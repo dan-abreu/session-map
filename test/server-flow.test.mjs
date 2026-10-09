@@ -94,6 +94,19 @@ test('apply refuses what is not a flowchart, a map from the main branch, and tex
   });
 });
 
+test('preview and apply refuse a drawing with a ``` line with a 400, writing nothing', async () => {
+  await withServer(async ({ call, read, write, root }) => {
+    const readme = readFileSync(join(root, DIR, 'README.md'), 'utf8');
+    const { text } = (await call('GET', `${P}/mermaid`, { headers: read })).body;
+    const fenced = `${text}\n\`\`\`\n## Injected\n\`\`\``;
+    for (const route of ['preview', 'apply']) {
+      const res = await call('POST', `${P}/mermaid/${route}`, { headers: write, body: { text: fenced } });
+      assert.deepEqual([res.status, res.body], [400, { ok: false, error: 'fence-in-drawing' }], route);
+    }
+    assert.equal(readFileSync(join(root, DIR, 'README.md'), 'utf8'), readme);
+  });
+});
+
 test('the workshop draft: starts as the export, is saved and discarded on its own, never in the README', async () => {
   await withServer(async ({ call, read, write, root, smDir }) => {
     const readme = readFileSync(join(root, DIR, 'README.md'), 'utf8');

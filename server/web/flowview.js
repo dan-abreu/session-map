@@ -654,6 +654,7 @@ export function createFlowView(ctx) {
         changeList(tt('flow.ch.partsMissing'), plan.partsMissing.map((m) => h('li', {}, m.name)), tt('flow.ch.partsMissingNote')),
         changeList(tt('flow.ch.edgesAdded'), plan.edgesAdded.map(arrow)),
         changeList(tt('flow.ch.edgesRemoved'), plan.edgesRemoved.map(arrow)),
+        plan.diagramChanged ? h('section', { class: 'fl-change' }, h('h3', {}, tt('flow.ch.diagram')), h('p', { class: 'fl-change-note' }, tt('flow.ch.diagramNote'))) : null,
         changeList(tt('flow.ch.warnings'), plan.warnings.map((w) => h('li', {}, h('code', {}, w.text))), tt('flow.ch.warningsNote'))),
       mainBranch ? h('p', { class: 'dv-warning' }, tt('flow.err.arch-not-here')) : null,
       status,

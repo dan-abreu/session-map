@@ -6,10 +6,9 @@ import { dirname, join } from 'node:path';
 import { safeResolve } from '../files.mjs';
 import { brainDir, writeAtomic } from '../store.mjs';
 import { flowKey, matchParts, newId, parseFlow, printFlow } from '../web/flow.js';
-import { readmeMermaid, slug } from './parse.mjs';
+import { MERMAID_FENCE_RE as FENCE_RE, readmeMermaid, slug } from './parse.mjs';
 
 const DEFAULT_DIR = { en: 'docs/architecture', pt: 'docs/arquitetura' };
-const FENCE_RE = /```mermaid[ \t]*\r?\n[\s\S]*?```/;
 
 const SKELETON = {
   en: (name) => `# ${name}\n\nPart added from the flow drawing. Say here, in a sentence or two, what it does.\n\n## How it works\n\n## Where in the code\n\n## Rules that must not break\n\n## What's missing\n`,
@@ -97,6 +96,9 @@ export function planImport(arch, text, { dir = arch.dir ?? DEFAULT_DIR[arch.lang
   const next = parseFlow(text);
   if (!next.ok) return { ok: false, error: next.error };
   if (!next.nodes.length) return { ok: false, error: 'empty-flowchart' };
+  // Labels print backticks as #96;, so only a line kept as it is can hold a fence, and a fence would end the README block.
+  const printed = printFlow(next);
+  if (printed.includes('```')) return { ok: false, error: 'fence-in-drawing' };
   const base = archFlow(arch);
   const was = entities(base, arch.parts);
   const now = entities(next, arch.parts);
@@ -139,8 +141,10 @@ export function planImport(arch, text, { dir = arch.dir ?? DEFAULT_DIR[arch.lang
   const edgesAdded = [...after].filter(([k]) => !before.has(k)).map(([, e]) => e);
   const edgesRemoved = [...before].filter(([k]) => !after.has(k)).map(([, e]) => e);
 
-  const unchanged = ![layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved].some((list) => list.length);
-  return { ok: true, unchanged, warnings: next.warnings, layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved };
+  // Direction, labels, arrow kinds, shapes and kept lines live only in the diagram: any of them changing rewrites it.
+  const diagramChanged = printed !== printFlow(base) && printed !== arch.mermaid;
+  const unchanged = !diagramChanged && ![layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved].some((list) => list.length);
+  return { ok: true, unchanged, diagramChanged, warnings: next.warnings, layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved };
 }
 
 function withBlock(readme, block) {

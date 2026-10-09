@@ -161,3 +161,65 @@ test('the workshop draft lives in the brain folder and never touches the README 
   assert.equal(readDraft(smDir, 'shop-abc123'), null);
   assert.throws(() => writeDraft(smDir, '../x', 'flowchart LR'));
 });
+
+test('the preview counts a change to the drawing itself even when parts, layers and arrows stay the same', () => {
+  const arch = archOf(project());
+  const exported = exportMermaid(arch);
+  assert.equal(planImport(arch, exported).diagramChanged, false);
+  const edits = {
+    direction: exported.replace('flowchart LR', 'flowchart TB'),
+    'arrow label': exported.replace('VIT --> CES', 'VIT -->|sends orders to| CES'),
+    'arrow kind': exported.replace('VIT --> CES', 'VIT -.-> CES'),
+    shape: exported.replace('VIT["Vitrine"]', 'VIT("Vitrine")'),
+    'extra line': `${exported}\n  classDef hot fill:#f00`,
+    'part box renamed': exported.replace('VIT["Vitrine"]', 'VIT["Loja"]'),
+  };
+  for (const [name, text] of Object.entries(edits)) {
+    const plan = planImport(arch, text);
+    assert.equal(plan.ok, true, name);
+    assert.equal(plan.diagramChanged, true, name);
+    assert.equal(plan.unchanged, false, name);
+  }
+});
+
+test('the preview counts a free box taken out of the drawing as a change', () => {
+  const root = project();
+  const readme = join(root, DIR, 'README.md');
+  writeFileSync(readme, readFileSync(readme, 'utf8').replace('    APP --> CES\n', '    APP --> CES\n    EXT[Banco externo]\n'));
+  const arch = archOf(root);
+  const plan = planImport(arch, exportMermaid(arch).replace(/\n.*EXT\["Banco externo"\]/, ''));
+  assert.equal(plan.diagramChanged, true);
+  assert.equal(plan.unchanged, false);
+});
+
+test('apply writes a change to the drawing itself into the README block', () => {
+  const root = project();
+  const arch = archOf(root);
+  const out = applyImport({ root, arch, text: exportMermaid(arch).replace('VIT --> CES', 'VIT -->|sends orders to| CES') });
+  assert.deepEqual(out, { ok: true, changed: true, files: ['docs/arquitetura/README.md'] });
+  assert.match(readFileSync(join(root, DIR, 'README.md'), 'utf8'), /VIT -->\|sends orders to\| CES/);
+});
+
+test('backticks never leave the README block: a label keeps the rest of the README byte for byte, a fence line is refused', () => {
+  const root = project();
+  const path = join(root, DIR, 'README.md');
+  const original = readFileSync(path, 'utf8');
+  const outside = (s) => s.replace(/```mermaid[ \t]*\r?\n[\s\S]*?^```[ \t]*$/m, '<block>');
+  let arch = archOf(root);
+  const labelled = exportMermaid(arch).replace('"Por onde as pessoas entram"', '"Por onde as ```pessoas``` entram"').replace('VIT --> CES', 'VIT -->|run ``` now| CES');
+  assert.deepEqual(applyImport({ root, arch, text: labelled }).files, ['docs/arquitetura/README.md']);
+  const once = readFileSync(path, 'utf8');
+  assert.equal(outside(once), outside(original));
+  assert.match(once, /subgraph entrada\["Por onde as #96;#96;#96;pessoas#96;#96;#96; entram"\]/);
+  arch = archOf(root);
+  assert.match(arch.mermaid, /VIT -->\|run #96;#96;#96; now\| CES/, 'the whole block is read back');
+  const again = exportMermaid(arch).replace('|run #96;#96;#96; now|', '|calls|');
+  assert.deepEqual(applyImport({ root, arch, text: again }).files, ['docs/arquitetura/README.md']);
+  assert.equal(outside(readFileSync(path, 'utf8')), outside(original));
+  assert.match(readFileSync(path, 'utf8'), /VIT -->\|calls\| CES/);
+  const before = readFileSync(path, 'utf8');
+  const fenced = `${exportMermaid(arch)}\n\`\`\`\n## Injected heading\n\`\`\``;
+  assert.deepEqual(planImport(arch, fenced), { ok: false, error: 'fence-in-drawing' });
+  assert.deepEqual(applyImport({ root, arch, text: fenced }), { ok: false, error: 'fence-in-drawing' });
+  assert.equal(readFileSync(path, 'utf8'), before);
+});

@@ -51,6 +51,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['today', 'd7', 'd30'].flatMap((r) => [`costs.range.${r}`, `costs.total.${r}`]),
     ...['user', 'project', 'plugin'].map((o) => `skills.origin.${o}`),
     ...['clash', 'decision', 'question'].map((k) => `waiting.${k}`),
+    ...['not-flowchart', 'empty-flowchart', 'fence-in-drawing', 'arch-not-here'].map((c) => `flow.err.${c}`),
   ];
   assert.deepEqual(dynamic.filter((k) => !(k in LANGS.en)), []);
 });

@@ -11,12 +11,14 @@ const OPEN = Object.fromEntries(SHAPES.map(([o, c, s]) => [s, [o, c]]));
 const OP_RE = /^\s*(?:(-\.+->)|(={2,}>)|(-{2,}>)|(-\.+-)|(-{3,}|={3,})|--\s+([^\s-][^>|]*?)\s+-{2,}>)(?:\s*\|([^|]*)\|)?\s*/;
 const KIND_OP = { arrow: '-->', line: '---', dotted: '-.->', 'dotted-line': '-.-', thick: '==>' };
 const RESERVED = new Set(['end', 'graph', 'subgraph', 'flowchart', 'style', 'class', 'classdef', 'click', 'linkstyle', 'direction', 'default', 'call', 'href']);
-const FENCE_RE = /```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n?```/g;
+// Fences on their own lines only, as in markdown and as the server reads the README.
+const FENCE_RE = /^[ \t]*```mermaid[ \t]*\r?\n([\s\S]*?)^[ \t]*```[ \t]*(?=\r?$)/gm;
 
 const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 export const flowKey = (s) => plain(s).replace(/[^a-z0-9]/g, '');
-const decode = (s) => s.replace(/#quot;/g, '"').trim();
-const encode = (s) => String(s).replace(/\s+/g, ' ').trim().replace(/"/g, '#quot;');
+const decode = (s) => s.replace(/#quot;/g, '"').replace(/#96;/g, '`').trim();
+// A backtick printed as is could close the README's fence; mermaid draws #96; as the same character.
+const encode = (s) => String(s).replace(/\s+/g, ' ').trim().replace(/"/g, '#quot;').replace(/`/g, '#96;');
 
 // The content of the last closed ```mermaid fence: what a chat reply that redraws the diagram holds.
 export function lastMermaidBlock(text) {

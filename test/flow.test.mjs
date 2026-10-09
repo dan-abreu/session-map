@@ -126,3 +126,21 @@ test('matchParts pairs each node with a part by its label, then by its id', () =
   const parts = [{ id: 'orders', name: 'Orders and cart' }, { id: 'payments', name: 'Payments' }];
   assert.deepEqual([...matchParts(m, parts)], [['a', 'orders'], ['payments', 'payments']]);
 });
+
+test('printFlow writes backticks in labels, layer names and arrow labels as #96;, and parseFlow reads them back', () => {
+  const m = parseFlow('flowchart LR\n  subgraph s["a ``` b"]\n    x["x ``` y"]\n  end\n  x -->|run `npm`| z');
+  const text = printFlow(m);
+  assert.ok(!text.includes('`'), text);
+  assert.match(text, /subgraph s\["a #96;#96;#96; b"\]/);
+  assert.match(text, /x\["x #96;#96;#96; y"\]/);
+  assert.match(text, /\|run #96;npm#96;\|/);
+  const again = parseFlow(text);
+  assert.equal(again.layers[0].name, 'a ``` b');
+  assert.equal(again.nodes[0].label, 'x ``` y');
+  assert.equal(again.edges[0].label, 'run `npm`');
+});
+
+test('lastMermaidBlock ends a block only at a fence on its own line', () => {
+  assert.equal(lastMermaidBlock('```mermaid\nflowchart LR\n  a["x ``` y"]\n```\n'), 'flowchart LR\n  a["x ``` y"]');
+  assert.equal(lastMermaidBlock('```mermaid\r\nflowchart LR\r\n  a\r\n```\r\n'), 'flowchart LR\r\n  a');
+});

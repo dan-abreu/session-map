@@ -136,3 +136,9 @@ test('the README mermaid block travels with the map, so the Flow tab draws it; n
   assert.equal(arch('arch-en', 'docs/architecture').mermaid, null);
   assert.equal(parseArch(null, {}).mermaid, null);
 });
+
+test('the README mermaid block ends only at a fence on its own line', async () => {
+  const { readmeMermaid } = await import('../server/arch/parse.mjs');
+  assert.equal(readmeMermaid('# A\n\n```mermaid\nflowchart LR\n  a["x ``` y"]\n```\n\nafter ```\n'), 'flowchart LR\n  a["x ``` y"]');
+  assert.equal(readmeMermaid('# A\n\nsee ```mermaid\nnot a fence\n'), null);
+});

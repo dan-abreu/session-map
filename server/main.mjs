@@ -32,7 +32,7 @@ const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
-const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
+const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
 const FLOW_TEXT_MAX = 60_000;
 const SKIP_MAX = 500;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -245,7 +245,7 @@ export function createApp({
     if (req.method === 'GET' && route === 'mermaid') return send(res, 200, { ok: true, text: exportMermaid(await currentArch(project)) });
     if (req.method === 'POST' && route === 'mermaid/preview') {
       const plan = planImport(await currentArch(project), flowText(await readBody(req)));
-      return send(res, plan.ok ? 200 : FLOW_ERRORS[plan.error], plan);
+      return send(res, plan.ok ? 200 : FLOW_ERRORS[plan.error] ?? 400, plan);
     }
     if (req.method === 'POST' && route === 'mermaid/apply') {
       if (demo) throw new HttpError(403, 'demo');

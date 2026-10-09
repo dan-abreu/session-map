@@ -188,8 +188,10 @@ function parsePart(dir, name, text) {
 
 const stripScan = ({ startIdx, endIdx, ...item }) => item;
 
-// The first mermaid block of the README: the diagram the Flow tab draws and an import rewrites.
-export const readmeMermaid = (text) => /```mermaid[ \t]*\r?\n([\s\S]*?)```/.exec(text)?.[1].replace(/\s+$/, '') ?? null;
+// The first mermaid block of the README: the diagram the Flow tab draws and an import rewrites. Both fences sit on
+// their own lines, as in markdown, so a run of backticks inside a line never ends the block.
+export const MERMAID_FENCE_RE = /^[ \t]*```mermaid[ \t]*\r?\n([\s\S]*?)^[ \t]*```[ \t]*(?=\r?$)/m;
+export const readmeMermaid = (text) => MERMAID_FENCE_RE.exec(text)?.[1].replace(/\s+$/, '') ?? null;
 
 function layersFromMermaid(text, resolve) {
   const block = readmeMermaid(text);
