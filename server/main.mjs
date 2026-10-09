@@ -8,10 +8,13 @@ import { parseArgs } from 'node:util';
 import { logAction, runAction } from './actions.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
+import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
+import { readArch } from './arch/detect.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { collect } from './collect.mjs';
+import { loadConfig } from './config.mjs';
 import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
@@ -29,6 +32,9 @@ const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
+const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
+const FLOW_TEXT_MAX = 60_000;
+const SKIP_MAX = 500;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -220,6 +226,56 @@ export function createApp({
     return send(res, 200, out);
   }
 
+  // The Flow tab (plano-v02 § v0.2.1): export, the import preview and apply, and the workshop draft. The demo answers from
+  // its invented state and keeps drafts in memory; only apply writes to the project, inside its architecture folder.
+  const demoDrafts = new Map();
+  const flowText = (body) => {
+    if (typeof body?.text !== 'string' || !body.text.trim()) throw new HttpError(400, 'bad-text');
+    if (body.text.length > FLOW_TEXT_MAX) throw new HttpError(413, 'too-large');
+    return body.text;
+  };
+  // The map as it is on disk now, with the relations collect found: the baseline both the preview and apply compare against.
+  // A map the state read from the main branch stays refused even if a folder appeared since: apply never guesses.
+  const currentArch = async (project) => (demo || project.arch.source === 'main-branch' ? project.arch : { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch.links ?? [] });
+  async function flowRoute(req, res, parts) {
+    if (!demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    const project = (await state()).projects.find((p) => p.id === parts[3]);
+    if (!project) throw new HttpError(404, 'unknown-project');
+    const route = parts.slice(4).join('/');
+    if (req.method === 'GET' && route === 'mermaid') return send(res, 200, { ok: true, text: exportMermaid(await currentArch(project)) });
+    if (req.method === 'POST' && route === 'mermaid/preview') {
+      const plan = planImport(await currentArch(project), flowText(await readBody(req)));
+      return send(res, plan.ok ? 200 : FLOW_ERRORS[plan.error], plan);
+    }
+    if (req.method === 'POST' && route === 'mermaid/apply') {
+      if (demo) throw new HttpError(403, 'demo');
+      const body = await readBody(req);
+      const skip = Array.isArray(body?.skip) ? body.skip.filter((x) => typeof x === 'string').slice(0, SKIP_MAX) : [];
+      const out = applyImport({ root: project.root, arch: await currentArch(project), text: flowText(body), skip });
+      const status = out.ok ? 200 : FLOW_ERRORS[out.error] ?? 400;
+      logAction(smDir, { action: 'flow-apply', projectId: project.id, count: out.files?.length ?? 0 }, status);
+      fresh();
+      return send(res, status, out);
+    }
+    if (route !== 'draft') throw new HttpError(404, 'not-found');
+    if (req.method === 'GET') {
+      const saved = demo ? demoDrafts.get(project.id) ?? null : readDraft(smDir, project.id);
+      return send(res, 200, { ok: true, saved: saved !== null, text: saved ?? exportMermaid(await currentArch(project)) });
+    }
+    if (req.method === 'PUT') {
+      const text = flowText(await readBody(req));
+      if (demo) demoDrafts.set(project.id, text);
+      else writeDraft(smDir, project.id, text);
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === 'DELETE') {
+      if (demo) demoDrafts.delete(project.id);
+      else deleteDraft(smDir, project.id);
+      return send(res, 200, { ok: true });
+    }
+    throw new HttpError(404, 'not-found');
+  }
+
   // One GitHub round at a time, however many tabs ask.
   let catalogRun = null;
   const loadCatalog = (force) => {
@@ -267,6 +323,7 @@ export function createApp({
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
+    if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');

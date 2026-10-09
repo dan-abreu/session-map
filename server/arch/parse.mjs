@@ -188,13 +188,16 @@ function parsePart(dir, name, text) {
 
 const stripScan = ({ startIdx, endIdx, ...item }) => item;
 
+// The first mermaid block of the README: the diagram the Flow tab draws and an import rewrites.
+export const readmeMermaid = (text) => /```mermaid[ \t]*\r?\n([\s\S]*?)```/.exec(text)?.[1].replace(/\s+$/, '') ?? null;
+
 function layersFromMermaid(text, resolve) {
-  const m = /```mermaid\s*\n([\s\S]*?)```/.exec(text);
-  if (!m) return [];
+  const block = readmeMermaid(text);
+  if (block === null) return [];
   const layers = [];
   const stack = [];
   const seen = new Set();
-  for (const raw of m[1].split('\n')) {
+  for (const raw of block.split('\n')) {
     const line = raw.trim();
     const sg = /^subgraph\s+([\w-]+)(?:\s*\[\s*"?([^\]"]+)"?\s*\])?\s*$/.exec(line) ?? /^subgraph\s+"?([^"]+)"?\s*$/.exec(line);
     if (sg) {
@@ -237,7 +240,7 @@ function layersFromHeadings(text, resolve, resolveFile) {
 export function parseArch(dir, files, source = 'worktree') {
   const names = Object.keys(files).sort();
   const partNames = names.filter((n) => /\.md$/i.test(n) && n.toLowerCase() !== 'readme.md');
-  if (!partNames.length && !('README.md' in files)) return { source: 'none', dir: null, lang: 'en', layers: [], parts: [] };
+  if (!partNames.length && !('README.md' in files)) return { source: 'none', dir: null, lang: 'en', mermaid: null, layers: [], parts: [] };
   const parsed = partNames.map((n) => parsePart(dir, n, files[n]));
   const parts = parsed.map((p) => p.part);
   const langs = parsed.map((p) => p.lang).filter(Boolean);
@@ -273,5 +276,5 @@ export function parseArch(dir, files, source = 'worktree') {
     }
     return { ...p, refs: [...refs].sort() };
   });
-  return { source, dir, lang, layers, parts: withRefs };
+  return { source, dir, lang, mermaid: readmeMermaid(readme), layers, parts: withRefs };
 }

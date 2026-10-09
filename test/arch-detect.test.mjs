@@ -77,7 +77,7 @@ test('nothing anywhere gives source none, and readArch returns an empty Arch', a
   const root = repo({ 'a.txt': 'a' });
   try {
     assert.deepEqual(await detectArch(root, {}, { exec: noGit }), { source: 'none', dir: null, files: {} });
-    assert.deepEqual(await readArch(root, {}, { exec: noGit }), { source: 'none', dir: null, lang: 'en', layers: [], parts: [] });
+    assert.deepEqual(await readArch(root, {}, { exec: noGit }), { source: 'none', dir: null, lang: 'en', mermaid: null, layers: [], parts: [] });
   } finally { cleanup(root); }
 });
 

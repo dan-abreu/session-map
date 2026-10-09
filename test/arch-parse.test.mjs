@@ -108,7 +108,7 @@ test('english sections and tokens are understood', () => {
 });
 
 test('no files at all gives an empty architecture', () => {
-  assert.deepEqual(parseArch(null, {}, 'none'), { source: 'none', dir: null, lang: 'en', layers: [], parts: [] });
+  assert.deepEqual(parseArch(null, {}, 'none'), { source: 'none', dir: null, lang: 'en', mermaid: null, layers: [], parts: [] });
 });
 
 test('a part lists the other parts its file links to, never itself or a file outside the map', () => {
@@ -127,4 +127,12 @@ test('a part lists the other parts its file links to, never itself or a file out
 test('an item code may have a longer word after the dash', () => {
   const a = parseArch('docs/arquitetura', { 'README.md': '# P\n', 'mensagens.md': '# Mensagens\n\n## O que falta\n\n- [ ] Pente fino nas mensagens `pf-lacuna1`\n- [ ] Outra `pf-pc24`\n' });
   assert.deepEqual(a.parts[0].groups[0].items.map((i) => [i.code, i.title]), [['pf-lacuna1', 'Pente fino nas mensagens'], ['pf-pc24', 'Outra']]);
+});
+
+test('the README mermaid block travels with the map, so the Flow tab draws it; none when the README has no diagram', () => {
+  const pt = arch('arch-pt', 'docs/arquitetura');
+  assert.match(pt.mermaid, /^flowchart LR\n {4}subgraph entrada\["Por onde as pessoas entram"\]/);
+  assert.match(pt.mermaid, /APP --> CES$/);
+  assert.equal(arch('arch-en', 'docs/architecture').mermaid, null);
+  assert.equal(parseArch(null, {}).mermaid, null);
 });
