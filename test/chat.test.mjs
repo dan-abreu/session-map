@@ -853,11 +853,11 @@ test('only "may reinforce on its own" changed: the running claude keeps going, n
 
 test('the list and the history tell the page what "Same as my Claude" runs and how much reinforcing is left this month', async () => {
   await withClaudeDir(async ({ dir, env }) => {
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'xhigh' }));
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'xhigh', modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } }));
     await withHub({ dir, env }, async ({ hub, state, smDir }) => {
       writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 20 } }));
       const listed = hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body;
-      assert.deepEqual(listed.mine, { model: 'opus[1m]', effort: 'xhigh', ultracode: false });
+      assert.deepEqual(listed.mine, { model: 'opus[1m]', effort: 'high', ultracode: false });
       assert.deepEqual(listed.reinforce, { limitUSD: 20, spentUSD: 0 });
     });
   });

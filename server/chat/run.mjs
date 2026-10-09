@@ -35,7 +35,7 @@ export function parseRun(value) {
 const BLOCK = [
   'End every reply with this fenced block, so session-map can show the person what is running and why:',
   '```session-map-run',
-  '{"level": "direct" | "helpers" | "reinforced"__ASK__, "why": "a short reason in the person\'s language"__EST__}',
+  '{"level": "direct" | "helpers" | "reinforced"__ASK__, "why": "a short reason in the person\'s language, at most 12 words"__EST__}',
   '```',
 ].join('\n');
 
@@ -90,19 +90,44 @@ export function expectedRun(run, mine) {
 
 const objectOr = (v, fallback) => (v && typeof v === 'object' && !Array.isArray(v) ? v : fallback);
 
-// model, effortLevel (or the model's own level under modelSettings) and ultracode, the more specific file winning.
+// A model name as Claude Code keys modelSettings: the canonical name, without [1m] or a date ("claude-opus-5-5"), or a bare
+// alias ("opus"), which stands for the newest of its family. version: 5.5 for claude-opus-5-5, Infinity for an alias.
+function modelKey(name) {
+  const key = String(name).replace(/\[1m\]$/i, '').replace(/-\d{8}$/, '');
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(key);
+  if (m) return { key, family: m[1], version: Number(`${m[2]}.${m[3] ?? 0}`) };
+  return { key, family: key, version: Infinity };
+}
+
+// The level a file saved for this model: under its canonical name, or, for an alias, under the newest of its family.
+function savedLevel(modelSettings, model) {
+  const want = modelKey(model);
+  const entries = Object.entries(objectOr(modelSettings, {})).map(([name, v]) => ({ ...modelKey(name), level: objectOr(v, {}).effortLevel }));
+  const exact = entries.find((e) => e.key === want.key);
+  if (exact) return exact.level;
+  if (want.version !== Infinity) return undefined;
+  return entries.filter((e) => e.family === want.family).sort((a, b) => b.version - a.version)[0]?.level;
+}
+
+// What "Same as my Claude" runs: model, ultracode and the effort for that model, as code.claude.com/docs/en/settings-reference
+// resolves them: the more specific file wins; within a file a saved per-model level beats the top-level effortLevel, which
+// in the user file no longer applies to Opus 5.5 and later (they start at their own default, shown as "default" here).
 export function settingsRun(root, dir) {
+  const userFile = join(dir, 'settings.json');
+  const files = [userFile, join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json')]
+    .map((file) => ({ file, s: objectOr(readJsonFile(file, null), null) })).filter((f) => f.s);
   let model = null;
-  let effort = null;
   let ultracode = false;
-  for (const file of [join(dir, 'settings.json'), join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json')]) {
-    const s = objectOr(readJsonFile(file, null), null);
-    if (!s) continue;
+  for (const { s } of files) {
     if (typeof s.model === 'string' && s.model) model = s.model;
-    const own = model ? objectOr(objectOr(s.modelSettings, {})[model], {}).effortLevel : undefined;
-    const level = EFFORTS.includes(own) ? own : s.effortLevel;
-    if (EFFORTS.includes(level)) effort = level;
     if (typeof s.ultracode === 'boolean') ultracode = s.ultracode;
+  }
+  let effort = null;
+  for (const { file, s } of files) {
+    const own = model ? savedLevel(s.modelSettings, model) : undefined;
+    const topApplies = file !== userFile || !model || modelKey(model).version < 5.5;
+    const level = EFFORTS.includes(own) ? own : topApplies ? s.effortLevel : undefined;
+    if (EFFORTS.includes(level)) effort = level;
   }
   return { model, effort, ultracode };
 }

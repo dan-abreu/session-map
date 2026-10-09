@@ -8,6 +8,14 @@ const RUN_FENCE = /```session-map-run[^\n]*\n([\s\S]*?)```/g;
 const BLOCKS = /```session-map(-run)?[^\n]*\n([\s\S]*?)(?:```|$)/g;
 const STATUS_LINE = /^\s*(?:>\s*)?\**skills\**\s*:.*·/i;
 
+// A reason past the limit ends at the last whole word, with an ellipsis: the header and the ask card show it as is.
+function clipWhy(why) {
+  if (why.length <= WHY_MAX) return why;
+  const cut = why.slice(0, WHY_MAX - 1);
+  const whole = /\s/.test(why[WHY_MAX - 1]) ? cut : cut.replace(/\S*$/, '');
+  return `${whole.replace(/[\s,;:.]+$/, '') || cut}…`;
+}
+
 // The maestro's own word on the level it works at, from the last block of a reply (server and page read it alike).
 export function readRunBlock(text) {
   const blocks = [...String(text ?? '').matchAll(RUN_FENCE)];
@@ -16,7 +24,7 @@ export function readRunBlock(text) {
   try { data = JSON.parse(blocks.at(-1)[1]); } catch { return null; }
   if (!data || !RUN_LEVELS.includes(data.level)) return null;
   const out = { level: data.level };
-  if (typeof data.why === 'string' && data.why.trim()) out.why = data.why.trim().slice(0, WHY_MAX);
+  if (typeof data.why === 'string' && data.why.trim()) out.why = clipWhy(data.why.trim());
   if (Number.isFinite(data.estimateUSD) && data.estimateUSD >= 0) out.estimateUSD = data.estimateUSD;
   return out;
 }

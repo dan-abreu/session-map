@@ -55,13 +55,39 @@ test('settingsRun reads model, effort and ultracode as Claude does: user, then p
   const root = mkdtempSync(join(tmpdir(), 'sm-run-root-'));
   try {
     assert.deepEqual(settingsRun(root, dir), { model: null, effort: null, ultracode: false });
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'xhigh' }));
-    assert.deepEqual(settingsRun(root, dir), { model: 'opus[1m]', effort: 'xhigh', ultracode: false });
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'claude-opus-5', effortLevel: 'xhigh' }));
+    assert.deepEqual(settingsRun(root, dir), { model: 'claude-opus-5', effort: 'xhigh', ultracode: false });
     mkdirSync(join(root, '.claude'));
     writeFileSync(join(root, '.claude', 'settings.local.json'), JSON.stringify({ model: 'sonnet', ultracode: true, modelSettings: { sonnet: { effortLevel: 'low' } } }));
     assert.deepEqual(settingsRun(root, dir), { model: 'sonnet', effort: 'low', ultracode: true });
     writeFileSync(join(root, '.claude', 'settings.local.json'), '{ not json');
-    assert.deepEqual(settingsRun(root, dir), { model: 'opus[1m]', effort: 'xhigh', ultracode: false });
+    assert.deepEqual(settingsRun(root, dir), { model: 'claude-opus-5', effort: 'xhigh', ultracode: false });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// code.claude.com/docs/en/settings-reference#modelsettings: entries live under the canonical name and match its alias and
+// [1m]; a top-level effortLevel in the user file no longer applies to Opus 5.5 and later (it still does in project files).
+test('settingsRun matches a level saved under the canonical name to the alias, and skips the user file\'s top-level level on Opus 5.5', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sm-run-dir-'));
+  const root = mkdtempSync(join(tmpdir(), 'sm-run-root-'));
+  const user = (s) => writeFileSync(join(dir, 'settings.json'), JSON.stringify(s));
+  try {
+    user({ model: 'opus[1m]', effortLevel: 'xhigh', modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } });
+    assert.equal(settingsRun(root, dir).effort, 'high');
+    user({ model: 'opus', modelSettings: { 'claude-opus-5': { effortLevel: 'low' }, 'claude-opus-5-5': { effortLevel: 'max' }, 'claude-sonnet-5-5': { effortLevel: 'medium' } } });
+    assert.equal(settingsRun(root, dir).effort, 'max', 'the alias is the newest of its family');
+    user({ model: 'claude-opus-5-5-20260901[1m]', modelSettings: { 'claude-opus-5-5': { effortLevel: 'low' } } });
+    assert.equal(settingsRun(root, dir).effort, 'low');
+    user({ model: 'opus[1m]', effortLevel: 'xhigh' });
+    assert.equal(settingsRun(root, dir).effort, null, 'Opus 5.5 ignores the user file\'s top-level level');
+    user({ model: 'claude-opus-5', effortLevel: 'xhigh' });
+    assert.equal(settingsRun(root, dir).effort, 'xhigh', 'older models keep it');
+    mkdirSync(join(root, '.claude'));
+    writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'low' }));
+    assert.equal(settingsRun(root, dir).effort, 'low', 'a project file\'s top-level level applies to every model');
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
@@ -78,6 +104,21 @@ test('readRunBlock takes the last session-map-run fence of a reply and ignores j
   assert.equal(readRunBlock(fence('not json')), null);
   assert.deepEqual(readRunBlock(fence(`{"level":"helpers","why":"${'x'.repeat(400)}","estimateUSD":-3}`)).why.length, 160);
   assert.equal(readRunBlock(fence('{"level":"helpers","estimateUSD":-3}')).estimateUSD, undefined);
+});
+
+// Seen on the real Opus (2026-10-09): a long reason was cut mid-word ("nem servidor de") in the header and the ask card.
+test('readRunBlock shortens a long reason at a word and marks the cut', () => {
+  const fence = (body) => `\`\`\`session-map-run\n${body}\n\`\`\``;
+  const long = 'Login com senha, cobrança por cartão e publicação em produção mexem com segurança, dados pessoais e dinheiro; o projeto ainda não tem aplicativo nem servidor de pagamento';
+  const why = readRunBlock(fence(JSON.stringify({ level: 'ask-reinforce', why: long }))).why;
+  assert.ok(why.length <= 160, `${why.length} chars`);
+  assert.ok(why.endsWith('…'), why);
+  assert.ok(long.startsWith(why.slice(0, -1)) && /[\p{L}\p{N}]$/u.test(why.slice(0, -1)), `cut at a word: ${why}`);
+  assert.ok(!/\s…$/.test(why) && !/[,;]…$/.test(why), why);
+});
+
+test('the Automatic prompt asks for a short reason', () => {
+  assert.match(runPrompt(DEFAULT_RUN), /"why": "a short reason[^"]*(\d+) words/);
 });
 
 test('mayReinforce: only when the person allowed it, a limit is set and the estimate still fits this month', () => {
