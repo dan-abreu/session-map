@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 const HEADING_RE = /^#{2,3}\s+(.*\S)\s*$/;
 const DONE_RE = /✅|\[[xX]\]/;
 const OPEN_RE = /⬜|\[ \]/;
+const CODE_RE = /^[A-Za-z]{1,3}\d+[a-z]?$/;
 
 function cleanCell(s) {
   return s.replace(/\[[ xX]\]|✅|⬜/g, '').replace(/^\s*[-*]\s+/, '').replace(/\*\*|`/g, '').trim();
@@ -12,8 +13,11 @@ function parseLine(line) {
   if (line.trimStart().startsWith('|')) {
     const cells = line.split('|').slice(1, -1).map((c) => c.trim());
     const idCell = cells.find((c) => /^\d+/.test(c));
-    const titleCell = cells.find((c) => c && c !== idCell && !/^[\s:-]+$/.test(c) && !/^(✅|⬜)/.test(c) && !/^\d+$/.test(c));
-    return { id: idCell?.match(/^\d+/)?.[0] ?? null, title: titleCell ? cleanCell(titleCell) : '' };
+    // A bare code such as "D3" names the row; the question sits in the next cell.
+    const codeCell = idCell ? undefined : cells.find((c) => CODE_RE.test(c));
+    const titleCell = cells.find((c) => c && c !== idCell && c !== codeCell && !/^[\s:-]+$/.test(c) && !/^(✅|⬜)/.test(c) && !/^\d+$/.test(c));
+    const title = titleCell ? cleanCell(titleCell) : '';
+    return { id: idCell?.match(/^\d+/)?.[0] ?? null, title: codeCell && title ? `${codeCell}: ${title}` : title };
   }
   const text = cleanCell(line);
   const m = /^(\d+)[.):]?\s+(.*)$/.exec(text);

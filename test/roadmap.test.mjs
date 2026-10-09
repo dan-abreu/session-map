@@ -61,3 +61,11 @@ test('readRoadmap without decisions config or with a missing file is empty, not 
   withFile(MD, (f) => assert.deepEqual(readRoadmap(f).decisions, []));
   assert.deepEqual(readRoadmap(join(tmpdir(), 'nope-sm.md'), {}), { milestones: [], decisions: [] });
 });
+
+test('readRoadmap reads a decision row whose first cell is a code like D3 as that code plus the question', () => {
+  const md = `## Decisions\n\n| ID | Question | Suggestion | Status |\n| --- | --- | --- | --- |\n| D3  | Charge from day one? | Free at first | to confirm |\n| **S1** Sweep | Keys in history | x | to confirm |\n`;
+  withFile(md, (f) => {
+    const { decisions } = readRoadmap(f, { decisions: DECISIONS });
+    assert.deepEqual(decisions.map((d) => d.text), ['D3: Charge from day one?', 'S1 Sweep']);
+  });
+});
