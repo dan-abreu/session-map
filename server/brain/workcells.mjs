@@ -145,9 +145,12 @@ export async function workCellsOf(root, units, { main, includeRemote = true, pre
     if (cell) alive.push(cell);
   }
 
+  // Two branches nobody touched for a week (old bot updates, say) sharing a lockfile are not news.
   for (const cell of alive) {
     const mine = new Set(cell.files.map((f) => f.path));
-    cell.clashWith = alive.filter((o) => o !== cell && o.files.some((f) => mine.has(f.path))).map((o) => o.id);
+    cell.clashWith = alive
+      .filter((o) => o !== cell && (cell.status === 'active' || o.status === 'active') && o.files.some((f) => mine.has(f.path)))
+      .map((o) => o.id);
   }
 
   const aliveIds = new Set(alive.map((c) => c.id));

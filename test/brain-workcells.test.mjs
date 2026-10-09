@@ -316,3 +316,19 @@ test('backfillMerges with since only reads merges inside the window', async () =
     assert.deepEqual([...new Set(events.map((e) => e.workCellId))], ['feature/new']);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('workCellsOf: two idle cells do not clash, but an active one still clashes with an idle one', async () => {
+  const { base, root } = makeRepo();
+  try {
+    twoBranches(root);
+    clock += 8 * 86_400_000;
+    git(root, ['checkout', '-q', '-b', 'feature/zoe']);
+    commit(root, { 'apps/api/route.js': 'r-zoe' }, 'route v3', 'zoe');
+    git(root, ['checkout', '-q', 'main']);
+    const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const of = (id) => cells.find((c) => c.id === id).clashWith.sort();
+    assert.deepEqual(of('feature/ana'), ['feature/zoe']);
+    assert.deepEqual(of('feature/rui'), ['feature/zoe']);
+    assert.deepEqual(of('feature/zoe'), ['feature/ana', 'feature/rui']);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
