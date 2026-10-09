@@ -128,3 +128,19 @@ test('creating the map: part files are named in lowercase with dashes and never 
   assert.match(text, /lowercase with dashes/);
   assert.match(text, /never README\.md, in any case/);
 });
+
+test('the flow workshop: the draft goes along, the reply must end with the whole draft in a mermaid fence, and no file is edited', () => {
+  const draft = 'flowchart LR\n  subgraph entrada["Por onde as pessoas entram"]\n    VIT["Vitrine"]\n  end';
+  const ctx = contextOf(PT, { kind: 'flow' }, { draft });
+  assert.equal(ctx.error, undefined);
+  assert.equal(ctx.part, null);
+  const text = all(ctx);
+  assert.ok(text.includes(draft), 'the draft as it is now');
+  assert.match(text, /```mermaid/);
+  assert.match(text, /every reply/i);
+  assert.match(text, /do not (create|edit|change)[^.]*files?/i);
+  assert.ok(text.includes('Vitrine: docs/arquitetura/vitrine.md'), 'the parts, so their names are kept');
+  assert.doesNotMatch(text, /em andamento/, 'no upkeep rule: the workshop writes nothing');
+  const bare = all(contextOf(NONE, { kind: 'flow' }, { draft: 'flowchart LR' }));
+  assert.match(bare, /no architecture map yet/i, 'a project without a map can draw one too');
+});

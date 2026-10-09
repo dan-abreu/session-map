@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
+import { exportMermaid, readDraft, writeDraft } from '../arch/flow.mjs';
 import { cleanEnv, findClaude } from '../ai/runner.mjs';
 import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
@@ -14,6 +15,7 @@ import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
+import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
 const KEY_RE = /^[0-9a-f]{32}$/;
@@ -36,6 +38,8 @@ const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <
 const now = () => new Date().toISOString();
 // What the page remembers of the point a chat was opened on: only the field its kind uses, which contextOf matched against the map.
 const NODE_FIELD = { layer: 'layerId', group: 'group', item: 'code' };
+const FENCE = '```';
+const handEdited = (draft) => `The person changed the draft by hand since your last reply. Start from this version:\n${FENCE}mermaid\n${draft}\n${FENCE}`;
 const nodeTag = (node) => {
   const field = NODE_FIELD[node.kind];
   return field && typeof node[field] === 'string' ? { kind: node.kind, [field]: node[field] } : { kind: node.kind };
@@ -155,8 +159,11 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       });
       return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
     }
+    if (evt.type === 'text' && chat.flow && !evt.data.partial) chat.flow.reply += `${evt.data.text}
+`;
     if (evt.type === 'turn-end') {
       chat.running = false;
+      if (chat.flow) saveFlowDraft(chat);
       clearTimeout(chat.idleTimer);
       chat.idleTimer = setTimeout(() => { chat.closing = true; chat.driver.end(); }, idleMs);
       chat.idleTimer.unref?.();
@@ -171,6 +178,18 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       return onExit(chat, { code: null, signal: null });
     }
     return emit(chat, evt.type, evt.data);
+  }
+
+  // The workshop's reply ends with the whole draft in a mermaid fence: that block becomes the shared draft.
+  function saveFlowDraft(chat) {
+    const block = lastMermaidBlock(chat.flow.reply);
+    chat.flow.reply = '';
+    if (!block || !parseFlow(block).ok) return;
+    try {
+      writeDraft(smDir, chat.projectId, block);
+      chat.flow.seen = block;
+      emit(chat, 'draft', { text: block });
+    } catch (err) { log('warn', 'flow-draft-save-failed', { error: err.message }); }
   }
 
   function onExit(chat, { code, signal }) {
@@ -200,6 +219,14 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
   function sendTo(chat, shown, prompt = shown) {
     clearTimeout(chat.idleTimer);
+    if (chat.flow) {
+      const draft = readDraft(smDir, chat.projectId);
+      if (draft !== null && draft !== chat.flow.seen) prompt = `${handEdited(draft)}
+
+${prompt}`;
+      chat.flow.seen = draft ?? chat.flow.seen;
+      chat.flow.reply = '';
+    }
     chat.running = true;
     emit(chat, 'user', { text: shown });
     chat.driver.send(prompt);
@@ -223,6 +250,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     let resume = null;
     let saved = null;
     let place = { partId: null, workCellId: null, title: body.text.trim().slice(0, TITLE_MAX) };
+    let flow = null;
     if (body.sessionId) {
       const chat = find(project, 'chat', body.sessionId);
       const page = readPageChats()[body.sessionId];
@@ -241,6 +269,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       cwd = state[INTERNALS]?.chats.get(body.sessionId)?.cwd ?? saved?.cwd;
       if (!cwd) return reply(409, { error: 'no-folder' });
       resume = body.sessionId;
+      if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
       if (chat) place = { ...place, title: chat.title };
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
@@ -248,14 +277,15 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       let { node } = body;
       if (node === undefined && partId !== undefined) node = { kind: 'part', partId };
       if (node === undefined && mother && find(project, 'part', mother.partId)) node = { kind: 'part', partId: mother.partId };
-      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node);
+      if (node?.kind === 'flow') flow = { seen: readDraft(smDir, project.id) ?? exportMermaid(project.arch ?? { layers: [], parts: [] }), reply: '' };
+      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen });
       if (context.error) return reply(context.status, { error: context.error });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
       prompt = firstPrompt({ sections: context.sections, mother, workCell, text: body.text, board });
       // An idea or a new map is about the whole project: it starts at the root, whatever branch is picked.
-      const atRoot = node?.kind === 'idea' || node?.kind === 'create-arch';
+      const atRoot = node?.kind === 'idea' || node?.kind === 'create-arch' || node?.kind === 'flow';
       cwd = atRoot ? project.root : workCell?.path ?? project.root;
       place = { ...place, partId: context.part?.id ?? null, workCellId: workCell?.id ?? null, ...(node ? { node: nodeTag(node) } : {}) };
     }
@@ -272,7 +302,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       projectId: project.id, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
       events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
-      configPath: join(smDir, 'chat', `${key}.json`),
+      configPath: join(smDir, 'chat', `${key}.json`), flow,
     };
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     // By file, not by argument: a command line is readable by other users of the machine.

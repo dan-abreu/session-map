@@ -2,7 +2,7 @@
 // and the rule that keeps the map true. Pure: it receives the project and returns text.
 // Keep code-shaped tokens out of the fixed texts: the transcript reader counts them as item codes and places the chat by them.
 
-const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch']);
+const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow']);
 const LIST_MAX = 40;
 
 const WORDS = {
@@ -63,6 +63,30 @@ const CREATE_TEXT = [
   '5. Do not change anything outside that folder.',
 ].join('\n');
 
+// The Flow workshop: the AI and the person draw one shared draft; the page redraws it from each reply's last fence.
+function flowText(project, draft) {
+  const { arch } = project;
+  const hasArch = arch && arch.source !== 'none';
+  const layers = hasArch ? arch.layers.map((l) => {
+    const parts = l.partIds.map((id) => arch.parts.find((p) => p.id === id)).filter(Boolean).slice(0, LIST_MAX);
+    return `${l.name}:\n${parts.map((p) => `- ${p.name}: ${p.file}`).join('\n')}`;
+  }) : [];
+  const fence = '```';
+  return [
+    `Project: ${project.name}`,
+    [
+      'You are drawing this project\'s flow diagram together with the person, in a shared draft on the session-map page.',
+      'The draft is a mermaid flowchart: one `subgraph id["Layer name"]` per layer, one box `id["Part name"]` per part inside its layer, and arrows `a --> b` for who calls or feeds whom (`a -->|what| b` to say what goes along, `a -.-> b` for a loose link).',
+      `- End every reply with the whole draft as it should look now, in one fenced ${fence}mermaid block. The page redraws the diagram from that block, so never send only a fragment.`,
+      '- Keep the names of existing parts exactly as they are, so the boxes stay tied to them. A box with a new name becomes a new part only when the person applies the draft.',
+      '- Do not create, edit or delete any files: the draft lives on the page, and the person applies it to the project from there after a preview.',
+      '- If the person changed the draft by hand, you get it again before their message: start from that version.',
+    ].join('\n'),
+    hasArch ? `The map's parts, by layer:\n${layers.join('\n')}` : 'This project has no architecture map yet: the draft can be the first drawing of it.',
+    `The draft now:\n${fence}mermaid\n${draft}\n${fence}`,
+  ];
+}
+
 function findItem(part, node) {
   for (const group of part.groups) {
     const item = group.items.find((i) => (node.code ? i.code === node.code : Number.isInteger(node.line) && i.line === node.line));
@@ -82,9 +106,10 @@ function partSections(project, part, extra) {
   ];
 }
 
-// node: {kind, partId?, layerId?, group?, code?, line?} → {sections, part} or {error, status}.
-export function contextOf(project, node) {
+// node: {kind, partId?, layerId?, group?, code?, line?} → {sections, part} or {error, status}. draft: the flow workshop's text.
+export function contextOf(project, node, { draft = '' } = {}) {
   if (!node || typeof node !== 'object' || !KINDS.has(node.kind)) return fail(400, 'bad-node');
+  if (node.kind === 'flow') return { sections: flowText(project, draft), part: null };
   const { arch } = project;
   const hasArch = arch && arch.source !== 'none';
   if (node.kind === 'create-arch') return hasArch ? fail(409, 'arch-exists') : { sections: [CREATE_TEXT], part: null };

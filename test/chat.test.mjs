@@ -599,3 +599,45 @@ test('point refusals: a bad node is 400, an unknown item 404, creating a map tha
     assert.equal(plain.status, 200, 'a project without a map still chats');
   });
 });
+
+// ---- the flow workshop chat ---------------------------------------------------------------
+
+test('a flow workshop chat saves the last mermaid block of each reply as the draft, and tells the AI about hand edits', async () => {
+  const { readDraft, writeDraft } = await import('../server/arch/flow.mjs');
+  await withHub({}, async ({ hub, state, smDir, root }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', node: { kind: 'flow' }, text: 'Draw it:\n```mermaid\nflowchart LR\n  web --> api\n```' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    const draftEvt = await r.until((e) => e.type === 'draft');
+    await nthTurnEnd(r, 1);
+    assert.equal(draftEvt.data.text, 'flowchart LR\n  web --> api');
+    assert.equal(readDraft(smDir, 'demo-abc123'), 'flowchart LR\n  web --> api');
+    assert.ok(r.events.findIndex((e) => e.type === 'draft') < r.events.findIndex((e) => e.type === 'turn-end'), 'the draft is saved before the turn ends');
+    assert.ok(!existsSync(join(root, 'docs')), 'nothing is written in the project');
+
+    writeDraft(smDir, 'demo-abc123', 'flowchart LR\n  x --> y');
+    assert.equal(hub.send(res.body.chatKey, { text: 'next' }).status, 200);
+    await nthTurnEnd(r, 2);
+    const echoed = r.events.filter((e) => e.type === 'text' && !e.data.partial).at(-1).data.text;
+    assert.match(echoed, /changed the draft by hand[\s\S]*```mermaid\nflowchart LR\n {2}x --> y\n```[\s\S]*next$/);
+    assert.equal(r.events.filter((e) => e.type === 'user').at(-1).data.text, 'next', 'the page shows only what the person wrote');
+
+    assert.equal(hub.send(res.body.chatKey, { text: 'plain words' }).status, 200);
+    await nthTurnEnd(r, 3);
+    assert.equal(readDraft(smDir, 'demo-abc123'), 'flowchart LR\n  x --> y', 'a reply without a diagram keeps the draft');
+    assert.doesNotMatch(r.events.filter((e) => e.type === 'text' && !e.data.partial).at(-1).data.text, /by hand/, 'the AI saw this version already');
+  });
+});
+
+test('a chat that is not the workshop never writes the draft, whatever its reply holds', async () => {
+  const { readDraft } = await import('../server/arch/flow.mjs');
+  await withHub({}, async ({ hub, state, smDir }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: '```mermaid\nflowchart LR\n  a --> b\n```' }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.equal(readDraft(smDir, 'demo-abc123'), null);
+    assert.equal(r.count((e) => e.type === 'draft'), 0);
+  });
+});
