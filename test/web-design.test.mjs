@@ -130,3 +130,16 @@ for (const [name, map] of [['light', light], ['dark', dark]]) {
     assert.deepEqual(fails, []);
   });
 }
+
+test('DESIGN.md records the system: the eight sections, every type step and the glossary', () => {
+  const doc = readFileSync(new URL('../DESIGN.md', import.meta.url), 'utf8');
+  for (const s of ['Overview', 'Colors', 'Typography', 'Layout', 'Elevation & Depth', 'Shapes', 'Components', "Do's and Don'ts"]) assert.match(doc, new RegExp(`^## ${s}$`, 'm'), s);
+  for (const step of ['2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl']) assert.ok(doc.includes(`--fs-${step}`), step);
+  for (const word of ['line of work', 'saved change', 'team of helpers', 'version history']) assert.ok(doc.includes(word), word);
+});
+
+test('two font stacks only, always through their tokens', () => {
+  for (const name of ['--font', '--mono']) assert.ok(light[name], `${name} missing`);
+  const bad = plain.filter((d) => /^font(-family)?$/.test(d.prop) && /monospace|sans-serif|serif\b/.test(d.value));
+  assert.deepEqual(bad.map((d) => `${d.where} { ${d.prop}: ${d.value.slice(0, 60)} }`), []);
+});

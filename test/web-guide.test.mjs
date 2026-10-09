@@ -82,3 +82,11 @@ test('the help menu holds the tour, the technical details switch and a glossary 
   for (const key of ['help.title', 'help.techLabel', 'help.techHint', 'help.glossary']) assert.ok(has(key), key);
   assert.ok(Object.keys(TECH.en).length > 40);
 });
+
+test('item codes (ca01) are technical: shown only with the technical words on', () => {
+  const css = readFileSync(new URL('style.css', WEB), 'utf8');
+  assert.match(css, /body:not\(\.is-tech\) \.bx-code,\s*body:not\(\.is-tech\) \.code-chip\s*\{\s*display:\s*none;/);
+  const app = readFileSync(new URL('app.js', WEB), 'utf8');
+  assert.match(app, /document\.body\.classList\.toggle\('is-tech', tech\)/);
+  assert.doesNotMatch(app, /\[decision\.who, decision\.code\]/, 'the waiting list leaves the code out in plain mode');
+});

@@ -6,32 +6,67 @@
 
 [English](README.md)
 
-Plugin do Claude Code que desenha a **arquitetura do seu projeto como um mapa mental** e pendura cada conversa, ramo e commit do Claude na parte a que pertence. Camadas abrem em partes, partes em grupos e itens; cada item é uma linha de markdown puro no seu repositório. Você vê o que está pronto, o que está em andamento, o que espera por você, quanto custa, e abre uma conversa em qualquer caixa, ou joga uma ideia nova e deixa a IA pôr no lugar certo.
+**Veja numa página só tudo o que o Claude está fazendo por você.** O session-map é um complemento gratuito do Claude Code. Ele desenha o seu projeto como um mapa de caixas, põe cada conversa com o Claude na caixa em que ela trabalha e mostra, em palavras simples, o que está trabalhando agora, o que ficou pronto, o que espera por você e quanto custaria.
 
-![O mapa mental](docs/images/mind-map-desktop.png)
+Não precisa saber programar para usar.
 
-| Quadro | No celular |
-|---|---|
-| ![O quadro](docs/images/board-desktop.png) | ![O mapa no celular](docs/images/mind-map-phone.png) |
+![O mapa de um projeto, com as conversas à esquerda e o que está acontecendo agora no alto](docs/images/pt-map.webp)
 
-Os prints vêm do `--demo`, que usa dados inventados (a tela fica em inglês porque os textos do projeto de exemplo são em inglês).
+As imagens desta página vêm de um projeto de exemplo com dados inventados (`--demo`); os nomes das partes ficam em inglês porque o exemplo é em inglês.
 
-## Instalar
+## Comece em 6 passos
+
+**1. Instale.** No Claude Code, digite estas duas linhas, uma de cada vez:
 
 ```text
 /plugin marketplace add dan-abreu/session-map
 /plugin install session-map@session-map
 ```
 
-**Requisitos:** Claude Code e Node.js 20 ou mais novo no `PATH`. O instalador nativo do Claude Code não traz o Node; sem ele, o servidor, o hook que arquiva as conversas encerradas e os comandos não rodam.
+Também é preciso ter o Node.js 20 ou mais novo no computador ([nodejs.org](https://nodejs.org), botão "LTS"). O instalador do próprio Claude Code não traz o Node.
 
-## Primeiros passos
+**2. Abra o mapa.** No Claude Code, digite `/session-map:map`. Ele responde com um link: abra no navegador. Guarde esse link só para você: ele leva a sua chave.
 
-1. Rode `/session-map:map` e abra o link que ele mostra.
-2. Escolha um projeto. Se ele já tem pasta de arquitetura, o mapa a mostra na hora. Se não tem, uma faixa oferece criar uma: uma conversa estuda o repositório, propõe as partes e não escreve nada até você dizer OK.
-3. Clique numa caixa para ver as conversas, os ramos e os arquivos dela, e conversar exatamente sobre aquele ponto. **Nova ideia** abre uma conversa sobre o projeto inteiro: ela propõe a parte e o grupo, mostra a linha que escreveria e só grava depois do seu OK.
+**3. Siga o passeio de boas-vindas.** Na primeira vez, cinco passos curtos mostram os lugares principais: o que está acontecendo agora, as suas conversas, o mapa, o que espera por você e onde achar ajuda. Dá para pular e ver de novo depois pelo **?** lá no alto.
 
-## Mapa de arquitetura
+![O passeio de boas-vindas mostrando o que é o mapa](docs/images/pt-tour.webp)
+
+**4. Clique numa caixa.** Cada caixa é uma parte do seu projeto. O painel dela mostra o que falta ali, as conversas sobre ela, as últimas mudanças salvas e os arquivos, cada coisa no seu bloco e com a sua cor. A aba **Conversa** deixa você pedir algo ao Claude exatamente sobre aquela parte.
+
+![O painel de uma parte, com um choque entre duas linhas de trabalho explicado em palavras simples](docs/images/pt-part.webp)
+
+Se o projeto ainda não tem mapa, uma faixa oferece criar um: o Claude estuda o projeto, propõe as partes numa conversa e não escreve nada até você dizer OK.
+
+**5. Responda o que espera por você.** O botão âmbar **Esperando você** lista as perguntas e decisões que só você pode responder. Cada uma diz o que é, por que está acontecendo e o que fazer agora, com o botão que faz.
+
+![A lista do que espera por você](docs/images/pt-waiting.webp)
+
+**6. Pergunte à página.** Cada área tem um **?** pequeno que diz o que ela é numa frase. O **?** lá no alto abre a ajuda: o passeio de novo, um glossário e **Mostrar palavras técnicas**, para quem prefere os termos dos programadores (branch, commit, token…).
+
+![O menu de ajuda com o glossário de palavras simples e técnicas](docs/images/pt-help.webp)
+
+Funciona no celular também: abra o mesmo link no mesmo Wi-Fi (ou veja [No celular](#no-celular) mais abaixo).
+
+<img src="docs/images/pt-phone.webp" alt="O mapa no celular" width="300">
+
+## Palavras desta página
+
+| Você vê | Os programadores dizem |
+|---|---|
+| Linha de trabalho | Ramo (branch) |
+| Mudança salva | Commit |
+| Juntar | Merge |
+| Ajudantes, equipe de ajudantes | Agentes, workflow |
+| Página principal do mapa | README.md da pasta de arquitetura |
+| Quanto custaria se fosse pago por uso | Custo em tokens equivalente à API |
+
+## Para quem programa
+
+Tudo daqui para baixo é o detalhe técnico: como o mapa é guardado, as abas, os comandos, segurança, privacidade e configurações.
+
+O Node.js 20 ou mais novo precisa estar no `PATH`: sem ele, o servidor, o hook que arquiva as conversas encerradas e os comandos não rodam.
+
+### Mapa de arquitetura
 
 O mapa lê markdown puro, então funciona com ou sem o Claude, e o seu time lê no GitHub. Onde ele procura: a pasta da configuração `architecture`, senão a primeira que existir entre `docs/arquitetura`, `docs/architecture`, `docs/arch` (primeiro a árvore de trabalho, depois o ramo principal, lido do `origin/main` quando o `main` local está atrás dele).
 
@@ -48,7 +83,7 @@ O mapa lê markdown puro, então funciona com ou sem o Claude, e o seu time lê 
 
 Os nomes de seção em português e em inglês funcionam. A skill `architecture` ensina isso a toda conversa, inclusive no VS Code: pedido novo vira item, começar marca em andamento e terminar marca como feito. Veja [docs/architecture](docs/architecture/README.md) com este repositório mapeado do mesmo jeito.
 
-## Aba Fluxo
+### Aba Fluxo
 
 A aba **Fluxo** desenha o diagrama mermaid do README da pasta com uma cópia fixa do mermaid que vem no plugin (sem CDN, nível de segurança estrito). Cada caixa que é uma parte ganha a cor da situação dela (conversa trabalhando ali, em andamento, falta fazer, tudo feito), com marcas para o que trava algo e o que espera uma pessoa, e um clique abre o chat da parte ao lado do desenho. Quando o README não tem setas próprias, as relações que o session-map encontrou entram como setas tracejadas.
 
@@ -56,7 +91,7 @@ A aba **Fluxo** desenha o diagrama mermaid do README da pasta com uma cópia fix
 - **Importar:** cole um desenho ou escolha um arquivo, veja o que muda (partes novas e o arquivo de cada uma, camadas, mudanças de camada, partes fora do desenho, setas) e confirme. Só o bloco mermaid do README e um arquivo-esqueleto por parte nova são gravados; nada é apagado, e cada aplicação vai para o `actions.log`. Um mapa lido do ramo principal mostra a prévia, mas não aplica.
 - **Ateliê:** um rascunho compartilhado por projeto. Um chat ao lado redesenha a cada resposta, e as ferramentas criam caixas, setas e camadas, renomeiam, movem e tiram, com editor de texto e desfazer/refazer. Nada chega ao projeto até você aplicar pela prévia da importação.
 
-## Lista de conversas
+### Lista de conversas
 
 A coluna à esquerda do mapa lista toda conversa do projeto aberto dos últimos 31 dias, onde quer que ela tenha rodado: iniciada no mapa, no VS Code, num terminal ou por uma automação. Ela recolhe para um trilho estreito; no celular, o botão **Conversas** no topo abre a lista como gaveta.
 
@@ -66,11 +101,11 @@ A coluna à esquerda do mapa lista toda conversa do projeto aberto dos últimos 
 - Um clique abre os galhos até a caixa dela, centraliza a caixa com um pulso curto e abre a conversa ao lado do mapa. Uma conversa do mapa continua de onde parou (`claude --resume`); uma do VS Code ou do terminal mostra o histórico, com **Abrir no VS Code** ou **Abrir num terminal**, e pode continuar pela página depois de fechada lá.
 - Cada caixa do mapa mostra quantas conversas ela e as de baixo têm; um clique nesse número filtra a lista para aquela caixa.
 
-## Ao vivo
+### Ao vivo
 
 O botão **Ao vivo** do mapa conta as conversas trabalhando agora, em todos os projetos, e abre **Trabalhando agora**: um cartão por conversa, agrupado por projeto, com o caminho dela no mapa, os últimos passos (o mais novo primeiro), os workflows com feitos/total e os agentes ajudantes ainda trabalhando com o modelo de cada um, e **Mostrar no mapa** / **Abrir conversa**. Ele se atualiza a cada 5 segundos. No próprio mapa, o caminho do projeto até a caixa em que se trabalha acende em verde, e uma legenda embaixo dessa caixa diz o último passo. Um agente de workflow parado há 30 minutos sai da lista, para um trabalho interrompido não ficar "trabalhando" para sempre.
 
-## Comandos
+### Comandos
 
 | Comando | O que faz |
 |---|---|
@@ -83,15 +118,15 @@ Sem o plugin: `node server/main.mjs [--lan] [--port 4001]`, ou `--demo` para dad
 
 **Só terminal?** `node server/cli.mjs` (ou `session-map` com o pacote ligado) mostra o mapa em texto: camadas e partes com ● trabalhando / ○ quieto / ! esperando / ✓ tudo feito, depois a lista "Esperando você" e os custos. Ele pergunta ao servidor que estiver rodando e, se não houver, lê o seu histórico direto, com a IA desligada. `--project <nome>` filtra, `--watch` redesenha a cada 5 segundos, `--json` imprime o estado.
 
-## Arquivos
+### Arquivos
 
 Abra uma parte, um item ou um ramo e a seção **Arquivos** lista os arquivos, com os novos e alterados marcados. Tocar num deles abre só para leitura (até 1 MB, só texto, nunca `.git`, nunca arquivos `.env`) com as linhas que o ramo mudou em destaque. **Abrir no VS Code** abre o arquivo neste PC, **Abrir terminal nesta pasta** abre um terminal ali, e **VS Code no celular** aparece quando você define `tunnelUrl`. Ler arquivos exige o token, como o chat.
 
-## No celular
+### No celular
 
 `/session-map:map` mostra um link com `?k=<token>`. Abra uma vez e o navegador guarda o token num cookie. O token fica em `~/.claude/session-map/token`; toda escrita e todo acesso de fora do `127.0.0.1` exige o token, então trate o link de rede como uma senha. A página só escuta em todas as interfaces com `--lan`. Fora de casa, ponha os dois aparelhos no [Tailscale](https://tailscale.com) e use o link `100.x` que ele mostra. Não exponha a porta na internet.
 
-## Conversar pela página
+### Conversar pela página
 
 Para conversas que rodam neste PC, ligue **Enable Remote Control for all sessions** no `/config`: a página passa a oferecer um botão que continua aquela conversa pelo claude.ai ou pelo app do Claude. A página também inicia e conduz conversas próprias com o seu `claude` CLI.
 
@@ -110,15 +145,15 @@ Trocar o jeito, o modelo ou o nível reinicia o processo `claude` da conversa; a
 
 > **Segurança:** uma conversa iniciada pela página pode editar arquivos e rodar comandos neste PC, como qualquer sessão do Claude Code, e em `acceptEdits` ou `auto` faz parte disso sem perguntar. Quem tem o seu token consegue conduzi-la, escolher o modo dela e trocar para `auto` o modo de todo Claude deste PC. Mantenha o token privado e a página fora da internet aberta.
 
-## Custos são estimativas
+### Custos são estimativas
 
 Custo é o equivalente em preço de API dos tokens do seu histórico local. Não é a fatura da sua assinatura.
 
-## Formatos internos podem mudar
+### Formatos internos podem mudar
 
 O plugin lê arquivos locais do Claude Code (sessões, transcrições, skills). Esses formatos não são contrato público e podem mudar; tudo que depende deles mora em `server/sources/claude.mjs`, então uma quebra se conserta num arquivo só.
 
-## Privacidade
+### Privacidade
 
 O servidor lê `~/.claude` (ou `CLAUDE_CONFIG_DIR`) e grava em `~/.claude/session-map/` (token, configuração, arquivo morto, notas e logs) e, só quando você confirma na página, `permissions.defaultMode` em `~/.claude/settings.json`. A pasta de arquitetura de um projeto é escrita pelas conversas, pelo seu `claude` CLI e no seu modo de permissão, não pelo servidor. Dados saem da sua máquina em dois casos.
 
@@ -134,7 +169,7 @@ O mapa passa a colocar as conversas pelos códigos de item que elas citam, pelos
 
 O link de rede (`--lan`) é HTTP simples: numa rede em que você não confia, use o Tailscale ou `--local`.
 
-## Configuração
+### Configuração
 
 As configurações da máquina ficam em `~/.claude/session-map/config.json`. Toda chave é opcional:
 

@@ -30,9 +30,9 @@ The `map` command starts the server and prints the links. `board` makes the curr
 
 ### Plain language
 
-- [ ] **Plain-language skill replies and terminal view** `pt03`
+- [x] **Claude:** Plain-language skill replies and terminal view `pt03`
   - The replies of `/session-map:map`, `:board`, `:history` and `:architecture` and the text view (`server/cli.mjs`) use simple words and say what to do, never raw codes. Part of the round in `mm11`.
-- [ ] **Lay step-by-step READMEs in English and Portuguese, with real screenshots** `pt05`
+- [x] **Claude:** Lay step-by-step READMEs in English and Portuguese, with real screenshots `pt05`
   - Install and first use, written for someone who does not code.
 
 ### Architecture and Flow together

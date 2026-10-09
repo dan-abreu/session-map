@@ -50,13 +50,26 @@ test('package.json carries the repository metadata', () => {
 test('both READMEs show the mind map and teach the architecture convention, not cells', () => {
   for (const f of ['README.md', 'README.pt-BR.md']) {
     const t = read(f);
-    const images = [...t.matchAll(/\]\((docs\/images\/[^)]+\.png)\)/g)].map((m) => m[1]);
-    assert.ok(images.length >= 2, `${f}: screenshots`);
+    const images = [...t.matchAll(/(?:\]\(|src=")(docs\/images\/[^)"]+\.(?:png|webp))/g)].map((m) => m[1]);
+    assert.ok(images.length >= 5, `${f}: a screenshot for each step`);
     for (const img of images) assert.ok(has(img), `${f}: ${img} exists`);
     assert.doesNotMatch(t, /\b(organs?|tissues?|neurons?|nucleus|órgãos?|tecidos?|neurônios?|núcleo)\b/i, f);
     assert.match(t, /actions\/workflows\/test\.yml\/badge\.svg/, `${f}: CI badge`);
     assert.match(t, /img\.shields\.io\/github\/v\/release/, `${f}: release badge`);
     assert.match(t, /docs\/architecture/, `${f}: points at the convention`);
+  }
+});
+
+test('both READMEs start with a lay step-by-step: install, open, tour, a box, waiting for you, help', () => {
+  const guides = [
+    ['README.md', '## Start in 6 steps', ['Install it', 'Open the map', 'welcome tour', 'Click a box', 'Waiting for you', 'Ask the page']],
+    ['README.pt-BR.md', '## Comece em 6 passos', ['Instale', 'Abra o mapa', 'passeio de boas-vindas', 'Clique numa caixa', 'Esperando você', 'Pergunte à página']],
+  ];
+  for (const [f, title, steps] of guides) {
+    const t = read(f);
+    const start = t.indexOf(title);
+    assert.ok(start > 0 && start < t.indexOf('docs/architecture'), `${f}: the steps come before the technical part`);
+    for (const step of steps) assert.ok(t.slice(start).includes(step), `${f}: ${step}`);
   }
 });
 

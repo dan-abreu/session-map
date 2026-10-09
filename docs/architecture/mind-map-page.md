@@ -56,7 +56,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Panels separated by kind of information `mm07`
   - Distinct blocks with their own color, icon and plain title: Tasks, Chats, Lines of work (branches), What changed, Files. Each block says where its data comes from.
   - Tabs in the panel (Summary, Tasks, Chats, Changes, Files); the Summary shows only the essentials. The same colors and icons for each kind everywhere: map, lists, Now strip, alerts.
-- [ ] **important:** Visual polish of the whole program, written down in `DESIGN.md` `mm08`
+- [x] **Claude:** Visual polish of the whole program, written down in `DESIGN.md` `mm08`
   - One visual system: type scale, spacing grid, semantic palette (light and dark, AA contrast), one icon set, identical components with every state, short purposeful motion that respects reduced motion.
   - Empty screens with a simple illustration and a sentence, skeletons while loading, nothing cut off or overlapping on desktop and phone.
   - Screen-by-screen polish with a review of screenshots; the owner approves the screenshots before anything is published. The tokens and components go in `DESIGN.md` for later versions to follow.
@@ -72,7 +72,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Plain language
 
-- [ ] **Plain-language round across the whole program** `mm11`
+- [x] **Claude:** Plain-language round across the whole program `mm11`
   - Clarify every screen so it is understood at a glance: jargon becomes simple words in English and Portuguese (diagram file → drawing, workflow and agents → team of helpers, branch → line of work, commit and merge → saved and joined, token cost → what it cost), with a "technical details" mode showing the original terms.
   - Icon plus text always, a "?" per area with one sentence, empty screens that say what to do, a five-step welcome tour (skip and replay), advanced options grouped in one place.
   - Scope is everything: tabs, panels, Now strip, lists, chats, every error, warning, confirmation and alert (what happened and what to do, never raw codes), install and first use, the settings texts.

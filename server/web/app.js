@@ -499,7 +499,7 @@ function waitingRow(entry, { where }) {
   const title = clashText ? t(clashText.key, clashText.vars) : decision ? decision.text : c.title;
   const detail = clashText?.vars.files
     ? h('span', { class: 'wi-detail mono' }, clashText.vars.files)
-    : decision ? (decision.kind === 'item' && decision.who ? h('span', { class: 'wi-detail' }, [decision.who, decision.code].filter(Boolean).join(' · ')) : null)
+    : decision ? (decision.kind === 'item' && decision.who ? h('span', { class: 'wi-detail' }, [decision.who, tech ? decision.code : null].filter(Boolean).join(' · ')) : null)
       : h('span', { class: 'wi-detail' }, c.waiting.items[0] || tail(c.lastAssistantText, 140));
   const main = h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, target) },
     h('span', { class: 'wi-reason' }, kmark(decision?.kind === 'clash' ? 'branches' : decision ? 'tasks' : 'chats'), reason),
@@ -805,7 +805,7 @@ function itemRow(node) {
   return h('li', {}, h('button', { type: 'button', class: `item-row st-${i.status}`, onclick: () => openPoint(node) },
     h('span', { class: `bx-status st-${i.status}`, 'aria-hidden': 'true' }),
     h('span', { class: 'ir-title' }, node.label),
-    h('span', { class: 'ir-meta' }, [i.status === 'doing' ? t('item.status.doing') : null, i.status === 'done' ? t('item.status.done') : null, i.who, i.weight ? t(`item.weight.${i.weight}`) : null, i.code].filter(Boolean).join(' · '))));
+    h('span', { class: 'ir-meta' }, [i.status === 'doing' ? t('item.status.doing') : null, i.status === 'done' ? t('item.status.done') : null, i.who, i.weight ? t(`item.weight.${i.weight}`) : null, tech ? i.code : null].filter(Boolean).join(' · '))));
 }
 
 function itemList(nodes) {
@@ -1630,11 +1630,13 @@ function wire() {
       refreshView(true);
     });
   }
+  document.body.classList.toggle('is-tech', tech);
   tour = createTour({ h, t: () => t, phone: () => PHONE.matches, onEnd: (how) => store.set('sm.tour', how) });
   help = createHelp({
     h, t: () => t, plain: () => translator(lang), tech: () => translator(lang, { tech: true }), getTech: () => tech,
     setTech: (on) => {
       tech = on;
+      document.body.classList.toggle('is-tech', tech);
       store.set('sm.tech', on ? '1' : '0');
       t = translator(lang, { tech });
       renderAll();

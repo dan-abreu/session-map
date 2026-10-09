@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { LANGS, TECH, translator } from '../server/web/i18n.js';
 
 // The words a person who never coded does not know. Each has a plain stand-in in the glossary of DESIGN.md.
-const JARGON = /\b(commits?|merg(e|es|ed|ing)|branch(es)?|tokens?|README|API|repo|repos|repositor(y|ies)|repositórios?|CLI|JSON|push(ed|es)?|rebase|workflows?|agents?|agentes?|subagents?|diff|MCP|hooks?|mermaid|markdown|git|ramos?|config|serv(er|idor)|process(o|es)?)\b|\?k=/i;
+const JARGON = /\b(commits?|merg(e|es|ed|ing)|branch(es)?|tokens?|README|API|repo|repos|repositor(y|ies)|repositórios?|CLI|JSON|push(ed|es)?|rebase|workflows?|agents?|agentes?|subagents?|diff|MCP|hooks?|mermaid|markdown|git|ramos?|config|serv(er|idor)|process(o|es)?|marketplaces?)\b|\?k=/i;
 // Texts that are technical by nature: the terminal's command-line help lists its flags.
 const TECHNICAL_BY_NATURE = new Set(['cli.help']);
 

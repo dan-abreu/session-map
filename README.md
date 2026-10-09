@@ -6,32 +6,67 @@
 
 [Português](README.pt-BR.md)
 
-A Claude Code plugin that draws your project's **architecture as a mind map** and hangs every Claude conversation, branch and commit on the part it belongs to. Layers open into parts, parts into groups and items; each item is a line of plain markdown in your repository. You see what is done, what is in progress, what waits for you, what it costs, and you start a chat on any box, or drop in a new idea and let the AI put it in the right place.
+**See everything Claude is doing for you, on one page.** session-map is a free add-on for Claude Code. It draws your project as a map of boxes, puts every conversation with Claude on the box it works on, and tells you, in plain words, what is working now, what is done, what is waiting for you and what it would cost.
 
-![The mind map](docs/images/mind-map-desktop.png)
+You do not need to know how to code to use it.
 
-| Board | On a phone |
-|---|---|
-| ![The board](docs/images/board-desktop.png) | ![The map on a phone](docs/images/mind-map-phone.png) |
+![The map of a project, with the conversations on the left and what is happening now at the top](docs/images/en-map.webp)
 
-The screenshots come from `--demo`, which uses invented data.
+The pictures on this page come from a sample project with invented data (`--demo`).
 
-## Install
+## Start in 6 steps
+
+**1. Install it.** In Claude Code, type these two lines, one at a time:
 
 ```text
 /plugin marketplace add dan-abreu/session-map
 /plugin install session-map@session-map
 ```
 
-**Requirements:** Claude Code and Node.js 20 or newer on your `PATH`. The native Claude Code installer does not bring Node; without it the server, the hook that archives finished chats and the commands do not run.
+You also need Node.js 20 or newer on the computer ([nodejs.org](https://nodejs.org), the "LTS" button). Claude Code's own installer does not bring it.
 
-## Getting started
+**2. Open the map.** In Claude Code, type `/session-map:map`. It answers with a link: open it in your browser. Keep that link to yourself: it carries your key.
 
-1. Run `/session-map:map` and open the link it prints.
-2. Pick a project. If it already has an architecture folder, the map shows it at once. If not, a banner offers to create one: a chat studies the repository, proposes the parts, and writes nothing until you say OK.
-3. Click a box to see its conversations, branches and files, and to chat about exactly that point. **New idea** opens a chat on the whole project: it proposes the part and the group, shows the line it would write, and writes it only after your OK.
+**3. Follow the welcome tour.** The first time, five short steps show the main places: what is happening now, your conversations, the map, what waits for you, and where to find help. You can skip it and play it again later from the **?** at the top.
 
-## Architecture map
+![The welcome tour showing what the map is](docs/images/en-tour.webp)
+
+**4. Click a box.** Each box is a part of your project. Its panel shows what is missing there, the conversations about it, the latest saved changes and its files, each in its own block with its own color. The **Conversation** tab lets you ask Claude for something about exactly that part.
+
+![The panel of a part, with a clash between two lines of work explained in plain words](docs/images/en-part.webp)
+
+If your project has no map yet, a banner offers to create one: Claude studies the project, proposes the parts in a chat and writes nothing until you say OK.
+
+**5. Answer what waits for you.** The amber **Waiting for you** button lists the questions and decisions only you can answer. Each one says what it is, why it is happening and what to do now, with the button that does it.
+
+![The list of what is waiting for you](docs/images/en-waiting.webp)
+
+**6. Ask the page.** Every area has a small **?** that says what it is in one sentence. The **?** at the top opens help: the tour again, a glossary, and **Show technical words** for people who prefer the programmers' terms (branch, commit, token…).
+
+![The help menu with the glossary of plain and technical words](docs/images/en-help.webp)
+
+It works on a phone too: open the same link on the same Wi-Fi (or see [On your phone](#on-your-phone) below).
+
+<img src="docs/images/en-phone.webp" alt="The map on a phone" width="300">
+
+## Words on this page
+
+| You see | Programmers say |
+|---|---|
+| Line of work | Branch |
+| Saved change | Commit |
+| Join | Merge |
+| Helpers, team of helpers | Agents, workflow |
+| The map's main page | README.md of the architecture folder |
+| What it would cost if paid per use | API-equivalent token cost |
+
+## For people who code
+
+Everything below is the technical detail: how the map is stored, the tabs, the commands, security, privacy and settings.
+
+Node.js 20 or newer must be on the `PATH`: without it the server, the hook that archives finished chats and the commands do not run.
+
+### Architecture map
 
 The map reads plain markdown, so it works with or without Claude, and your teammates can read it on GitHub. Where it looks: the folder set in the config `architecture`, else the first that exists of `docs/arquitetura`, `docs/architecture`, `docs/arch` (the working tree first, then the main branch, read from `origin/main` when the local `main` is behind it).
 
@@ -48,7 +83,7 @@ The map reads plain markdown, so it works with or without Claude, and your teamm
 
 English and Portuguese section names both work. The `architecture` skill teaches this to every chat, VS Code included, so a new request becomes an item, starting marks it in progress, and finishing ticks it. See [docs/architecture](docs/architecture/README.md) for this repository mapped the same way.
 
-## Flow tab
+### Flow tab
 
 The **Flow** tab draws the folder README's mermaid diagram with a pinned copy of mermaid shipped with the plugin (no CDN, strict security level). Each box that is a part takes the color of its situation (a chat working there, in progress, still to do, all done), with marks for blockers and items waiting on a person, and a click opens that part's chat beside the drawing. When the README has no arrows of its own, the relations session-map found fill in as dotted arrows.
 
@@ -56,7 +91,7 @@ The **Flow** tab draws the folder README's mermaid diagram with a pinned copy of
 - **Import:** paste a drawing or pick a file, see what it changes (new parts and the file each gets, layers, moves, parts left out, arrows), then confirm. Only the README's mermaid block and a skeleton file per new part are written; nothing is deleted, and each apply goes to `actions.log`. A map read from the main branch can be previewed but not applied.
 - **Workshop:** a shared draft per project. A side chat redraws it with every reply, and the tools add boxes, arrows and layers, rename, move and remove, with a text editor and undo/redo. Nothing reaches the project until you apply it through the import preview.
 
-## Conversation list
+### Conversation list
 
 The column on the left of the map lists every conversation of the open project from the last 31 days, wherever it ran: started on the map, in VS Code, in a terminal, or by an automation. It folds to a narrow rail; on a phone, the **Conversations** button at the top opens it as a drawer.
 
@@ -66,11 +101,11 @@ The column on the left of the map lists every conversation of the open project f
 - A click opens the branches down to its box, centers it with a short pulse, and opens the conversation beside the map. A map conversation picks up where it stopped (`claude --resume`); one from VS Code or a terminal shows its history, with **Open in VS Code** or **Open in a terminal**, and can go on from the page once it is closed there.
 - Every box of the map shows how many conversations it and its children hold; a click on that number narrows the list to that box.
 
-## Live
+### Live
 
 The **Live** button on the map counts the conversations working now, in every project, and opens **Working now**: one card per conversation, grouped by project, with its way down the map, its latest steps (the newest first), its workflows with done/total and the helper agents still running with their model, and **Show on map** / **Open conversation**. It updates every 5 seconds. On the map itself the way from the project to the box being worked on lights up in green, and a caption under that box names the latest step. A workflow agent that has not moved for 30 minutes is left out, so an interrupted run does not stay "working" for ever.
 
-## Commands
+### Commands
 
 | Command | What it does |
 |---|---|
@@ -83,15 +118,15 @@ Without the plugin: `node server/main.mjs [--lan] [--port 4001]`, or `--demo` fo
 
 **Terminal only?** `node server/cli.mjs` (or `session-map` once the package is linked) prints the map as text: layers and parts with ● working / ○ quiet / ! waiting / ✓ all done, then the "Waiting for you" list and costs. It asks the running server and, if there is none, reads your history directly with the AI off. `--project <name>` narrows it, `--watch` redraws every 5 seconds, `--json` prints the state.
 
-## Files
+### Files
 
 Open a part, an item or a branch and its **Files** section lists the files, new and changed ones marked. Tapping one opens it read-only (up to 1 MB, text only, never `.git`, never `.env` files) with the lines the branch changed highlighted. **Open in VS Code** opens that file on this PC, **Open terminal in this folder** opens a shell there, and **VS Code on your phone** appears when you set `tunnelUrl`. Reading files needs the token, like the chat.
 
-## On your phone
+### On your phone
 
 `/session-map:map` prints a link with `?k=<token>`. Open it once and the browser keeps the token in a cookie. The token is in `~/.claude/session-map/token`; every write and every access from outside `127.0.0.1` needs it, so treat the network link like a password. The page listens on all interfaces only with `--lan`. Away from home, put both devices on [Tailscale](https://tailscale.com) and use the `100.x` link it prints. Do not expose the port to the internet.
 
-## Chat from the page
+### Chat from the page
 
 For chats that run on this PC, turn on **Enable Remote Control for all sessions** in `/config`: the page then offers a button that continues that conversation from claude.ai or the Claude app. The page can also start and drive its own chats with your `claude` CLI.
 
@@ -110,15 +145,15 @@ Changing the way, the model or the effort restarts the conversation's `claude` p
 
 > **Security:** a chat started from the page can edit files and run commands on this PC, like any Claude Code session, and in `acceptEdits` or `auto` it does part of that without asking you. Anyone holding your token can drive it, pick its mode, and switch the mode of every Claude on this PC to `auto`. Keep the token private and the page off the open internet.
 
-## Costs are estimates
+### Costs are estimates
 
 Costs are the API-price equivalent of the tokens in your local history. They are not your subscription bill.
 
-## Internal formats may change
+### Internal formats may change
 
 The plugin reads Claude Code's local files (sessions, transcripts, skills). Those formats are not a public contract and may change; everything that depends on them lives in `server/sources/claude.mjs`, so a break is a one-file fix.
 
-## Privacy
+### Privacy
 
 The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes to `~/.claude/session-map/` (token, config, archive, notes and logs) and, only when you confirm it on the page, `permissions.defaultMode` in `~/.claude/settings.json`. The architecture folder of a project is written by the chats, through your `claude` CLI and in your permission mode, not by the server. Data leaves your machine in two cases.
 
@@ -134,7 +169,7 @@ The map then places chats by the item codes they cite, by the files they touch a
 
 The network link (`--lan`) is plain HTTP: on a network you do not trust, use Tailscale or `--local`.
 
-## Configuration
+### Configuration
 
 Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is optional:
 
