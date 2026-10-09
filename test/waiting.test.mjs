@@ -41,3 +41,16 @@ test('items come from card.waiting even when the chat is busy', () => {
 test('missing assistant text is not a question', () => {
   assert.equal(waitingFor(summary({ lastAssistantText: null }), idle, null).weak, false);
 });
+
+// Seen on the real page (2026-10-09): Automatic asked for the OK to reinforce, and the list put it under "Recent".
+const runFence = (body) => `\n\n\`\`\`session-map-run\n${body}\n\`\`\``;
+test('strong: the maestro asked for the OK to reinforce, in its run block', () => {
+  const text = `Login and card payments need a planned team. Can I go ahead?${runFence('{"level":"ask-reinforce","why":"touches sign in","estimateUSD":4}')}`;
+  assert.deepEqual([waitingFor(summary({ lastAssistantText: text }), idle, null).strong, waitingFor(summary({ lastAssistantText: text }), busy, null).strong], [true, false]);
+});
+
+test('weak: a question before the folded blocks still counts, and a plain run block does not ask', () => {
+  const card = '\n\n```session-map\n{"title":"T","doing":"x"}\n```';
+  assert.equal(waitingFor(summary({ lastAssistantText: `Should I keep the old file?${card}${runFence('{"level":"direct","why":"a question"}')}` }), idle, null).weak, true);
+  assert.deepEqual(Object.values(waitingFor(summary({ lastAssistantText: `Done.${runFence('{"level":"direct","why":"small"}')}` }), idle, null)).slice(0, 2), [false, false]);
+});
