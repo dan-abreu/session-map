@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { runAction } from './actions.mjs';
 import { cleanTags, newUnit, normalizeUnit } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { archiveAll, readArchived, readIndex, searchIndex } from './archive.mjs';
+import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { UNSORTED, brainDir, readJsonFile, setOverride, writeUnits } from './brain/cells.mjs';
 import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
@@ -25,6 +25,7 @@ const STATE_TTL_MS = 3000;
 const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const NAME_MAX = 40;
+const LEVEL_RANK = { cell: 0, tissue: 1, organ: 2 };
 const NUCLEUS_ITEMS_MAX = 50;
 const NUCLEUS_TEXT_MAX = 1000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,6 +78,15 @@ export function editUnits(units, op, now) {
       }
       into.pinned = true;
       return next.filter((u) => !ids.includes(u.id));
+    }
+    case 'move': {
+      const { parentId } = op;
+      if (!editable(op.id) || parentId === undefined || (parentId !== null && !editable(parentId))) return null;
+      const unit = byId.get(op.id);
+      // Levels stay strict: a unit only sits inside a higher level, which also rules out cycles.
+      if (parentId !== null && LEVEL_RANK[byId.get(parentId).level] <= LEVEL_RANK[unit.level]) return null;
+      Object.assign(unit, { parentId, pinned: true });
+      return next;
     }
     case 'create': {
       const name = cleanName(op.name);
@@ -203,6 +213,11 @@ export function createApp({
       if (demo) return send(res, 200, { results: [] });
       const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir));
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20 }) });
+    }
+    if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
+      if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
+      if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');
+      return send(res, 200, { ok: true });
     }
     if (req.method === 'GET' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       const id = parts[3];

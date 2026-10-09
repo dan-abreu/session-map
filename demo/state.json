@@ -1863,7 +1863,8 @@
         "enabled": true,
         "model": "haiku",
         "spentUSDToday": 0.04,
-        "queue": 1
+        "queue": 1,
+        "bootstrap": null
       },
       "activity": [
         {
@@ -2578,6 +2579,19 @@
         },
         {
           "kind": "renamed",
+          "ts": "2026-10-06T21:00:00.000Z",
+          "subject": "Fuzzy search → Typo tolerance",
+          "branch": "main",
+          "author": {
+            "name": "Claude Haiku 4.5",
+            "email": ""
+          },
+          "unitIds": [
+            "typo"
+          ]
+        },
+        {
+          "kind": "renamed",
           "ts": "2026-10-07T09:30:00.000Z",
           "subject": "Renamed Checkout flow to One-click checkout and pinned it",
           "branch": "main",
@@ -3149,7 +3163,7 @@
           "status": "idle",
           "entrypoint": "cli",
           "live": true,
-          "bridgeUrl": null,
+          "bridgeUrl": "https://claude.ai/code/demo-bridge-0001",
           "lastPrompt": "Email customers when a product they watch is back.",
           "lastAssistantText": "Alerts are queued and sent in batches every 15 minutes. I need one decision before turning them on (see the card).",
           "waiting": {
@@ -3176,7 +3190,7 @@
           "startedAt": "2026-10-04T15:00:00.000Z",
           "updatedAt": "2026-10-07T19:00:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
           "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
@@ -3212,7 +3226,7 @@
           "startedAt": "2026-10-05T15:00:00.000Z",
           "updatedAt": "2026-10-07T13:00:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
           "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
@@ -3223,7 +3237,7 @@
           "workCellSource": "card",
           "parentId": null,
           "status": "idle",
-          "entrypoint": "vscode",
+          "entrypoint": "claude-vscode",
           "live": true,
           "bridgeUrl": null,
           "lastPrompt": "Handle declined cards more gracefully.",
@@ -3248,7 +3262,7 @@
           "startedAt": "2026-10-06T15:00:00.000Z",
           "updatedAt": "2026-10-08T13:00:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
           "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
@@ -3814,7 +3828,12 @@
         "enabled": true,
         "model": "haiku",
         "spentUSDToday": 0.01,
-        "queue": 0
+        "queue": 0,
+        "bootstrap": {
+          "done": 4,
+          "total": 6,
+          "estimatedUSD": 0.02
+        }
       },
       "activity": [
         {
@@ -4118,7 +4137,7 @@
           "startedAt": "2026-10-06T15:00:00.000Z",
           "updatedAt": "2026-10-07T09:00:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
           "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",

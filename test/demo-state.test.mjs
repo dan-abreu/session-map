@@ -128,6 +128,19 @@ test('waiting count matches waiting chats plus decisions', () => {
   assert.equal(state.waitingCount, chats + decisions);
 });
 
+test('demo chats follow the server rules for actions and the in-page chat', () => {
+  for (const p of state.projects) {
+    assert.ok(p.ai === null || 'bootstrap' in p.ai, `${p.name} ai.bootstrap`);
+    for (const c of p.chats) {
+      assert.ok(['cli', 'claude-vscode', 'sdk-cli'].includes(c.entrypoint), `${c.title} entrypoint ${c.entrypoint}`);
+      assert.equal(c.chattable, !c.live, `${c.title}: only a closed conversation is written from the page`);
+      assert.ok(c.bridgeUrl === null || c.bridgeUrl.startsWith('https://claude.ai/code/'));
+    }
+  }
+  assert.ok(shop.chats.some((c) => c.live && c.bridgeUrl), 'one live chat has Remote Control');
+  assert.ok(shop.activity.some((a) => a.kind === 'renamed' && / → /.test(a.subject)), 'an AI rename in the server format');
+});
+
 test('demo data carries nothing personal', () => {
   assert.doesNotMatch(raw, /[A-Za-z]:[\\/]+Users|\/Users\/|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
 });

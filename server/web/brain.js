@@ -278,7 +278,10 @@ const ICON_BANG = 'M0,-3.6V0.6';
 const ICON_ASK = 'M-1.9,-1.9a1.95,1.95 0 1 1 2.4,1.9c-0.5,0.15-0.5,0.5-0.5,1.1';
 const ICON_PIN = 'M-2.6,-5.2h5.2M-1.7,-5.2l-0.5,3.6-1.7,1.6h7.8l-1.7-1.6-0.5-3.6M0,0v4.6';
 
-export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, budAria, linkLabel, freeArea }) {
+const AI_KINDS = new Set(['grouped', 'fused-by-meaning', 'renamed']);
+
+// labelAt(unit, t) names a unit as it was at time t; onMoveChat and onMoveUnit receive drops (desenho-2 § 28: the person decides).
+export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, unitMeta, unitAria, budAria, linkLabel, freeArea, onMoveChat, onMoveUnit }) {
   const svg = d3.select(svgEl);
   svg.selectAll('*').remove();
   const world = svg.append('g').attr('class', 'world');
@@ -374,6 +377,27 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
     budBody.append('text').attr('class', 'bud-initial').attr('dy', '0.35em').attr('text-anchor', 'middle')
       .style('font-size', (d) => `${(d.r * 0.95).toFixed(1)}px`).text((d) => d.letter);
 
+    buildNeurons();
+
+    // Bigger units first: they claim label space before smaller ones (see placeLabels).
+    const lab = gLabels.selectAll('g.label').data(unitsByLevel, (d) => d.id).join('g')
+      .attr('class', (d) => `label level-${d.level} status-${d.data.status}`);
+    lab.append('text').attr('text-anchor', 'middle').each(function (d) { writeLabel(d3.select(this), d); });
+    lab.filter((d) => d.data.pinned).append('path').attr('class', 'pin').attr('d', ICON_PIN);
+    gLabels.selectAll('g.bud-label').data(model.buds, (d) => d.id).join('g')
+      .attr('class', 'bud-label').style('--owner-h', (d) => d.hue)
+      .append('text').attr('text-anchor', 'middle').text((d) => d.data.branch);
+    unitG.filter((d) => d.level !== 'organ').call(unitDrag);
+  }
+
+  function writeLabel(el, d) {
+    el.selectAll('*').remove();
+    d.lines.forEach((line, i) => el.append('tspan').attr('class', 'name').attr('x', 0).attr('dy', i ? '1.15em' : 0).text(line));
+    el.append('tspan').attr('class', 'meta').attr('x', 0).attr('dy', '1.3em').text(unitMeta(d.data, d.visible ?? d.chats.length));
+  }
+
+  function buildNeurons() {
+    gNeurons.selectAll('*').remove();
     const nG = interactive(gNeurons.selectAll('g.neuron').data(model.neurons, (d) => d.id).join('g'), (d) => ({ type: 'chat', id: d.id }))
       .attr('class', (d) => `neuron kind-${neuronKind(d.chat)}${d.chat.waiting.weak ? ' weak' : ''}`)
       .attr('aria-label', (d) => d.chat.title);
@@ -391,21 +415,68 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
     unsure.append('circle').attr('r', 5.6);
     unsure.append('path').attr('d', ICON_ASK);
     unsure.append('circle').attr('class', 'ask-dot').attr('cy', 2.7).attr('r', 0.85);
-
-    // Bigger units first: they claim label space before smaller ones (see placeLabels).
-    const lab = gLabels.selectAll('g.label').data(unitsByLevel, (d) => d.id).join('g')
-      .attr('class', (d) => `label level-${d.level} status-${d.data.status}`);
-    const text = lab.append('text').attr('text-anchor', 'middle');
-    text.each(function (d) {
-      const el = d3.select(this);
-      d.lines.forEach((line, i) => el.append('tspan').attr('class', 'name').attr('x', 0).attr('dy', i ? '1.15em' : 0).text(line));
-      el.append('tspan').attr('class', 'meta').attr('x', 0).attr('dy', '1.3em').text(unitMeta(d.data, d.chats.length));
-    });
-    lab.filter((d) => d.data.pinned).append('path').attr('class', 'pin').attr('d', ICON_PIN);
-    gLabels.selectAll('g.bud-label').data(model.buds, (d) => d.id).join('g')
-      .attr('class', 'bud-label').style('--owner-h', (d) => d.hue)
-      .append('text').attr('text-anchor', 'middle').text((d) => d.data.branch);
+    if (onMoveChat) nG.call(neuronDrag);
   }
+
+  // Deepest unit under a world point: cells before tissues before organs.
+  function unitAt(x, y, accept) {
+    let best = null;
+    for (const n of model.ordered) {
+      if (n.rNow < 1 || Math.hypot(x - n.x, y - n.y) > n.rNow || !accept(n)) continue;
+      if (!best || LEVEL_RANK[n.level] < LEVEL_RANK[best.level] || (n.level === best.level && n.rNow < best.rNow)) best = n;
+    }
+    return best;
+  }
+
+  const markDrop = (target) => gUnits.selectAll('g.unit').classed('is-drop-target', (d) => d === target);
+
+  function dragStart(event, d) {
+    d.dragging = true;
+    d.dragX = d.startX = d.x;
+    d.dragY = d.startY = d.y;
+    svg.classed('is-dragging', true);
+  }
+  function dragEnd(d) {
+    d.dragging = false;
+    svg.classed('is-dragging', false);
+    markDrop(null);
+    draw();
+  }
+
+  // A neuron dropped on another unit moves that conversation there for good (POST /api/override).
+  const neuronDrag = d3.drag().clickDistance(5)
+    .on('start', dragStart)
+    .on('drag', (event, d) => {
+      d.dragX = event.x;
+      d.dragY = event.y;
+      markDrop(unitAt(event.x, event.y, (n) => n !== d.unit));
+      draw();
+    })
+    .on('end', (event, d) => {
+      const target = unitAt(event.x, event.y, (n) => n !== d.unit);
+      const moved = Math.hypot(event.x - d.startX, event.y - d.startY) > 5;
+      dragEnd(d);
+      if (target && moved) onMoveChat(d.id, target.id);
+    });
+
+  // Only the selected cell or tissue drags: anywhere else a drag still pans the map.
+  const higher = (d) => (n) => LEVEL_RANK[n.level] > LEVEL_RANK[d.level];
+  const unitDrag = d3.drag().clickDistance(5)
+    .filter((event, d) => !event.button && Boolean(onMoveUnit) && selection?.type === 'unit' && selection.id === d.id && d.id !== 'unsorted')
+    .on('start', dragStart)
+    .on('drag', (event, d) => {
+      d.dragX = event.x;
+      d.dragY = event.y;
+      markDrop(unitAt(event.x, event.y, higher(d)));
+      draw();
+    })
+    .on('end', (event, d) => {
+      const target = unitAt(event.x, event.y, higher(d));
+      const outside = d.parent && Math.hypot(event.x - d.parent.x, event.y - d.parent.y) > d.parent.rNow;
+      dragEnd(d);
+      if (target && target !== d.parent) onMoveUnit(d.id, target.id);
+      else if (!target && outside) onMoveUnit(d.id, null);
+    });
 
   const spreadOf = (n) => (n.parent ? 1 + SPREAD * (1 - n.parent.gNow) : 1);
 
@@ -416,6 +487,7 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
       n.x = n.parent.x + n.relX * k;
       n.y = n.parent.y + n.relY * k;
     }
+    for (const n of model.ordered) if (n.dragging) { n.x = n.dragX; n.y = n.dragY; }
     for (const b of model.buds) {
       const u = b.unit;
       const cos = Math.cos(b.angle), sin = Math.sin(b.angle);
@@ -444,6 +516,7 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
       } else {
         nr.x = ux; nr.y = uy;
       }
+      if (nr.dragging) { nr.x = nr.dragX; nr.y = nr.dragY; }
     }
   }
 
@@ -593,10 +666,32 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
     return transform.applyY(d.y - d.rNow) - 26 - 15 * (d.lines.length - 1);
   }
 
-  function ripple(n) {
-    if (reducedMotion()) return;
-    const c = gRipples.append('circle').attr('class', 'ripple').attr('cx', n.x).attr('cy', n.y).attr('r', n.rNow);
-    c.transition().duration(900).ease(d3.easeCubicOut).attr('r', n.rNow + 26).style('opacity', 0).remove();
+  function ripple(n, kind = 'git') {
+    if (reducedMotion() || !n || n.rNow < 1) return;
+    const ai = kind === 'ai';
+    const c = gRipples.append('circle').attr('class', `ripple ripple-${kind}`).attr('cx', n.x).attr('cy', n.y).attr('r', n.rNow);
+    c.transition().duration(ai ? 1400 : 900).ease(d3.easeCubicOut).attr('r', n.rNow + (ai ? 40 : 26)).style('opacity', 0).remove();
+  }
+
+  const flash = (sel) => sel.classed('is-fresh', false).each(function () { this.getBoundingClientRect(); }).classed('is-fresh', true);
+
+  // Something the AI or git just did, seen live: the units it touched shiver once and their names light up.
+  function pulse(unitIds, kind) {
+    if (!model) return;
+    for (const id of unitIds) ripple(model.nodes.get(id), AI_KINDS.has(kind) ? 'ai' : 'git');
+    if (!reducedMotion()) flash(gLabels.selectAll('g.label').filter((d) => unitIds.includes(d.id)));
+  }
+
+  // Crossing a rename on the timeline changes the name in place.
+  function relabel(t, animated) {
+    gLabels.selectAll('g.label').each(function (d) {
+      const name = labelAt(d.data, t);
+      if (name === d.name) return;
+      d.name = name;
+      d.lines = wrapLabel(name, d.level === 'cell' ? 16 : 22);
+      writeLabel(d3.select(this).select('text'), d);
+      if (animated && !reducedMotion()) flash(d3.select(this));
+    });
   }
 
   const animated = () => [...model.neurons, ...model.links, ...model.buds, ...model.ghosts];
@@ -631,7 +726,15 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
   function setTime(t, { instant = false } = {}) {
     if (!model) return;
     const forward = t >= tNow;
+    const before = tNow;
     tNow = t;
+    if (!instant && forward) {
+      for (const a of model.life) {
+        const ts = Date.parse(a.ts);
+        if (ts > before && ts <= t) ripple(model.nodes.get(a.unitIds[0]), 'ai');
+      }
+    }
+    relabel(t, !instant && forward);
     for (const n of model.neurons) n.target = n.t <= t ? 1 : 0;
     const visibleChats = (n) => model.neurons.filter((nr) => nr.unit === n && nr.target === 1).length;
     for (const n of model.ordered) {
@@ -792,10 +895,31 @@ export function createBrain(svgEl, { onSelect, labelFor, unitMeta, unitAria, bud
 
   function setProject(project) {
     model = layout(project, freeArea(), labelFor);
+    model.life = (project.activity || []).filter((a) => AI_KINDS.has(a.kind) && a.unitIds?.length);
+    for (const n of model.nodes.values()) n.name = labelFor(n.data);
     tNow = Infinity;
     build();
     select(selection);
   }
 
-  return { setProject, setTime, select, fit, focusUnit, focusChat, focusLink, focusWorkCell };
+  // Same shape, new facts (status, waiting, titles): repaint by id and keep positions and zoom.
+  function update(project) {
+    if (!model) return;
+    const units = new Map(project.units.map((u) => [u.id, u]));
+    const chats = new Map(project.chats.map((c) => [c.sessionId, c]));
+    const cells = new Map(project.workCells.map((w) => [w.id, w]));
+    for (const n of model.nodes.values()) if (units.has(n.id)) n.data = units.get(n.id);
+    for (const nr of model.neurons) if (chats.has(nr.id)) nr.chat = chats.get(nr.id);
+    for (const b of model.buds) if (cells.has(b.id)) b.data = cells.get(b.id);
+    gUnits.selectAll('g.unit')
+      .attr('class', (d) => `unit level-${d.level} status-${d.data.status}${d.data.pinned ? ' is-pinned' : ''}`)
+      .attr('aria-label', (d) => unitAria(d.data));
+    gLabels.selectAll('g.label').attr('class', (d) => `label level-${d.level} status-${d.data.status}`);
+    gLabels.selectAll('tspan.meta').text((d) => unitMeta(d.data, d.visible));
+    buildNeurons();
+    draw();
+    select(selection);
+  }
+
+  return { setProject, update, setTime, select, fit, focusUnit, focusChat, focusLink, focusWorkCell, pulse };
 }

@@ -25,6 +25,8 @@
     <symbol id="i-rename" viewBox="0 0 24 24"><path d="M14.5 5.5l4 4L9 19H5v-4z"/><path d="M12.5 7.5l4 4"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.8 6L6.5 13h11l-2.7-3L14 4M12 13v7"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M7 7l2 2M15 15l2 2M17 7l-2 2M9 15l-2 2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 12h13M12.5 6.5L18 12l-5.5 5.5"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
     <symbol id="i-seed" viewBox="0 0 24 24"><path d="M5 19c0-7 4-12 14-14-1 10-6 14-14 14z"/><path d="M5 19l7-7"/></symbol>
   </svg>
 
@@ -41,12 +43,12 @@
       </label>
     </div>
     <nav class="tabs" data-i18n-aria="tabs.label">
-      <button type="button" class="tab" id="tabBrain" aria-current="page" data-i18n="tab.brain"></button>
-      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.map"></button>
-      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.board"></button>
-      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.history"></button>
-      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.costs"></button>
-      <button type="button" class="tab" id="tabDiscover" data-i18n="tab.discover"></button>
+      <button type="button" class="tab" id="tab-brain" aria-current="page" data-i18n="tab.brain"></button>
+      <button type="button" class="tab" id="tab-map" aria-current="false" data-i18n="tab.map"></button>
+      <button type="button" class="tab" id="tab-board" aria-current="false" data-i18n="tab.board"></button>
+      <button type="button" class="tab" id="tab-history" aria-current="false" data-i18n="tab.history"></button>
+      <button type="button" class="tab" id="tab-costs" aria-current="false" data-i18n="tab.costs"></button>
+      <button type="button" class="tab" id="tab-discover" aria-current="false" data-i18n="tab.discover"></button>
     </nav>
     <div class="bar-end">
       <div class="lang" role="group" data-i18n-aria="lang.label">
@@ -102,6 +104,32 @@
 
     <p class="notice" id="notice" role="status"></p>
 
+    <aside id="chat" class="sheet chat" aria-labelledby="chatTitle" hidden>
+      <div class="sheet-head">
+        <div>
+          <h2 id="chatTitle"></h2>
+          <p class="meta" id="chatContext"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close="chat" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <ol id="chatLog" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
+      <form id="chatForm" class="chat-form">
+        <p class="chat-status" id="chatStatus" role="status"></p>
+        <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
+        <textarea id="chatInput" rows="3" maxlength="20000"></textarea>
+        <div class="chat-bar">
+          <span class="chat-safety" data-i18n="chat.safety"></span>
+          <button type="button" class="btn" id="chatStop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+          <button type="submit" class="btn primary" id="chatSend"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
+        </div>
+      </form>
+    </aside>
+
+    <section id="view-map" class="view" aria-labelledby="tab-map" hidden></section>
+    <section id="view-board" class="view" aria-labelledby="tab-board" hidden></section>
+    <section id="view-history" class="view" aria-labelledby="tab-history" hidden></section>
+    <section id="view-costs" class="view" aria-labelledby="tab-costs" hidden></section>
+
     <section id="discover" class="discover" aria-labelledby="discoverTitle" hidden>
       <div class="dv-wrap">
         <h2 id="discoverTitle" data-i18n="discover.title"></h2>
@@ -131,6 +159,7 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="confirmDialog" class="dv-dialog" data-i18n-aria="confirm.label"></dialog>
 
   <script src="vendor/d3-dispatch.min.js"></script>
   <script src="vendor/d3-quadtree.min.js"></script>
