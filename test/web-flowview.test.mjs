@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName,
+  partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName, forLayout,
 } from '../server/web/flowview.js';
 
 const counts = (o = {}) => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, ...o });
@@ -67,4 +67,27 @@ test('mmdFileName: the project name as a safe file name', () => {
   assert.equal(mmdFileName('acme-shop'), 'acme-shop-flow.mmd');
   assert.equal(mmdFileName('Minha Loja / v2'), 'minha-loja-v2-flow.mmd');
   assert.equal(mmdFileName(''), 'flow.mmd');
+});
+
+test('forLayout: a layer with no arrow in or out is tied to its neighbour by an invisible link, for the drawing only', () => {
+  const lines = (...l) => l.join('\n');
+  const head = lines('flowchart LR', '  subgraph entrada["Entrada"]', '    WA["WhatsApp"]', '    SITE["Site"]', '  end',
+    '  subgraph motor["Motor"]', '    VERO["Verô"]', '    PED["Pedidos"]', '  end');
+  const base = lines('  subgraph base["Base"]', '    EMP["Empresa"]', '    SEG["Segurança"]', '  end');
+  const arrows = lines('  WA --> VERO', '  PED --> WA');
+  assert.equal(forLayout(lines(head, base, arrows)), lines(head, base, arrows, '  PED ~~~ EMP'));
+  const baseFirst = lines('flowchart LR', base, head.replace('flowchart LR\n', ''), arrows);
+  assert.equal(forLayout(baseFirst), lines(baseFirst, '  SEG ~~~ WA'), 'a first layer alone is tied to the next one');
+  const islands = lines('flowchart LR', '  subgraph a["A"]', '    x["X"]', '  end', '  subgraph b["B"]', '    y["Y"]', '  end', '  subgraph c["C"]', '    z["Z"]', '  end');
+  assert.equal(forLayout(islands), lines(islands, '  x ~~~ y', '  y ~~~ z'));
+});
+
+test('forLayout: leaves alone a drawing whose layers all have arrows, a single layer, and what is not a flowchart', () => {
+  const linked = 'flowchart LR\n  subgraph a["A"]\n    x["X"]\n  end\n  subgraph b["B"]\n    y["Y"]\n  end\n  x --> y';
+  assert.equal(forLayout(linked), linked);
+  const one = 'flowchart LR\n  subgraph a["A"]\n    x["X"]\n    y["Y"]\n  end';
+  assert.equal(forLayout(one), one);
+  assert.equal(forLayout('sequenceDiagram\n  a->>b: hi'), 'sequenceDiagram\n  a->>b: hi');
+  const loose = 'flowchart LR\n  subgraph a["A"]\n    x["X"]\n  end\n  subgraph b["B"]\n    y["Y"]\n  end\n  x --> out\n  out --> y';
+  assert.equal(forLayout(loose), loose, 'an arrow to a box outside every layer counts as a way out');
 });

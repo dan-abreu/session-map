@@ -97,6 +97,26 @@ let renderSeq = 0;
 // On a phone a left-to-right drawing turns top-to-bottom, for the screen only: what is copied or saved stays as written.
 const forScreen = (text, phone) => (phone ? text.replace(/^(\s*(?:flowchart|graph))\s+(LR|RL)\s*;?\s*$/im, '$1 TB') : text);
 
+// mermaid 11 lays a subgraph with no arrow in or out apart from the rest and far away, which turns ten boxes into a
+// drawing of 3000 px with an empty middle. An invisible link to the neighbouring layer keeps it in the layout; it is
+// added for the drawing only, never to what is copied, saved or applied.
+export function forLayout(text) {
+  const m = parseFlow(text);
+  if (!m.ok) return text;
+  const groups = m.layers.map((l) => m.nodes.filter((n) => n.layer === l.id)).filter((g) => g.length);
+  if (groups.length < 2) return text;
+  const layerOf = new Map(m.nodes.map((n) => [n.id, n.layer]));
+  const crossed = new Set();
+  for (const e of m.edges) {
+    const a = layerOf.get(e.from) ?? null, b = layerOf.get(e.to) ?? null;
+    if (a !== b) crossed.add(a).add(b);
+  }
+  const alone = groups.map((g) => !crossed.has(g[0].layer));
+  const ties = [];
+  for (let i = 1; i < groups.length; i++) if (alone[i] || alone[i - 1]) ties.push(`  ${groups[i - 1].at(-1).id} ~~~ ${groups[i][0].id}`);
+  return ties.length ? `${text}\n${ties.join('\n')}` : text;
+}
+
 async function renderMermaid(el, text, phone) {
   const mermaid = await loadMermaid();
   mermaid.initialize({
@@ -110,7 +130,7 @@ async function renderMermaid(el, text, phone) {
   const mine = String(renderSeq);
   el.dataset.render = mine;
   try {
-    const { svg } = await mermaid.render(id, forScreen(text, phone));
+    const { svg } = await mermaid.render(id, forLayout(forScreen(text, phone)));
     if (el.dataset.render !== mine) return { ok: false, stale: true };
     // mermaid's own output, sanitized by it under securityLevel strict: no script, no click handlers, no raw HTML labels.
     el.innerHTML = svg;
