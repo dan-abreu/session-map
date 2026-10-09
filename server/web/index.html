@@ -40,6 +40,9 @@
     <symbol id="i-move" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/><path d="M6 12h10M13.5 9.5L16 12l-2.5 2.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V4.5h5V7M7 7l1 12.5h8L17 7"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95"/><path d="M19.5 4.5v3.5H16"/><circle cx="12" cy="12" r="1.6"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15"/></symbol>
   </svg>
 
   <header class="bar">
@@ -51,6 +54,7 @@
         <select id="project"></select>
         <svg class="select-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
       </label>
+      <button type="button" class="convs-btn" id="convsBtn" aria-controls="convs" aria-expanded="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-chat"/></svg><span data-i18n="convs.title"></span><span class="convs-btn-n num" id="convsBtnCount"></span></button>
     </div>
     <nav class="tabs" data-i18n-aria="tabs.label">
       <button type="button" class="tab" id="tab-map" aria-current="page" data-i18n="tab.map"></button>
@@ -67,6 +71,34 @@
       </div>
     </div>
   </header>
+
+  <aside class="convs" id="convs" aria-labelledby="convsTitle">
+    <div class="cv-rail">
+      <button type="button" class="cv-rail-btn" id="convsExpand" aria-controls="convsBody" aria-expanded="false" data-i18n-aria="convs.expand" data-i18n-title="convs.expand">
+        <svg aria-hidden="true"><use href="#i-chat"/></svg><span class="cv-rail-n num" id="convsRailCount"></span><span class="cv-rail-live" id="convsRailLive" hidden></span>
+      </button>
+    </div>
+    <div class="cv-body" id="convsBody">
+      <div class="cv-head">
+        <h2 id="convsTitle"><span data-i18n="convs.title"></span> <span class="cv-total num" id="convsTotal"></span></h2>
+        <button type="button" class="icon-btn cv-collapse" id="convsCollapse" aria-controls="convsBody" aria-expanded="true" data-i18n-aria="convs.collapse" data-i18n-title="convs.collapse"><svg><use href="#i-sidebar"/></svg></button>
+      </div>
+      <div class="cv-tools">
+        <div class="cv-search">
+          <svg class="cv-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <label class="visually-hidden" for="convsSearch" data-i18n="convs.searchLabel"></label>
+          <input type="search" id="convsSearch" autocomplete="off" data-i18n-placeholder="convs.search">
+        </div>
+        <div class="seg cv-scope" id="convsScope" role="group" data-i18n-aria="convs.scope">
+          <button type="button" data-scope="project" aria-pressed="true" data-i18n="convs.scope.project"></button>
+          <button type="button" data-scope="all" aria-pressed="false" data-i18n="convs.scope.all"></button>
+        </div>
+      </div>
+      <div class="cv-filter" id="convsFilter" hidden></div>
+      <div class="cv-list" id="convsList" data-i18n-aria="convs.label" role="region"></div>
+    </div>
+  </aside>
+  <div class="cv-scrim" id="convsScrim" hidden></div>
 
   <main class="stage" id="stage">
     <div class="mm-tools" id="tools">
@@ -142,6 +174,7 @@
           <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
         </div>
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
+        <div class="chat-where" data-chat="where" hidden></div>
         <ul id="chatList" data-chat="list" class="plain rows chat-list" hidden></ul>
         <ol id="chatLog" data-chat="log" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
         <form id="chatForm" data-chat="form" class="chat-form">

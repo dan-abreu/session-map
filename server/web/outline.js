@@ -1,3 +1,5 @@
+import { paintCount, pulseOn } from './mindmap.js';
+
 // The same map on a phone (desenho-3 § 2): an indented list whose rows open and close. ctx as in mindmap.js.
 export function createOutline(root, ctx) {
   const list = document.createElement('ul');
@@ -39,6 +41,15 @@ export function createOutline(root, ctx) {
     box.append(...ctx.content(node));
     box.addEventListener('click', () => ctx.onPick(node));
     line.append(toggle, box);
+    const count = ctx.count?.(node);
+    if (count) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ol-count';
+      paintCount(btn, count, {});
+      btn.addEventListener('click', () => ctx.onCount?.(node));
+      line.append(btn);
+    }
     li.append(line);
     if (has && open) {
       const kids = document.createElement('ul');
@@ -65,5 +76,10 @@ export function createOutline(root, ctx) {
     list.querySelector(`[data-id="${CSS.escape(id)}"] > .ol-row > .ol-box`)?.focus({ preventScroll: true });
   }
 
-  return { render, reveal, focus, fit() { root.scrollTop = 0; } };
+  function pulse(id) {
+    const line = list.querySelector(`[data-id="${CSS.escape(id)}"] > .ol-row`);
+    if (line) pulseOn(line);
+  }
+
+  return { render, reveal, focus, pulse, fit() { root.scrollTop = 0; } };
 }

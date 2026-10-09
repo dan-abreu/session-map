@@ -1,0 +1,128 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { archTree } from '../server/web/tree.js';
+import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts } from '../server/web/convlist.js';
+
+const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const NOW = '2026-10-09T15:00:00.000Z';
+const ago = (min) => new Date(Date.parse(NOW) - min * 60_000).toISOString();
+
+const row = (sessionId, extra = {}) => ({
+  sessionId, title: `chat ${sessionId}`, origin: 'terminal', partId: null, itemCode: null, node: null, status: 'closed', waiting: false,
+  lastStep: null, costUSD: 1, startedAt: ago(600), updatedAt: ago(60), archived: false, live: false, chattable: true, onMap: true, ...extra,
+});
+
+function shop(conversations) {
+  const state = clone(DEMO);
+  state.generatedAt = NOW;
+  state.projects[0].conversations = conversations;
+  state.projects[1].conversations = [row('n1', { title: 'Sync notes offline', updatedAt: ago(5) })];
+  return state;
+}
+
+test('nodeOfConversation: the item it works on, else its part, layer or group, and the project for an idea, a new map or none', () => {
+  const tree = archTree(DEMO.projects[0]);
+  assert.equal(nodeOfConversation(tree, row('a', { partId: 'orders', itemCode: 'or03' })), 'i:orders:or03');
+  assert.equal(nodeOfConversation(tree, row('b', { partId: 'orders', itemCode: 'zz99' })), 'pt:orders', 'a code the map no longer has falls back to the part');
+  assert.equal(nodeOfConversation(tree, row('c', { partId: 'orders' })), 'pt:orders');
+  assert.equal(nodeOfConversation(tree, row('d', { node: { kind: 'layer', layerId: 'engine' } })), 'l:engine');
+  assert.equal(nodeOfConversation(tree, row('e', { partId: 'orders', node: { kind: 'group', group: 'Checkout' } })), 'g:orders:Checkout');
+  for (const kind of ['idea', 'create-arch', 'flow']) assert.equal(nodeOfConversation(tree, row('f', { partId: 'orders', node: { kind } })), 'p', kind);
+  assert.equal(nodeOfConversation(tree, row('g')), 'p');
+  assert.equal(nodeOfConversation(tree, row('h', { partId: 'gone' })), 'p');
+});
+
+test('placeOf names the way down the map, and marks the points that are not boxes', () => {
+  const tree = archTree(DEMO.projects[0]);
+  assert.deepEqual(placeOf(tree, row('a', { partId: 'orders', itemCode: 'or03' })), { path: ['What makes it work', 'Orders and cart', 'Checkout', 'One-click checkout with a saved card'], special: null });
+  assert.deepEqual(placeOf(tree, row('b', { partId: 'payments' })).path, ['What makes it work', 'Payments']);
+  assert.deepEqual(placeOf(tree, row('c', { node: { kind: 'idea' } })), { path: [], special: 'idea' });
+  assert.deepEqual(placeOf(tree, row('d', { node: { kind: 'create-arch' } })), { path: [], special: 'create-arch' });
+  assert.deepEqual(placeOf(tree, row('e')), { path: [], special: 'off' });
+});
+
+test('listConversations: working now first, then waiting for you, then the rest newest first', () => {
+  const state = shop([
+    row('old', { updatedAt: ago(3000) }),
+    row('busy', { status: 'busy', partId: 'orders', updatedAt: ago(2) }),
+    row('asks', { waiting: true, updatedAt: ago(30) }),
+    row('busyAsks', { status: 'busy', waiting: true, updatedAt: ago(1) }),
+    row('new', { updatedAt: ago(10) }),
+  ]);
+  const out = listConversations(state, { projectId: state.projects[0].id });
+  assert.deepEqual(out.working.map((x) => x.row.sessionId), ['busyAsks', 'busy']);
+  assert.deepEqual(out.waiting.map((x) => x.row.sessionId), ['asks']);
+  assert.deepEqual(out.recent.map((x) => x.row.sessionId), ['new', 'old']);
+  assert.equal(out.total, 5);
+  assert.equal(out.working[1].nodeId, 'pt:orders');
+  assert.deepEqual(out.working[1].place.path, ['What makes it work', 'Orders and cart']);
+  assert.equal(out.working[1].project.id, state.projects[0].id);
+});
+
+test('listConversations hides archived rows unless asked, and the toggle "all projects" merges every project', () => {
+  const state = shop([row('kept'), row('gone', { archived: true })]);
+  const id = state.projects[0].id;
+  assert.deepEqual(listConversations(state, { projectId: id }).recent.map((x) => x.row.sessionId), ['kept']);
+  assert.deepEqual(listConversations(state, { projectId: id, showArchived: true }).recent.map((x) => x.row.sessionId).sort(), ['gone', 'kept']);
+  const all = listConversations(state, { projectId: id, scope: 'all' });
+  assert.deepEqual(all.recent.map((x) => [x.row.sessionId, x.project.name]), [['n1', 'notes-app'], ['kept', 'acme-shop']]);
+});
+
+test('listConversations searches the title and the place, ignoring accents and case', () => {
+  const state = shop([row('a', { title: 'Revisão do carrinho' }), row('b', { title: 'Pay button', partId: 'payments' }), row('c', { title: 'Other' })]);
+  const id = state.projects[0].id;
+  const ids = (query) => listConversations(state, { projectId: id, query }).recent.map((x) => x.row.sessionId);
+  assert.deepEqual(ids('REVISAO'), ['a']);
+  assert.deepEqual(ids('payments'), ['b'], 'the part name is searched too');
+  assert.deepEqual(ids('  '), ['a', 'b', 'c']);
+});
+
+test('listConversations filtered on a box keeps the conversations at that box and below it', () => {
+  const state = shop([
+    row('item', { partId: 'orders', itemCode: 'or03' }),
+    row('part', { partId: 'orders', updatedAt: ago(70) }),
+    row('other', { partId: 'payments', updatedAt: ago(80) }),
+    row('idea', { node: { kind: 'idea' }, updatedAt: ago(90) }),
+  ]);
+  const id = state.projects[0].id;
+  const ids = (nodeId) => listConversations(state, { projectId: id, nodeId }).recent.map((x) => x.row.sessionId);
+  assert.deepEqual(ids('pt:orders'), ['item', 'part']);
+  assert.deepEqual(ids('i:orders:or03'), ['item']);
+  assert.deepEqual(ids('l:engine'), ['item', 'part', 'other']);
+  assert.deepEqual(ids('p'), ['item', 'part', 'other', 'idea']);
+});
+
+test('conversationCounts gives each box the conversations at it and below, up to the project', () => {
+  const state = shop([
+    row('item', { partId: 'orders', itemCode: 'or03' }),
+    row('part', { partId: 'orders' }),
+    row('other', { partId: 'payments' }),
+    row('loose'),
+    row('hidden', { partId: 'orders', archived: true }),
+  ]);
+  const project = state.projects[0];
+  const counts = conversationCounts(project, archTree(project));
+  assert.equal(counts.get('i:orders:or03'), 1);
+  assert.equal(counts.get('g:orders:Checkout'), 1);
+  assert.equal(counts.get('pt:orders'), 2);
+  assert.equal(counts.get('pt:payments'), 1);
+  assert.equal(counts.get('l:engine'), 3);
+  assert.equal(counts.get('p'), 4);
+  assert.equal(counts.get('pt:search'), undefined);
+  assert.equal(conversationCounts(project, archTree(project), { showArchived: true }).get('pt:orders'), 3);
+});
+
+test('conversationsOf falls back to the map\'s chats for a state from an older server', () => {
+  const project = clone(DEMO.projects[0]);
+  delete project.conversations;
+  const rows = conversationsOf(project);
+  assert.equal(rows.length, project.chats.length);
+  const vs = rows.find((r) => r.sessionId === project.chats.find((c) => c.entrypoint === 'claude-vscode').sessionId);
+  assert.equal(vs.origin, 'vscode');
+  const busy = project.chats.find((c) => c.status === 'busy');
+  const busyRow = rows.find((r) => r.sessionId === busy.sessionId);
+  assert.deepEqual([busyRow.status, busyRow.partId, busyRow.costUSD, busyRow.onMap], ['busy', busy.partId, busy.costUSD, true]);
+  assert.equal(conversationsOf({ ...project, conversations: [row('x')] }).length, 1);
+});

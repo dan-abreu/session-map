@@ -30,6 +30,7 @@ export function createChat({
   const listEl = q('list');
   const noteEl = q('note');
   const pcBtn = q('pcmode');
+  const whereEl = q('where');
   let context = null;
   let key = null;
   let sessionId = null;
@@ -141,8 +142,25 @@ export function createChat({
     noteEl.textContent = settings?.downgraded ? tt('chat.downgraded') : '';
   }
 
+  // A conversation that lives elsewhere (VS Code, a terminal): where it is, what can be done there, and whether it may be
+  // written here. ctx.where() is asked again on each render, so it follows the language.
+  function renderWhere() {
+    const where = context?.where?.() ?? null;
+    form.hidden = Boolean(where && !where.canWrite);
+    // Nothing is run from here while it is open elsewhere, so the permission row has nothing to say.
+    const modeRow = modeEl.closest?.('.chat-mode');
+    if (modeRow) modeRow.hidden = form.hidden;
+    if (!whereEl) return;
+    whereEl.hidden = !where;
+    whereEl.replaceChildren(...(where ? [
+      h('p', {}, where.note),
+      where.actions.length ? h('div', { class: 'actions' }, where.actions.map((a) => h('button', { type: 'button', class: 'btn small-btn', onclick: a.onclick }, a.label))) : null,
+    ].filter(Boolean) : []));
+  }
+
   function render() {
     const tt = t();
+    renderWhere();
     const items = log?.items ?? [];
     const stick = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
     logEl.replaceChildren(...(items.length ? items.map(itemView) : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]));
@@ -282,6 +300,8 @@ export function createChat({
     open,
     close,
     isOpen: () => !root.hidden,
+    // The conversation the sheet shows, once it has an id.
+    current: () => (root.hidden ? null : sessionId ?? context?.start?.sessionId ?? null),
     // After a reload: the conversation that was open in this project's sheet.
     restore(projectId) {
       const saved = remembered();

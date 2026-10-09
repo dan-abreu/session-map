@@ -11,6 +11,7 @@ import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
+import { createConvList, conversationCounts, listConversations } from './convlist.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -40,6 +41,7 @@ let changedRange = RANGES.includes(store.get('sm.changed')) ? store.get('sm.chan
 let relationsOn = store.get('sm.relations') === '1';
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
+let convCounts = new Map();
 // While the person types in a panel, polling must not redraw it under their fingers.
 let editing = false;
 
@@ -188,11 +190,9 @@ const liveDot = () => h('span', { class: 'bx-live', title: t('box.live') }, h('s
 
 function partBadges(node) {
   const part = node.part;
-  const chats = shown.chats.filter((c) => c.partId === part.id).length;
   const branches = marks.branches.get(part.id) ?? [];
   const clashes = marks.clashes.get(part.id) ?? [];
   const out = [];
-  if (chats) out.push(h('span', { class: 'bx-badge', title: t.count('summary.chats', chats) }, icon('chat', 'bx-icon'), h('span', { class: 'num' }, String(chats)), h('span', { class: 'visually-hidden' }, t.count('summary.chats', chats))));
   if (branches.length) {
     out.push(h('span', { class: 'bx-people', title: branches.map((b) => `${b.branch} · ${b.name}`).join('\n') },
       branches.slice(0, 4).map((b) => h('span', { class: 'bx-person', style: `--owner-h:${b.hue}`, 'aria-hidden': 'true' }, b.initial)),
@@ -233,7 +233,7 @@ function boxContent(node) {
 function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
-    part && marks.branches.get(part), part && marks.clashes.get(part), part && shown.chats.filter((c) => c.partId === part).length, node.kind === 'project' && shown.chats.length]);
+    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length]);
 }
 
 const toggleLabel = (node, isOpen) => t(isOpen ? 'map.collapse' : 'map.expand', { name: node.label });
@@ -505,6 +505,51 @@ function createArch() {
   closeWaiting();
   chat.open({ projectId: project.id, title: t('arch.chatTitle'), subtitle: project.name, intro: t('arch.chatIntro'), draft: t('arch.createText'), start: { node: { kind: 'create-arch' } } });
   plainPoint();
+}
+
+// ---- the conversation list ------------------------------------------------------------------
+
+// What the sheet says about a conversation that lives in VS Code or a terminal, and what it offers there.
+function whereOf(row) {
+  const open = (done) => () => runAction({ action: 'open', sessionId: row.sessionId }, done);
+  const actions = [];
+  if (row.origin === 'vscode') actions.push({ label: t('action.openVscode'), onclick: open(t('action.openedVscode')) });
+  else if (!row.live) actions.push({ label: t('convs.openTerminal'), onclick: open(t('action.openedTerminal')) });
+  let note = t('convs.readClosed', { origin: t(`convs.origin.${row.origin}`) });
+  if (row.live) note = row.origin === 'vscode' ? t('convs.readVscode') : t('convs.readTerminal');
+  return { note, actions, canWrite: row.chattable && !row.live };
+}
+
+// A row of the list: the map opens the way to its box, centres it and makes it glow, and the chat opens beside with the
+// conversation (a page one resumes; one from VS Code or a terminal reads here, with where it lives).
+function openConversation({ row, project: p, nodeId, place }) {
+  convs.closeDrawer();
+  closeWaiting();
+  if (view !== 'map') showView('map');
+  if (p.id !== project.id) setProject(p.id);
+  closePanel(false);
+  const node = nodeById(tree, nodeId) ?? tree;
+  selection = { type: 'node', id: node.id };
+  const subtitle = [project.name, ...(place.special ? [t(`convs.place.${place.special}`)] : place.path)].join(' › ');
+  chat.open({
+    projectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
+    where: row.origin === 'map' ? null : () => whereOf(row),
+  });
+  if (node.kind === 'project') plainPoint();
+  else {
+    pointNode = node.id;
+    $('#pointTabs').hidden = false;
+    setPointTab('chat');
+    renderPointDetails();
+  }
+  revealNode(node.id, { center: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(node.id)));
+  convs.render();
+}
+
+function boxCount(node) {
+  const n = convCounts.get(node.id);
+  return n ? { n, label: t.count('convs.count', n), pressed: convs?.filterNode() === node.id } : null;
 }
 
 function itemRow(node) {
@@ -882,6 +927,7 @@ async function pcMode(mode) {
 
 function refreshMarks() {
   marks = { live: liveNodes(shown, tree), branches: branchMarks(shown), clashes: clashMarks(shown) };
+  convCounts = conversationCounts(project, tree, { showArchived });
 }
 
 function renderBanner() {
@@ -894,7 +940,9 @@ function renderBanner() {
 }
 
 function setProject(id) {
+  const before = project?.id;
   project = state.projects.find((p) => p.id === id) || state.projects[0];
+  if (project.id !== before) convs.projectChanged();
   shown = visibleProject(project, showArchived);
   tree = archTree(shown);
   refreshMarks();
@@ -908,6 +956,7 @@ function setProject(id) {
   renderBanner();
   $('#notice').hidden = true;
   renderMap();
+  convs.render();
   requestAnimationFrame(() => activeMap().fit(false));
   refreshView();
 }
@@ -920,6 +969,7 @@ function setArchived(on) {
   refreshMarks();
   renderSummary();
   renderMap();
+  convs.render();
   refreshView();
   rerender();
 }
@@ -965,6 +1015,7 @@ function applyState(next) {
   renderSummary();
   renderBanner();
   renderMap();
+  convs.render();
   if (!editing) rerender();
   refreshView();
   return undefined;
@@ -1053,6 +1104,7 @@ let tabs = null;
 let mindmap = null;
 let outline = null;
 let flow = null;
+let convs = null;
 
 function wire() {
   $('#project').addEventListener('change', (e) => setProject(e.target.value));
@@ -1070,6 +1122,8 @@ function wire() {
     content: boxContent, signature, toggleLabel,
     onPick: (node) => openPoint(node),
     onToggle: toggleNode,
+    count: boxCount,
+    onCount: (node) => convs.filterTo(convs.filterNode() === node.id ? null : node.id),
     onLink: (l) => select({ type: 'link', id: `${l.a}|${l.b}` }),
     linkLabel: (l) => t('link.aria', { a: partById(l.a)?.name ?? l.a, b: partById(l.b)?.name ?? l.b }),
     freeArea,
@@ -1082,13 +1136,21 @@ function wire() {
   });
   chat = createChat({
     root: $('#chat'), h, t: () => t, toast, errorText, relative,
-    onSession: () => setTimeout(poll, 1200),
+    onSession: () => { convs.render(); setTimeout(poll, 1200); },
     onPcMode: pcMode,
     onClose: () => {
       pointNode = null;
       if (selection?.type === 'node') selection = null;
       renderMap();
+      convs.render();
     },
+  });
+  convs = createConvList({
+    root: $('#convs'), h, t: () => t, icon, relative, money, phone: PHONE, store,
+    state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(),
+    nodeLabel: (id) => (tree ? nodeById(tree, id)?.label ?? null : null),
+    onOpen: openConversation,
+    onFilter: () => renderMap(),
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
@@ -1142,7 +1204,8 @@ function wire() {
   search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open) return;
-    if (!$('#waitingList').hidden) closeWaiting();
+    if (convs.isDrawerOpen()) convs.closeDrawer();
+    else if (!$('#waitingList').hidden) closeWaiting();
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
@@ -1157,7 +1220,7 @@ function wire() {
 }
 
 // Deep link for screenshots and sharing a view: ?view=<tab>&project=<id>&open=<ids|all>&select=node:<id> (or chat:, workcell:,
-// link:, project:)&tab=details&relations=1&changed=d7&q=<search>.
+// link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1.
 function applyDeepLink() {
   const params = new URLSearchParams(location.search);
   if (params.get('project')) setProject(params.get('project'));
@@ -1185,6 +1248,15 @@ function applyDeepLink() {
     } else setTimeout(() => select({ type, id }), 60);
   }
   if (params.get('idea') === '1') setTimeout(openIdea, 60);
+  // &conv=<sessionId> opens a conversation as the list does; &convfilter=<box id> and &drawer=1 show the list's states.
+  const conv = params.get('conv');
+  if (conv) {
+    const out = listConversations(state, { projectId: project.id, scope: 'all', showArchived: true });
+    const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === conv);
+    if (hit) setTimeout(() => openConversation(hit), 80);
+  }
+  if (params.get('convfilter')) setTimeout(() => convs.filterTo(params.get('convfilter')), 60);
+  if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);

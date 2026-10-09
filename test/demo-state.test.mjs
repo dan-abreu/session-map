@@ -99,3 +99,18 @@ test('demo chats follow the server rules for actions and the in-page chat', () =
 test('demo data carries nothing personal', () => {
   assert.doesNotMatch(raw, /[A-Za-z]:[\\/]+Users|\/Users\/|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
 });
+
+test('the demo lists its conversations: every chat of the map, an idea, a new map and some older than the map shows', () => {
+  const ids = new Set(shop.arch.parts.map((p) => p.id));
+  for (const p of state.projects) {
+    const listed = new Set(p.conversations.map((r) => r.sessionId));
+    for (const c of p.chats) assert.ok(listed.has(c.sessionId), `${c.title} is listed`);
+    for (const r of p.conversations) {
+      assert.ok(['map', 'vscode', 'terminal', 'sdk'].includes(r.origin), r.title);
+      assert.ok(r.partId === null || ids.has(r.partId), `${r.title} part`);
+    }
+  }
+  assert.ok(shop.conversations.some((r) => r.node?.kind === 'idea'));
+  assert.ok(shop.conversations.some((r) => !r.onMap && r.costUSD === null), 'a page conversation older than the window');
+  assert.ok(notes.conversations.some((r) => r.node?.kind === 'create-arch'));
+});

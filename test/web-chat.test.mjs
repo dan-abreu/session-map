@@ -32,7 +32,7 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 // chat.js finds each part by its data-chat role; the tests name them by the map sheet's ids.
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
-  '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close',
+  '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close', '#chatWhere': 'where',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
@@ -245,4 +245,33 @@ test('the workshop sheet saves the draft before a message leaves, and remembers 
   assert.deepEqual(order, ['saved', 'start']);
   sse(streams.at(-1), 'session', { sessionId: S1, state: 'started' }, 1);
   assert.equal(storage.items.size, 0, 'nothing kept for a reload');
+});
+
+test('a conversation that lives in VS Code reads here with its note and buttons; the box to write shows only when it may be written here', async () => {
+  server({ [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, mode: 'settings', readOnly: true }) });
+  const { chat, part } = makeChat();
+  let opened = 0;
+  let canWrite = false;
+  chat.open({
+    projectId: 'acme-shop', title: 'Second question', intro: 'intro', start: { sessionId: S1 },
+    where: () => ({ note: 'Open in VS Code: read it here.', actions: [{ label: 'Open in VS Code', onclick: () => opened++ }], canWrite }),
+  });
+  await settle();
+  assert.ok(text(part('#chatLog')).includes('Here it is.'), 'the history reads');
+  assert.equal(part('#chatForm').hidden, true, 'open elsewhere: nothing to write here');
+  assert.equal(part('#chatWhere').hidden, false);
+  assert.ok(text(part('#chatWhere')).includes('Open in VS Code: read it here.'));
+  walk(part('#chatWhere')).find((e) => e.tag === 'button').attrs.onclick();
+  assert.equal(opened, 1);
+  assert.equal(chat.current(), S1, 'the list can mark the conversation the sheet shows');
+
+  canWrite = true;
+  chat.relabel();
+  assert.equal(part('#chatForm').hidden, false, 'closed: written here, it resumes');
+
+  chat.open({ projectId: 'acme-shop', title: 'x', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  assert.equal(part('#chatWhere').hidden, true, 'a page conversation has no such note');
+  assert.equal(part('#chatForm').hidden, false);
+  chat.close();
+  assert.equal(chat.current(), null);
 });

@@ -9,6 +9,35 @@ const FIT_PAD = 28;
 const SCALE = [0.3, 1.6];
 const READABLE = 0.85;
 
+// The number of conversations on a box: a small button on its top edge, rebuilt only when it changes.
+export function paintCount(el, count, memo) {
+  const sig = count ? `${count.n}|${count.label}|${count.pressed}` : '';
+  if (sig === memo.countSig) return;
+  memo.countSig = sig;
+  el.hidden = !count;
+  if (!count) return;
+  el.setAttribute('aria-label', count.label);
+  el.setAttribute('aria-pressed', String(count.pressed));
+  el.title = count.label;
+  const icon = document.createElementNS(SVG_NS, 'svg');
+  icon.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', '#i-chat');
+  icon.append(use);
+  const num = document.createElement('span');
+  num.textContent = String(count.n);
+  el.replaceChildren(icon, num);
+}
+
+const PULSE_MS = 1600;
+export function pulseOn(el) {
+  el.classList.remove('is-pulse');
+  void el.offsetWidth;
+  el.classList.add('is-pulse');
+  clearTimeout(el.pulseTimer);
+  el.pulseTimer = setTimeout(() => el.classList.remove('is-pulse'), PULSE_MS);
+}
+
 const svg = (tag, attrs = {}) => {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
@@ -21,7 +50,8 @@ const lerpBox = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p), w: l
 // The horizontal mind map (desenho-3 § 2): rounded boxes per level, smooth curves, a round toggle beside each box,
 // zoom and drag. The page hands it the tree and what lights each box; it owns only positions and motion.
 // ctx: content(node) → DOM children of a box, signature(node) → string that changes when the content must be rebuilt,
-// onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), freeArea() → {left, top, width, height}.
+// onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), freeArea() → {left, top, width, height};
+// count(node) → {n, label, pressed} or null: the number of conversations hung on the box, onCount(node) when it is pressed.
 export function createMindmap(root, ctx) {
   const world = document.createElement('div');
   world.className = 'mm-world';
@@ -64,9 +94,14 @@ export function createMindmap(root, ctx) {
       toggle.append(svg('svg', { 'aria-hidden': 'true' }));
       toggle.firstChild.append(svg('use', { href: '#i-next' }));
       toggle.addEventListener('click', () => ctx.onToggle(n.node));
-      el.append(box, toggle);
+      const count = document.createElement('button');
+      count.type = 'button';
+      count.className = 'mm-count';
+      count.hidden = true;
+      count.addEventListener('click', () => ctx.onCount?.(n.node));
+      el.append(box, toggle, count);
       world.append(el);
-      n = { el, box, toggle, sig: null, node };
+      n = { el, box, toggle, count, sig: null, countSig: null, node };
       nodes.set(node.id, n);
     }
     n.node = node;
@@ -79,6 +114,7 @@ export function createMindmap(root, ctx) {
       n.box.replaceChildren(...ctx.content(node));
       n.sig = sig;
     }
+    paintCount(n.count, ctx.count?.(node) ?? null, n);
     const open = view.open.has(node.id);
     const has = node.children.length > 0;
     n.toggle.hidden = !has;
@@ -239,5 +275,11 @@ export function createMindmap(root, ctx) {
     nodes.get(id)?.box.focus({ preventScroll: true });
   }
 
-  return { render, fit, reveal, focus, zoomBy: (f) => sel.transition().duration(200).call(zoom.scaleBy, f) };
+  // A short glow on the box a conversation of the list belongs to, once the map has brought it into view.
+  function pulse(id) {
+    const n = nodes.get(id);
+    if (n) pulseOn(n.el);
+  }
+
+  return { render, fit, reveal, focus, pulse, zoomBy: (f) => sel.transition().duration(200).call(zoom.scaleBy, f) };
 }
