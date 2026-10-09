@@ -91,6 +91,7 @@ const brain = createBrain($('#brain'), {
   statusLabel: statusWord,
   chatsLabel: (n) => t.count('summary.chats', n),
   chatsShort: (n) => t.count('label.chats', n),
+  linkLabel: (a, b) => t('link.aria', { a: cellName(a), b: cellName(b) }),
   freeArea,
 });
 
@@ -205,6 +206,32 @@ function renderCellPanel(cell) {
   ].filter(Boolean));
 }
 
+function renderLinkPanel(link) {
+  const a = project.cells.find((c) => c.id === link.a);
+  const b = project.cells.find((c) => c.id === link.b);
+  const chatById = new Map(project.chats.map((c) => [c.sessionId, c]));
+  const cellButton = (cell) => h('button', { type: 'button', class: 'meta-link', onclick: () => select({ type: 'cell', id: cell.id }, { zoom: true }) }, cellName(cell));
+  $('#panelHead').replaceChildren(
+    h('h2', { id: 'panelTitle' }, `${cellName(a)} ↔ ${cellName(b)}`),
+    h('p', { class: 'meta' },
+      h('span', {}, t.count('link.reasons', link.reasons.length)),
+      h('span', {}, t('link.since', { date: shortDate(Date.parse(link.since)) })),
+      cellButton(a), cellButton(b)),
+  );
+  const reasons = link.reasons.map((r) => {
+    const chat = r.sessionId && chatById.get(r.sessionId);
+    const parts = [
+      h('span', { class: 'lr-kind' }, t(`link.kind.${r.kind}`)),
+      h('span', { class: 'lr-line' }, r.text),
+      chat ? h('span', { class: 'lr-open' }, t('link.open', { title: chat.title })) : null,
+    ];
+    return h('li', {}, chat
+      ? h('button', { type: 'button', class: 'link-row reason', onclick: () => select({ type: 'chat', id: chat.sessionId }, { zoom: true }) }, parts)
+      : h('div', { class: 'link-row reason static' }, parts));
+  });
+  $('#panelBody').replaceChildren(section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)));
+}
+
 function renderChatPanel(chat) {
   const cell = project.cells.find((c) => c.id === chat.cellId);
   const front = project.fronts.find((f) => f.id === chat.frontId);
@@ -278,6 +305,11 @@ function select(sel, { zoom = false } = {}) {
     const cell = project.cells.find((c) => c.id === sel.id);
     if (!cell) return;
     renderCellPanel(cell);
+  } else if (sel.type === 'link') {
+    const link = (project.cellLinks || []).find((l) => `${l.a}|${l.b}` === sel.id);
+    if (!link) return;
+    if (Date.parse(link.since) > tNow) setTime(tMax, { instant: true });
+    renderLinkPanel(link);
   } else {
     const chat = project.chats.find((c) => c.sessionId === sel.id);
     if (!chat) return;
@@ -286,7 +318,8 @@ function select(sel, { zoom = false } = {}) {
   }
   openPanel();
   brain.select(sel);
-  if (zoom) requestAnimationFrame(() => (sel.type === 'cell' ? brain.focusCell(sel.id) : brain.focusChat(sel.id)));
+  const focus = { cell: brain.focusCell, link: brain.focusLink, chat: brain.focusChat }[sel.type];
+  if (zoom) requestAnimationFrame(() => focus(sel.id));
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

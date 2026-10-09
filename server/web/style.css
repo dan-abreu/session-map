@@ -18,6 +18,8 @@
   --idle-fill: rgb(93 113 107 / 0.06);
   --closed: #7d8985;
   --front: #376a8c;
+  --link: #8b9893;
+  --link-strong: #4a5c57;
   --focus: #1f6fb0;
   --shadow: 0 3px 8px -2px rgb(20 35 32 / 0.16);
   --panel-w: 384px;
@@ -45,6 +47,8 @@
     --idle-fill: rgb(136 154 148 / 0.05);
     --closed: #5e6c68;
     --front: #74a8c9;
+    --link: #56645f;
+    --link-strong: #9db0a9;
     --focus: #7cb8ea;
     --shadow: 0 3px 8px -2px rgb(0 0 0 / 0.5);
   }
@@ -243,6 +247,8 @@ button, select, input { font: inherit; color: inherit; }
 .lg-unsure .ask-dot { fill: var(--ink-2); }
 .lg-parent { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
 .lg-front { fill: none; stroke: var(--front); stroke-width: 1.5; stroke-dasharray: 3 3.5; }
+.lg-axon { fill: none; stroke: var(--link); stroke-width: 2.6; stroke-linecap: round; }
+.lg-bulb { fill: var(--link); }
 
 .notice {
   position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
@@ -266,6 +272,14 @@ button, select, input { font: inherit; color: inherit; }
 .dendrite { fill: none; stroke: var(--tone); stroke-width: 1; stroke-opacity: 0.45; }
 .nucleus { fill: var(--tone); }
 .nucleolus { fill: var(--bg); fill-opacity: 0.55; }
+
+.cell-link { cursor: pointer; outline: none; }
+.link-hit { fill: none; stroke: transparent; stroke-width: 18; stroke-linecap: round; }
+.link-axon { fill: none; stroke: var(--link); stroke-linecap: round; }
+.link-bulb { fill: var(--link); }
+.cell-link:hover .link-axon, .cell-link.is-related .link-axon { stroke: var(--link-strong); }
+.cell-link:hover .link-bulb, .cell-link.is-related .link-bulb { fill: var(--link-strong); }
+.cell-link:focus-visible .link-hit { stroke: color-mix(in srgb, var(--focus) 35%, transparent); }
 
 .synapse { fill: none; pointer-events: none; }
 .synapse.parent { stroke: var(--ink-2); stroke-width: 1.5; stroke-opacity: 0.8; }
@@ -309,6 +323,7 @@ button, select, input { font: inherit; color: inherit; }
 .has-selection .neuron:not(.is-related) .neuron-body,
 .has-selection .label:not(.is-related) text { opacity: 0.42; transition: opacity 200ms; }
 .has-selection .synapse:not(.is-related) { stroke-opacity: 0.2; }
+.has-selection .cell-link:not(.is-related) > * { opacity: 0.25; }
 .has-selection .synapse.is-related { stroke-width: 2.2; stroke-opacity: 1; }
 
 /* ---------- sheets: panel and waiting list ---------- */
@@ -386,6 +401,12 @@ button, select, input { font: inherit; color: inherit; }
 .lr-title { font-weight: 600; }
 .lr-date { color: var(--ink-2); font-size: 0.75rem; }
 .lr-line { grid-column: 1 / -1; color: var(--ink-2); font-size: 0.8125rem; }
+.link-row.reason { grid-template-columns: 1fr; gap: 3px; }
+.link-row.reason .lr-line { color: var(--ink); font-size: 0.875rem; }
+.link-row.static { cursor: default; }
+.link-row.static:hover { background: none; }
+.lr-kind { font-size: 0.75rem; font-weight: 650; color: var(--ink-2); }
+.lr-open { font-size: 0.8125rem; font-weight: 600; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 
 .callout {
   margin-top: 16px; padding: 12px 14px; border-radius: 10px;
@@ -526,3 +547,7 @@ input[type="range"]:focus-visible { outline-offset: 4px; }
   .sheet { animation: none; }
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
+
+/* A lineage between areas is already drawn as an axon; the neuron-level line shows only for the selected conversation. */
+.synapse.cross { display: none; }
+.has-selection .synapse.cross.is-related { display: inline; }

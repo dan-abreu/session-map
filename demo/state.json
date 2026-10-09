@@ -317,6 +317,108 @@
           "status": "idle"
         }
       ],
+      "cellLinks": [
+        {
+          "a": "checkout",
+          "b": "accounts",
+          "weight": 3,
+          "since": "2026-09-16T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-chat",
+              "text": "Saved cards with tokenization also changed the account page, where customers remove a saved card.",
+              "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b"
+            },
+            {
+              "kind": "spec-ref",
+              "text": "The one-click checkout proposal limits one-click to signed-in customers.",
+              "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e"
+            }
+          ]
+        },
+        {
+          "a": "checkout",
+          "b": "notifications",
+          "weight": 2,
+          "since": "2026-09-16T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "spec-ref",
+              "text": "The one-click checkout proposal has an open task \"Receipt email\" that needs the email sender.",
+              "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e"
+            }
+          ]
+        },
+        {
+          "a": "search",
+          "b": "catalog",
+          "weight": 4,
+          "since": "2026-09-24T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-front",
+              "text": "Branch feat/typo-search changed how product names are indexed in src/catalog/."
+            },
+            {
+              "kind": "shared-chat",
+              "text": "Fuzzy matching on product names read and edited catalog product fields.",
+              "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870"
+            }
+          ]
+        },
+        {
+          "a": "orders",
+          "b": "checkout",
+          "weight": 2,
+          "since": "2026-10-02T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "lineage",
+              "text": "Order status timeline was continued from Order summary redesign.",
+              "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31"
+            }
+          ]
+        },
+        {
+          "a": "orders",
+          "b": "notifications",
+          "weight": 1,
+          "since": "2026-10-02T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-chat",
+              "text": "Order status timeline added a \"shipped\" email template in src/email/.",
+              "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31"
+            }
+          ]
+        },
+        {
+          "a": "accounts",
+          "b": "notifications",
+          "weight": 2,
+          "since": "2026-09-13T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-chat",
+              "text": "Password reset emails edited the shared email layout in src/email/.",
+              "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416"
+            }
+          ]
+        },
+        {
+          "a": "admin",
+          "b": "orders",
+          "weight": 1,
+          "since": "2026-09-09T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-chat",
+              "text": "Sales dashboard charts reads totals from the orders tables.",
+              "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
+            }
+          ]
+        }
+      ],
       "fronts": [
         {
           "id": "acme-main",
@@ -763,7 +865,7 @@
           "cellSource": "files",
           "frontId": "acme-main",
           "frontSource": "cwd",
-          "parentId": null,
+          "parentId": "82deffef-f504-460a-af9d-5690e87ad768",
           "status": "closed",
           "entrypoint": "cli",
           "live": false,
@@ -1166,6 +1268,21 @@
             "8c0f5f1c-de23-4452-abb6-8fccb981c5f7"
           ],
           "status": "idle"
+        }
+      ],
+      "cellLinks": [
+        {
+          "a": "editor",
+          "b": "sync",
+          "weight": 2,
+          "since": "2026-09-28T15:00:00.000Z",
+          "reasons": [
+            {
+              "kind": "shared-chat",
+              "text": "Undo history across sessions keeps each note history in the sync queue.",
+              "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508"
+            }
+          ]
         }
       ],
       "fronts": [

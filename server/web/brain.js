@@ -124,15 +124,12 @@ function layout(project, aspect, labelFor, metaFor) {
     }
   }
 
-  const cellLinks = [];
-  const seen = new Set();
-  for (const s of synapses) {
-    if (s.a.cell === s.b.cell) continue;
-    const key = [s.a.cell.id, s.b.cell.id].sort().join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cellLinks.push({ source: s.a.cell, target: s.b.cell });
-  }
+  const cellById = new Map(cells.map((c) => [c.id, c]));
+  const links = (project.cellLinks || []).map((l) => ({
+    id: `${l.a}|${l.b}`, data: l, a: cellById.get(l.a), b: cellById.get(l.b),
+    weight: Math.min(4, Math.max(1, l.weight || 1)), t: Date.parse(l.since),
+    bend: (hash(l.a + l.b) - 0.5) * 0.36, shown: 0, target: 0,
+  })).filter((l) => l.a && l.b && l.a !== l.b);
 
   const order = cells.slice().sort((a, b) => b.chats.length - a.chats.length);
   order.forEach((c, i) => {
@@ -142,23 +139,25 @@ function layout(project, aspect, labelFor, metaFor) {
   });
   const sim = d3.forceSimulation(cells)
     .force('collide', d3.forceCollide((d) => d.collide).strength(1).iterations(3))
-    .force('x', d3.forceX(0).strength(aspect >= 1 ? 0.04 / aspect : 0.07 / aspect))
-    .force('y', d3.forceY(0).strength(aspect >= 1 ? 0.085 * aspect ** 1.3 : 0.07 * aspect))
-    .force('link', d3.forceLink(cellLinks).distance((l) => l.source.collide + l.target.collide).strength(0.08))
+    .force('x', d3.forceX(0).strength(aspect >= 1 ? 0.02 / aspect : 0.035 / aspect))
+    .force('y', d3.forceY(0).strength(aspect >= 1 ? 0.0425 * aspect ** 1.3 : 0.035 * aspect))
+    .force('link', d3.forceLink(links.map((l) => ({ source: l.a, target: l.b, weight: l.weight })))
+      .distance((l) => l.source.collide + l.target.collide).strength((l) => 0.6 + 0.1 * l.weight))
     .stop();
   for (let i = 0; i < 360; i++) sim.tick();
 
-  return { cells, neurons, synapses, neuronById, cellById: new Map(cells.map((c) => [c.id, c])) };
+  return { cells, neurons, synapses, links, neuronById, cellById, linkById: new Map(links.map((l) => [l.id, l])) };
 }
 
 const ICON_BANG = 'M0,-3.6V0.6';
 const ICON_ASK = 'M-1.9,-1.9a1.95,1.95 0 1 1 2.4,1.9c-0.5,0.15-0.5,0.5-0.5,1.1';
 
-export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel, chatsShort, freeArea }) {
+export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel, chatsShort, linkLabel, freeArea }) {
   const svg = d3.select(svgEl);
   svg.selectAll('*').remove();
   const world = svg.append('g').attr('class', 'world');
   const gCells = world.append('g').attr('class', 'cells');
+  const gLinks = world.append('g').attr('class', 'cell-links');
   const gSyn = world.append('g').attr('class', 'synapses');
   const gNeurons = world.append('g').attr('class', 'neurons');
   const gLabels = svg.append('g').attr('class', 'labels').attr('aria-hidden', 'true');
@@ -198,6 +197,7 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
 
   function build() {
     gCells.selectAll('*').remove();
+    gLinks.selectAll('*').remove();
     gSyn.selectAll('*').remove();
     gNeurons.selectAll('*').remove();
     gLabels.selectAll('*').remove();
@@ -216,8 +216,20 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
     cellG.append('circle').attr('class', 'nucleus').attr('r', (d) => 6.5 + Math.min(4, d.chats.length * 0.5));
     cellG.append('circle').attr('class', 'nucleolus').attr('r', 2.2).attr('cx', 1.4).attr('cy', -1.2);
 
+    const linkG = gLinks.selectAll('g.cell-link').data(model.links, (d) => d.id).join('g')
+      .attr('class', 'cell-link')
+      .attr('tabindex', 0)
+      .attr('role', 'button')
+      .attr('aria-label', (d) => linkLabel(d.a.data, d.b.data))
+      .on('click', (event, d) => activate({ type: 'link', id: d.id })(event))
+      .on('keydown', (event, d) => keyActivate({ type: 'link', id: d.id })(event));
+    linkG.append('path').attr('class', 'link-hit');
+    linkG.append('path').attr('class', 'link-axon').attr('stroke-width', (d) => 1.1 + d.weight * 0.85);
+    linkG.append('circle').attr('class', 'link-bulb end-a').attr('r', (d) => 2.2 + d.weight * 0.55);
+    linkG.append('circle').attr('class', 'link-bulb end-b').attr('r', (d) => 2.2 + d.weight * 0.55);
+
     gSyn.selectAll('path').data(model.synapses, (d) => d.id).join('path')
-      .attr('class', (d) => `synapse ${d.kind}`);
+      .attr('class', (d) => `synapse ${d.kind}${d.a.cell === d.b.cell ? '' : ' cross'}`);
 
     const nG = gNeurons.selectAll('g.neuron').data(model.neurons, (d) => d.id).join('g')
       .attr('class', (d) => `neuron kind-${neuronKind(d.chat)}${d.chat.waiting.weak ? ' weak' : ''}`)
@@ -268,6 +280,17 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
       .select('.neuron-body')
       .attr('transform', (n) => `scale(${n.shown.toFixed(3)})`);
 
+    gLinks.selectAll('g.cell-link').each(function (l) {
+      const g = d3.select(this);
+      const visible = l.shown > 0.02 && l.a.rNow > 1 && l.b.rNow > 1;
+      g.style('display', visible ? null : 'none').attr('opacity', l.shown);
+      if (!visible) return;
+      const geo = linkGeometry(l);
+      g.selectAll('path').attr('d', geo.d);
+      g.select('.end-a').attr('cx', geo.x1).attr('cy', geo.y1);
+      g.select('.end-b').attr('cx', geo.x2).attr('cy', geo.y2);
+    });
+
     gSyn.selectAll('path.synapse')
       .attr('d', (s) => curve(
         s.a.cell.x + s.a.u * s.a.cell.rNow, s.a.cell.y + s.a.v * s.a.cell.rNow,
@@ -275,6 +298,17 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
       .attr('opacity', (s) => Math.min(s.a.shown, s.b.shown))
       .style('display', (s) => (Math.min(s.a.shown, s.b.shown) < 0.02 ? 'none' : null));
     placeLabels();
+  }
+
+  // Edge to edge: the axon leaves each membrane on the side its curve bows toward.
+  function linkGeometry(l) {
+    const theta = Math.atan2(l.b.y - l.a.y, l.b.x - l.a.x);
+    const alpha = l.bend * 1.6;
+    const x1 = l.a.x + Math.cos(theta + alpha) * (l.a.rNow - 1);
+    const y1 = l.a.y + Math.sin(theta + alpha) * (l.a.rNow - 1);
+    const x2 = l.b.x + Math.cos(theta + Math.PI - alpha) * (l.b.rNow - 1);
+    const y2 = l.b.y + Math.sin(theta + Math.PI - alpha) * (l.b.rNow - 1);
+    return { x1, y1, x2, y2, d: curve(x1, y1, x2, y2, l.bend) };
   }
 
   function placeLabels() {
@@ -289,7 +323,7 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
     cancelAnimationFrame(frame);
     if (reducedMotion()) {
       for (const c of model.cells) c.rNow = c.rTarget;
-      for (const n of model.neurons) n.shown = n.target;
+      for (const n of [...model.neurons, ...model.links]) n.shown = n.target;
       draw();
       return;
     }
@@ -299,7 +333,7 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
         const d = c.rTarget - c.rNow;
         if (Math.abs(d) > 0.2) { c.rNow += d * 0.16; moving = true; } else c.rNow = c.rTarget;
       }
-      for (const n of model.neurons) {
+      for (const n of [...model.neurons, ...model.links]) {
         const d = n.target - n.shown;
         if (Math.abs(d) > 0.01) { n.shown += d * 0.2; moving = true; } else n.shown = n.target;
       }
@@ -317,10 +351,11 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
       c.rTarget = c.chats.length === 0 || visible > 0 ? radiusFor(visible) : 0;
       c.visible = visible;
     }
+    for (const l of model.links) l.target = l.t <= t && l.a.rTarget > 0 && l.b.rTarget > 0 ? 1 : 0;
     gLabels.selectAll('tspan.meta').text((d) => metaFor(d.data, d.visible));
     if (instant) {
       for (const c of model.cells) c.rNow = c.rTarget;
-      for (const n of model.neurons) n.shown = n.target;
+      for (const n of [...model.neurons, ...model.links]) n.shown = n.target;
       draw();
     } else animate();
   }
@@ -364,6 +399,11 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
     moveTo(transformFor(bounds([cell]), 1.7), true);
   }
 
+  function focusLink(id) {
+    const l = model && model.linkById.get(id);
+    if (l) moveTo(transformFor(bounds([l.a, l.b]), 1.5), true);
+  }
+
   function focusChat(id) {
     const n = model && model.neuronById.get(id);
     if (!n) return;
@@ -390,15 +430,20 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
       }
     }
     if (sel && sel.type === 'cell') relatedCell = sel.id;
+    const link = sel && sel.type === 'link' ? model.linkById.get(sel.id) : null;
+    const linkCells = new Set(link ? [link.a.id, link.b.id] : []);
     svg.classed('has-selection', !!sel);
+    const cellRelated = (d) => d.id === relatedCell || linkCells.has(d.id) || model.neurons.some((n) => n.cell === d && related.has(n.id));
     gCells.selectAll('g.cell')
       .classed('is-selected', (d) => sel && sel.type === 'cell' && d.id === sel.id)
-      .classed('is-related', (d) => d.id === relatedCell || model.neurons.some((n) => n.cell === d && related.has(n.id)));
-    gLabels.selectAll('g.label')
-      .classed('is-related', (d) => d.id === relatedCell || model.neurons.some((n) => n.cell === d && related.has(n.id)));
+      .classed('is-related', cellRelated);
+    gLabels.selectAll('g.label').classed('is-related', cellRelated);
+    gLinks.selectAll('g.cell-link')
+      .classed('is-selected', (l) => l === link)
+      .classed('is-related', (l) => l === link || (sel?.type === 'cell' && (l.a.id === sel.id || l.b.id === sel.id)));
     gNeurons.selectAll('g.neuron')
       .classed('is-selected', (n) => sel && sel.type === 'chat' && n.id === sel.id)
-      .classed('is-related', (n) => related.has(n.id) || n.cell.id === relatedCell);
+      .classed('is-related', (n) => related.has(n.id) || n.cell.id === relatedCell || linkCells.has(n.cell.id));
     gSyn.selectAll('path.synapse')
       .classed('is-related', (s) => related.has(s.a.id) && related.has(s.b.id) && (s.a.id === sel?.id || s.b.id === sel?.id));
   }
@@ -412,7 +457,7 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
   }
 
   return {
-    setProject, setTime, select, fit, focusCell, focusChat,
+    setProject, setTime, select, fit, focusCell, focusChat, focusLink,
     hasCell: (id) => !!model?.cellById.get(id),
   };
 }
