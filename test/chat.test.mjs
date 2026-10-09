@@ -79,7 +79,8 @@ const turnEnds = (r) => r.count((e) => e.type === 'turn-end');
 const nthTurnEnd = (r, n) => r.until(() => turnEnds(r) >= n).then(() => r.events.filter((e) => e.type === 'turn-end')[n - 1]);
 
 test('translate maps the stream-json lines of the spike to page events and ignores the rest', () => {
-  assert.deepEqual(translate({ type: 'system', subtype: 'init', session_id: CLOSED, permissionMode: 'auto' }), [{ type: 'session', data: { sessionId: CLOSED, mode: 'auto' } }]);
+  assert.deepEqual(translate({ type: 'system', subtype: 'init', session_id: CLOSED, permissionMode: 'auto', model: 'claude-opus-5-5' }), [{ type: 'session', data: { sessionId: CLOSED, mode: 'auto', model: 'claude-opus-5-5' } }]);
+  assert.equal(translate({ type: 'system', subtype: 'init', session_id: CLOSED, model: 7 })[0].data.model, null);
   assert.deepEqual(translate({ type: 'system', subtype: 'hook_started', session_id: CLOSED }), []);
   assert.deepEqual(translate({ type: 'rate_limit_event' }), []);
   assert.deepEqual(translate({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'O' } } }), [{ type: 'text', data: { text: 'O', partial: true } }]);
@@ -90,8 +91,8 @@ test('translate maps the stream-json lines of the spike to page events and ignor
   assert.equal(use.data.name, 'Write');
   assert.ok(use.data.input.length <= 280);
   assert.deepEqual(translate({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'nope', is_error: true }] } }), [{ type: 'tool', data: { phase: 'result', id: 'toolu_1', isError: true, text: 'nope' } }]);
-  const [end] = translate({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: CLOSED, stop_reason: null, terminal_reason: 'aborted_streaming', permission_denials: [{ tool_name: 'Write' }] });
-  assert.deepEqual(end, { type: 'turn-end', data: { subtype: 'error_during_execution', isError: true, sessionId: CLOSED, terminalReason: 'aborted_streaming', denials: 1 } });
+  const [end] = translate({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: CLOSED, stop_reason: null, terminal_reason: 'aborted_streaming', permission_denials: [{ tool_name: 'Write' }], total_cost_usd: 0.25 });
+  assert.deepEqual(end, { type: 'turn-end', data: { subtype: 'error_during_execution', isError: true, sessionId: CLOSED, terminalReason: 'aborted_streaming', denials: 1, processCostUSD: 0.25 } });
 });
 
 test('buildArgs: stream-json both ways, partial messages, our MCP only, default permission mode, never a bypass', () => {
@@ -149,7 +150,7 @@ test('start a new chat: session, text and turn-end arrive in order; the mother i
     const end = await nthTurnEnd(r, 1);
     assert.equal(end.data.isError, false);
     const types = r.events.map((e) => e.type);
-    assert.deepEqual([...new Set(types)], ['user', 'session', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(types)], ['user', 'session', 'run', 'text', 'turn-end']);
     assert.equal(r.events[0].data.text, 'Hello there', 'the page sees what the person wrote, not the context block');
     assert.ok(r.events.every((e, i) => i === 0 || e.id > r.events[i - 1].id));
     const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
@@ -508,7 +509,7 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     const { chatKey } = JSON.parse(started.text);
     assert.equal((await readEvents(chatKey)).status, 401, 'local GET of a chat still needs the token');
     const all = await readEvents(chatKey, { cookie: `sm_token=${token}` });
-    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'run', 'text', 'turn-end']);
     assert.ok(all.events.every((e, i) => i === 0 || e.id > all.events[i - 1].id));
     const tail = await readEvents(chatKey, { cookie: `sm_token=${token}`, 'last-event-id': String(all.events[0].id) });
     assert.deepEqual(tail.events.map((e) => e.id), all.events.slice(1).map((e) => e.id));
@@ -676,6 +677,168 @@ test('a conversation of the list the page did not start: its history reads read-
       hub.subscribe(res.body.chatKey, r.sink);
       await nthTurnEnd(r, 1);
       assert.equal(r.events.find((e) => e.type === 'session').data.sessionId, OLD);
+    });
+  });
+});
+
+// ---- the way a page conversation runs: model, effort, Automatic / Manual (plano-v02 item 12) ----
+
+const argvOf = (log) => JSON.parse(readFileSync(log, 'utf8')).argv;
+const flagOf = (argv, name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
+const fakeLog = () => join(mkdtempSync(join(tmpdir(), 'sm-chat-log-')), 'fake.json');
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('a new conversation runs Automatic: Opus at high with the maestro prompt; the run event names the real model and the cost', async () => {
+  const log = fakeLog();
+  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state, smDir }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const argv = argvOf(log);
+    assert.equal(flagOf(argv, '--model'), 'opus');
+    assert.equal(flagOf(argv, '--effort'), 'high');
+    assert.match(flagOf(argv, '--append-system-prompt'), /ask-reinforce/);
+    const runs = r.events.filter((e) => e.type === 'run');
+    assert.deepEqual(runs[0].data.run, { kind: 'auto', selfReinforce: false });
+    assert.equal(runs[0].data.model, 'claude-opus-5-5', 'the model claude reported, not the alias');
+    assert.equal(runs[0].data.effort, 'high');
+    assert.equal(r.events.find((e) => e.type === 'turn-end').data.costUSD, 0.001);
+    assert.equal(runs.at(-1).data.costUSD, 0.001);
+    const sessionId = r.events.find((e) => e.type === 'session').data.sessionId;
+    const saved = JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8'))[sessionId];
+    assert.deepEqual(saved.run, { kind: 'auto', selfReinforce: false });
+  });
+});
+
+test('Manual: a fixed model and effort, Ultracode through --effort ultracode, Same as my Claude with no flags; junk is refused', async () => {
+  const log = fakeLog();
+  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state }) => {
+    const run = async (choice) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run: choice }, state);
+      assert.equal(res.status, 200);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      await nthTurnEnd(r, 1);
+      return { argv: argvOf(log), run: r.events.find((e) => e.type === 'run').data };
+    };
+    const fixed = await run({ kind: 'fixed', model: 'haiku', effort: 'low' });
+    assert.deepEqual([flagOf(fixed.argv, '--model'), flagOf(fixed.argv, '--effort'), flagOf(fixed.argv, '--append-system-prompt')], ['haiku', 'low', undefined]);
+    assert.equal(fixed.run.model, 'claude-haiku-5-5');
+    const ultra = await run({ kind: 'ultracode' });
+    assert.equal(flagOf(ultra.argv, '--effort'), 'ultracode');
+    assert.equal(ultra.run.ultracode, true);
+    const mine = await run({ kind: 'settings' });
+    assert.equal(flagOf(mine.argv, '--model'), undefined);
+    assert.equal(flagOf(mine.argv, '--effort'), undefined);
+    const bad = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run: { kind: 'fixed', model: 'opus', effort: '--x' } }, state);
+    assert.deepEqual([bad.status, bad.body.error], [400, 'bad-run']);
+  });
+});
+
+test('a conversation the page did not start resumes the way it ran (no flags), and the cost adds to what it had already spent', async () => {
+  const log = fakeLog();
+  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state }) => {
+    state.projects[0].conversations = [{ sessionId: CLOSED, title: 'old', chattable: true, live: false, costUSD: 0.5 }];
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'go on' }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.equal(flagOf(argvOf(log), '--model'), undefined);
+    assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'settings' });
+    assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: go on'), 'no note: nothing changed');
+    assert.equal(r.events.find((e) => e.type === 'turn-end').data.costUSD, 0.501);
+  });
+});
+
+test('Automatic asks before reinforcing: the run event carries the reason and estimate, and nothing is sent for the person', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:4.5' }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const last = r.events.filter((e) => e.type === 'run').at(-1).data;
+    assert.deepEqual([last.level, last.why, last.estimateUSD], ['ask-reinforce', 'touches sign in', 4.5]);
+    await pause(150);
+    assert.equal(r.count((e) => e.type === 'user'), 1);
+  });
+});
+
+test('"may reinforce on its own" answers the ask while the monthly limit holds, counts the reinforced cost, and asks again past it', async () => {
+  await withHub({}, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
+    const run = { kind: 'auto', selfReinforce: true };
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.5', run }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 2);
+    const auto = r.events.filter((e) => e.type === 'user')[1];
+    assert.equal(auto.data.auto, 'reinforce', 'the page shows it as session-map\'s answer, not the person\'s');
+    assert.equal(hub.send(res.body.chatKey, { text: 'Doing it RUN:reinforced' }).status, 200);
+    await nthTurnEnd(r, 3);
+    const spend = JSON.parse(readFileSync(join(smDir, 'reinforced-spend.json'), 'utf8'));
+    assert.ok(Object.values(spend)[0] > 0, 'the reinforced turn counts against the month');
+    assert.equal(r.events.filter((e) => e.type === 'run').at(-1).data.level, 'reinforced');
+
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 0.0001 } }));
+    hub.send(res.body.chatKey, { text: 'Next one RUN:ask-reinforce:0.5' });
+    await nthTurnEnd(r, 4);
+    await pause(150);
+    assert.equal(turnEnds(r), 4, 'past the limit it waits for the person');
+  });
+});
+
+test('changing the way it runs mid-conversation restarts claude with the new flags and tells it in the next message, which the page never shows', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const log = fakeLog();
+    await withHub({ dir, env: { ...env, FAKE_LOG: log } }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'first' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      assert.equal(hub.run(res.body.chatKey, { run: { kind: 'turbo' } }).status, 400);
+      assert.equal(hub.run(res.body.chatKey, { run: { kind: 'fixed', model: 'sonnet', effort: 'medium' } }).status, 200);
+      await r.until((e) => e.type === 'session' && e.data.state === 'ended');
+      const again = await hub.start({ projectId: 'demo-abc123', sessionId, text: 'second' }, state);
+      assert.equal(again.status, 200);
+      const r2 = recorder();
+      hub.subscribe(again.body.chatKey, r2.sink);
+      await nthTurnEnd(r2, 1);
+      assert.deepEqual([flagOf(argvOf(log), '--model'), flagOf(argvOf(log), '--effort')], ['sonnet', 'medium']);
+      const echoed = r2.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
+      assert.match(echoed, /session-map: the way this conversation runs changed/);
+      assert.deepEqual(r2.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['second']);
+      const shown = hub.history(sessionId, state).body;
+      assert.deepEqual(shown.run, { kind: 'fixed', model: 'sonnet', effort: 'medium' });
+      assert.ok(shown.messages.filter((m) => m.role === 'user').every((m) => !m.text.includes('session-map: the way')));
+    });
+  });
+});
+
+test('only "may reinforce on its own" changed: the running claude keeps going, no restart and no note', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'first' }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.equal(hub.run(res.body.chatKey, { run: { kind: 'auto', selfReinforce: true } }).status, 200);
+    assert.equal(hub.send(res.body.chatKey, { text: 'second' }).status, 200);
+    await nthTurnEnd(r, 2);
+    assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: second'));
+    assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0);
+  });
+});
+
+test('the list and the history tell the page what "Same as my Claude" runs and how much reinforcing is left this month', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'xhigh' }));
+    await withHub({ dir, env }, async ({ hub, state, smDir }) => {
+      writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 20 } }));
+      const listed = hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body;
+      assert.deepEqual(listed.mine, { model: 'opus[1m]', effort: 'xhigh', ultracode: false });
+      assert.deepEqual(listed.reinforce, { limitUSD: 20, spentUSD: 0 });
     });
   });
 });

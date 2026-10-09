@@ -1,7 +1,9 @@
 // Stand-in for the `claude` CLI. One-shot mode (ai runner): logs how it was called to FAKE_LOG and prints FAKE_REPLY
 // (or sleeps FAKE_SLEEP_MS). Chat mode (--input-format stream-json): speaks the lines recorded in .dev/prova/RESULTADO.md.
 //   "PERM:<Tool>" (repeatable) asks our permission MCP once per occurrence; "SLOW" streams until interrupted;
+//   "RUN:<level>[:<estimate>]" ends the reply with a session-map-run block at that level;
 //   anything else is echoed back as "echo: <text>". set_permission_mode changes the mode the next init reports.
+//   init reports the model of --model (as claude names it); total_cost_usd grows by 0.001 a turn, for the process.
 //   FAKE_TRANSCRIPTS: a folder where each conversation is written as <sessionId>.jsonl, as claude does under ~/.claude/projects.
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -38,6 +40,9 @@ function chat() {
   const out = (msg) => process.stdout.write(`${JSON.stringify({ ...msg, session_id: sessionId })}\n`);
   let interrupted = false;
   let mode = flag('--permission-mode');
+  const MODEL_IDS = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5' };
+  const model = MODEL_IDS[flag('--model')] ?? flag('--model') ?? 'claude-opus-5-5';
+  let turns = 0;
   const transcript = (entry) => {
     if (!process.env.FAKE_TRANSCRIPTS) return;
     mkdirSync(process.env.FAKE_TRANSCRIPTS, { recursive: true });
@@ -48,7 +53,7 @@ function chat() {
   let mcp = null;
 
   const delta = (text) => out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } } });
-  const result = (extra = {}) => out({ type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', terminal_reason: 'completed', total_cost_usd: 0.001, permission_denials: [], ...extra });
+  const result = (extra = {}) => out({ type: 'result', subtype: 'success', is_error: false, stop_reason: 'end_turn', terminal_reason: 'completed', total_cost_usd: 0.001 * ++turns, permission_denials: [], ...extra });
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function startMcp() {
@@ -79,7 +84,7 @@ function chat() {
   }
 
   async function run(text) {
-    out({ type: 'system', subtype: 'init', cwd: process.cwd(), permissionMode: mode, mcp_servers: [{ name: 'sessionmap', status: 'connected' }] });
+    out({ type: 'system', subtype: 'init', cwd: process.cwd(), model, permissionMode: mode, mcp_servers: [{ name: 'sessionmap', status: 'connected' }] });
     out({ type: 'system', subtype: 'hook_started', hook_name: 'SessionStart' });
     transcript({ type: 'user', message: { role: 'user', content: text } });
     const perms = [...text.matchAll(/PERM:(\w+)/g)].map((m) => m[1]);
@@ -110,7 +115,10 @@ function chat() {
       }
       return result({ result: 'numbers' });
     }
-    const reply = `echo: ${text}`;
+    const level = /RUN:([\w-]+)(?::([\d.]+))?/.exec(text);
+    const fence = '```';
+    const block = level ? `\n\n${fence}session-map-run\n${JSON.stringify({ level: level[1], why: 'touches sign in', ...(level[2] ? { estimateUSD: Number(level[2]) } : {}) })}\n${fence}` : '';
+    const reply = `echo: ${text}${block}`;
     delta(reply.slice(0, 3));
     delta(reply.slice(3));
     out({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: reply }] } });

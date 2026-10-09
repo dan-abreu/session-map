@@ -1,3 +1,5 @@
+import { RUN_NOTE_END, RUN_NOTE_HEAD } from './run.mjs';
+
 // The first message of a chat the page starts: what session-map knows, then the person's words.
 const list = (items) => items.map((i) => `- ${i}`).join('\n');
 
@@ -32,8 +34,16 @@ export function firstPrompt({ sections = [], mother, workCell, text, board = fal
   return `${CONTEXT_HEAD}\n\n${parts.join('\n\n')}\n\n${hint}\n\n${text}`;
 }
 
-// The first prompt as the person wrote it, without the context block firstPrompt put before it.
+// A prompt as the person wrote it, without the context block firstPrompt put before it or the note of a changed way
+// of working (run.mjs).
 export function personsWords(prompt) {
+  if (prompt.startsWith(RUN_NOTE_HEAD)) {
+    const at = prompt.indexOf(`
+${RUN_NOTE_END}
+
+`);
+    if (at >= 0) return personsWords(prompt.slice(at + RUN_NOTE_END.length + 3));
+  }
   if (!prompt.startsWith(CONTEXT_HEAD)) return prompt;
   for (const hint of [BOARD_HINT, CARD_HINT]) {
     const at = prompt.indexOf(`\n\n${hint}\n\n`);

@@ -152,6 +152,7 @@ export function logAction(smDir, body, status) {
   if (typeof body?.mode === 'string') line.mode = body.mode.slice(0, 20);
   if (typeof body?.projectId === 'string') line.projectId = body.projectId.slice(0, 100);
   if (Number.isInteger(body?.count)) line.count = body.count;
+  if (Number.isFinite(body?.usd)) line.usd = body.usd;
   try {
     mkdirSync(smDir, { recursive: true });
     appendFileSync(join(smDir, 'actions.log'), `${JSON.stringify(line)}\n`);

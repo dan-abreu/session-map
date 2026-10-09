@@ -13,6 +13,7 @@ import { readArch } from './arch/detect.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
+import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
 import { collect } from './collect.mjs';
 import { loadConfig } from './config.mjs';
 import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
@@ -32,6 +33,7 @@ const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
+const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
 const FLOW_TEXT_MAX = 60_000;
 const SKIP_MAX = 500;
@@ -168,7 +170,7 @@ export function createApp({
       req.on('close', unsubscribe);
       return undefined;
     }
-    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
+    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
     return send(res, result.status, result.body);
@@ -191,6 +193,19 @@ export function createApp({
     } else throw new HttpError(404, 'not-found');
     const status = result.ok ? 200 : MODE_ERRORS[result.error];
     logAction(smDir, action, status);
+    return send(res, status, result);
+  }
+
+  // How much Automatic may spend a month reinforcing on its own (budget.reinforcedMonthlyUSD in session-map's own config).
+  async function limitRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method === 'GET') return send(res, 200, { ok: true, limitUSD: reinforcedLimit(smDir), spentUSD: Math.round(reinforcedSpend(smDir) * 1e6) / 1e6 });
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const usd = (await readBody(req))?.usd;
+    const result = setReinforcedLimit(smDir, usd);
+    const status = result.ok ? 200 : LIMIT_ERRORS[result.error];
+    logAction(smDir, { action: 'reinforced-limit', usd: typeof usd === 'number' ? usd : null }, status);
     return send(res, status, result);
   }
 
@@ -325,6 +340,7 @@ export function createApp({
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
+    if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

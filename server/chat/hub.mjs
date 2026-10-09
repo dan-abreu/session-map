@@ -14,6 +14,10 @@ import { contextOf } from './context.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
+import {
+  DEFAULT_RUN, addReinforcedSpend, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
+  settingsRun, withRunNote,
+} from './run.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
@@ -32,6 +36,11 @@ const IDLE_MS = 30 * 60_000;
 const LINGER_MS = 5 * 60_000;
 const DENIED = 'Denied by the person in session-map.';
 const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
+// Sent for the person when they let Automatic reinforce on its own and the month's allowance still covers the estimate.
+const AUTO_REINFORCE = 'OK, you may reinforce. (Answered by session-map: the person allows reinforcing on its own while the monthly limit holds.)';
+// The instructions a conversation already carries: the system prompt of its first turn, or the last note sent.
+const instructionsOf = (run) => (run.kind === 'fixed' || run.kind === 'settings' ? 'plain' : run.kind);
+const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
@@ -147,6 +156,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       }
       chat.announced = true;
       chat.reported = evt.data.mode ?? null;
+      chat.model = evt.data.model;
       chat.sessionId = evt.data.sessionId;
       bySession.set(chat.sessionId, chat);
       if (chat.parentId && chat.parentId !== chat.sessionId) {
@@ -154,21 +164,31 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       }
       const known = readPageChats()[chat.sessionId];
       savePageChat(chat.sessionId, {
-        projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, updatedAt: now(),
+        projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, updatedAt: now(),
         ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
       });
-      return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
+      emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
+      return emitRun(chat);
     }
+    if (evt.type === 'text' && !evt.data.partial) chat.turnText += `${evt.data.text}\n`;
     if (evt.type === 'text' && chat.flow && !evt.data.partial) chat.flow.reply += `${evt.data.text}
 `;
     if (evt.type === 'turn-end') {
       chat.running = false;
       if (chat.flow) saveFlowDraft(chat);
+      const auto = endTurnRun(chat, evt.data.processCostUSD);
       clearTimeout(chat.idleTimer);
       chat.idleTimer = setTimeout(() => { chat.closing = true; chat.driver.end(); }, idleMs);
       chat.idleTimer.unref?.();
       if (chat.sessionId) savePageChat(chat.sessionId, { updatedAt: now() });
-      return emit(chat, 'turn-end', evt.data);
+      const { processCostUSD, ...data } = evt.data;
+      emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD });
+      emitRun(chat);
+      if (chat.restart) {
+        chat.closing = true;
+        chat.driver.end();
+      } else if (auto) sendTo(chat, AUTO_REINFORCE, AUTO_REINFORCE, 'reinforce');
+      return undefined;
     }
     if (evt.type === 'exit') return onExit(chat, evt.data);
     if (evt.type === 'error' && evt.data.error === 'spawn-failed') {
@@ -178,6 +198,32 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       return onExit(chat, { code: null, signal: null });
     }
     return emit(chat, evt.type, evt.data);
+  }
+
+  // What the header shows: the way it runs, the model claude reported (the alias until it does), the level the maestro
+  // works at and why, and what the conversation has cost.
+  function emitRun(chat) {
+    const expected = expectedRun(chat.run, settingsRun(chat.root, dir));
+    emit(chat, 'run', {
+      run: chat.run, model: chat.model ?? expected.model, effort: expected.effort, ultracode: expected.ultracode,
+      level: chat.level?.level ?? null, why: chat.level?.why ?? null, estimateUSD: chat.level?.estimateUSD ?? null, costUSD: chat.costUSD,
+    });
+  }
+
+  // The cost and level of the turn that ended. true: answer the maestro's ask to reinforce for the person.
+  function endTurnRun(chat, processCostUSD) {
+    const spent = Number.isFinite(processCostUSD) ? Math.max(0, processCostUSD - chat.processCostUSD) : 0;
+    if (Number.isFinite(processCostUSD)) chat.processCostUSD = processCostUSD;
+    chat.costUSD = round6(chat.baseCostUSD + chat.processCostUSD);
+    const block = readRunBlock(chat.turnText);
+    chat.turnText = '';
+    if (!block) return false;
+    chat.level = block;
+    if (block.level === 'reinforced') {
+      try { addReinforcedSpend(smDir, spent); } catch (err) { log('warn', 'reinforced-spend-failed', { error: err.message }); }
+    }
+    if (chat.run.kind !== 'auto' || block.level !== 'ask-reinforce' || chat.restart) return false;
+    return mayReinforce({ selfReinforce: chat.run.selfReinforce, limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
   }
 
   // The workshop's reply ends with the whole draft in a mermaid fence: that block becomes the shared draft.
@@ -219,8 +265,13 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
-  function sendTo(chat, shown, prompt = shown) {
+  function sendTo(chat, shown, prompt = shown, auto = undefined) {
     clearTimeout(chat.idleTimer);
+    if (instructionsOf(chat.run) !== chat.prompted) {
+      prompt = withRunNote(chat.run, prompt);
+      chat.prompted = instructionsOf(chat.run);
+      if (chat.sessionId) savePageChat(chat.sessionId, { prompted: chat.prompted });
+    }
     if (chat.flow) {
       const draft = readDraft(smDir, chat.projectId);
       if (draft !== null && draft !== chat.flow.seen) prompt = `${handEdited(draft)}
@@ -230,7 +281,7 @@ ${prompt}`;
       chat.flow.reply = '';
     }
     chat.running = true;
-    emit(chat, 'user', { text: shown });
+    emit(chat, 'user', auto ? { text: shown, auto } : { text: shown });
     chat.driver.send(prompt);
   }
 
@@ -245,6 +296,8 @@ ${prompt}`;
     const workCellId = body.frontId ?? body.workCellId;
     for (const id of [body.sessionId, body.parentId]) if (id !== undefined && !(typeof id === 'string' && UUID_RE.test(id))) return reply(400, { error: 'bad-session' });
     if (body.mode !== undefined && pickMode(body.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
+    const asked = body.run === undefined ? null : parseRun(body.run);
+    if (body.run !== undefined && !asked) return reply(400, { error: 'bad-run' });
     const fromSettings = settingsMode(project.root, dir);
 
     let cwd;
@@ -263,6 +316,8 @@ ${prompt}`;
       if (driven) {
         if (driven.running) return reply(409, { error: 'busy', chatKey: driven.key });
         if (body.mode !== undefined) changeMode(driven, body.mode);
+        if (asked) changeRun(driven, asked);
+        if (driven.restart) return reply(409, { error: 'restarting' });
         sendTo(driven, body.text);
         return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: driven.choice === 'settings' && fromSettings.downgraded });
       }
@@ -293,6 +348,11 @@ ${prompt}`;
     }
     const choice = body.mode ?? saved?.mode ?? 'settings';
     const mode = pickMode(choice, fromSettings);
+    // A conversation that ran before without session-map's flags (elsewhere, or before they existed) keeps running that way.
+    const run = asked ?? parseRun(saved?.run) ?? (resume ? { kind: 'settings' } : DEFAULT_RUN);
+    const prompted = resume ? saved?.prompted ?? 'plain' : instructionsOf(run);
+    const listed = resume ? (project.conversations ?? []).find((c) => c.sessionId === resume) ?? find(project, 'chat', resume) : null;
+    const baseCostUSD = Number(listed?.costUSD) || 0;
 
     if ([...chats.values()].filter((c) => !c.ended).length >= CHATS_MAX) return reply(429, { error: 'too-many-chats' });
     const claude = bin !== undefined ? bin : findClaude();
@@ -305,6 +365,7 @@ ${prompt}`;
       events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`), flow,
+      run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
     };
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     // By file, not by argument: a command line is readable by other users of the machine.
@@ -314,7 +375,7 @@ ${prompt}`;
     chats.set(key, chat);
     if (resume) bySession.set(resume, chat);
     chat.driver = startDriver({
-      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode }), cwd, env: cleanEnv(env),
+      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run) }), cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
     sendTo(chat, body.text, prompt);
@@ -328,6 +389,33 @@ ${prompt}`;
     if (chat.sessionId) savePageChat(chat.sessionId, { mode: choice });
   }
 
+  // Model and effort are flags of the process: a change that touches them ends it (now, or after the running turn) and
+  // the next message resumes the conversation with the new ones. "May reinforce on its own" alone needs no restart.
+  function changeRun(chat, run) {
+    const restart = JSON.stringify(runArgs(run)) !== JSON.stringify(runArgs(chat.run));
+    chat.run = run;
+    if (chat.sessionId) savePageChat(chat.sessionId, { run });
+    emitRun(chat);
+    if (!restart || chat.ended) return;
+    chat.restart = true;
+    if (!chat.running) {
+      chat.closing = true;
+      chat.driver.end();
+    }
+  }
+
+  function setRun(key, body) {
+    const chat = chatOf(key);
+    if (!chat) return reply(404, { error: 'unknown-chat' });
+    if (chat.ended) return reply(409, { error: 'ended' });
+    const run = parseRun(body?.run);
+    if (!run) return reply(400, { error: 'bad-run' });
+    changeRun(chat, run);
+    return reply(200, { run });
+  }
+
+  const reinforceState = () => ({ limitUSD: reinforcedLimit(smDir), spentUSD: round6(reinforcedSpend(smDir)) });
+
   // The page conversations of a part (of one of its items with code), of a kind of point (idea, create-arch) or of a branch,
   // the one used last first, with the key of those still running.
   function listChats(query, state) {
@@ -340,10 +428,10 @@ ${prompt}`;
       const driven = drivenNow(sessionId);
       return {
         sessionId, title: c.title ?? '', startedAt: c.startedAt ?? null, updatedAt: c.updatedAt ?? c.startedAt ?? null,
-        mode: c.mode ?? 'settings', chatKey: driven?.key ?? null, running: Boolean(driven?.running),
+        mode: c.mode ?? 'settings', run: parseRun(c.run) ?? { kind: 'settings' }, chatKey: driven?.key ?? null, running: Boolean(driven?.running),
       };
     }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
-    return reply(200, { chats, settings: settingsMode(project.root, dir) });
+    return reply(200, { chats, settings: settingsMode(project.root, dir), mine: settingsRun(project.root, dir), reinforce: reinforceState() });
   }
 
   // claude keeps each conversation as projects/<folder>/<sessionId>.jsonl; the id is a checked UUID.
@@ -366,10 +454,14 @@ ${prompt}`;
     const driven = drivenNow(sessionId);
     const file = transcriptOf(sessionId);
     const messages = (file ? readFullTranscript(file) : []).filter((m) => !driven || !m.ts || m.ts < driven.startedAt);
-    const first = messages.find((m) => m.role === 'user');
-    if (first) first.text = personsWords(first.text);
-    const settings = settingsMode(page.root ?? page.cwd, dir);
-    return reply(200, { sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings, messages, chatKey: driven?.key ?? null });
+    for (const m of messages) if (m.role === 'user') m.text = personsWords(m.text);
+    const folder = page.root ?? page.cwd;
+    const row = state?.projects.find((p) => p.id === page.projectId)?.conversations?.find((c) => c.sessionId === sessionId);
+    return reply(200, {
+      sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, chatKey: driven?.key ?? null,
+      run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
+      costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0),
+    });
   }
 
   // A conversation of the list the page did not start (VS Code, a terminal): read here, written where it lives, unless
@@ -380,7 +472,10 @@ ${prompt}`;
     const row = project.conversations.find((c) => c.sessionId === sessionId);
     const file = transcriptOf(sessionId);
     const messages = file ? readFullTranscript(file) : [];
-    return reply(200, { sessionId, title: row.title ?? '', mode: 'settings', settings: settingsMode(project.root, dir), messages, chatKey: null, readOnly: true });
+    return reply(200, {
+      sessionId, title: row.title ?? '', mode: 'settings', settings: settingsMode(project.root, dir), messages, chatKey: null, readOnly: true,
+      run: { kind: 'settings' }, mine: settingsRun(project.root, dir), reinforce: reinforceState(), costUSD: Number(row.costUSD) || 0,
+    });
   }
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);
@@ -456,5 +551,5 @@ ${prompt}`;
     }
   }
 
-  return { start, send, permission, mode, stop, subscribe, list: listChats, history, close };
+  return { start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, close };
 }

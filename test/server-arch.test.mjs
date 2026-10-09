@@ -107,3 +107,36 @@ async function waitFor(read, ms = 8000) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
+
+test('the monthly limit for reinforcing on its own: read and set with the token, kept in session-map\'s config, logged; junk refused', async () => {
+  await withServer(async ({ call, write, token, smDir }) => {
+    const path = '/api/settings/reinforced-limit';
+    assert.equal((await call('GET', path)).status, 401);
+    assert.deepEqual((await call('GET', path, { headers: { cookie: `sm_token=${token}` } })).body, { ok: true, limitUSD: null, spentUSD: 0 });
+    assert.equal((await call('POST', path, { body: { usd: 10 } })).status, 403, 'no header, no origin');
+    assert.deepEqual((await call('POST', path, { headers: write, body: { usd: -2 } })).body, { ok: false, error: 'bad-limit' });
+    assert.equal((await call('POST', path, { headers: write, body: { usd: 25 } })).status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8')), { budget: { reinforcedMonthlyUSD: 25 } });
+    assert.equal((await call('GET', path, { headers: { cookie: `sm_token=${token}` } })).body.limitUSD, 25);
+    const logged = readFileSync(join(smDir, 'actions.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(logged.map((l) => [l.action, l.usd, l.status]), [['reinforced-limit', -2, 400], ['reinforced-limit', 25, 200]]);
+  });
+});
+
+test('a chat\'s way of running changes through /api/chat/:key/run, with the token', async () => {
+  await withServer(async ({ call, write }) => {
+    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', node: { kind: 'idea' }, text: 'An idea', run: { kind: 'fixed', model: 'haiku', effort: 'low' } } });
+    assert.equal(made.status, 200);
+    const path = `/api/chat/${made.body.chatKey}/run`;
+    assert.equal((await call('POST', path, { headers: { ...write, cookie: '' }, body: { run: { kind: 'maestro' } } })).status, 401);
+    assert.equal((await call('POST', path, { headers: write, body: { run: { kind: 'nope' } } })).status, 400);
+    const ok = await call('POST', path, { headers: write, body: { run: { kind: 'auto', selfReinforce: true } } });
+    assert.deepEqual([ok.status, ok.body.run], [200, { kind: 'auto', selfReinforce: true }]);
+  });
+});
+
+test('the demo never sets the reinforced limit', async () => {
+  await withServer(async ({ call }) => {
+    assert.equal((await call('POST', '/api/settings/reinforced-limit', { headers: { 'x-session-map': '1' }, body: { usd: 5 } })).status, 403);
+  }, { demo: true });
+});

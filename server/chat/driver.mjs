@@ -13,12 +13,13 @@ export const preview = (value) => {
 const resultText = (content) => (Array.isArray(content) ? content.map((c) => c?.text ?? '').join('') : content);
 
 // Formats from .dev/prova/RESULTADO.md. The permission mode is always spelled out, and only from CHAT_MODES:
-// a user setting or a crafted request cannot turn it into a bypass.
-export function buildArgs({ mcpConfigPath, resume, mode = 'default' }) {
+// a user setting or a crafted request cannot turn it into a bypass. run: the model flags of run.mjs (runArgs).
+export function buildArgs({ mcpConfigPath, resume, mode = 'default', run = [] }) {
   return [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--permission-mode', CHAT_MODES.includes(mode) ? mode : 'default',
     '--mcp-config', mcpConfigPath, '--strict-mcp-config', '--permission-prompt-tool', PERMISSION_TOOL,
+    ...run,
     ...(resume ? ['--resume', resume] : []),
   ];
 }
@@ -27,7 +28,7 @@ export function buildArgs({ mcpConfigPath, resume, mode = 'default' }) {
 export function translate(msg) {
   switch (msg?.type) {
     case 'system':
-      return msg.subtype === 'init' && msg.session_id ? [{ type: 'session', data: { sessionId: msg.session_id, mode: msg.permissionMode } }] : [];
+      return msg.subtype === 'init' && msg.session_id ? [{ type: 'session', data: { sessionId: msg.session_id, mode: msg.permissionMode, model: typeof msg.model === 'string' ? msg.model : null } }] : [];
     case 'stream_event': {
       const delta = msg.event?.type === 'content_block_delta' ? msg.event.delta : null;
       return delta?.type === 'text_delta' ? [{ type: 'text', data: { text: delta.text, partial: true } }] : [];
@@ -45,7 +46,9 @@ export function translate(msg) {
     case 'result':
       return [{
         type: 'turn-end',
-        data: { subtype: msg.subtype, isError: Boolean(msg.is_error), sessionId: msg.session_id, terminalReason: msg.terminal_reason, denials: msg.permission_denials?.length ?? 0 },
+        data: { subtype: msg.subtype, isError: Boolean(msg.is_error), sessionId: msg.session_id, terminalReason: msg.terminal_reason, denials: msg.permission_denials?.length ?? 0,
+          // What this process has spent so far: claude adds every turn of the process into it.
+          processCostUSD: Number.isFinite(msg.total_cost_usd) ? msg.total_cost_usd : null },
       }];
     default:
       return [];
