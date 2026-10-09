@@ -1,0 +1,11 @@
+{
+  "name": "session-map",
+  "owner": { "name": "Daniel Abreu" },
+  "plugins": [
+    {
+      "name": "session-map",
+      "source": "./",
+      "description": "A living brain of every Claude Code conversation on this machine, in the browser."
+    }
+  ]
+}
