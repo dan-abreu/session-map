@@ -6,6 +6,9 @@ import { wantsAlert } from '../web/alerts.js';
 import { snapshotOf, transitionsOf } from './watch.mjs';
 
 const FEED_MAX = 100;
+// The first read of every history takes up to a minute and holds the process: it waits, so a restart opens the port and
+// answers with the saved copy first.
+const FIRST_LOOK_MS = 5_000;
 
 // readState() → the state; deliver(alerts, prefs); prefs() → notifyPrefs; skip() → the sessionIds the page drives (it
 // pushes their changes itself); startup(state) → alerts the first look brings (chats a restart cut off).
@@ -17,6 +20,7 @@ export function createWatcher({ readState, deliver, prefs, skip, startup = () =>
   let last = null;
   let looking = null;
   let timer = null;
+  let firstLook = null;
 
   function push(events) {
     if (!events.length) return;
@@ -54,11 +58,13 @@ export function createWatcher({ readState, deliver, prefs, skip, startup = () =>
 
   return {
     tick, push, since,
-    start(intervalMs) {
-      timer ??= setInterval(tick, intervalMs);
+    start(intervalMs, { firstLookMs = FIRST_LOOK_MS } = {}) {
+      if (timer) return;
+      timer = setInterval(tick, intervalMs);
       timer.unref?.();
-      tick();
+      firstLook = setTimeout(tick, firstLookMs);
+      firstLook.unref?.();
     },
-    stop() { clearInterval(timer); timer = null; },
+    stop() { clearInterval(timer); clearTimeout(firstLook); timer = null; },
   };
 }

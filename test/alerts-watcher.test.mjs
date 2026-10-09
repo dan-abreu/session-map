@@ -81,3 +81,13 @@ test('the feed keeps the newest 100', () => {
   assert.equal(feed.alerts.length, 100);
   assert.equal(feed.alerts[0].id, 21);
 });
+
+test('start never reads the state in the same tick: a restart must open the port before the first long read', async () => {
+  let reads = 0;
+  const watcher = createWatcher({ readState: async () => { reads++; return stateOf(); }, deliver: async () => {}, prefs: () => ({ perProject: {} }), skip: () => new Set() });
+  watcher.start(60_000, { firstLookMs: 20 });
+  assert.equal(reads, 0, 'the first look waits, so the server can listen and answer with the saved copy');
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(reads, 1);
+  watcher.stop();
+});
