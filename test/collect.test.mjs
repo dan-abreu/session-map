@@ -204,6 +204,28 @@ test('collect hangs branches on parts by their diff and fills them from their ch
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
+test('a chat the page opened on a part stays there when no item code places it, before the files and the AI', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    const id = projectIdOf(root);
+    writeChat(dir, { id: A, cwd: root, title: 'Opened on billing', edits: ['src/shop/cart.ts'] });
+    writeChat(dir, { id: B, cwd: root, title: 'Cites an item', prompts: ['see `sh02`'] });
+    writeChat(dir, { id: C, cwd: root, title: 'Part gone', endedAgo: HOUR });
+    writeChat(dir, { id: D, cwd: root, title: 'Other project', endedAgo: HOUR });
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
+      [A]: { projectId: id, partId: 'billing' }, [B]: { projectId: id, partId: 'billing' }, [C]: { projectId: id, partId: 'ghost' }, [D]: { projectId: 'other-123456', partId: 'billing' },
+    }));
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const placed = (sessionId) => { const c = p.chats.find((x) => x.sessionId === sessionId); return [c.partId, c.partSource]; };
+    assert.deepEqual(placed(A), ['billing', 'page']);
+    assert.deepEqual(placed(B), ['shop', 'code']);
+    assert.deepEqual(placed(C), [null, 'none']);
+    assert.deepEqual(placed(D), [null, 'none']);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
 test('files edited in a sibling checkout of the repo place the chat too', async () => {
   const dir = tmp();
   const smDir = tmp();

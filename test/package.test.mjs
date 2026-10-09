@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { buildLinks, privateAddresses } from '../scripts/links.mjs';
+import { parseArch } from '../server/arch/parse.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -31,7 +32,7 @@ test('marketplace lists the plugin from the repository root', () => {
   assert.deepEqual(m.plugins.map((p) => [p.name, p.source]), [['session-map', './']]);
 });
 
-for (const name of ['map', 'board', 'history']) {
+for (const name of ['map', 'board', 'history', 'architecture']) {
   test(`skill ${name} has matching name and a "Use when" description`, () => {
     const fm = frontmatter(`skills/${name}/SKILL.md`);
     assert.equal(fm.name, name);
@@ -46,6 +47,32 @@ test('board skill documents every card field the parser reads', () => {
     assert.ok(body.includes(`"${f}"`), f);
   }
   assert.ok(body.includes('```session-map'));
+});
+
+test('architecture skill: where the map lives, the item format, the three moves, and asking before creating one', () => {
+  const body = read('skills/architecture/SKILL.md');
+  for (const piece of ['docs/arquitetura', 'docs/architecture', 'docs/arch', 'O que falta', "What's missing", 'em andamento', 'in progress', '- [x]', 'Onde está no código', 'Where in the code', 'subgraph', 'OK']) {
+    assert.ok(body.includes(piece), piece);
+  }
+});
+
+test('the example part file in the architecture skill is read by the parser as the skill says', () => {
+  const body = read('skills/architecture/SKILL.md');
+  const example = /```markdown\r?\n([\s\S]*?)```/.exec(body);
+  assert.ok(example, 'a markdown example of a part file');
+  const arch = parseArch('docs/architecture', { 'login.md': example[1] });
+  const [part] = arch.parts;
+  assert.ok(part.about.length > 0, 'opening paragraph is the about');
+  assert.ok(part.codePaths.length > 0, 'where in the code gives paths');
+  const items = part.groups.flatMap((g) => g.items);
+  assert.ok(items.length >= 3);
+  assert.ok(items.every((i) => i.code), 'every example item has a code');
+  assert.deepEqual([...new Set(items.map((i) => i.status))].sort(), ['doing', 'done', 'todo']);
+  assert.ok(items.some((i) => i.who && i.weight), 'one item shows who and weight');
+});
+
+test('board skill tells the chat to cite the code of the architecture item it works on', () => {
+  assert.match(read('skills/board/SKILL.md'), /item code|code of the item/i);
 });
 
 test('history skill runs the search script and map skill the server', () => {

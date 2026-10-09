@@ -9,6 +9,7 @@ import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
 import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
+import { contextOf } from './context.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
@@ -33,6 +34,12 @@ const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
 const now = () => new Date().toISOString();
+// What the page remembers of the point a chat was opened on: only the field its kind uses, which contextOf matched against the map.
+const NODE_FIELD = { layer: 'layerId', group: 'group', item: 'code' };
+const nodeTag = (node) => {
+  const field = NODE_FIELD[node.kind];
+  return field && typeof node[field] === 'string' ? { kind: node.kind, [field]: node[field] } : { kind: node.kind };
+};
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
 export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner } = {}) {
@@ -144,7 +151,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       const known = readPageChats()[chat.sessionId];
       savePageChat(chat.sessionId, {
         projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, updatedAt: now(),
-        ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, title: chat.title, startedAt: chat.startedAt }),
+        ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
       });
       return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
     }
@@ -198,7 +205,8 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     chat.driver.send(prompt);
   }
 
-  // body: {projectId, partId?, frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
+  // body: {projectId, node? ({kind, partId?, layerId?, group?, code?, line?}: the point of the map), partId? (same as a part node),
+  //        frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
   async function start(body, state) {
     if (!body || typeof body !== 'object') return reply(400, { error: 'bad-request' });
     if (!isText(body.text)) return reply(400, { error: 'bad-text' });
@@ -237,14 +245,19 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
       if (body.parentId && !mother) return reply(404, { error: 'unknown-session' });
-      const part = partId !== undefined ? find(project, 'part', partId) : mother && find(project, 'part', mother.partId);
-      if (partId !== undefined && !part) return reply(404, { error: 'unknown-part' });
+      let { node } = body;
+      if (node === undefined && partId !== undefined) node = { kind: 'part', partId };
+      if (node === undefined && mother && find(project, 'part', mother.partId)) node = { kind: 'part', partId: mother.partId };
+      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node);
+      if (context.error) return reply(context.status, { error: context.error });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
-      prompt = firstPrompt({ part, mother, workCell, text: body.text, board });
-      cwd = workCell?.path ?? project.root;
-      place = { ...place, partId: part?.id ?? null, workCellId: workCell?.id ?? null };
+      prompt = firstPrompt({ sections: context.sections, mother, workCell, text: body.text, board });
+      // An idea or a new map is about the whole project: it starts at the root, whatever branch is picked.
+      const atRoot = node?.kind === 'idea' || node?.kind === 'create-arch';
+      cwd = atRoot ? project.root : workCell?.path ?? project.root;
+      place = { ...place, partId: context.part?.id ?? null, workCellId: workCell?.id ?? null, ...(node ? { node: nodeTag(node) } : {}) };
     }
     const choice = body.mode ?? saved?.mode ?? 'settings';
     const mode = pickMode(choice, fromSettings);
@@ -283,12 +296,14 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     if (chat.sessionId) savePageChat(chat.sessionId, { mode: choice });
   }
 
-  // The page conversations of a part (or of a branch), the one used last first, with the key of those still running.
+  // The page conversations of a part (of one of its items with code), of a kind of point (idea, create-arch) or of a branch,
+  // the one used last first, with the key of those still running.
   function listChats(query, state) {
     const project = state.projects.find((p) => p.id === query?.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });
-    const { partId, workCellId } = query;
-    const belongs = (c) => c.projectId === project.id && (partId ? c.partId === partId : Boolean(workCellId) && c.workCellId === workCellId);
+    const { partId, workCellId, code, kind } = query;
+    const onPoint = (c) => (kind ? c.node?.kind === kind : partId ? c.partId === partId && (!code || c.node?.code === code) : Boolean(workCellId) && c.workCellId === workCellId);
+    const belongs = (c) => c.projectId === project.id && onPoint(c);
     const chats = Object.entries(readPageChats()).filter(([, c]) => belongs(c)).map(([sessionId, c]) => {
       const driven = drivenNow(sessionId);
       return {

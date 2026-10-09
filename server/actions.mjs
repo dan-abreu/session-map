@@ -137,13 +137,14 @@ async function dispatch(body, deps) {
   }
 }
 
-function logAction(smDir, body, status) {
+export function logAction(smDir, body, status) {
   const line = { ts: new Date().toISOString(), action: String(body?.action ?? '').slice(0, 20), status };
   if (typeof body?.sessionId === 'string') line.sessionId = body.sessionId.slice(0, 40);
   if (typeof body?.frontId === 'string') line.frontId = body.frontId.slice(0, 200);
   if (typeof body?.repo === 'string') line.repo = body.repo.slice(0, 100);
   if (typeof body?.scope === 'string') line.scope = body.scope.slice(0, 10);
   if (typeof body?.plugin === 'string') line.plugin = body.plugin.slice(0, 100);
+  if (typeof body?.mode === 'string') line.mode = body.mode.slice(0, 20);
   try {
     mkdirSync(smDir, { recursive: true });
     appendFileSync(join(smDir, 'actions.log'), `${JSON.stringify(line)}\n`);

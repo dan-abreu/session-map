@@ -5,11 +5,12 @@ import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { runAction } from './actions.mjs';
+import { logAction, runAction } from './actions.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { createChatHub } from './chat/hub.mjs';
+import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { collect } from './collect.mjs';
 import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
@@ -27,6 +28,8 @@ const COLLECT_AFTER_COPY_MS = 300;
 const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
+const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
+const CREATE_ARCH_TEXT = 'Create the architecture map of this project.';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -136,7 +139,7 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
-      const query = Object.fromEntries(['projectId', 'partId', 'workCellId'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
+      const query = Object.fromEntries(['projectId', 'partId', 'workCellId', 'code', 'kind'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
       const result = chat.list(query, await state());
       return send(res, result.status, result.body);
     }
@@ -164,6 +167,26 @@ export function createApp({
     const body = await readBody(req);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
     return send(res, result.status, result.body);
+  }
+
+  // The permission mode in the user's own settings.json, which every Claude on this PC reads (desenho-3 § 3).
+  async function settingsRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method === 'GET') return send(res, 200, { ok: true, ...userModeState(dir) });
+    let result;
+    let action;
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      action = { action: 'permission-mode', mode: body?.mode };
+      result = setUserMode(dir, body?.mode);
+    } else if (req.method === 'DELETE') {
+      action = { action: 'permission-mode-undo' };
+      result = undoUserMode(dir);
+    } else throw new HttpError(404, 'not-found');
+    const status = result.ok ? 200 : MODE_ERRORS[result.error];
+    logAction(smDir, action, status);
+    return send(res, status, result);
   }
 
   // Reading project files is as sensitive as the chat: even a local read needs the token.
@@ -245,6 +268,15 @@ export function createApp({
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
+    if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
+    // A chat at the root with the request ready: the Claude proposes the parts and writes only after the OK (desenho-3 § 4).
+    if (req.method === 'POST' && path === '/api/arch/create') {
+      if (!chat) throw new HttpError(403, 'demo');
+      const body = await readBody(req);
+      const text = typeof body?.text === 'string' && body.text.trim() ? body.text : CREATE_ARCH_TEXT;
+      const result = await chat.start({ projectId: body?.projectId, mode: body?.mode, text, node: { kind: 'create-arch' } }, await state());
+      return send(res, result.status, result.body);
+    }
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

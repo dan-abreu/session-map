@@ -536,3 +536,64 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     rmSync(smDir, { recursive: true, force: true });
   }
 });
+
+// The demo project with a map item, plus a second project that has no map yet.
+function withItem(state, root) {
+  const [project] = state.projects;
+  project.arch.layers = [{ id: 'front', name: 'Front', partIds: ['auth'] }];
+  project.arch.parts[0].groups = [{ name: 'Login', items: [{ code: 'au07', title: 'Show the error message', detail: ['Under the password field.'], status: 'todo', who: null, weight: null, milestone: null, line: 9 }] }];
+  state.projects.push({ id: 'bare-def456', name: 'bare', root, arch: { source: 'none', dir: null, lang: 'en', layers: [], parts: [] }, workCells: [], chats: [] });
+  return state;
+}
+
+test('a chat opened on an item reads its place, its text and its code; the page keeps the point it was opened on', async () => {
+  await withHub({}, async ({ hub, state, smDir, root }) => {
+    withItem(state, root);
+    const res = await hub.start({ projectId: 'demo-abc123', node: { kind: 'item', partId: 'auth', code: 'au07' }, text: 'Do it' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
+    for (const piece of ['demo › Front › Auth › Login', 'Show the error message', 'Under the password field.', '`au07`', 'docs/architecture/auth.md', '- [x]', 'Do it']) assert.ok(final.includes(piece), piece);
+    assert.equal(r.events[0].data.text, 'Do it');
+    const saved = Object.values(JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8')));
+    assert.deepEqual(saved.map((c) => [c.partId, c.node]), [['auth', { kind: 'item', code: 'au07' }]]);
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth', code: 'au07' }, state).body.chats.length, 1);
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth', code: 'au08' }, state).body.chats.length, 0);
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 1, 'an item chat is a chat of its part too');
+  });
+});
+
+test('"New idea" opens at the project root with no part; it is listed by its kind', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'sm-chat-log-')), 'fake.json');
+  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state, root }) => {
+    withItem(state, root);
+    const res = await hub.start({ projectId: 'demo-abc123', node: { kind: 'idea' }, frontId: 'feature/login', text: 'Sign in with a magic link' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
+    assert.match(final, /new idea/);
+    assert.match(final, /docs\/architecture\/README\.md/);
+    assert.equal(JSON.parse(readFileSync(log, 'utf8')).cwd.replace(/\\/g, '/').toLowerCase(), root.replace(/\\/g, '/').toLowerCase());
+    const ideas = hub.list({ projectId: 'demo-abc123', kind: 'idea' }, state).body.chats;
+    assert.deepEqual(ideas.map((c) => c.title), ['Sign in with a magic link']);
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 0);
+  });
+});
+
+test('point refusals: a bad node is 400, an unknown item 404, creating a map that exists or an idea without one 409', async () => {
+  await withHub({}, async ({ hub, state, root }) => {
+    withItem(state, root);
+    const start = (projectId, node) => hub.start({ projectId, node, text: 'hi' }, state).then((r) => [r.status, r.body.error]);
+    assert.deepEqual(await start('demo-abc123', { kind: 'cell' }), [400, 'bad-node']);
+    assert.deepEqual(await start('demo-abc123', 'item'), [400, 'bad-node']);
+    assert.deepEqual(await start('demo-abc123', { kind: 'item', partId: 'auth', code: 'zz01' }), [404, 'unknown-item']);
+    assert.deepEqual(await start('demo-abc123', { kind: 'create-arch' }), [409, 'arch-exists']);
+    assert.deepEqual(await start('bare-def456', { kind: 'idea' }), [409, 'no-arch']);
+    const plain = await hub.start({ projectId: 'bare-def456', text: 'just talk' }, state);
+    assert.equal(plain.status, 200, 'a project without a map still chats');
+  });
+});

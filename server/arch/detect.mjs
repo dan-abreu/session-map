@@ -61,8 +61,7 @@ async function fromBranch(root, branch, dir, exec) {
 
 // Finds the architecture folder: the configured one, else the first conventional name; work tree first, then main branch.
 export async function detectArch(root, config = {}, { exec = defaultExec, mainBranch = null } = {}) {
-  const configured = safeRelative(config.architecture);
-  const candidates = [...(configured ? [configured] : []), ...DEFAULT_DIRS.filter((d) => d !== configured)];
+  const candidates = candidatesOf(config);
   for (const dir of candidates) {
     const files = fromWorktree(root, dir);
     if (files) return { source: 'worktree', dir, files };
@@ -77,7 +76,49 @@ export async function detectArch(root, config = {}, { exec = defaultExec, mainBr
   return { source: 'none', dir: null, files: {} };
 }
 
-export async function readArch(root, config, opts) {
-  const { source, dir, files } = await detectArch(root, config, opts);
-  return parseArch(dir, files, source);
+function candidatesOf(config) {
+  const configured = safeRelative(config?.architecture);
+  return [...(configured ? [configured] : []), ...DEFAULT_DIRS.filter((d) => d !== configured)];
+}
+
+// Name, time and size of each markdown file: editing, adding or removing one changes it; null when the folder is missing.
+function folderStamp(root, dir) {
+  try {
+    if (!statSync(join(root, dir)).isDirectory()) return null;
+    return readdirSync(join(root, dir), { withFileTypes: true })
+      .filter((e) => e.isFile() && /\.md$/i.test(e.name))
+      .map((e) => {
+        const s = statSync(join(root, dir, e.name));
+        return `${e.name}:${s.mtimeMs}:${s.size}`;
+      }).sort().join('|');
+  } catch {
+    return null;
+  }
+}
+
+const memo = new Map();
+
+// What collect calls every few seconds: the files are read and parsed again only when the folder changed (desenho-3 § 3).
+// On the main branch the stamp is the branch's commit: one rev-parse per read instead of a show per file.
+export async function readArch(root, config, opts = {}) {
+  const exec = opts.exec ?? defaultExec;
+  const candidates = candidatesOf(config);
+  let stamp = null;
+  for (const dir of candidates) {
+    const s = folderStamp(root, dir);
+    if (s !== null) { stamp = `worktree|${dir}|${s}`; break; }
+  }
+  let mainBranch = opts.mainBranch ?? null;
+  if (stamp === null) {
+    mainBranch ??= await mainBranchName(root, exec);
+    const commit = mainBranch ? (await exec(root, ['rev-parse', '--verify', '--quiet', `${mainBranch}^{commit}`])).trim() : '';
+    stamp = `branch|${mainBranch}|${commit}`;
+  }
+  const key = `${root}|${candidates.join('|')}`;
+  const hit = memo.get(key);
+  if (hit?.stamp === stamp) return hit.arch;
+  const { source, dir, files } = await detectArch(root, config, { exec, mainBranch });
+  const arch = parseArch(dir, files, source);
+  memo.set(key, { stamp, arch });
+  return arch;
 }

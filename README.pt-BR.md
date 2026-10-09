@@ -25,6 +25,7 @@ Os prints vêm do `--demo`, que usa dados inventados.
 | `/session-map:map` | Liga o servidor local se não estiver no ar e mostra os links (este PC e a rede local). `--local` tira o link de rede, `--port N` troca a porta (padrão 4001). |
 | `/session-map:board` | A conversa atual escreve um cartão curto sobre si (área, ramo, fazendo agora, o que falta, o que espera por você) que o mapa lê. |
 | `/session-map:history` | Busca no histórico arquivado e responde com resultados curtos. |
+| `/session-map:architecture` | Ensina a qualquer conversa a convenção do mapa de arquitetura: onde fica, como abrir um item, marcar em andamento e fechar, e como criar o mapa (pedindo antes) num projeto que não tem. |
 
 Sem o plugin: `node server/main.mjs [--lan] [--port 4001]`, ou `--demo` para dados de exemplo.
 

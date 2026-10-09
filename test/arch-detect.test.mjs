@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { detectArch, readArch } from '../server/arch/detect.mjs';
@@ -86,5 +86,52 @@ test('readArch parses what it detected', async () => {
   try {
     const a = await readArch(root, {}, { exec: noGit });
     assert.deepEqual([a.source, a.lang, a.parts[0].counts.todo], ['worktree', 'pt', 1]);
+  } finally { cleanup(root); }
+});
+
+test('readArch reads the folder again only when a file in it changes, is added or removed', async () => {
+  const part = '# Vitrine\n\nSobre.\n\n## O que falta\n\n- [ ] Algo `vi01`\n';
+  const root = repo({ 'docs/arquitetura/README.md': '# P', 'docs/arquitetura/vitrine.md': part });
+  const file = join(root, 'docs/arquitetura/vitrine.md');
+  try {
+    const first = await readArch(root, {}, { exec: noGit });
+    assert.equal(await readArch(root, {}, { exec: noGit }), first, 'nothing changed: the same Arch, nothing parsed');
+    writeFileSync(file, `${part}- [ ] Outra coisa \`vi02\`\n`);
+    utimesSync(file, new Date(Date.now() + 5000), new Date(Date.now() + 5000));
+    const second = await readArch(root, {}, { exec: noGit });
+    assert.notEqual(second, first);
+    assert.equal(second.parts[0].counts.todo, 2, 'the new item shows at once');
+    writeFileSync(join(root, 'docs/arquitetura/pagamentos.md'), '# Pagamentos\n');
+    assert.equal((await readArch(root, {}, { exec: noGit })).parts.length, 2, 'a new part file shows too');
+    rmSync(file);
+    assert.deepEqual((await readArch(root, {}, { exec: noGit })).parts.map((p) => p.id), ['pagamentos']);
+  } finally { cleanup(root); }
+});
+
+test('from the main branch, readArch asks git for one commit id and shows the files again only when the branch moves', async () => {
+  const root = repo({ 'src/x.txt': 'x' });
+  let commit = 'aaa';
+  let calls = 0;
+  const shows = [];
+  const exec = async (cwd, args) => {
+    const a = args.join(' ');
+    calls++;
+    if (a === 'rev-parse --verify --quiet main^{commit}') return `${commit}\n`;
+    if (a === 'ls-tree -z --name-only main:docs/arquitetura') return 'README.md\0vitrine.md\0';
+    if (a.startsWith('show ')) { shows.push(a); return a.endsWith('README.md') ? '# Partes\n' : '# Vitrine\n'; }
+    return '';
+  };
+  try {
+    const first = await readArch(root, {}, { exec, mainBranch: 'main' });
+    assert.equal(first.source, 'main-branch');
+    assert.equal(shows.length, 2);
+    assert.equal(await readArch(root, {}, { exec, mainBranch: 'main' }), first);
+    assert.equal(shows.length, 2, 'no git show while the branch stays');
+    calls = 0;
+    await readArch(root, {}, { exec, mainBranch: 'main' });
+    assert.equal(calls, 1, 'one git call per read while nothing moves');
+    commit = 'bbb';
+    await readArch(root, {}, { exec, mainBranch: 'main' });
+    assert.equal(shows.length, 4);
   } finally { cleanup(root); }
 });

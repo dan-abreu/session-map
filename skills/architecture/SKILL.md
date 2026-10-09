@@ -1,0 +1,55 @@
+---
+name: architecture
+description: Use when a project keeps an architecture map in docs/arquitetura, docs/architecture or docs/arch, when the user asks for something new, starts or finishes a piece of work, brings a new idea to place, or wants an architecture map for a project that has none.
+---
+
+# Architecture map
+
+The session map draws each project as a tree: layers, parts, groups and items, read live from plain markdown files. Keeping those files true is what keeps the map true.
+
+## Where it lives
+
+The folder set in session-map's config `architecture`, else the first that exists: `docs/arquitetura`, `docs/architecture`, `docs/arch`. If it exists only on the main branch and not in this folder, do not edit it here: say in your reply what should change.
+
+- `README.md`: the layers, as a mermaid block (`subgraph id["Layer name"]` holding nodes `ID[Part name]`) or as `##` headings listing the parts, each linked: `[Part name](part-file.md)`.
+- One file per part, like this:
+
+```markdown
+# Login
+
+Lets people sign in with e-mail and password and keeps them signed in.
+
+## Where in the code
+
+- `apps/web/src/login/`
+- `packages/core/src/session.ts`
+
+## What's missing
+
+### Sign in
+
+- [ ] **in progress · Ana and Claude · step 2 of the roadmap:** Show the error message under the field `qx07`
+  - Same words as the sign-up page.
+- [ ] **with Ana · blocks:** Pick the text of the password reset e-mail `qx08`
+- [x] **Claude:** Lock the account after 5 tries `qx06`
+```
+
+In Portuguese the sections are `## Onde está no código` and `## O que falta`; tokens `em andamento`, `com o <nome>`, `<nome> e Claude`, `etapa N`, `bloqueia`, `importante`, `detalhe`. English: `in progress`, `with <name>`, `<name> and Claude`, `step N`, `blocks`, `important`, `detail`. Tokens go in one bold prefix ending in `:`, separated by ` · `.
+
+## The three moves
+
+| When | Do |
+|---|---|
+| The user asks for something new | Add `- [ ] what to do` under "What's missing" / "O que falta" of the right part, in a fitting `###` group, before you start. End it with the next code: the prefix the part's items use, plus the highest number in the folder plus one. |
+| You start it | Put `in progress` (`em andamento`) first in its bold prefix, or add `**in progress:**`. |
+| It is done | Tick it: `- [x]`. |
+
+Change only that line; leave the rest of the file byte for byte. If the section has a line like "4 open items: ...", update its numbers. Cite the item code in your replies and in the board card: that is how the map hangs the conversation on the part.
+
+## A new idea
+
+Read the README and the likely parts, say which part (or a new part, with its layer) and group it belongs to, show the exact line you would add, and write it only after the user's OK.
+
+## No map yet
+
+Offer to create one, and ask first. With the OK: study the repository, propose the layers and parts in the chat (name, what it is, main folders), wait for a second OK, then write `docs/architecture/` (`docs/arquitetura/` when the project's docs are in Portuguese): the README with the mermaid block and the links, and one file per part with the opening paragraph, "How it works", "Where in the code", "Rules that must not break" and "What's missing" ("Como funciona", "Onde está no código", "Regras que não podem quebrar", "O que falta"). Nothing is written before the OK.

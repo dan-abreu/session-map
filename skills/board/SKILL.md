@@ -18,13 +18,15 @@ The session map reads the **last** valid `session-map` block in this conversatio
 | Field | Meaning |
 |---|---|
 | `title` | Short name of this conversation |
-| `area` | The area (cell) of the project it belongs to |
+| `area` | The part of the architecture it belongs to |
 | `front` | Branch or worktree being worked on |
 | `milestone` | Step or milestone id |
 | `doing` | What is happening now |
 | `todo`, `waiting` | Lists; `waiting` is only what needs the user |
 | `decided` | Decisions worth keeping in the area's memory |
 | `estimateUSD` | Expected cost of the whole front |
+
+When the work is an item of the project's architecture map, put its item code (the code at the end of the item line) in `title` or `doing`: the map hangs the conversation on that part by it. See the session-map:architecture skill.
 
 Keep it short: valid JSON, at most 15 lines, texts of one line, lists of a few items. Omit fields you do not know.
 

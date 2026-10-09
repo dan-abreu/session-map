@@ -25,6 +25,7 @@ The screenshots come from `--demo`, which uses invented data.
 | `/session-map:map` | Starts the local server if it is not running and prints the links (this PC and your local network). `--local` skips the network link, `--port N` changes the port (default 4001). |
 | `/session-map:board` | The current chat writes a short card about itself (area, branch, doing now, what is left, what waits for you) that the map reads. |
 | `/session-map:history` | Searches the archived conversation history and answers with short matches. |
+| `/session-map:architecture` | Teaches any chat the architecture map convention: where it lives, how to add an item, mark it in progress and close it, and how to create a map (asking first) for a project that has none. |
 
 Without the plugin: `node server/main.mjs [--lan] [--port 4001]`, or `--demo` for sample data.
 

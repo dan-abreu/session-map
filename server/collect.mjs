@@ -131,12 +131,15 @@ async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
 
 // ---- placing chats -----------------------------------------------------------
 
-// An item code the conversation cites, then the files it edited, then what the AI answered earlier (desenho-3 § 2).
-function placeInPart(item, arch, placeFiles, root, aiAnswers) {
+// An item code the conversation cites, then the part the page opened it on, then the files it edited, then what the AI
+// answered earlier (desenho-3 § 2).
+function placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts) {
   const s = item.summary;
   if (!arch.parts.length) return { partId: null, partSource: 'none' };
   const byCode = partByCodes(s.mentionedCodes, arch);
   if (byCode) return { partId: byCode, partSource: 'code' };
+  const byPage = pageParts.get(s.sessionId);
+  if (byPage && arch.parts.some((p) => p.id === byPage)) return { partId: byPage, partSource: 'page' };
   const byFiles = placeFiles(repoFiles(s.editedFiles ?? [], root, s.cwd)).partId;
   if (byFiles) return { partId: byFiles, partSource: 'files' };
   const byAi = aiAnswers[s.sessionId]?.partId;
@@ -235,6 +238,8 @@ async function buildProject(ctx, { root, items }) {
   const roadmap = config.roadmap ? readRoadmap(join(root, config.roadmap), { decisions: config.decisions }) : null;
   const aiOn = life.queue.enabled && config.ai?.enabled !== false;
   const aiAnswers = aiPlacements(life, smDir, projectId);
+  const pageChats = readJsonFile(join(smDir, 'page-chats.json'), {}) ?? {};
+  const pageParts = new Map(Object.entries(pageChats).filter(([, c]) => c?.projectId === projectId && typeof c.partId === 'string').map(([id, c]) => [id, c.partId]));
 
   const openBranches = new Set(memo.workCells.filter((w) => w.status !== 'merged').map((w) => w.branch));
   const placed = items.map((item) => {
@@ -242,7 +247,7 @@ async function buildProject(ctx, { root, items }) {
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
       item, updatedAt,
-      ...placeInPart(item, arch, placeFiles, root, aiAnswers),
+      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
       shown: liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch),
