@@ -48,6 +48,14 @@ O mapa lê markdown puro, então funciona com ou sem o Claude, e o seu time lê 
 
 Os nomes de seção em português e em inglês funcionam. A skill `architecture` ensina isso a toda conversa, inclusive no VS Code: pedido novo vira item, começar marca em andamento e terminar marca como feito. Veja [docs/architecture](docs/architecture/README.md) com este repositório mapeado do mesmo jeito.
 
+## Aba Fluxo
+
+A aba **Fluxo** desenha o diagrama mermaid do README da pasta com uma cópia fixa do mermaid que vem no plugin (sem CDN, nível de segurança estrito). Cada caixa que é uma parte ganha a cor da situação dela (conversa trabalhando ali, em andamento, falta fazer, tudo feito), com marcas para o que trava algo e o que espera uma pessoa, e um clique abre o chat da parte ao lado do desenho. Quando o README não tem setas próprias, as relações que o session-map encontrou entram como setas tracejadas.
+
+- **Exportar:** Copiar ou Baixar `.mmd`.
+- **Importar:** cole um desenho ou escolha um arquivo, veja o que muda (partes novas e o arquivo de cada uma, camadas, mudanças de camada, partes fora do desenho, setas) e confirme. Só o bloco mermaid do README e um arquivo-esqueleto por parte nova são gravados; nada é apagado, e cada aplicação vai para o `actions.log`. Um mapa lido do ramo principal mostra a prévia, mas não aplica.
+- **Ateliê:** um rascunho compartilhado por projeto. Um chat ao lado redesenha a cada resposta, e as ferramentas criam caixas, setas e camadas, renomeiam, movem e tiram, com editor de texto e desfazer/refazer. Nada chega ao projeto até você aplicar pela prévia da importação.
+
 ## Comandos
 
 | Comando | O que faz |

@@ -48,6 +48,14 @@ The map reads plain markdown, so it works with or without Claude, and your teamm
 
 English and Portuguese section names both work. The `architecture` skill teaches this to every chat, VS Code included, so a new request becomes an item, starting marks it in progress, and finishing ticks it. See [docs/architecture](docs/architecture/README.md) for this repository mapped the same way.
 
+## Flow tab
+
+The **Flow** tab draws the folder README's mermaid diagram with a pinned copy of mermaid shipped with the plugin (no CDN, strict security level). Each box that is a part takes the color of its situation (a chat working there, in progress, still to do, all done), with marks for blockers and items waiting on a person, and a click opens that part's chat beside the drawing. When the README has no arrows of its own, the relations session-map found fill in as dotted arrows.
+
+- **Export:** Copy or Download `.mmd`.
+- **Import:** paste a drawing or pick a file, see what it changes (new parts and the file each gets, layers, moves, parts left out, arrows), then confirm. Only the README's mermaid block and a skeleton file per new part are written; nothing is deleted, and each apply goes to `actions.log`. A map read from the main branch can be previewed but not applied.
+- **Workshop:** a shared draft per project. A side chat redraws it with every reply, and the tools add boxes, arrows and layers, rename, move and remove, with a text editor and undo/redo. Nothing reaches the project until you apply it through the import preview.
+
 ## Commands
 
 | Command | What it does |
