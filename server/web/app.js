@@ -1,6 +1,6 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import { createBrain, neuronKind, isUnsure } from './brain.js';
-import { unitTree, ownerHue, initial } from './body.js';
+import { unitTree, ownerHue, initial, collapseBots, BOTS_ID } from './body.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
 import { createChat } from './chat.js';
@@ -90,7 +90,11 @@ function errorText(code) {
 const unitName = (u) => (u.id === 'unsorted' ? t('unit.unsorted') : u.name);
 const statusWord = (s) => t(`status.${s}`);
 const unitById = (id) => tree?.byId.get(id);
-const workCellById = (id) => project.workCells.find((w) => w.id === id);
+const workCellById = (id) => project.workCells.find((w) => w.id === id)
+  ?? (id === BOTS_ID ? collapseBots(project.workCells).find((w) => w.id === BOTS_ID) : undefined);
+// The brain shows every bot branch of a project as one cell; the lists and the panels keep them apart.
+const forBrain = (p) => ({ ...p, workCells: collapseBots(p.workCells) });
+const botsLabel = (w) => t.count('wc.bots', w.bots.length);
 const chatById = (id) => project.chats.find((c) => c.sessionId === id);
 const subtree = (u) => [u, ...tree.descendants(u.id)];
 
@@ -187,7 +191,8 @@ const brain = createBrain($('#brain'), {
   labelAt: (u, time) => (u.id === 'unsorted' ? t('unit.unsorted') : nameAt(u, project.activity, time)),
   unitMeta,
   unitAria: (u) => t('unit.aria', { name: unitName(u), level: t(`level.${u.level}`), status: statusWord(u.status), chats: t.count('summary.chats', u.work.chats) }),
-  budAria: (w) => t('wc.aria', { branch: w.branch, owner: w.owner.name, status: wcStatus(w) }),
+  budAria: (w) => (w.id === BOTS_ID ? botsLabel(w) : t('wc.aria', { branch: w.branch, owner: w.owner.name, status: wcStatus(w) })),
+  budLabel: (w) => (w.id === BOTS_ID ? botsLabel(w) : w.branch),
   linkLabel: (a, b) => t('link.aria', { a: unitName(a), b: unitName(b) }),
   freeArea,
   onMoveChat: (sessionId, unitId) => moveChat(sessionId, unitId),
@@ -521,7 +526,18 @@ function filesSection({ unit, workCell, files: list, folder = true }) {
   return section(t('files.title'), tools, files.tree({ unit, workCell, files: list }));
 }
 
+function renderBotsPanel(group) {
+  panelHead(botsLabel(group), h('span', {}, t('wc.botsHint')));
+  const rows = [...group.bots].sort((a, b) => (a.status === 'merged') - (b.status === 'merged') || b.bornAt.localeCompare(a.bornAt));
+  $('#panelBody').replaceChildren(section(t('unit.branches'), h('ul', { class: 'plain rows' }, rows.map((w) => h('li', {},
+    h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'workcell', id: w.id }) },
+      h('span', { class: 'lr-title branch-name' }, w.branch),
+      h('span', { class: 'lr-date' }, ownerChip(w.owner)),
+      h('span', { class: `lr-line${w.clashWith.length ? ' tone-clash' : ''}` }, wcStatus(w))))))));
+}
+
 function renderWorkCellPanel(w) {
+  if (w.id === BOTS_ID) return renderBotsPanel(w);
   const home = unitById(w.unitId);
   panelHead(h('span', { class: 'branch-name' }, w.branch),
     ownerChip(w.owner),
@@ -878,7 +894,7 @@ function setProject(id) {
   const empty = project.chats.length === 0;
   $('#notice').textContent = empty ? t('state.emptyProject') : '';
   $('#notice').hidden = !empty;
-  brain.setProject(shown);
+  brain.setProject(forBrain(shown));
   renderGrowth();
   setTime(tMax, { instant: true });
   brain.fit(false);
@@ -889,7 +905,7 @@ function setArchived(on) {
   showArchived = on;
   store.set('sm.archived', on ? '1' : '0');
   shown = visibleProject(project, showArchived);
-  brain.setProject(shown);
+  brain.setProject(forBrain(shown));
   renderGrowth();
   setTime(tNow, { instant: true });
   renderSummary();
@@ -940,10 +956,10 @@ function applyState(next) {
   renderSummary();
   $('#notice').hidden = project.chats.length > 0;
   if (structureKey(old) !== structureKey(shown)) {
-    brain.setProject(shown);
+    brain.setProject(forBrain(shown));
     renderGrowth();
   } else {
-    brain.update(shown);
+    brain.update(forBrain(shown));
     renderGrowth();
   }
   setTime(wasAtEnd ? tMax : tNow, { instant: true });
@@ -1049,7 +1065,7 @@ function wire() {
       if (!project || size === stageSize) return;
       stageSize = size;
       const sel = selection;
-      brain.setProject(shown);
+      brain.setProject(forBrain(shown));
       brain.setTime(tNow, { instant: true });
       brain.fit(false);
       if (sel) brain.select(sel);

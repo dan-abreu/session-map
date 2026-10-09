@@ -291,6 +291,11 @@ button, select, input { font: inherit; color: inherit; }
 .level-organ .membrane-inner { stroke-width: 1; stroke-opacity: 0.16; stroke-dasharray: 1 5; stroke-linecap: round; }
 .level-tissue .membrane { fill: color-mix(in srgb, var(--tone) 6%, transparent); stroke-width: 1.2; stroke-opacity: 0.42; }
 .level-tissue .membrane-inner { display: none; }
+/* Nothing alive for two weeks: a quiet dot in the background, still there to tap. */
+.unit.is-dormant { --tone: var(--closed); --tone-fill: transparent; }
+.unit.is-dormant > .membrane { stroke-width: 1; stroke-opacity: 0.5; stroke-dasharray: 1.5 2; fill: var(--bg-2); }
+.unit.is-dormant > .membrane-inner { display: none; }
+.unit.is-dormant .nucleus { fill-opacity: 0.6; }
 .unit:hover > .membrane, .unit.is-selected > .membrane { stroke-width: 2.4; stroke-opacity: 1; }
 .level-organ:hover > .membrane, .level-organ.is-selected > .membrane { stroke-width: 2.8; stroke-opacity: 0.7; }
 .unit:focus-visible > .membrane { stroke: var(--focus); stroke-width: 2.4; stroke-opacity: 1; }
@@ -319,6 +324,10 @@ button, select, input { font: inherit; color: inherit; }
 .bud:hover .bud-membrane, .bud.is-selected .bud-membrane { stroke-width: 2.6; }
 .bud:focus-visible .bud-membrane { stroke: var(--focus); stroke-width: 2.6; }
 .bud-initial { fill: color-mix(in srgb, var(--owner) 70%, var(--ink)); font-weight: 700; pointer-events: none; transition: opacity 200ms; }
+/* The bots' group: one grey cell for every automatic dependency update. */
+.bud.is-bots, .bud-label.is-bots { --owner: var(--idle); }
+.bud.is-bots .bud-membrane { stroke-dasharray: 2 2.5; }
+.bud .unsure { pointer-events: none; }
 .organelle { opacity: 0; transition: opacity 240ms var(--ease-out); pointer-events: none; }
 .organelle.st-A { fill: var(--owner); }
 .organelle.st-M { fill: color-mix(in srgb, var(--owner) 45%, var(--ink-2)); }
@@ -367,9 +376,10 @@ button, select, input { font: inherit; color: inherit; }
 .label .meta { font-size: 10.5px; font-weight: 550; fill: var(--tone-ink); }
 .label.level-organ text { font-size: 14.5px; font-weight: 720; letter-spacing: -0.012em; }
 .label.level-organ .meta { font-size: 11px; }
-.label.level-tissue text { font-size: 11.5px; font-weight: 650; fill: var(--tone-ink); }
+.label.level-tissue text { font-size: 11.5px; font-weight: 680; letter-spacing: 0.01em; fill: var(--tone-ink); }
 .label.level-tissue .meta { display: none; }
 .label .pin { fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.bud-label.is-bots text { font-family: var(--font); font-weight: 600; }
 .bud-label text {
   font: 600 10.5px/1 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
   fill: color-mix(in srgb, var(--owner) 60%, var(--ink));

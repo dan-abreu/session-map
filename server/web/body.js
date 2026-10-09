@@ -100,3 +100,88 @@ export function filesByFolder(files) {
   return [...groups].sort(([a], [b]) => a.localeCompare(b))
     .map(([folder, list]) => ({ folder, files: list.sort((a, b) => a.name.localeCompare(b.name)) }));
 }
+
+const DORMANT_DAYS = 14;
+
+// Units with nothing alive in them: no conversation, no branch, no commit in two weeks, and (for a group) no awake
+// member. The brain draws them as small dim dots, so what is alive stands out; pinned ones stay as the person set them.
+export function dormantUnits(project, now = Date.now(), days = DORMANT_DAYS) {
+  const since = now - days * 864e5;
+  const committed = new Set(project.activity
+    .filter((a) => (a.kind === 'commit' || a.kind === 'merge') && Date.parse(a.ts) >= since)
+    .flatMap((a) => a.unitIds ?? []));
+  const kids = new Map();
+  for (const u of project.units) if (u.parentId) kids.set(u.parentId, [...(kids.get(u.parentId) ?? []), u]);
+  const memo = new Map();
+  const asleep = (u, seen = new Set()) => {
+    if (memo.has(u.id)) return memo.get(u.id);
+    if (seen.has(u.id)) return true;
+    seen.add(u.id);
+    const own = !u.pinned && !u.chatIds.length && !u.workCellIds.length && !committed.has(u.id);
+    const result = own && (kids.get(u.id) ?? []).every((k) => asleep(k, seen));
+    memo.set(u.id, result);
+    return result;
+  };
+  return new Set(project.units.filter((u) => asleep(u)).map((u) => u.id));
+}
+
+export const BOTS_ID = 'bots';
+const isBot = (w) => /\[bot\]|(^|[-_])bot$/i.test(w.owner?.name ?? '') || /\[bot\]/i.test(w.owner?.email ?? '') || /^(dependabot|renovate)\//.test(w.branch);
+
+// Dependency bots open a branch per update; on the map they are one cell, "N automatic updates".
+export function collapseBots(workCells) {
+  const bots = workCells.filter(isBot);
+  if (!bots.length) return workCells;
+  const ids = new Set(bots.map((w) => w.id));
+  const alive = bots.filter((w) => w.status !== 'merged');
+  const group = {
+    id: BOTS_ID, branch: BOTS_ID, remote: true, path: null, bots,
+    owner: { name: 'bots', email: 'bots' }, authors: [], unitId: 'unsorted', touches: [],
+    files: bots.flatMap((w) => w.files), commits: bots.reduce((n, w) => n + w.commits, 0), ahead: bots.reduce((n, w) => n + w.ahead, 0),
+    status: alive.some((w) => w.status === 'active') ? 'active' : alive.length ? 'idle' : 'merged',
+    bornAt: bots.map((w) => w.bornAt).sort()[0], mergedAt: alive.length ? null : bots.map((w) => w.mergedAt).sort().at(-1),
+    clashWith: [], chatIds: [], lastCommit: null, nucleus: { doing: null, todo: [] }, openspec: null, estimateUSD: null, costUSD: 0,
+  };
+  const people = workCells.filter((w) => !ids.has(w.id)).map((w) => (
+    w.clashWith.some((id) => ids.has(id)) ? { ...w, clashWith: [...new Set(w.clashWith.map((id) => (ids.has(id) ? BOTS_ID : id)))] } : w
+  ));
+  group.clashWith = people.filter((w) => w.clashWith.includes(BOTS_ID)).map((w) => w.id);
+  return [...people, group];
+}
+
+export const ellipsize = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
+
+// A unit's name in at most two lines of about max characters; a longer one ends the second line with "…".
+export function wrapLabel(text, max = 18) {
+  if (text.length <= max) return [text];
+  const lines = [''];
+  for (const w of text.split(/\s+/)) {
+    const cur = lines[lines.length - 1];
+    if (!cur || (cur + ' ' + w).length <= max) lines[lines.length - 1] = cur ? `${cur} ${w}` : w;
+    else lines.push(w);
+  }
+  if (lines.length > 2) {
+    lines.length = 2;
+    lines[1] = `${lines[1]}…`;
+  }
+  return lines;
+}
+
+// Map-style labelling: candidates come in priority order; each is slid inside the view, then kept only if it
+// overlaps none already kept nor any shape in its own avoid list. Returns id → {dx} or null when the label waits
+// for a closer zoom.
+export function placeBoxes(candidates, { width, pad = 4 }) {
+  const kept = [];
+  const out = new Map();
+  for (const c of candidates) {
+    const w = c.x1 - c.x0;
+    if (w > width - 2 * pad) { out.set(c.id, null); continue; }
+    const dx = c.x0 < pad ? pad - c.x0 : c.x1 > width - pad ? width - pad - c.x1 : 0;
+    const b = { x0: c.x0 + dx, x1: c.x1 + dx, y0: c.y0, y1: c.y1 };
+    const hits = (k) => k.x0 < b.x1 && b.x0 < k.x1 && k.y0 < b.y1 && b.y0 < k.y1;
+    if (kept.some(hits) || (c.avoid ?? []).some(hits)) { out.set(c.id, null); continue; }
+    kept.push(b);
+    out.set(c.id, { dx });
+  }
+  return out;
+}

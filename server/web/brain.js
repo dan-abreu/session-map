@@ -1,4 +1,4 @@
-import { hash, unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder } from './body.js';
+import { hash, unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, ellipsize, placeBoxes, wrapLabel, BOTS_ID } from './body.js';
 
 const d3 = window.d3;
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
@@ -13,26 +13,17 @@ const NEAR_ZOOM = 1.9;
 const LABEL_TOP = 50;
 const LABEL_BOTTOM = 40;
 const LABEL_MARGIN = LABEL_TOP + LABEL_BOTTOM;
+const DORMANT_R = 6;
+const BRANCH_LABEL_MAX = 18;
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Size follows accumulated work (conversations + commits + decisions), on a square-root scale.
 const cellRadius = (work) => 15 + 6.5 * Math.sqrt(work);
-const budRadius = (wc) => 10 + 2.6 * Math.sqrt(wc.files.length + wc.commits);
+// The bots' group grows with how many updates it holds, not with their lockfiles.
+const budRadius = (wc) => (wc.bots ? 11 + 1.5 * wc.bots.length ** 0.5 * 2 : 10 + 2.6 * Math.sqrt(wc.files.length + wc.commits));
 const isWork = (item) => item.kind === 'commit' || item.kind === 'merge';
 const lerp = (a, b, k) => a + (b - a) * k;
-
-function wrapLabel(text, max = 18) {
-  if (text.length <= max) return [text];
-  const lines = [''];
-  for (const w of text.split(/\s+/)) {
-    const cur = lines[lines.length - 1];
-    if (!cur || (cur + ' ' + w).length <= max) lines[lines.length - 1] = cur ? `${cur} ${w}` : w;
-    else lines.push(w);
-  }
-  if (lines.length > 2) lines.splice(2, lines.length, `${lines[1]}…`);
-  return lines;
-}
 
 // Smooth closed curve through wobbly points: a membrane, not a perfect circle.
 function membranePath(r, seed, amp = 0.035) {
@@ -118,6 +109,7 @@ export function isUnsure(chat) {
 function layout(project, area, labelFor) {
   const aspect = Math.min(2.2, Math.max(0.4, area.width / Math.max(1, area.height)));
   const tree = unitTree(project.units);
+  const dormant = dormantUnits(project);
   const chatById = new Map(project.chats.map((c) => [c.sessionId, c]));
   const activity = project.activity || [];
   const nodes = new Map();
@@ -129,6 +121,7 @@ function layout(project, area, labelFor) {
     nodes.set(u.id, {
       id: u.id, data: u, level: u.level, chats, commitTimes, decisions,
       workTotal: chats.length + commitTimes.length + decisions,
+      dormant: dormant.has(u.id),
       born: Date.parse(u.bornAt), seed: hash(u.id), lines: wrapLabel(labelFor(u), u.level === 'cell' ? 16 : 22),
       children: [], parent: null, buds: [], relX: 0, relY: 0, x: 0, y: 0, rNow: 0, rTarget: 0, gNow: 1, gTarget: 1,
     });
@@ -159,7 +152,7 @@ function layout(project, area, labelFor) {
     for (const c of n.children) sizeOf(c);
     const budRoom = n.buds.reduce((m, b) => Math.max(m, b.r * 2.3), 0);
     if (!n.children.length) {
-      n.rFull = n.level === 'cell' ? cellRadius(n.workTotal) : 34;
+      n.rFull = n.dormant ? DORMANT_R : n.level === 'cell' ? cellRadius(n.workTotal) : 34;
     } else {
       const packed = packCircles(n.children.map((c) => ({ id: c.id, r: c.packR })), PAD[n.level] ?? PAD.tissue);
       packed.items.forEach((it, i) => { n.children[i].relX = it.x; n.children[i].relY = it.y; });
@@ -203,7 +196,7 @@ function layout(project, area, labelFor) {
 
   const rootOf = (n) => (n.parent ? rootOf(n.parent) : n);
   // Labels are drawn in screen pixels, so the room they need in the world grows as the view zooms out.
-  const labelPx = (n) => (n.level === 'organ' ? 46 : n.level === 'tissue' ? 14 : 36 + 13 * (n.lines.length - 1));
+  const labelPx = (n) => (n.dormant ? 4 : n.level === 'organ' ? 46 : n.level === 'tissue' ? 30 : 36 + 13 * (n.lines.length - 1));
   for (const r of roots) r.collide = r.packR + labelPx(r);
   const order = roots.slice().sort((a, b) => b.packR - a.packR);
   order.forEach((c, i) => {
@@ -239,6 +232,9 @@ function layout(project, area, labelFor) {
     if (n.parent) { n.x = n.parent.x + n.relX; n.y = n.parent.y + n.relY; }
   }
   for (const n of nodes.values()) {
+    // Buds fan out from the direction they lean, alternating sides, each taking the arc its size needs on the rim.
+    const arc = (b) => (b.r * 1.15 + 3) / Math.max(1, n.rFull + b.r * 0.15);
+    let left = 0, right = 0;
     n.buds.forEach((b, i) => {
       const touched = b.data.touches.map((id) => nodes.get(id)).filter(Boolean);
       let ax, ay;
@@ -251,7 +247,9 @@ function layout(project, area, labelFor) {
         ax = Math.cos(n.seed * 6.283); ay = Math.sin(n.seed * 6.283);
       }
       if (Math.hypot(ax, ay) < 1e-6) { ax = Math.cos(n.seed * 6.283); ay = Math.sin(n.seed * 6.283); }
-      b.angle = Math.atan2(ay, ax) + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.75;
+      let offset = 0;
+      if (i === 0) { left = right = arc(b); } else if (i % 2) { offset = right + arc(b); right = offset + arc(b); } else { offset = -(left + arc(b)); left = -offset + arc(b); }
+      b.angle = Math.atan2(ay, ax) + offset;
       b.touched = touched;
     });
   }
@@ -281,7 +279,8 @@ const ICON_PIN = 'M-2.6,-5.2h5.2M-1.7,-5.2l-0.5,3.6-1.7,1.6h7.8l-1.7-1.6-0.5-3.6
 const AI_KINDS = new Set(['grouped', 'fused-by-meaning', 'renamed']);
 
 // labelAt(unit, t) names a unit as it was at time t; onMoveChat and onMoveUnit receive drops (desenho-2 § 28: the person decides).
-export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, unitMeta, unitAria, budAria, linkLabel, freeArea, onMoveChat, onMoveUnit }) {
+// budLabel(workCell) names a work cell under it (the bots' group gets "N automatic updates").
+export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, unitMeta, unitAria, budAria, budLabel = (w) => w.branch, linkLabel, freeArea, onMoveChat, onMoveUnit }) {
   const svg = d3.select(svgEl);
   svg.selectAll('*').remove();
   const world = svg.append('g').attr('class', 'world');
@@ -335,15 +334,15 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     const unitsByLevel = model.ordered.slice().sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || a.depth - b.depth);
 
     const unitG = interactive(gUnits.selectAll('g.unit').data(unitsByLevel, (d) => d.id).join('g'), (d) => ({ type: 'unit', id: d.id }))
-      .attr('class', (d) => `unit level-${d.level} status-${d.data.status}${d.data.pinned ? ' is-pinned' : ''}`)
+      .attr('class', unitClass)
       .attr('aria-label', (d) => unitAria(d.data));
     unitG.append('path').attr('class', 'membrane');
     unitG.append('path').attr('class', 'membrane-inner');
     const cellG = unitG.filter((d) => d.level === 'cell');
     cellG.append('g').attr('class', 'dendrites').selectAll('path')
       .data((d) => model.neurons.filter((n) => n.unit === d)).join('path').attr('class', 'dendrite');
-    cellG.append('circle').attr('class', 'nucleus').attr('r', (d) => 5 + Math.min(3.5, d.chats.length * 0.6));
-    cellG.append('circle').attr('class', 'nucleolus').attr('r', 1.8).attr('cx', 1.2).attr('cy', -1);
+    cellG.append('circle').attr('class', 'nucleus').attr('r', (d) => (d.dormant ? 1.8 : 5 + Math.min(3.5, d.chats.length * 0.6)));
+    cellG.filter((d) => !d.dormant).append('circle').attr('class', 'nucleolus').attr('r', 1.8).attr('cx', 1.2).attr('cy', -1);
 
     gGhosts.selectAll('path.ghost').data(model.ghosts, (d) => d.id).join('path').attr('class', 'ghost');
 
@@ -364,9 +363,11 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
       .attr('class', (d) => `synapse parent${d.a.unit === d.b.unit ? '' : ' cross'}`);
 
     const budG = interactive(gBuds.selectAll('g.bud').data(model.buds, (d) => d.id).join('g'), (d) => ({ type: 'workcell', id: d.id }))
-      .attr('class', (d) => `bud${d.data.remote ? ' is-remote' : ''}${d.data.clashWith.length ? ' is-clash' : ''}`)
+      .attr('class', (d) => `bud${d.data.remote ? ' is-remote' : ''}${d.data.clashWith.length ? ' is-clash' : ''}${d.id === BOTS_ID ? ' is-bots' : ''}`)
       .style('--owner-h', (d) => d.hue)
       .attr('aria-label', (d) => budAria(d.data));
+    // The full branch name on hover; the label under the cell is cut to fit.
+    budG.append('title').text((d) => budLabel(d.data));
     const budBody = budG.append('g').attr('class', 'bud-body');
     budBody.append('path').attr('class', 'bud-membrane');
     budBody.append('g').attr('class', 'organelles').selectAll('circle')
@@ -375,7 +376,13 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
       .attr('cx', (o) => (o.u * o.bud.r * 0.62).toFixed(2)).attr('cy', (o) => (o.v * o.bud.r * 0.62).toFixed(2))
       .attr('r', (o) => Math.max(1.1, o.bud.r * 0.085));
     budBody.append('text').attr('class', 'bud-initial').attr('dy', '0.35em').attr('text-anchor', 'middle')
-      .style('font-size', (d) => `${(d.r * 0.95).toFixed(1)}px`).text((d) => d.letter);
+      .style('font-size', (d) => `${(d.r * (d.id === BOTS_ID ? 0.8 : 0.95)).toFixed(1)}px`).text((d) => (d.id === BOTS_ID ? String(d.data.bots.length) : d.letter));
+    // A branch whose files point at no single unit waits in "unsorted" with a question mark, like a guessed chat.
+    const unsureBud = budBody.filter((d) => d.data.unitId === 'unsorted' && d.id !== BOTS_ID).append('g').attr('class', 'unsure')
+      .attr('transform', (d) => `translate(${(d.r * 0.72).toFixed(1)},${(-d.r * 0.72).toFixed(1)})`);
+    unsureBud.append('circle').attr('r', 5.6);
+    unsureBud.append('path').attr('d', ICON_ASK);
+    unsureBud.append('circle').attr('class', 'ask-dot').attr('cy', 2.7).attr('r', 0.85);
 
     buildNeurons();
 
@@ -385,9 +392,24 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     lab.append('text').attr('text-anchor', 'middle').each(function (d) { writeLabel(d3.select(this), d); });
     lab.filter((d) => d.data.pinned).append('path').attr('class', 'pin').attr('d', ICON_PIN);
     gLabels.selectAll('g.bud-label').data(model.buds, (d) => d.id).join('g')
-      .attr('class', 'bud-label').style('--owner-h', (d) => d.hue)
-      .append('text').attr('text-anchor', 'middle').text((d) => d.data.branch);
+      .attr('class', (d) => `bud-label${d.id === BOTS_ID ? ' is-bots' : ''}`).style('--owner-h', (d) => d.hue)
+      .append('text').attr('text-anchor', 'middle').text((d) => ellipsize(budLabel(d.data), BRANCH_LABEL_MAX));
+    measureLabels();
     unitG.filter((d) => d.level !== 'organ').call(unitDrag);
+  }
+
+  // Real text widths for the collision boxes; a label measured while hidden (width 0) falls back to an estimate.
+  function measureLabels() {
+    gLabels.selectAll('g.label, g.bud-label').each(function (d) {
+      const text = this.querySelector('text');
+      let w = 0;
+      try { w = text.getBBox().width; } catch { /* not rendered yet */ }
+      d.labelW = w;
+    });
+  }
+
+  function unitClass(d) {
+    return `unit level-${d.level} status-${d.data.status}${d.data.pinned ? ' is-pinned' : ''}${d.dormant ? ' is-dormant' : ''}`;
   }
 
   function writeLabel(el, d) {
@@ -612,57 +634,75 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     return { x1, y1, x2, y2, d: curve(x1, y1, x2, y2, l.bend) };
   }
 
-  // Semantic zoom: organs always speak, tissues once they have room, small cells only up close.
+  // Semantic zoom: a tissue or organ always names itself (it is what holds the cells), a cell inside one once it has
+  // room, a free cell always. Dormant units never: they are the quiet background.
   function labelVisible(d) {
-    if (d.rNow < 1) return false;
-    const screenR = d.rNow * transform.k;
-    if (d.level === 'organ') return true;
-    if (d.level === 'tissue') return screenR >= 46;
-    // A cell whose tissue has not formed yet is still free-living: it keeps its name visible.
-    return !d.parent || d.parent.rNow < 1 || screenR >= 32;
+    if (d.rNow < 1 || d.dormant) return false;
+    if (d.level !== 'cell') return true;
+    return !d.parent || d.parent.rNow < 1 || d.rNow * transform.k >= 26;
   }
 
-  // Map-style label collision: when two names overlap, the bigger unit keeps its name and the smaller waits for zoom.
+  const estimateW = (d) => Math.max(...d.lines.map((l) => l.length), d.level === 'tissue' ? 0 : 14) * (d.level === 'organ' ? 8 : 6.6);
+
+  // Screen box of a label drawn at (x, y): the text's first baseline sits at y.
   function labelBox(d, x, y) {
-    const chars = Math.max(...d.lines.map((l) => l.length), d.level === 'tissue' ? 0 : 14);
-    const w = chars * (d.level === 'organ' ? 8 : 6.6);
-    const h = (d.level === 'tissue' ? 0 : 14) + 15 * d.lines.length;
-    return { x0: x - w / 2, x1: x + w / 2, y0: y - 12, y1: y - 12 + h };
+    const w = (d.labelW || estimateW(d)) + (d.data.pinned ? 18 : 0) + 6;
+    const lines = d.lines.length + (d.level === 'tissue' ? 0 : 1);
+    return { id: d.id, x0: x - w / 2, x1: x + w / 2, y0: y - 13, y1: y - 13 + 15 * lines + 3 };
   }
 
+  const budLabelY = (b) => transform.applyY(b.y + b.rNow) + 13;
+
+  // Map-style labelling, one pass for everything: organs, tissues and cells first (bigger first), branch names last;
+  // a name that would overlap one already placed waits for a closer zoom, and none runs off the edge of the view.
   function placeLabels() {
     if (!model) return;
-    const kept = [];
-    gLabels.selectAll('g.label').each(function (d) {
-      const g = d3.select(this);
-      let show = labelVisible(d);
-      if (show) {
-        const box = labelBox(d, transform.applyX(d.x), labelY(d));
-        show = !kept.some((k) => k.x0 < box.x1 && box.x0 < k.x1 && k.y0 < box.y1 && box.y0 < k.y1);
-        if (show) kept.push(box);
+    const units = gLabels.selectAll('g.label');
+    const buds = gLabels.selectAll('g.bud-label');
+    const candidates = [];
+    // Under the summary bar a label would print over the project's own numbers.
+    const top = freeArea().top;
+    units.each(function (d) {
+      if (!labelVisible(d) || labelY(d) - 13 < top) return;
+      if (!d.labelW) {
+        try { d.labelW = this.querySelector('text').getBBox().width; } catch { /* hidden: estimate */ }
       }
-      g.style('display', show ? null : 'none');
-      if (!show) return;
-      const x = transform.applyX(d.x);
-      const y = labelY(d);
-      g.attr('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`)
-        .attr('opacity', Math.min(1, d.rNow / Math.max(1, d.rTarget || d.rFull)));
-      if (d.data.pinned) {
-        const w = Math.max(...d.lines.map((l) => l.length)) * (d.level === 'organ' ? 4.3 : 3.6);
-        g.select('.pin').attr('transform', `translate(${(w + 9).toFixed(1)},-4)`);
-      }
+      candidates.push(labelBox(d, transform.applyX(d.x), labelY(d)));
     });
-    gLabels.selectAll('g.bud-label').each(function (b) {
+    // A branch name drawn across another branch's body reads as part of it: those bodies are kept clear.
+    const bodies = model.buds.filter((b) => b.shown > 0.5).map((b) => {
+      const x = transform.applyX(b.x), y = transform.applyY(b.y), r = b.rNow * transform.k;
+      return { bud: b, x0: x - r, x1: x + r, y0: y - r, y1: y + r };
+    });
+    buds.each((b) => {
+      if (b.shown <= 0.5 || b.r * transform.k < 11 || budLabelY(b) - 10 < top) return;
+      const w = (b.labelW || 70) + 6;
+      const x = transform.applyX(b.x);
+      const y = budLabelY(b);
+      candidates.push({ id: `bud:${b.id}`, x0: x - w / 2, x1: x + w / 2, y0: y - 10, y1: y + 3, avoid: bodies.filter((o) => o.bud !== b) });
+    });
+    const placed = placeBoxes(candidates, { width: svgEl.clientWidth || freeArea().width });
+    units.each(function (d) {
+      const spot = placed.get(d.id);
       const g = d3.select(this);
-      const show = b.shown > 0.5 && b.r * transform.k >= 15;
-      g.style('display', show ? null : 'none');
-      if (show) g.attr('transform', `translate(${transform.applyX(b.x).toFixed(1)},${(transform.applyY(b.y + b.rNow) + 13).toFixed(1)})`);
+      g.style('display', spot ? null : 'none');
+      if (!spot) return;
+      g.attr('transform', `translate(${(transform.applyX(d.x) + spot.dx).toFixed(1)},${labelY(d).toFixed(1)})`)
+        .attr('opacity', Math.min(1, d.rNow / Math.max(1, d.rTarget || d.rFull)));
+      if (d.data.pinned) g.select('.pin').attr('transform', `translate(${((d.labelW || estimateW(d)) / 2 + 9).toFixed(1)},-4)`);
+    });
+    buds.each(function (b) {
+      const spot = placed.get(`bud:${b.id}`);
+      const g = d3.select(this);
+      g.style('display', spot ? null : 'none');
+      if (spot) g.attr('transform', `translate(${(transform.applyX(b.x) + spot.dx).toFixed(1)},${budLabelY(b).toFixed(1)})`);
     });
   }
 
+  // Cells are named under their membrane; tissues and organs above theirs, outside what they hold.
   function labelY(d) {
     if (d.level === 'cell') return transform.applyY(d.y + d.rNow) + 16;
-    if (d.level === 'tissue') return transform.applyY(d.y - d.rNow) + 4;
+    if (d.level === 'tissue') return transform.applyY(d.y - d.rNow) - 7;
     return transform.applyY(d.y - d.rNow) - 26 - 15 * (d.lines.length - 1);
   }
 
@@ -690,6 +730,7 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
       d.name = name;
       d.lines = wrapLabel(name, d.level === 'cell' ? 16 : 22);
       writeLabel(d3.select(this).select('text'), d);
+      d.labelW = 0;
       if (animated && !reducedMotion()) flash(d3.select(this));
     });
   }
@@ -743,7 +784,8 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
         const commits = n.commitTimes.filter((ts) => ts <= t).length;
         // Decisions carry no date: they count once the unit has a conversation.
         const work = visible + commits + (visible > 0 ? n.decisions : 0);
-        n.rTarget = (n.workTotal === 0 && n.born <= t) || work > 0 ? cellRadius(work) : 0;
+        if (n.dormant) n.rTarget = n.born <= t ? DORMANT_R : 0;
+        else n.rTarget = (n.workTotal === 0 && n.born <= t) || work > 0 ? cellRadius(work) : 0;
         n.visible = visible;
       } else {
         n.rTarget = n.born <= t ? n.rFull : 0;
@@ -912,7 +954,7 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     for (const nr of model.neurons) if (chats.has(nr.id)) nr.chat = chats.get(nr.id);
     for (const b of model.buds) if (cells.has(b.id)) b.data = cells.get(b.id);
     gUnits.selectAll('g.unit')
-      .attr('class', (d) => `unit level-${d.level} status-${d.data.status}${d.data.pinned ? ' is-pinned' : ''}`)
+      .attr('class', unitClass)
       .attr('aria-label', (d) => unitAria(d.data));
     gLabels.selectAll('g.label').attr('class', (d) => `label level-${d.level} status-${d.data.status}`);
     gLabels.selectAll('tspan.meta').text((d) => unitMeta(d.data, d.visible));

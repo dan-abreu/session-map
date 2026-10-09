@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder,
+  unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, collapseBots, ellipsize, placeBoxes, BOTS_ID, wrapLabel,
 } from '../server/web/body.js';
 
 const units = [
@@ -86,4 +86,82 @@ test('filesByFolder groups organelles by folder, folders sorted', () => {
   ]);
   assert.deepEqual(groups.map((g) => g.folder), ['', 'src/products', 'src/search']);
   assert.deepEqual(groups[2].files.map((f) => f.name), ['index.ts', 'trigram.ts']);
+});
+
+const DAY_MS = 864e5;
+const NOW_MS = Date.parse('2026-10-09T12:00:00Z');
+const daysAgo = (n) => new Date(NOW_MS - n * DAY_MS).toISOString();
+
+test('dormantUnits: no chats, no branches and no commit for 14 days; a group of only dormant units is dormant too', () => {
+  const unit = (id, over = {}) => ({ id, level: 'cell', parentId: null, chatIds: [], workCellIds: [], pinned: false, ...over });
+  const project = {
+    units: [
+      unit('talking', { chatIds: ['c1'] }), unit('branching', { workCellIds: ['feat/x'] }), unit('committed'), unit('old-commit'),
+      unit('empty'), unit('pinned-empty', { pinned: true }), unit('sleepy-a', { parentId: 'sleepy' }), unit('sleepy-b', { parentId: 'sleepy' }),
+      unit('sleepy', { level: 'tissue' }), unit('mixed', { level: 'tissue' }), unit('kid-awake', { parentId: 'mixed', chatIds: ['c2'] }), unit('kid-asleep', { parentId: 'mixed' }),
+    ],
+    activity: [
+      { kind: 'commit', ts: daysAgo(3), unitIds: ['committed'] },
+      { kind: 'commit', ts: daysAgo(20), unitIds: ['old-commit'] },
+    ],
+  };
+  assert.deepEqual([...dormantUnits(project, NOW_MS)].sort(), ['empty', 'kid-asleep', 'old-commit', 'sleepy', 'sleepy-a', 'sleepy-b']);
+});
+
+test('collapseBots folds bot branches into one cell per project and keeps the people\'s branches', () => {
+  const cell = (id, owner, over = {}) => ({
+    id, branch: id.replace(/^origin\//, ''), remote: id.startsWith('origin/'), owner: { name: owner, email: `${owner}@x` }, authors: [], unitId: 'api', touches: [],
+    files: [{ path: `${id}.txt`, status: 'M' }], commits: 1, ahead: 1, status: 'idle', bornAt: daysAgo(30), mergedAt: null, clashWith: [], chatIds: [], lastCommit: null, ...over,
+  });
+  const cells = [
+    cell('feat/pay', 'Ana', { clashWith: ['origin/dependabot/npm/x'], status: 'active' }),
+    cell('origin/dependabot/npm/x', 'dependabot[bot]', { clashWith: ['feat/pay'], bornAt: daysAgo(40) }),
+    cell('origin/renovate/react', 'renovate-bot', { commits: 2 }),
+  ];
+  const out = collapseBots(cells);
+  assert.deepEqual(out.map((w) => w.id), ['feat/pay', BOTS_ID]);
+  const bots = out[1];
+  assert.equal(bots.bots.length, 2);
+  assert.equal(bots.commits, 3);
+  assert.equal(bots.unitId, 'unsorted');
+  assert.equal(bots.bornAt, daysAgo(40));
+  assert.deepEqual(out[0].clashWith, [BOTS_ID]);
+  assert.deepEqual(collapseBots([cells[0]]).map((w) => w.id), ['feat/pay'], 'no bots, no group');
+});
+
+test('ellipsize cuts long branch names with an ellipsis and leaves short ones alone', () => {
+  assert.equal(ellipsize('feat/pay', 18), 'feat/pay');
+  assert.equal(ellipsize('dependabot/npm_and_yarn/fastify/swagger-ui-5.2.6', 18), 'dependabot/npm_an…');
+  assert.equal(ellipsize('dependabot/npm_and_yarn/fastify/swagger-ui-5.2.6', 18).length, 18);
+});
+
+test('placeBoxes keeps labels in priority order without overlap and slides them inside the view', () => {
+  const box = (id, x0, x1, y0, y1) => ({ id, x0, x1, y0, y1 });
+  const placed = placeBoxes([
+    box('organ', 100, 200, 10, 30),
+    box('overlaps-organ', 150, 260, 20, 40),
+    box('below', 150, 260, 41, 60),
+    box('off-right', 360, 440, 100, 120),
+    box('too-wide', -10, 500, 200, 220),
+  ], { width: 390, pad: 4 });
+  assert.deepEqual(placed.get('organ'), { dx: 0 });
+  assert.equal(placed.get('overlaps-organ'), null);
+  assert.deepEqual(placed.get('below'), { dx: 0 });
+  assert.deepEqual(placed.get('off-right'), { dx: -54 });
+  assert.equal(placed.get('too-wide'), null);
+});
+
+test('wrapLabel keeps two lines and ends the second with an ellipsis, never repeating a line', () => {
+  assert.deepEqual(wrapLabel('Roteiro de automação do Chrome', 16), ['Roteiro de', 'automação do…']);
+  assert.deepEqual(wrapLabel('Motor da home', 16), ['Motor da home']);
+  assert.deepEqual(wrapLabel('Artes e cores para redes', 16), ['Artes e cores', 'para redes']);
+});
+
+test('placeBoxes also keeps a label off the shapes it is told to avoid', () => {
+  const placed = placeBoxes([
+    { id: 'branch', x0: 10, x1: 90, y0: 50, y1: 62, avoid: [{ x0: 60, x1: 120, y0: 40, y1: 100 }] },
+    { id: 'free', x0: 10, x1: 50, y0: 200, y1: 212, avoid: [{ x0: 60, x1: 120, y0: 40, y1: 100 }] },
+  ], { width: 390 });
+  assert.equal(placed.get('branch'), null);
+  assert.deepEqual(placed.get('free'), { dx: 0 });
 });
