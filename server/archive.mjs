@@ -12,6 +12,7 @@ const PROMPTS_MAX = 20;
 
 const archiveRoot = (smDir) => join(smDir, 'archive');
 const indexPath = (smDir) => join(archiveRoot(smDir), 'index.jsonl');
+const deletedPath = (smDir) => join(archiveRoot(smDir), 'deleted.json');
 const copyPath = (smDir, entry) => join(archiveRoot(smDir), entry.projectDir, `${entry.sessionId}.jsonl.gz`);
 const safeSegment = (s) => typeof s === 'string' && s !== '' && s !== '.' && s !== '..' && basename(s) === s && !s.includes('\\');
 
@@ -41,6 +42,27 @@ function writeIndex(smDir, entries) {
   renameSync(tmp, indexPath(smDir));
 }
 
+// The source transcript outlives the copy (Claude keeps it ~30 days), so a deletion must be remembered
+// or the next sweep would archive the conversation again.
+function readDeleted(smDir) {
+  try {
+    const ids = JSON.parse(readFileSync(deletedPath(smDir), 'utf8'));
+    return Array.isArray(ids) ? ids.filter((id) => UUID_RE.test(id)) : [];
+  } catch (err) {
+    if (err.code !== 'ENOENT') log('warn', 'deleted-read-failed', { code: err.code ?? err.name });
+    return [];
+  }
+}
+
+function rememberDeleted(smDir, sessionId) {
+  const ids = readDeleted(smDir);
+  if (ids.includes(sessionId)) return;
+  mkdirSync(archiveRoot(smDir), { recursive: true });
+  const tmp = `${deletedPath(smDir)}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify([...ids, sessionId]));
+  renameSync(tmp, deletedPath(smDir));
+}
+
 function buildEntry(ref, summary) {
   const helperUsage = readHelperUsage(join(dirname(ref.path), ref.sessionId));
   return {
@@ -60,10 +82,11 @@ function buildEntry(ref, summary) {
   };
 }
 
-// 'archived' | 'unchanged' | 'missing' | 'invalid'. Safe to call from the hook and the sweep at once:
+// 'archived' | 'unchanged' | 'missing' | 'invalid' | 'deleted'. Safe to call from the hook and the sweep at once:
 // both write the same content and the index is replaced atomically.
 export function archiveTranscript(ref, smDir) {
   if (!UUID_RE.test(ref.sessionId) || !safeSegment(ref.projectDir)) return 'invalid';
+  if (readDeleted(smDir).includes(ref.sessionId)) return 'deleted';
   const entries = readIndex(smDir);
   const known = entries.find((e) => e.sessionId === ref.sessionId);
   if (known?.sourceMtimeMs === ref.mtimeMs && existsSync(copyPath(smDir, known))) return 'unchanged';
@@ -137,6 +160,7 @@ export function readArchived(smDir, sessionId) {
 export function deleteArchived(smDir, sessionId) {
   const entry = entryOf(smDir, sessionId);
   if (!entry) return false;
+  rememberDeleted(smDir, sessionId);
   rmSync(copyPath(smDir, entry), { force: true });
   writeIndex(smDir, readIndex(smDir).filter((e) => e.sessionId !== sessionId));
   return true;

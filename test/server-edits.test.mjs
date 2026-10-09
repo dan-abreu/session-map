@@ -39,7 +39,10 @@ test('DELETE /api/conversation/:id removes an archived conversation, only with t
   const smDir = join(root, 'sm');
   cpSync(new URL('./fixtures/claude/', import.meta.url), dir, { recursive: true });
   const S1 = '11111111-1111-4111-8111-111111111111';
-  assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S1), smDir), 'archived');
+  const ref = listTranscripts(dir).find((r) => r.sessionId === S1);
+  assert.equal(archiveTranscript(ref, smDir), 'archived');
+  const gz = join(smDir, 'archive', ref.projectDir, `${S1}.jsonl.gz`);
+  assert.equal(existsSync(gz), true);
   const app = createApp({ dir, smDir, ai: { bin: null }, chat: null });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
@@ -59,7 +62,8 @@ test('DELETE /api/conversation/:id removes an archived conversation, only with t
     assert.equal(await call('/api/conversation/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', good), 404);
     assert.equal(await call(`/api/conversation/${S1}`, good), 200);
     assert.equal(readIndex(smDir).some((e) => e.sessionId === S1), false);
-    assert.equal(existsSync(join(smDir, 'archive', readIndex(smDir)[0]?.projectDir ?? 'x', `${S1}.jsonl.gz`)), false);
+    assert.equal(existsSync(gz), false);
+    assert.equal(archiveTranscript(ref, smDir), 'deleted', 'the next sweep does not bring it back');
     assert.equal(await call(`/api/conversation/${S1}`, good), 404);
   } finally {
     await new Promise((resolve) => app.close(resolve));

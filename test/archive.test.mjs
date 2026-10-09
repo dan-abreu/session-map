@@ -101,6 +101,27 @@ test('deleteArchived removes the copy and the index line, and nothing else', () 
   assert.equal(deleteArchived(smDir, '../x'), false);
 });
 
+test('a deleted conversation stays deleted: the sweep and the hook do not copy it again', () => {
+  const { dir, smDir, root } = setup();
+  archiveAll(dir, smDir);
+  const ref = listTranscripts(dir).find((r) => r.sessionId === S1);
+  const gz = join(smDir, 'archive', ref.projectDir, `${S1}.jsonl.gz`);
+  assert.equal(deleteArchived(smDir, S1), true);
+  assert.equal(archiveAll(dir, smDir), 0);
+  assert.equal(archiveTranscript({ ...ref, mtimeMs: ref.mtimeMs + 1 }, smDir), 'deleted');
+  assert.equal(readIndex(smDir).some((e) => e.sessionId === S1), false);
+  assert.equal(existsSync(gz), false);
+  assert.equal(readIndex(smDir).length, 2, 'the other conversations stay archived');
+
+  const hookSm = join(dir, 'session-map');
+  archiveAll(dir, hookSm);
+  deleteArchived(hookSm, S1);
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: join(root, 'claude') };
+  execFileSync(process.execPath, [hook], { input: JSON.stringify({ session_id: S1, transcript_path: ref.path }), env, stdio: ['pipe', 'pipe', 'pipe'] });
+  assert.equal(readIndex(hookSm).some((e) => e.sessionId === S1), false);
+  assert.match(readFileSync(join(hookSm, 'actions.log'), 'utf8'), /"result":"deleted"/);
+});
+
 test('a half-written index line is ignored', () => {
   const { dir, smDir } = setup();
   archiveAll(dir, smDir);
