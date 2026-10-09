@@ -43,3 +43,26 @@ test('every classification result is a listed type and category', () => {
     assert.ok(CATEGORIES.includes(out.category));
   }
 });
+
+// Shaped like real catalog entries: almost every repo says claude, ai, agent, skill or plugin somewhere.
+const REALISTIC = [
+  [repo('lazy-senior', 'Makes your AI agent think like the laziest senior dev. The best code is the code you never write.', ['agent-skills', 'ai-agents', 'claude', 'claude-code', 'claude-code-plugin', 'llm', 'yagni', 'refactoring']), 'code'],
+  [repo('agent-recall', 'Persistent memory across sessions for every agent, with embeddings and RAG', ['ai', 'ai-agents', 'ai-memory', 'claude', 'claude-code-plugin', 'long-term-memory']), 'ai'],
+  [repo('growth-kit', 'Marketing skills for Claude Code and AI agents. CRO, copywriting, SEO and growth', ['agent-skills', 'ai-agents', 'claude', 'claude-code-plugin', 'marketing', 'seo']), 'marketing'],
+  [repo('short-films', 'Claude Code skill for short films with no video model: film styles and ffmpeg', ['agent-skills', 'ai-agents', 'ai-video', 'claude', 'claude-code-plugin', 'video-production']), 'media'],
+  [repo('safety-net', 'A pre-execution guard for AI coding agents that blocks destructive git commands', ['ai-agents', 'ai-safety', 'claude', 'claude-code-plugin', 'security', 'guardrails']), 'security'],
+  [repo('mission-control', 'Self-hosted mission control for AI coding agents: sessions, terminal and tmux in a web dashboard', ['agent', 'ai-agents', 'claude', 'claude-code-plugin', 'session-manager', 'terminal', 'tmux']), 'workflow'],
+  [repo('recall-cards', 'Evidence-based learning engine with spaced repetition', ['claude-code', 'claude-code-plugin', 'education', 'learning']), 'education'],
+  [repo('plain-agent', 'An agent plugin for Claude with skills', ['ai', 'agent', 'claude', 'llm', 'skills']), 'other'],
+];
+
+for (const [r, category] of REALISTIC) {
+  test(`classifyRepo ignores generic words: ${r.name} is ${category}`, () => assert.equal(classifyRepo(r, []).category, category));
+}
+
+test('the Discover tab offers exactly the categories the classifier can give', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../server/web/discover.js', import.meta.url), 'utf8');
+  const listed = JSON.parse(/const CATEGORIES = (\[[^\]]*\])/.exec(src)[1].replaceAll("'", '"'));
+  assert.deepEqual([...listed].sort(), [...CATEGORIES].sort());
+});

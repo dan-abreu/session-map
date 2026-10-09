@@ -38,7 +38,9 @@ function readJson(path) {
 
 export function readCatalogCache(smDir) {
   const cache = readJson(join(smDir, 'catalog.json'));
-  return Array.isArray(cache?.items) && typeof cache.fetchedAt === 'string' ? cache : null;
+  if (!Array.isArray(cache?.items) || typeof cache.fetchedAt !== 'string') return null;
+  // The category needs only name, description and topics: a newer classifier applies to an older cache too.
+  return { ...cache, items: cache.items.map((i) => ({ ...i, category: classifyRepo({ name: i.name, description: i.description, topics: i.topics }, []).category })) };
 }
 
 // What the caller gets from a child process; a missing binary is {code: null}, never a throw.

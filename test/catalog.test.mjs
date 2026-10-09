@@ -284,3 +284,14 @@ test('markInstalled flags repositories whose marketplace has an installed plugin
     assert.deepEqual(markInstalled(items, f.dir).map((i) => i.installed), [true, false, false]);
   } finally { f.cleanup(); }
 });
+
+test('a catalog saved by an older classifier is read back with today\'s categories', () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-cat-old-'));
+  try {
+    const item = { repo: 'ana/growth', name: 'growth', description: 'Marketing skills for AI agents: SEO and growth', topics: ['ai-agents', 'seo'], type: 'skill', category: 'ai' };
+    writeFileSync(join(smDir, 'catalog.json'), JSON.stringify({ fetchedAt: new Date().toISOString(), items: [item] }));
+    const [read] = readCatalogCache(smDir).items;
+    assert.equal(read.category, 'marketing');
+    assert.equal(read.type, 'skill', 'the type needed the file list and stays as saved');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});

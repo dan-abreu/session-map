@@ -1,5 +1,5 @@
 const TYPES = ['skill', 'plugin', 'marketplace', 'mcp', 'agent', 'hook'];
-const CATEGORIES = ['design', 'security', 'testing', 'writing', 'data', 'devops', 'product', 'ai', 'other'];
+const CATEGORIES = ['design', 'security', 'testing', 'code', 'writing', 'data', 'devops', 'product', 'marketing', 'media', 'workflow', 'education', 'ai', 'other'];
 const SORTS = ['stars', 'updated', 'name'];
 const DEBOUNCE_MS = 250;
 
