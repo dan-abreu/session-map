@@ -24,6 +24,8 @@ const WEB_DIR = join(here, 'web');
 const DEMO_STATE = join(here, '..', 'demo', 'state.json');
 const STATE_TTL_MS = 3000;
 const STATE_SAVE_MS = 60_000;
+// Reading the transcripts holds the event loop for a while: the copy's bytes leave the socket first.
+const COLLECT_AFTER_COPY_MS = 300;
 const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const NAME_MAX = 40;
@@ -169,10 +171,12 @@ export function createApp({
     return cached.promise;
   };
   const firstAnswer = async () => {
-    const pending = state();
-    if (ready || demo || !stateCopy) return pending;
+    if (ready || demo || !stateCopy) return state();
+    // Until the first collect is done every poll gets the copy, so none waits a minute on it.
     const copy = readJsonFile(stateCopy, null);
-    return copy && Array.isArray(copy.projects) ? { ...copy, refreshing: true } : pending;
+    if (!copy || !Array.isArray(copy.projects)) return state();
+    if (!cached) setTimeout(state, COLLECT_AFTER_COPY_MS).unref?.();
+    return { ...copy, refreshing: true };
   };
   const fresh = () => { cached = null; };
 

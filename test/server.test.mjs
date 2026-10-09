@@ -223,8 +223,11 @@ test('the first /api/state answers from the disk copy at once, marked refreshing
     assert.equal(body.refreshing, true);
     assert.equal(body.generatedAt, '2026-10-08T09:00:00.000Z');
     release(fresh);
-    await slow;
-    const second = JSON.parse((await call('GET', '/api/state')).text);
+    let second = { refreshing: true };
+    for (let i = 0; i < 30 && second.refreshing; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      second = JSON.parse((await call('GET', '/api/state')).text);
+    }
     assert.equal(second.generatedAt, '2026-10-09T12:00:00.000Z');
     assert.equal(second.refreshing, undefined);
     const saved = JSON.parse(readFileSync(join(smDir, 'state-cache.json'), 'utf8'));
@@ -244,5 +247,21 @@ test('a collect still running is shared by every request, even past the state li
     release();
     await Promise.all([a, b]);
     assert.equal(runs, 1);
+  });
+});
+
+test('the disk copy goes out before a collect that holds the event loop starts', { timeout: 20_000 }, async () => {
+  const collectFn = () => {
+    const end = Date.now() + 2500;
+    while (Date.now() < end) { /* reading every transcript synchronously */ }
+    return Promise.resolve(DEMO);
+  };
+  await withServer({ collectFn }, async ({ call, smDir }) => {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(join(smDir, 'state-cache.json'), JSON.stringify(DEMO));
+    const started = Date.now();
+    const first = JSON.parse((await call('GET', '/api/state')).text);
+    assert.equal(first.refreshing, true);
+    assert.ok(Date.now() - started < 1500, `${Date.now() - started} ms`);
   });
 });
