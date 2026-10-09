@@ -208,3 +208,10 @@ test('group into a name that already names a free unit of that level reuses it i
   assert.equal(next.find((u) => u.id === 'coupons').parentId, 'carrinho');
   assert.equal(next.find((u) => u.id === 'extra').parentId, 'carrinho');
 });
+
+// Seen after a restart: the AI answered "new unit" with the exact name of one it made before, and a "-2" twin was born.
+test('applyPerception puts the chat in the unit that already has that name instead of making a twin', () => {
+  const next = applyPerception(seedUnits(), { sessionId: S1 }, { unitId: null, name: 'coupons', purpose: '', tags: [] }, NOW);
+  assert.equal(next.length, seedUnits().length);
+  assert.ok(next.find((u) => u.id === 'coupons').chatIds.includes(S1));
+});

@@ -47,7 +47,10 @@ export function applyPerception(units, chat, p, now = new Date().toISOString()) 
   // A chat in a pinned unit was placed there by the person.
   if (!p || next.some((u) => u.pinned && u.chatIds.includes(chat.sessionId))) return next;
   for (const u of next) u.chatIds = u.chatIds.filter((id) => id !== chat.sessionId);
-  let target = next.find((u) => u.id === p.unitId && u.id !== UNSORTED);
+  const plainName = (name) => String(name).toLowerCase().replace(/\s+/g, ' ').trim();
+  // The AI sometimes answers "new" with the very name of a unit it made before: that is the same unit.
+  let target = next.find((u) => u.id === p.unitId && u.id !== UNSORTED)
+    ?? next.find((u) => u.level === 'cell' && u.id !== UNSORTED && plainName(u.name) === plainName(p.name));
   if (!target) {
     target = newUnit(next, p, now);
     next.push(target);
