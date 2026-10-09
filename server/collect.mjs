@@ -194,7 +194,8 @@ function rollUp(units, own) {
 
 // ---- one project -----------------------------------------------------------------
 
-function clashesOf(workCells, projectId) {
+// The page words each clash itself from the fields; text is for the terminal view.
+export function clashItems(workCells, projectId) {
   const items = [];
   const byId = new Map(workCells.map((w) => [w.id, w]));
   for (const w of workCells) {
@@ -202,8 +203,12 @@ function clashesOf(workCells, projectId) {
       const o = byId.get(otherId);
       if (!o || w.id > o.id) continue;
       const theirs = new Set(o.files.map((f) => f.path));
-      const shared = w.files.map((f) => f.path).filter((f) => theirs.has(f));
-      items.push({ kind: 'clash', text: `${w.owner.name} (${w.branch}) × ${o.owner.name} (${o.branch}): ${shared.slice(0, 3).join(', ')}`, projectId, sessionId: null });
+      const files = w.files.map((f) => f.path).filter((f) => theirs.has(f)).slice(0, 3);
+      const sameOwner = w.owner.email === o.owner.email;
+      const text = sameOwner
+        ? `Your branches ${w.branch} and ${o.branch} touch the same file: ${files.join(', ')}`
+        : `${w.owner.name} (${w.branch}) and ${o.owner.name} (${o.branch}) touch the same file: ${files.join(', ')}`;
+      items.push({ kind: 'clash', text, projectId, sessionId: null, workCellIds: [w.id, o.id], branches: [w.branch, o.branch], owners: [w.owner.name, o.owner.name], files, sameOwner });
     }
   }
   return items;
@@ -397,7 +402,7 @@ async function buildProject(ctx, { root, items }) {
       units: outUnits, unitLinks, workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, roadmap: milestones,
-      decisions: [...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })), ...clashesOf(workCells.filter((w) => w.status !== 'merged'), projectId)],
+      decisions: [...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })), ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId)],
       skills: listSkills(root, dir),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
     },

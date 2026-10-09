@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   structureKey, lifeEventsSince, nameAt, mapTree, boardColumns, costRows, estimateTone, budgetTone,
-  aiSpend, bootstrapOf, chatButtons, chatLog, visibleProject, unitMoves, waitingEntries, safeTunnel, changedLines,
+  aiSpend, bootstrapOf, chatButtons, chatLog, visibleProject, unitMoves, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
 } from '../server/web/views.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
@@ -228,4 +228,22 @@ test('changedLines turns ranges into a lookup and finds the first line', () => {
   const none = changedLines([]);
   assert.equal(none.has(1), false);
   assert.equal(none.first, null);
+});
+
+test('waitingCounts counts the list by kind, questions first, and leaves out kinds with nothing', () => {
+  const p = { id: 'p', units: [], chats: [], workCells: [] };
+  const chat = (waiting) => ({ project: p, chat: { waiting: { strong: false, weak: false, items: [], ...waiting } } });
+  const entries = [
+    chat({ strong: true }), chat({ items: ['pick one'] }), chat({ weak: true }),
+    { project: p, decision: { kind: 'decision' } }, { project: p, decision: { kind: 'clash' } }, { project: p, decision: { kind: 'clash' } },
+  ];
+  assert.deepEqual(waitingCounts(entries), [{ kind: 'question', n: 1 }, { kind: 'decision', n: 2 }, { kind: 'clash', n: 2 }, { kind: 'ends', n: 1 }]);
+  assert.deepEqual(waitingCounts([]), []);
+});
+
+test('clashWords picks "your branches" for one owner and names both people otherwise', () => {
+  assert.deepEqual(clashWords({ kind: 'clash', sameOwner: true, branches: ['a', 'b'], owners: ['Ana', 'Ana'], files: ['x.ts'] }),
+    { key: 'waiting.clashMine', vars: { a: 'a', b: 'b', ownerA: 'Ana', ownerB: 'Ana', files: 'x.ts' } });
+  assert.equal(clashWords({ kind: 'clash', sameOwner: false, branches: ['a', 'b'], owners: ['Ana', 'Rui'], files: ['x.ts', 'y.ts'] }).key, 'waiting.clashOthers');
+  assert.equal(clashWords({ kind: 'clash', text: 'older server' }), null);
 });

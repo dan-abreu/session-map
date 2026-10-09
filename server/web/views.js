@@ -19,6 +19,28 @@ export function waitingEntries(state) {
   return out.sort((a, b) => a.rank - b.rank || b.ts.localeCompare(a.ts));
 }
 
+const WAITING_ORDER = ['question', 'decision', 'clash', 'ends'];
+
+export function waitingKind({ chat, decision }) {
+  if (decision) return decision.kind === 'clash' ? 'clash' : 'decision';
+  return chat.waiting.strong ? 'question' : chat.waiting.items.length ? 'decision' : 'ends';
+}
+
+// The head of the waiting list: how many of each kind, so 19 items read as "2 questions · 14 decisions · 3 clashes".
+export function waitingCounts(entries) {
+  const counts = new Map();
+  for (const e of entries) counts.set(waitingKind(e), (counts.get(waitingKind(e)) ?? 0) + 1);
+  return WAITING_ORDER.filter((kind) => counts.has(kind)).map((kind) => ({ kind, n: counts.get(kind) }));
+}
+
+// A clash from a server that sends the branches is worded on the page, in the page's language.
+export function clashWords(d) {
+  if (!Array.isArray(d.branches) || d.branches.length < 2) return null;
+  const [a, b] = d.branches;
+  const [ownerA, ownerB] = d.owners ?? ['', ''];
+  return { key: d.sameOwner ? 'waiting.clashMine' : 'waiting.clashOthers', vars: { a, b, ownerA, ownerB, files: (d.files ?? []).join(', ') } };
+}
+
 const isWaiting = (c) => c.waiting.strong || c.waiting.weak || c.waiting.items.length > 0;
 
 // What forces the brain to lay itself out again. Status and waiting flags are left out: those repaint in place.

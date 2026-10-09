@@ -6,7 +6,7 @@ import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
-import { structureKey, lifeEventsSince, nameAt, visibleProject, chatButtons, bootstrapOf, unitMoves, waitingEntries, safeTunnel } from './views.js';
+import { structureKey, lifeEventsSince, nameAt, visibleProject, chatButtons, bootstrapOf, unitMoves, waitingEntries, waitingCounts, clashWords, safeTunnel } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
 const PLAY_MS = 9000;
@@ -232,6 +232,7 @@ function renderWaiting() {
   $('#waitingBtn').classList.toggle('is-zero', state.waitingCount === 0);
   const entries = waitingEntries(state);
   const listEl = $('#waitingItems');
+  $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, n))));
   if (!entries.length) {
     listEl.replaceChildren(h('li', { class: 'empty' }, t('waiting.none')));
     return;
@@ -242,13 +243,17 @@ function renderWaiting() {
   };
   listEl.replaceChildren(...entries.map(({ project: p, chat: c, decision }) => {
     if (decision) {
-      const clashing = decision.kind === 'clash' ? p.workCells.find((w) => w.clashWith.length && w.status !== 'merged') : null;
+      const firstId = decision.workCellIds?.[0];
+      const clashing = decision.kind !== 'clash' ? null
+        : p.workCells.find((w) => w.id === firstId) ?? p.workCells.find((w) => w.clashWith.length && w.status !== 'merged');
+      const words = decision.kind === 'clash' ? clashWords(decision) : null;
       return h('li', {}, h('button', {
         type: 'button', class: `waiting-item${decision.kind === 'clash' ? ' clash' : ''}`,
         onclick: () => goTo(p.id, clashing ? { type: 'workcell', id: clashing.id } : decision.sessionId ? { type: 'chat', id: decision.sessionId } : null),
       },
       h('span', { class: 'wi-reason' }, t(`waiting.${decision.kind}`)),
-      h('span', { class: 'wi-title' }, decision.text),
+      h('span', { class: 'wi-title' }, words ? t(words.key, words.vars) : decision.text),
+      words?.vars.files ? h('span', { class: 'wi-detail mono' }, words.vars.files) : null,
       h('span', { class: 'wi-where' }, where(p, clashing?.unitId))));
     }
     const reason = c.waiting.strong ? t('waiting.question') : c.waiting.items.length ? t('waiting.item') : t('waiting.ends');

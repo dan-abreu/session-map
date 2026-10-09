@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { collect, settleAi } from '../server/collect.mjs';
+import { clashItems, collect, settleAi } from '../server/collect.mjs';
 import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
@@ -539,4 +539,23 @@ test('collect tidies an older units.json once: twins merged, readable names, cle
     rmSync(smDir, { recursive: true, force: true });
     rmSync(join(root, '..'), { recursive: true, force: true });
   }
+});
+
+test('clashItems says "your branches" when one person owns both, and names both people otherwise', () => {
+  const cell = (id, owner, paths) => ({ id, branch: id, status: 'active', owner: { name: owner, email: `${owner}@example.com` }, files: paths.map((path) => ({ path, status: 'M' })), clashWith: [] });
+  const a = cell('feat/a', 'Ana', ['src/index.ts', 'src/a.ts']);
+  const b = cell('feat/b', 'Ana', ['src/index.ts']);
+  const c = cell('feat/c', 'Rui', ['src/a.ts']);
+  a.clashWith = ['feat/b', 'feat/c'];
+  b.clashWith = ['feat/a'];
+  c.clashWith = ['feat/a'];
+  const items = clashItems([a, b, c], 'p1');
+  assert.equal(items.length, 2);
+  const mine = items.find((i) => i.sameOwner);
+  assert.deepEqual(mine.workCellIds, ['feat/a', 'feat/b']);
+  assert.deepEqual(mine.files, ['src/index.ts']);
+  assert.equal(mine.text, 'Your branches feat/a and feat/b touch the same file: src/index.ts');
+  const theirs = items.find((i) => !i.sameOwner);
+  assert.deepEqual(theirs.owners, ['Ana', 'Rui']);
+  assert.equal(theirs.text, 'Ana (feat/a) and Rui (feat/c) touch the same file: src/a.ts');
 });

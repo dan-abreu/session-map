@@ -508,6 +508,19 @@ button, select, input { font: inherit; color: inherit; }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); }
 
+.waiting-counts {
+  display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 10px 16px 8px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.waiting-counts:empty { display: none; }
+.waiting-counts li {
+  padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+  background: var(--waiting-fill); color: var(--waiting-ink);
+}
+.waiting-counts .wc-clash { background: var(--clash-fill); color: var(--clash-ink); }
+.waiting-counts .wc-ends { background: var(--idle-fill); color: var(--idle-ink); }
+.waiting-item.clash .wi-reason { color: var(--clash-ink); }
+.wi-detail.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.75rem; }
 #waitingItems { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
 #waitingItems .empty { padding: 14px; color: var(--ink-2); }
 .waiting-item {
