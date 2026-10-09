@@ -5,6 +5,7 @@ const NAME_MAX = 40;
 const PURPOSE_MAX = 160;
 const TAG_MAX = 24;
 const TAGS_MAX = 5;
+const PATHS_MAX = 20;
 
 const text = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
@@ -52,5 +53,8 @@ export function applyPerception(units, chat, p, now = new Date().toISOString()) 
     next.push(target);
   }
   target.chatIds.push(chat.sessionId);
+  // Work cells and commits find their unit by these folders; specs rarely cite code paths, so the chats teach them.
+  const folders = (chat.files ?? []).filter((f) => f.includes('/')).map((f) => f.slice(0, f.lastIndexOf('/')));
+  if (!target.pinned) target.paths = [...new Set([...target.paths, ...folders])].slice(0, PATHS_MAX);
   return next;
 }

@@ -65,7 +65,7 @@ async function perceiveChat(life, p, item, workCell, uncapped) {
   life.perceived.set(sessionId, hashOf(digest));
   if (!perception) return null;
   const before = unitsNow(p.smDir, p.projectId);
-  saveUnits(p.smDir, p.projectId, before, applyPerception(before, { sessionId }, perception, new Date().toISOString()));
+  saveUnits(p.smDir, p.projectId, before, applyPerception(before, { sessionId, files: digest.files }, perception, new Date().toISOString()));
   return answer?.costUSD ?? 0;
 }
 

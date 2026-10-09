@@ -174,3 +174,14 @@ test('fuse never makes a unit its own parent, even on a tree that already breaks
   assert.ok(next.every((u) => u.parentId !== u.id));
   assert.equal(next.find((u) => u.id === 'n').parentId, 't');
 });
+
+test('applyPerception learns the folders of the chat files as path hints, so branches and commits find the unit', () => {
+  const files = ['src/cart/total.ts', 'src/cart/total.test.ts', 'docs/cart.md', 'README.md'];
+  const fitted = applyPerception(seedUnits(), { sessionId: S1, files }, { unitId: 'coupons', name: 'Cupons', purpose: '', tags: [] }, NOW);
+  assert.deepEqual(fitted.find((u) => u.id === 'coupons').paths, ['src/cart', 'docs']);
+  const born = applyPerception(seedUnits(), { sessionId: S1, files }, { unitId: null, name: 'Frete', purpose: '', tags: [] }, NOW);
+  assert.deepEqual(born.find((u) => u.name === 'Frete').paths, ['src/cart', 'docs']);
+  const many = Array.from({ length: 40 }, (_, i) => `pkg${i}/a.ts`);
+  assert.equal(applyPerception(seedUnits(), { sessionId: S1, files: many }, { unitId: 'coupons', name: 'Cupons', purpose: '', tags: [] }, NOW)
+    .find((u) => u.id === 'coupons').paths.length, 20);
+});
