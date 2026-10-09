@@ -889,6 +889,7 @@ function setProject(id) {
   $('#project').value = project.id;
   stopPlay();
   closePanel(false);
+  chat.showProject(project.id);
   timeBounds();
   renderSummary();
   const empty = project.chats.length === 0;

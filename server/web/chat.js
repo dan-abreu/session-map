@@ -155,6 +155,8 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose })
     open,
     close,
     isOpen: () => !root.hidden,
+    // Left open over another project, the sheet would start its conversation in the old project's folder.
+    showProject(projectId) { if (context && context.projectId !== projectId) close(); },
     relabel() { if (!root.hidden) { input.placeholder = t()('chat.placeholder'); render(); } },
   };
 }

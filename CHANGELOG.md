@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2
+
+Switching projects no longer leaves a conversation of the previous project open over the new one.
+
+- A chat sheet opened with Continue stayed open after picking another project in the top selector: the brain showed
+  the new project while the sheet still named a unit of the old one, and its first message would start the
+  conversation in the old project's folder. Picking another project now closes the sheet (the conversation keeps
+  running on the PC, as when the sheet is closed by hand); showing the same project again, after a poll or a language
+  switch, keeps it open.
+
 ## 0.1.1
 
 Related units now show up on real projects, not only in the demo.
