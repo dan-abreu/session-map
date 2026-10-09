@@ -70,6 +70,7 @@ export function createDiscover({ root, h, t, lang, project, toast }) {
     const notes = [];
     if (res.limited) notes.push(tt('discover.limited'));
     else if (res.error === 'network') notes.push(tt('discover.offline'));
+    else if (res.error === 'github') notes.push(tt('discover.githubError'));
     if (res.fetchedAt) notes.push(tt('discover.fetched', { when: stamp(res.fetchedAt) }));
     q('#discoverStatus').textContent = notes.join(' · ');
     q('#discoverStatus').classList.toggle('is-error', Boolean(res.limited || res.error));

@@ -155,6 +155,85 @@ test('a network failure with no cache gives an empty list, not an exception', as
   } finally { f.cleanup(); }
 });
 
+async function cachedWith(f, repo) {
+  const ok = fakeGithub([[/search\/repositories/, { body: { items: [gh(repo)] } }]]);
+  await fetchCatalog({ token: null, exec: noExec, fetchFn: ok.fetchFn, smDir: f.smDir, dir: f.dir, now: NOW });
+  return readFileSync(join(f.smDir, 'catalog.json'), 'utf8');
+}
+
+for (const [label, status] of [['401', 401], ['500', 500], ['403 without a limit', 403]]) {
+  test(`a ${label} answer keeps the good cache untouched and flags the error`, async () => {
+    const f = fixture();
+    try {
+      const before = await cachedWith(f, 'old/one');
+      const bad = fakeGithub([[/search\/repositories/, { status, body: { message: 'Bad credentials' } }]]);
+      const out = await fetchCatalog({ token: null, exec: noExec, fetchFn: bad.fetchFn, smDir: f.smDir, dir: f.dir, now: NOW + CACHE_TTL_MS + 1, force: true });
+      assert.equal(out.stale, true);
+      assert.equal(out.error, 'github');
+      assert.equal(out.limited, false);
+      assert.deepEqual(out.items.map((i) => i.repo), ['old/one']);
+      assert.equal(out.fetchedAt, JSON.parse(before).fetchedAt);
+      assert.equal(readFileSync(join(f.smDir, 'catalog.json'), 'utf8'), before);
+    } finally { f.cleanup(); }
+  });
+}
+
+test('a partial fetch (some requests fail) never replaces a fuller cache', async () => {
+  const f = fixture();
+  try {
+    const before = await cachedWith(f, 'old/one');
+    let n = 0;
+    const flaky = fakeGithub([[/search\/repositories/, () => (++n === 1
+      ? { body: { items: [gh('new/only')] } }
+      : { status: 502, body: {} })]]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn: flaky.fetchFn, smDir: f.smDir, dir: f.dir, now: NOW + CACHE_TTL_MS + 1, force: true });
+    assert.equal(out.error, 'github');
+    assert.deepEqual(out.items.map((i) => i.repo), ['old/one']);
+    assert.equal(readFileSync(join(f.smDir, 'catalog.json'), 'utf8'), before);
+  } finally { f.cleanup(); }
+});
+
+test('an HTTP error with no cache returns what it has, flagged, and writes nothing', async () => {
+  const f = fixture();
+  try {
+    const bad = fakeGithub([[/search\/repositories/, { status: 500, body: {} }]]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn: bad.fetchFn, smDir: f.smDir, dir: f.dir, now: NOW });
+    assert.deepEqual(out.items, []);
+    assert.equal(out.stale, true);
+    assert.equal(out.error, 'github');
+    assert.equal(existsSync(join(f.smDir, 'catalog.json')), false);
+  } finally { f.cleanup(); }
+});
+
+test('a 401 with a token retries once anonymously and caches that result', async () => {
+  const f = fixture();
+  try {
+    const { fetchFn, calls } = fakeGithub([[/search\/repositories/, () => ({ body: { items: [gh('anon/ok')] } })]]);
+    const guarded = async (url, opts) => (opts.headers.authorization
+      ? respond({ status: 401, body: { message: 'Bad credentials' } })
+      : fetchFn(url, opts));
+    const out = await fetchCatalog({ token: 'expired-token', exec: noExec, fetchFn: guarded, smDir: f.smDir, dir: f.dir, now: NOW });
+    assert.equal(out.error, undefined);
+    assert.equal(out.stale, false);
+    assert.deepEqual(out.items.map((i) => i.repo), ['anon/ok']);
+    assert.ok(calls.length > 0 && calls.every((c) => c.auth === null));
+    assert.equal(readCatalogCache(f.smDir).items.length, 1);
+  } finally { f.cleanup(); }
+});
+
+test('a 404 on a single lookup is not a failure and the catalog is still cached', async () => {
+  const f = fixture();
+  try {
+    mkdirSync(join(f.dir, 'plugins'), { recursive: true });
+    writeFileSync(join(f.dir, 'plugins', 'known_marketplaces.json'), JSON.stringify({ gone: { source: { source: 'github', repo: 'gone/repo' } } }));
+    const { fetchFn } = fakeGithub([[/search\/repositories/, { body: { items: [gh('a/b')] } }]]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW });
+    assert.equal(out.error, undefined);
+    assert.equal(out.stale, false);
+    assert.equal(readCatalogCache(f.smDir).items.length, 1);
+  } finally { f.cleanup(); }
+});
+
 test('a damaged cache file is ignored', () => {
   const f = fixture();
   try {

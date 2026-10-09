@@ -95,7 +95,8 @@ function isRateLimit(res, body) {
   return res.status === 403 && (res.headers?.get?.('x-ratelimit-remaining') === '0' || /rate limit/i.test(body?.message ?? ''));
 }
 
-// → parsed JSON, or null when the request failed for any reason other than the limit (which throws LimitReached).
+// → parsed JSON, or null when the request failed. The limit throws LimitReached; any other failure is counted so a broken
+// fetch never replaces a good cache. A 404 is an answer (repository gone, folder missing), not a failure.
 function githubClient({ token, fetchFn }) {
   const headers = {
     accept: 'application/vnd.github+json',
@@ -103,18 +104,24 @@ function githubClient({ token, fetchFn }) {
     'user-agent': 'session-map',
     ...(token ? { authorization: `Bearer ${token}` } : {}),
   };
-  const state = { networkFailures: 0 };
+  const state = { failures: 0, networkFailures: 0, unauthorized: false };
   async function get(path) {
     let res;
     try {
       res = await fetchFn(`${API}${path}`, { headers });
     } catch {
+      state.failures++;
       state.networkFailures++;
       return null;
     }
     const body = await res.json().catch(() => null);
     if (isRateLimit(res, body)) throw new LimitReached();
-    return res.ok ? body : null;
+    if (res.ok) return body;
+    if (res.status !== 404) {
+      state.failures++;
+      if (res.status === 401) state.unauthorized = true;
+    }
+    return null;
   }
   return { get, state };
 }
@@ -165,9 +172,9 @@ async function gather({ token, fetchFn, dir }) {
     }
   } catch (err) {
     if (!(err instanceof LimitReached)) throw err;
-    return { repos, limited: true, networkFailures: api.state.networkFailures };
+    return { repos, limited: true, ...api.state };
   }
-  return { repos, limited: false, networkFailures: api.state.networkFailures };
+  return { repos, limited: false, ...api.state };
 }
 
 // token: undefined looks it up (GITHUB_TOKEN, then `gh auth token`); null stays anonymous (topic searches only).
@@ -176,7 +183,11 @@ export async function fetchCatalog({ token, exec = execCapture, fetchFn = fetch,
   if (cache && !force && now - Date.parse(cache.fetchedAt) < CACHE_TTL_MS) {
     return { items: cache.items, fetchedAt: cache.fetchedAt, stale: false, limited: false };
   }
-  const { repos, limited, networkFailures } = await gather({ token: token === undefined ? await resolveToken({ exec }) : token, fetchFn, dir });
+  const resolved = token === undefined ? await resolveToken({ exec }) : token;
+  let result = await gather({ token: resolved, fetchFn, dir });
+  // A rejected token (expired, revoked) would fail every Refresh the same way: fall back to the anonymous topic searches.
+  if (resolved && result.unauthorized) result = await gather({ token: null, fetchFn, dir });
+  const { repos, limited, failures, networkFailures } = result;
   const items = [...repos.values()].map((e) => toItem(e.raw, [...e.files]));
   if (limited) {
     log('warn', 'catalog-rate-limited', { cached: Boolean(cache) });
@@ -184,10 +195,11 @@ export async function fetchCatalog({ token, exec = execCapture, fetchFn = fetch,
       ? { items: cache.items, fetchedAt: cache.fetchedAt, stale: true, limited: true }
       : { items, fetchedAt: null, stale: true, limited: true };
   }
-  if (!items.length && networkFailures) {
+  if (failures) {
+    const error = networkFailures ? 'network' : 'github';
     return cache
-      ? { items: cache.items, fetchedAt: cache.fetchedAt, stale: true, limited: false, error: 'network' }
-      : { items: [], fetchedAt: null, stale: true, limited: false, error: 'network' };
+      ? { items: cache.items, fetchedAt: cache.fetchedAt, stale: true, limited: false, error }
+      : { items, fetchedAt: null, stale: true, limited: false, error };
   }
   const fetchedAt = new Date(now).toISOString();
   writeAtomic(join(smDir, 'catalog.json'), `${JSON.stringify({ fetchedAt, items })}\n`);
