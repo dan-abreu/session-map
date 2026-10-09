@@ -94,3 +94,12 @@ test('buildLinks carries the token, and --local drops the network links', () => 
 test('links script exits non-zero when no server answers', () => {
   assert.throws(() => execFileSync(process.execPath, [join(root, 'scripts/links.mjs'), '--port', '1'], { stdio: 'pipe' }));
 });
+
+test('both READMEs say the AI is on by default, how to turn it off, what it needs and how to configure it', () => {
+  for (const f of ['README.md', 'README.pt-BR.md']) {
+    const t = read(f);
+    for (const s of ['"ai": { "enabled": false }', '~/.claude/session-map/config.json', 'Node.js 20', 'monthlyUSD', '"currency"', '"roadmap"', 'autoFetchMinutes', 'maxCallsPerHour', 'bootstrapLimit', 'gh auth token', 'GITHUB_TOKEN']) {
+      assert.ok(t.includes(s), `${f}: ${s}`);
+    }
+  }
+});

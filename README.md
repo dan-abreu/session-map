@@ -16,6 +16,8 @@ The screenshots come from `--demo`, which uses invented data.
 /plugin install session-map@session-map
 ```
 
+**Requirements:** Claude Code and Node.js 20 or newer on your `PATH`. The native Claude Code installer does not bring Node; without it the server, the hook that archives finished chats and the three commands do not run.
+
 ## Commands
 
 | Command | What it does |
@@ -46,7 +48,43 @@ The plugin reads Claude Code's local files (sessions, transcripts, skills). Thos
 
 ## Privacy
 
-Everything stays on your machine. The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes only to `~/.claude/session-map/`: token, config, archive, notes and logs. Nothing is sent anywhere, except the optional Discover tab, which asks GitHub for public plugin repositories, and the AI features you turn on, which run through your own `claude` CLI.
+The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes only to `~/.claude/session-map/`: token, config, archive, notes and logs. Data leaves your machine in two cases.
+
+**AI organisation, on by default.** The map names and groups your work with your own `claude` CLI (`claude -p`, model `haiku`), so it goes to Anthropic like any Claude Code prompt. Each call sends a digest of one conversation, never the transcript: its title, up to 8 of your prompts cut to 160 characters, up to 30 file paths, up to 10 commit subjects, the branch name, and the names and purposes of the project's current units. The first time a project shows up, its 60 most recent conversations are read at once, outside the cap of 30 calls per hour; the page shows the estimated cost of this first organisation. Every call counts against your subscription limits or your API spend. To turn it off, put this in `~/.claude/session-map/config.json`:
+
+```json
+{ "ai": { "enabled": false } }
+```
+
+The map then groups chats by the files they touch and by the cards from `/session-map:board`.
+
+**Discover tab.** It asks the GitHub API for public plugin repositories, and looks up the marketplaces you already added, only when you open the tab. If `GITHUB_TOKEN` is set, or `gh auth token` answers, that token goes to GitHub with these requests, for a wider search and a higher rate limit.
+
+The network link (`--lan`) is plain HTTP: on a network you do not trust, use Tailscale or `--local`.
+
+## Configuration
+
+Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is optional:
+
+```json
+{
+  "ai": { "enabled": true, "model": "haiku", "maxCallsPerHour": 30, "bootstrapLimit": 60 },
+  "budget": { "monthlyUSD": 100 },
+  "currency": { "code": "BRL", "rate": 5.4 },
+  "projects": {
+    "c:/dev/shop": { "roadmap": "docs/ROADMAP.md", "decisions": { "heading": "Decisions", "pendingWhen": "pending" }, "autoFetchMinutes": 15 }
+  }
+}
+```
+
+- `ai`: the AI organisation (see Privacy). `"ai": { "enabled": false }` turns it off.
+- `budget.monthlyUSD`: shows how much of a monthly budget the estimated cost has used.
+- `currency`: shows costs in another currency, at the rate you give (1 USD = `rate`).
+- `projects`: per-project settings, keyed by the project folder in lower case with `/`. The same keys can sit in `<project>/.claude/session-map.json`; the entry here wins.
+  - `roadmap`: a Markdown file, relative to the project, whose `[x]`/`[ ]` (or ✅/⬜) lines become milestones. `decisions` reads the lines under the heading named `heading` that contain `pendingWhen` as decisions waiting for you.
+  - `autoFetchMinutes`: runs `git fetch` that often so branches pushed from other machines show up. Off by default.
+  - `ai`: `{ "enabled": false }` here turns the AI off for that project only.
+
 
 ## License
 

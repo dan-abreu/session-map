@@ -16,6 +16,8 @@ Os prints vêm do `--demo`, que usa dados inventados.
 /plugin install session-map@session-map
 ```
 
+**Requisitos:** Claude Code e Node.js 20 ou mais novo no `PATH`. O instalador nativo do Claude Code não traz o Node; sem ele, o servidor, o hook que arquiva as conversas encerradas e os três comandos não rodam.
+
 ## Comandos
 
 | Comando | O que faz |
@@ -46,7 +48,43 @@ O plugin lê arquivos locais do Claude Code (sessões, transcrições, skills). 
 
 ## Privacidade
 
-Tudo fica na sua máquina. O servidor lê `~/.claude` (ou `CLAUDE_CONFIG_DIR`) e grava só em `~/.claude/session-map/`: token, configuração, arquivo morto, notas e logs. Nada é enviado para fora, exceto a aba Descobrir, que pede ao GitHub repositórios públicos de plugins, e os recursos de IA que você ligar, que rodam pelo seu próprio `claude` CLI.
+O servidor lê `~/.claude` (ou `CLAUDE_CONFIG_DIR`) e grava só em `~/.claude/session-map/`: token, configuração, arquivo morto, notas e logs. Dados saem da sua máquina em dois casos.
+
+**Organização por IA, ligada por padrão.** O mapa dá nome e agrupa o seu trabalho com o seu próprio `claude` CLI (`claude -p`, modelo `haiku`), então isso vai para a Anthropic como qualquer prompt do Claude Code. Cada chamada envia um resumo de uma conversa, nunca a transcrição: o título, até 8 prompts seus cortados em 160 caracteres, até 30 caminhos de arquivo, até 10 assuntos de commit, o nome do ramo e os nomes e propósitos das unidades atuais do projeto. Na primeira vez que um projeto aparece, as 60 conversas mais recentes são lidas de uma vez, fora do limite de 30 chamadas por hora; a página mostra o custo estimado dessa primeira organização. Toda chamada conta nos limites da sua assinatura ou no seu gasto de API. Para desligar, ponha isto em `~/.claude/session-map/config.json`:
+
+```json
+{ "ai": { "enabled": false } }
+```
+
+O mapa passa a agrupar as conversas pelos arquivos que elas mexem e pelos cartões do `/session-map:board`.
+
+**Aba Descobrir.** Pede à API do GitHub repositórios públicos de plugins, e consulta os marketplaces que você já adicionou, só quando você abre a aba. Se `GITHUB_TOKEN` estiver definido, ou se `gh auth token` responder, esse token vai para o GitHub junto com essas consultas, para uma busca mais ampla e um limite de consultas maior.
+
+O link de rede (`--lan`) é HTTP simples: numa rede em que você não confia, use o Tailscale ou `--local`.
+
+## Configuração
+
+As configurações da máquina ficam em `~/.claude/session-map/config.json`. Toda chave é opcional:
+
+```json
+{
+  "ai": { "enabled": true, "model": "haiku", "maxCallsPerHour": 30, "bootstrapLimit": 60 },
+  "budget": { "monthlyUSD": 100 },
+  "currency": { "code": "BRL", "rate": 5.4 },
+  "projects": {
+    "c:/dev/loja": { "roadmap": "docs/ROTEIRO.md", "decisions": { "heading": "Decisões", "pendingWhen": "pendente" }, "autoFetchMinutes": 15 }
+  }
+}
+```
+
+- `ai`: a organização por IA (veja Privacidade). `"ai": { "enabled": false }` desliga.
+- `budget.monthlyUSD`: mostra quanto do orçamento mensal o custo estimado já usou.
+- `currency`: mostra os custos em outra moeda, na cotação que você informar (1 USD = `rate`).
+- `projects`: configurações por projeto, com a pasta do projeto em minúsculas e com `/` como chave. As mesmas chaves podem ficar em `<projeto>/.claude/session-map.json`; a entrada daqui vence.
+  - `roadmap`: um arquivo Markdown, relativo ao projeto, cujas linhas `[x]`/`[ ]` (ou ✅/⬜) viram marcos. `decisions` lê, sob o título chamado `heading`, as linhas que contêm `pendingWhen` como decisões esperando por você.
+  - `autoFetchMinutes`: roda `git fetch` nesse intervalo, para os ramos enviados de outras máquinas aparecerem. Desligado por padrão.
+  - `ai`: `{ "enabled": false }` aqui desliga a IA só naquele projeto.
+
 
 ## Licença
 
