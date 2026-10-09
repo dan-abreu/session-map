@@ -29,6 +29,9 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - In "All projects": one collapsible header per project (name, color, working and waiting counters), like project folders in Claude or ChatGPT and channels in Slack. Every row shows a project badge, also in "This project".
   - Inside a project: the orchestration chat pinned on top, then Working now and Waiting for you, then by date (Today, Yesterday, Last 7 days, Older). The Now strip and the alerts use the same order and badges.
   - Test: in "All projects" no row lacks the project name.
+- [ ] **important:** Move and rename a conversation with one click `mm21`
+  - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
+  - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
 - [ ] **important:** Relations you can zoom, select and read `mm05`
   - Wider zoom range, +/−/fit buttons, pinch on phones, a click on a box centers it.
   - A wide invisible hit area (about 16 px) on every line, a summary on hover ("A ↔ B · 3 reasons") and a "Relations" list sorted by strength that lights the line when clicked.
