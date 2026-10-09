@@ -21,6 +21,11 @@
   --link: #8b9893;
   --link-strong: #4a5c57;
   --focus: #1f6fb0;
+  --clash: #c2410c;
+  --clash-ink: #9a3412;
+  --clash-fill: rgb(194 65 12 / 0.1);
+  --owner-l: 0.56;
+  --owner-c: 0.12;
   --shadow: 0 3px 8px -2px rgb(20 35 32 / 0.16);
   --panel-w: 384px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -50,6 +55,11 @@
     --link: #56645f;
     --link-strong: #9db0a9;
     --focus: #7cb8ea;
+    --clash: #f2784b;
+    --clash-ink: #f89a74;
+    --clash-fill: rgb(242 120 75 / 0.12);
+    --owner-l: 0.74;
+    --owner-c: 0.11;
     --shadow: 0 3px 8px -2px rgb(0 0 0 / 0.5);
   }
 }
@@ -235,7 +245,9 @@ button, select, input { font: inherit; color: inherit; }
 .legend ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
 .legend li { display: flex; align-items: center; gap: 8px; }
 .legend svg { width: 18px; height: 18px; flex: none; overflow: visible; }
-.legend li:nth-child(n+6) svg { width: 22px; height: 10px; }
+.legend li:nth-child(n+9) svg { width: 22px; height: 10px; }
+.legend li:nth-child(1) svg { width: 20px; height: 20px; }
+.legend li:nth-child(8) svg { width: 22px; height: 11px; }
 .lg-busy { fill: var(--active); }
 .lg-idle { fill: var(--bg); stroke: var(--idle); stroke-width: 2; }
 .lg-closed { fill: var(--closed); }
@@ -246,7 +258,14 @@ button, select, input { font: inherit; color: inherit; }
 .lg-unsure path { fill: none; stroke: var(--ink-2); stroke-width: 1.3; stroke-linecap: round; }
 .lg-unsure .ask-dot { fill: var(--ink-2); }
 .lg-parent { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
-.lg-front { fill: none; stroke: var(--front); stroke-width: 1.5; stroke-dasharray: 3 3.5; }
+.lg-tether { fill: none; stroke: var(--front); stroke-width: 1.5; stroke-dasharray: 2 3.5; }
+.lg-organ { fill: none; stroke: var(--idle); stroke-width: 1.4; stroke-opacity: 0.55; }
+.lg-tissue { fill: var(--idle-fill); stroke: var(--idle); stroke-width: 1; stroke-opacity: 0.6; }
+.lg-cell { fill: var(--active-fill); stroke: var(--active); stroke-width: 1; }
+.lg-bud { --owner: oklch(var(--owner-l) var(--owner-c) 250); fill: color-mix(in srgb, var(--owner) 20%, var(--bg)); stroke: var(--owner); stroke-width: 1.4; }
+.lg-bud-initial { font-size: 9px; font-weight: 700; fill: oklch(var(--owner-l) var(--owner-c) 250); }
+.lg-bud.lg-clash { stroke: var(--clash); }
+.lg-clash-bridge { stroke: var(--clash); stroke-width: 2; stroke-dasharray: 3 2; }
 .lg-axon { fill: none; stroke: var(--link); stroke-width: 2.6; stroke-linecap: round; }
 .lg-bulb { fill: var(--link); }
 
@@ -260,30 +279,58 @@ button, select, input { font: inherit; color: inherit; }
 
 /* ---------- brain marks ---------- */
 
-.cell { cursor: pointer; outline: none; }
 .status-active { --tone: var(--active); --tone-fill: var(--active-fill); --tone-ink: var(--active-ink); }
 .status-waiting { --tone: var(--waiting); --tone-fill: var(--waiting-fill); --tone-ink: var(--waiting-ink); }
 .status-idle { --tone: var(--idle); --tone-fill: var(--idle-fill); --tone-ink: var(--idle-ink); }
 
+.unit { cursor: pointer; outline: none; }
 .membrane { fill: var(--tone-fill); stroke: var(--tone); stroke-width: 1.5; stroke-opacity: 0.75; }
 .membrane-inner { fill: none; stroke: var(--tone); stroke-width: 0.75; stroke-opacity: 0.3; }
-.cell:hover .membrane, .cell.is-selected .membrane { stroke-width: 2.4; stroke-opacity: 1; }
-.cell:focus-visible .membrane { stroke: var(--focus); stroke-width: 2.4; stroke-opacity: 1; }
+/* An organ is a quiet body wall; a tissue a looser sheath; a cell the crisp, living thing inside. */
+.level-organ .membrane { fill: color-mix(in srgb, var(--tone) 4%, transparent); stroke-width: 2.2; stroke-opacity: 0.32; }
+.level-organ .membrane-inner { stroke-width: 1; stroke-opacity: 0.16; stroke-dasharray: 1 5; stroke-linecap: round; }
+.level-tissue .membrane { fill: color-mix(in srgb, var(--tone) 6%, transparent); stroke-width: 1.2; stroke-opacity: 0.42; }
+.level-tissue .membrane-inner { display: none; }
+.unit:hover > .membrane, .unit.is-selected > .membrane { stroke-width: 2.4; stroke-opacity: 1; }
+.level-organ:hover > .membrane, .level-organ.is-selected > .membrane { stroke-width: 2.8; stroke-opacity: 0.7; }
+.unit:focus-visible > .membrane { stroke: var(--focus); stroke-width: 2.4; stroke-opacity: 1; }
 .dendrite { fill: none; stroke: var(--tone); stroke-width: 1; stroke-opacity: 0.45; }
 .nucleus { fill: var(--tone); }
 .nucleolus { fill: var(--bg); fill-opacity: 0.55; }
 
-.cell-link { cursor: pointer; outline: none; }
+.ghost { fill: var(--idle-fill); stroke: var(--idle); stroke-width: 1.2; stroke-dasharray: 2 3; pointer-events: none; }
+.ripple { fill: none; stroke: var(--active); stroke-width: 2; pointer-events: none; }
+
+.unit-link { cursor: pointer; outline: none; }
 .link-hit { fill: none; stroke: transparent; stroke-width: 18; stroke-linecap: round; }
 .link-axon { fill: none; stroke: var(--link); stroke-linecap: round; stroke-opacity: 0.6; }
+.unit-link.by-meaning .link-axon { stroke-dasharray: 0.5 4.5; stroke-opacity: 0.85; }
 .link-bulb { fill: var(--link); fill-opacity: 0.75; }
-.cell-link:hover .link-axon, .cell-link.is-related .link-axon { stroke: var(--link-strong); stroke-opacity: 1; }
-.cell-link:hover .link-bulb, .cell-link.is-related .link-bulb { fill: var(--link-strong); fill-opacity: 1; }
-.cell-link:focus-visible .link-hit { stroke: color-mix(in srgb, var(--focus) 35%, transparent); }
+.unit-link:hover .link-axon, .unit-link.is-related .link-axon { stroke: var(--link-strong); stroke-opacity: 1; }
+.unit-link:hover .link-bulb, .unit-link.is-related .link-bulb { fill: var(--link-strong); fill-opacity: 1; }
+.unit-link:focus-visible .link-hit { stroke: color-mix(in srgb, var(--focus) 35%, transparent); }
 
+/* Work cells: a branch budding off the unit it mostly changes, coloured by its owner. */
+.bud, .pod, .bud-label { --owner: oklch(var(--owner-l) var(--owner-c) var(--owner-h)); }
+.bud { cursor: pointer; outline: none; }
+.bud-membrane { fill: color-mix(in srgb, var(--owner) 20%, var(--bg)); stroke: var(--owner); stroke-width: 1.6; }
+.bud.is-remote .bud-membrane { stroke-dasharray: 3 2.5; fill: color-mix(in srgb, var(--owner) 12%, var(--bg)); }
+.bud.is-clash .bud-membrane { stroke: var(--clash); stroke-width: 2.2; }
+.bud:hover .bud-membrane, .bud.is-selected .bud-membrane { stroke-width: 2.6; }
+.bud:focus-visible .bud-membrane { stroke: var(--focus); stroke-width: 2.6; }
+.bud-initial { fill: color-mix(in srgb, var(--owner) 70%, var(--ink)); font-weight: 700; pointer-events: none; transition: opacity 200ms; }
+.organelle { opacity: 0; transition: opacity 240ms var(--ease-out); pointer-events: none; }
+.organelle.st-A { fill: var(--owner); }
+.organelle.st-M { fill: color-mix(in srgb, var(--owner) 45%, var(--ink-2)); }
+.organelle.st-D { fill: var(--bg); stroke: var(--ink-2); stroke-width: 0.6; }
+.brain.is-near .organelle { opacity: 1; }
+.brain.is-near .bud-initial { opacity: 0.16; }
+.pod { fill: var(--owner); fill-opacity: 0.22; pointer-events: none; }
+.clash-bridge { fill: none; stroke: var(--clash); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 5 3; pointer-events: none; }
+
+.tether { fill: none; stroke: var(--front); stroke-width: 1.1; stroke-dasharray: 2 3.5; stroke-opacity: 0.7; pointer-events: none; }
 .synapse { fill: none; pointer-events: none; }
 .synapse.parent { stroke: var(--ink-2); stroke-width: 1.5; stroke-opacity: 0.8; }
-.synapse.front { stroke: var(--front); stroke-width: 1.3; stroke-dasharray: 3 4; stroke-opacity: 0.75; }
 
 .neuron { cursor: pointer; outline: none; }
 .neuron .hit { fill: transparent; }
@@ -313,18 +360,30 @@ button, select, input { font: inherit; color: inherit; }
 
 .labels { pointer-events: none; }
 .label text {
-  font-size: 12.5px; font-weight: 650; letter-spacing: -0.005em;
+  font-size: 12px; font-weight: 650; letter-spacing: -0.005em;
   fill: var(--ink);
   paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round;
 }
-.label .meta { font-size: 11px; font-weight: 550; fill: var(--tone-ink); }
+.label .meta { font-size: 10.5px; font-weight: 550; fill: var(--tone-ink); }
+.label.level-organ text { font-size: 14.5px; font-weight: 720; letter-spacing: -0.012em; }
+.label.level-organ .meta { font-size: 11px; }
+.label.level-tissue text { font-size: 11.5px; font-weight: 650; fill: var(--tone-ink); }
+.label.level-tissue .meta { display: none; }
+.label .pin { fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.bud-label text {
+  font: 600 10.5px/1 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  fill: color-mix(in srgb, var(--owner) 60%, var(--ink));
+  paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round;
+}
 
-.has-selection .cell:not(.is-related) > *,
+.has-selection .unit:not(.is-related) > *,
 .has-selection .neuron:not(.is-related) .neuron-body,
+.has-selection .bud:not(.is-related) .bud-body,
 .has-selection .label:not(.is-related) text { opacity: 0.42; transition: opacity 200ms; }
-.has-selection .synapse:not(.is-related) { stroke-opacity: 0.2; }
-.has-selection .cell-link:not(.is-related) > * { opacity: 0.25; }
+.has-selection .synapse:not(.is-related), .has-selection .tether:not(.is-related) { stroke-opacity: 0.2; }
+.has-selection .unit-link:not(.is-related) > * { opacity: 0.25; }
 .has-selection .synapse.is-related { stroke-width: 2.2; stroke-opacity: 1; }
+.has-selection .tether.is-related { stroke-width: 1.6; stroke-opacity: 1; }
 
 /* ---------- sheets: panel and waiting list ---------- */
 
@@ -480,6 +539,16 @@ button, select, input { font: inherit; color: inherit; }
 .body-future { fill: var(--bg-3); }
 .body-past { fill: color-mix(in srgb, var(--active) 22%, transparent); }
 .body-edge { fill: none; stroke: var(--active); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.marks { position: absolute; left: 9px; right: 9px; top: 2px; height: 8px; pointer-events: none; }
+.mark-event {
+  position: absolute; top: 0; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%;
+  --owner: oklch(var(--owner-l) var(--owner-c) var(--owner-h, 160));
+  background: var(--bg); border: 1.5px solid var(--line); transition: border-color 200ms, background-color 200ms;
+}
+.mark-event.mk-born.is-past { border-color: var(--owner); }
+.mark-event.mk-fused.is-past { background: var(--owner); border-color: var(--owner); }
+.mark-event.mk-grouped, .mark-event.mk-fused-by-meaning { border-radius: 1.5px; transform: rotate(45deg) scale(0.85); }
+.mark-event.mk-grouped.is-past, .mark-event.mk-fused-by-meaning.is-past { border-color: var(--active); background: var(--active-fill); }
 .time-label { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; white-space: nowrap; }
 
 input[type="range"] {
@@ -566,3 +635,59 @@ input[type="range"]:focus-visible { outline-offset: 4px; }
 /* A lineage between areas is already drawn as an axon; the neuron-level line shows only for the selected conversation. */
 .synapse.cross { display: none; }
 .has-selection .synapse.cross.is-related { display: inline; }
+
+/* ---------- body model: panel pieces ---------- */
+
+.branch-name { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.pinned { display: inline-flex; vertical-align: -2px; margin-left: 8px; color: var(--ink-2); }
+.pin-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+.level-badge {
+  font-size: 0.75rem; font-weight: 650; color: var(--ink-2);
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line);
+}
+.level-badge.level-organ { color: var(--ink); border-color: var(--ink-2); }
+.pill.tone-clash { --tone: var(--clash); --tone-ink: var(--clash-ink); --tone-fill: var(--clash-fill); }
+.tone-clash { color: var(--clash-ink); }
+
+.purpose { margin-top: 14px; display: grid; gap: 8px; }
+.origin { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 0.8125rem; }
+.origin-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.tags li { padding: 1px 8px; border-radius: 6px; background: var(--bg-3); color: var(--ink-2); font-size: 0.75rem; font-weight: 550; }
+
+.lr-title { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.level-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; border: 1.5px solid var(--tone); background: var(--tone-fill); }
+
+.owner { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); --owner: oklch(var(--owner-l) var(--owner-c) var(--owner-h)); }
+.owner-dot {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: color-mix(in srgb, var(--owner) 22%, var(--bg-2)); border: 1.5px solid var(--owner);
+  color: color-mix(in srgb, var(--owner) 70%, var(--ink)); font-size: 0.6875rem; font-weight: 700;
+}
+.link-row .lr-date .owner { font-size: 0.75rem; font-weight: 550; color: var(--ink-2); }
+
+.callout.clash { background: var(--clash-fill); }
+.callout.clash h3 { color: var(--clash-ink); }
+.callout.clash p + p { margin-top: 6px; }
+
+.progress { height: 6px; border-radius: 6px; background: var(--bg-3); overflow: hidden; }
+.progress span { display: block; height: 100%; border-radius: 6px; background: var(--active); }
+.small { font-size: 0.8125rem; margin-top: 6px !important; }
+
+.organelle-list { display: grid; gap: 10px; }
+.folder-name { font: 600 0.75rem/1.4 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; color: var(--ink-2); }
+.folder ul { list-style: none; margin: 3px 0 0; padding: 0; display: grid; gap: 2px; }
+.file { display: flex; align-items: baseline; gap: 8px; font: 0.8125rem/1.45 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.file-status { flex: none; width: 16px; text-align: center; border-radius: 4px; font-size: 0.6875rem; font-weight: 700; }
+.file.st-A .file-status { background: var(--active-fill); color: var(--active-ink); }
+.file.st-M .file-status { background: var(--bg-3); color: var(--ink-2); }
+.file.st-D .file-status { color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
+.file.st-D { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.path { font-size: 0.75rem; overflow-wrap: anywhere; }
+
+.waiting-item.clash .wi-reason { color: var(--clash-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .organelle, .bud-initial { transition: none; }
+}

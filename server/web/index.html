@@ -19,6 +19,13 @@
     <symbol id="i-push" viewBox="0 0 24 24"><path d="M12 19V5M6.5 10.5L12 5l5.5 5.5"/></symbol>
     <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="7" cy="5.5" r="2"/><circle cx="7" cy="18.5" r="2"/><circle cx="17" cy="8.5" r="2"/><path d="M7 7.5v9M17 10.5c0 4-4 5.5-9.2 6.4"/></symbol>
     <symbol id="i-tag" viewBox="0 0 24 24"><path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.6" cy="8.6" r="1.2"/></symbol>
+    <symbol id="i-born" viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="17.5" cy="12" r="3"/></symbol>
+    <symbol id="i-fuse" viewBox="0 0 24 24"><circle cx="13" cy="12" r="6.5"/><circle cx="5.5" cy="7" r="2.2"/><path d="M7.2 8.4l1.6 1.2"/></symbol>
+    <symbol id="i-group" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="9.3" cy="10" r="2.6"/><circle cx="14.6" cy="13.8" r="2.6"/></symbol>
+    <symbol id="i-rename" viewBox="0 0 24 24"><path d="M14.5 5.5l4 4L9 19H5v-4z"/><path d="M12.5 7.5l4 4"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.8 6L6.5 13h11l-2.7-3L14 4M12 13v7"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M7 7l2 2M15 15l2 2M17 7l-2 2M9 15l-2 2"/></symbol>
+    <symbol id="i-seed" viewBox="0 0 24 24"><path d="M5 19c0-7 4-12 14-14-1 10-6 14-14 14z"/><path d="M5 19l7-7"/></symbol>
   </svg>
 
   <header class="bar">
@@ -76,13 +83,16 @@
     <details class="legend" id="legend">
       <summary data-i18n="legend.title"></summary>
       <ul>
+        <li><svg viewBox="-12 -12 24 24"><circle r="10.5" class="lg-organ"/><circle cx="-3" cy="-1" r="5" class="lg-tissue"/><circle cx="-4" cy="-2" r="1.8" class="lg-cell"/><circle cx="-1.5" cy="1.2" r="1.6" class="lg-cell"/><circle cx="5.5" cy="3" r="3" class="lg-cell"/></svg><span data-i18n="legend.levels"></span></li>
         <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-busy"/></svg><span data-i18n="legend.busy"></span></li>
         <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-idle"/></svg><span data-i18n="legend.idle"></span></li>
         <li><svg viewBox="-10 -10 20 20"><circle r="4.2" class="lg-closed"/></svg><span data-i18n="legend.closed"></span></li>
         <li><svg viewBox="-10 -10 20 20"><circle r="7.5" class="lg-waiting"/><path d="M0,-3.6V0.6" class="lg-glyph"/><circle cy="2.9" r="1.1" class="lg-glyph-dot"/></svg><span data-i18n="legend.waiting"></span></li>
         <li><svg viewBox="-10 -10 20 20"><g class="lg-unsure"><circle r="5.6"/><path d="M-1.9,-1.9a1.95,1.95 0 1 1 2.4,1.9c-0.5,0.15-0.5,0.5-0.5,1.1"/><circle class="ask-dot" cy="2.7" r="0.85"/></g></svg><span data-i18n="legend.unsure"></span></li>
+        <li><svg viewBox="-10 -10 20 20"><circle r="8" class="lg-bud"/><text class="lg-bud-initial" dy="0.35em" text-anchor="middle">A</text></svg><span data-i18n="legend.branch"></span></li>
+        <li><svg viewBox="0 0 28 14"><circle cx="5" cy="7" r="4.5" class="lg-bud lg-clash"/><circle cx="23" cy="7" r="4.5" class="lg-bud lg-clash"/><path d="M9.5,7H18.5" class="lg-clash-bridge"/></svg><span data-i18n="legend.clash"></span></li>
+        <li><svg viewBox="0 0 28 12"><path d="M2,6H26" class="lg-tether"/></svg><span data-i18n="legend.tether"></span></li>
         <li><svg viewBox="0 0 28 12"><path d="M2,9Q14,-1 26,9" class="lg-parent"/></svg><span data-i18n="legend.parent"></span></li>
-        <li><svg viewBox="0 0 28 12"><path d="M2,6H26" class="lg-front"/></svg><span data-i18n="legend.front"></span></li>
         <li><svg viewBox="0 0 28 12"><path d="M4,8Q14,1 24,8" class="lg-axon"/><circle cx="4" cy="8" r="2.6" class="lg-bulb"/><circle cx="24" cy="8" r="2.6" class="lg-bulb"/></svg><span data-i18n="legend.related"></span></li>
       </ul>
     </details>
@@ -96,6 +106,7 @@
     <button type="button" id="play" class="icon-btn play-btn"><svg><use href="#i-play"/></svg></button>
     <div class="track">
       <svg id="growth" class="growth" aria-hidden="true" preserveAspectRatio="none"></svg>
+      <div id="marks" class="marks" aria-hidden="true"></div>
       <input type="range" id="time" min="0" max="1000" step="1" value="1000">
     </div>
     <output id="timeLabel" for="time" class="time-label"></output>
