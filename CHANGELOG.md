@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
+
+The architecture's diagram gets its own tab, and it goes both ways: export it, edit it by hand or with a chat, and
+bring it back into the repository after a preview.
 
 - New: the Flow tab. The architecture's mermaid diagram, drawn with a pinned copy of mermaid shipped with the plugin
   (no CDN, strict security level). Each box tied to a part is colored by its situation, with marks for blockers and
-  people waiting, and opens that part's chat and details beside the drawing.
+  people waiting, and opens that part's chat and details beside the drawing. The README's own arrows are drawn as
+  they are; the relations session-map found fill in, dotted, only when the README has no arrows.
 - New: export the map as a mermaid flowchart (Copy, Download `.mmd`), and import one back: paste or pick a file, see
   what changes (new parts and the file each gets, moves, parts left out, arrows), then confirm. Only the README's
   mermaid block and a skeleton file per new part are written; nothing is deleted; each apply goes to `actions.log`.
@@ -14,6 +18,9 @@
 - New: the chat sheet is as wide as you drag it (arrow keys too; a double click resets), on the map and in the
   workshop.
 - Fixed: maps that list only open items read "N open" instead of "0 of N done".
+- Fixed: a layer with no arrow in or out no longer pushes the drawing apart (mermaid laid it far from the rest, with an
+  empty middle); it stays beside its neighbour, on the screen only.
+- Fixed: holding an arrow key on the chat sheet's edge keeps widening it; each press used to measure the old width.
 
 ## 0.2.0
 
