@@ -8,9 +8,10 @@ Nothing of it is built yet. The plan: deterministic readers (a census of all fil
 
 ## Where in the code
 
-Not built yet; until it is, the part lives in its own file:
+Not built yet; until it is, the part lives in its own file and in the professional standard it follows:
 
 - `docs/architecture/foundation.md`
+- `docs/standard/`
 
 ## Rules that must not break
 
@@ -104,3 +105,12 @@ Not built yet; until it is, the part lives in its own file:
   - A single choice per project replaces the scattered switches: Automatic (does everything and logs it in Changes with Undo; recommended for people who are not technical), Suggest (tips with what, why and before/after, and Accept / Not now / Never; nothing is written to the repository without an OK) and Look only. It is asked once at first use in plain words and can be changed per project.
   - It governs every feature that writes: documents, architecture, Flow sync and fixes. Sensitive actions (delete, publish, money, accounts) always ask for confirmation, in every mode. The rule applies to everything session-map creates or maintains in any project, and to session-map itself.
   - How to confirm it is done: in a test project, Suggest leaves the repository byte-identical until a tip is accepted; Automatic applies the same tip, shows it in Changes and Undo restores the files; Look only writes nothing; a delete asks for confirmation in all three modes; the mode is asked once and survives a restart.
+
+### The professional standard
+
+- [ ] **important:** Professional standard: every idea goes through `docs/standard` `fd15`
+  - The specification in `docs/standard/` (Brazilian Portuguese, 14 stages plus an index) says what happens to every idea of a non-technical founder, from "I want this" to live, selling and maintained: idea and product, design and architecture, code, tests, security and LGPD, versions and release, operation and costs, documentation, brand and design, marketing and content (with video), sales, support and retention, legal and company, finance, and work with AI.
+  - Each stage lists the steps a professional takes, who does them (role, model and reasoning level, skills and tools), the deliverables, the checks with how each is detected, what the founder decides (with a recommendation), the amateur mistakes it prevents and its sources, marked verified, vendor, convention or not verified.
+  - In session-map: every idea is classified (trivial, small, medium, large, plus sensitive), filtered by the project profile, and walked through the stages that apply; every check ends in passed, failed, not verified (with the reason) or not applicable; nothing is "done" without its evidence; the checks are the steps of the N0–N4 ladder and feed "Tudo em dia?" (`fd07`) and the repository health (`fd08`); the care mode (`fd14`) governs what is written, and sensitive actions always ask.
+  - Legal, LGPD and tax stages always carry "not legal or accounting advice"; laws, prices and platform limits are checked at the source on the day they are used.
+  - How to confirm it is done: a test idea marked "medium + sensitive" shows the applicable stages and hides the ones the profile excludes, each with the reason; every check of those stages shows one of the four states with its evidence or reason; a check left "not verified" keeps the level provisional instead of failing it; the idea cannot be marked done while an essential check is failed; every file in `docs/standard/` stays at or under 300 lines.

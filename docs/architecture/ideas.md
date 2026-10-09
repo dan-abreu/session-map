@@ -13,7 +13,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - The Flow: id45, id46, id47, id48, id49, id50
 - Clarity and polish: id51, id52, id53, id54, id55, id56
 - Reading every detail: id57, id58, id59, id60, id61
-- Everything up to date and professional: id62, id63, id64, id70, id71
+- Everything up to date and professional: id62, id63, id64, id70, id71, id72
 - This registry: id65, id66, id67, id68, id69
 
 ## How it works
@@ -281,6 +281,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: one care mode per project (Automatic, Suggest, Look only) that governs every feature that writes; in Suggest nothing is written without an OK, in Automatic everything is done and logged with Undo.
   - How to confirm it is done: see `fd14`.
   - Where it went: `fd14`.
+  - Status: accepted.
+- [ ] Every idea executed at a professional level, without the owner having to learn it all `id72`
+  - Asked: 2026-10-09 ~18:30 — paraphrased (the exact words were not recorded): he does not want to learn everything; he wants his ideas executed at a professional level, not an amateur one, and felt the earlier summaries were shallow.
+  - What it means: a deep specification of what happens to every idea, from "I want this" to live, selling and maintained, in 14 stages (product, design, code, tests, security and LGPD, release, operation and costs, documentation, brand, marketing and video, sales and support, legal, finance, work with AI), each with its steps, roles, models, tools, checks, the owner's decisions and sources; session-map walks every idea through it and proves each step.
+  - How to confirm it is done: see `fd15`.
+  - Where it went: `fd15`.
   - Status: accepted.
 
 ### This registry
