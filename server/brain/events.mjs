@@ -5,8 +5,8 @@ import { brainDir } from './cells.mjs';
 
 export const eventsPath = (smDir, projectId) => join(brainDir(smDir, projectId), 'events.jsonl');
 
-// Same branch, kind and time = same event: restarts and backfills can offer it again without duplicating it.
-const keyOf = (e) => `${e.kind}|${e.workCellId}|${Date.parse(e.ts)}`;
+// Same branch (or units), kind and time = same event: restarts and backfills can offer it again without duplicating it.
+const keyOf = (e) => `${e.kind}|${e.workCellId}|${(e.unitIds ?? []).join(',')}|${Date.parse(e.ts)}`;
 
 function readText(path) {
   try {
