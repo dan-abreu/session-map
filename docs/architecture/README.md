@@ -11,6 +11,7 @@ flowchart LR
         AM[Architecture map]
         FD[Foundation]
         ID[Ideas and requests]
+        IC[Ideas and requests — closed]
     end
     subgraph engine["What it works out"]
         SB[State builder]
@@ -47,6 +48,7 @@ flowchart LR
     FD --> BI
     FD --> WA
     ID --> AM
+    ID --> IC
     ID --> OR
 ```
 
@@ -57,7 +59,8 @@ flowchart LR
 | [Readers](readers.md) | Reads Claude Code's local files, git and the config. |
 | [Architecture map](architecture-map.md) | Reads a project's architecture folder; chats write it. |
 | [Foundation](foundation.md) | Exact facts from the code, counted letter by letter, that everything else is checked against. |
-| [Ideas and requests](ideas.md) | Every request of the owner, in his words, with where it went and where it stands. |
+| [Ideas and requests](ideas.md) | The owner's requests still open (new, accepted, in progress, later), in his words, with where they went and where they stand. |
+| [Ideas and requests — closed](ideas-closed.md) | The requests already done or discarded, ticked, with their codes. |
 | [State builder](state-builder.md) | Joins everything into one state, with the AI's help. |
 | [Page chat](page-chat.md) | Starts and drives Claude chats from the page. |
 | [Flow](flow.md) | The diagram of how the parts talk, kept in step with the architecture. |
@@ -70,4 +73,4 @@ flowchart LR
 
 ## How to keep this true
 
-When someone asks for something new, add it as an item under "What's missing" of the right part before starting; mark it in progress when it starts and tick it when it is done. Every request the owner makes is also recorded in [Ideas and requests](ideas.md), pointing to the item it became. The `architecture` skill teaches this to every chat.
+When someone asks for something new, add it as an item under "What's missing" of the right part before starting; mark it in progress when it starts and tick it when it is done. Every request the owner makes is also recorded in [Ideas and requests](ideas.md) (moved to [the closed part](ideas-closed.md) when done or discarded), pointing to the item it became. The `architecture` skill teaches this to every chat.
