@@ -47,6 +47,25 @@ async function mainBranchName(root, exec) {
   return null;
 }
 
+// Work on branches often leaves the local main behind origin/main: read origin/main unless the local one has commits it lacks.
+async function branchHeads(root, branch, exec) {
+  const out = await exec(root, ['for-each-ref', '--format=%(refname) %(objectname)', `refs/heads/${branch}`, `refs/remotes/origin/${branch}`]);
+  const heads = { local: null, remote: null };
+  for (const line of out.split(/\r?\n/)) {
+    const [ref, hash] = line.trim().split(' ');
+    if (ref === `refs/heads/${branch}`) heads.local = hash;
+    if (ref === `refs/remotes/origin/${branch}`) heads.remote = hash;
+  }
+  return heads;
+}
+
+async function freshestRef(root, branch, exec, heads) {
+  if (!heads.remote || heads.local === heads.remote) return branch;
+  if (!heads.local) return `origin/${branch}`;
+  const localOnly = Number.parseInt(await exec(root, ['rev-list', '--count', `origin/${branch}..${branch}`]), 10);
+  return localOnly === 0 ? `origin/${branch}` : branch;
+}
+
 async function fromBranch(root, branch, dir, exec) {
   const listing = await exec(root, ['ls-tree', '-z', '--name-only', `${branch}:${dir}`]);
   const names = listing.split('\0').filter((n) => /\.md$/i.test(n));
@@ -68,8 +87,9 @@ export async function detectArch(root, config = {}, { exec = defaultExec, mainBr
   }
   const branch = mainBranch ?? (await mainBranchName(root, exec));
   if (branch) {
+    const ref = await freshestRef(root, branch, exec, await branchHeads(root, branch, exec));
     for (const dir of candidates) {
-      const files = await fromBranch(root, branch, dir, exec);
+      const files = await fromBranch(root, ref, dir, exec);
       if (files) return { source: 'main-branch', dir, files };
     }
   }
@@ -99,7 +119,7 @@ function folderStamp(root, dir) {
 const memo = new Map();
 
 // What collect calls every few seconds: the files are read and parsed again only when the folder changed (desenho-3 § 3).
-// On the main branch the stamp is the branch's commit: one rev-parse per read instead of a show per file.
+// On the main branch the stamp is the commits of main and origin/main: one git call per read instead of a show per file.
 export async function readArch(root, config, opts = {}) {
   const exec = opts.exec ?? defaultExec;
   const candidates = candidatesOf(config);
@@ -111,8 +131,8 @@ export async function readArch(root, config, opts = {}) {
   let mainBranch = opts.mainBranch ?? null;
   if (stamp === null) {
     mainBranch ??= await mainBranchName(root, exec);
-    const commit = mainBranch ? (await exec(root, ['rev-parse', '--verify', '--quiet', `${mainBranch}^{commit}`])).trim() : '';
-    stamp = `branch|${mainBranch}|${commit}`;
+    const heads = mainBranch ? await branchHeads(root, mainBranch, exec) : {};
+    stamp = `branch|${mainBranch}|${heads.local}|${heads.remote}`;
   }
   const key = `${root}|${candidates.join('|')}`;
   const hit = memo.get(key);

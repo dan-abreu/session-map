@@ -108,7 +108,7 @@ test('readArch reads the folder again only when a file in it changes, is added o
   } finally { cleanup(root); }
 });
 
-test('from the main branch, readArch asks git for one commit id and shows the files again only when the branch moves', async () => {
+test('from the main branch, readArch asks git for the branch heads once and shows the files again only when the branch moves', async () => {
   const root = repo({ 'src/x.txt': 'x' });
   let commit = 'aaa';
   let calls = 0;
@@ -116,7 +116,7 @@ test('from the main branch, readArch asks git for one commit id and shows the fi
   const exec = async (cwd, args) => {
     const a = args.join(' ');
     calls++;
-    if (a === 'rev-parse --verify --quiet main^{commit}') return `${commit}\n`;
+    if (a.startsWith('for-each-ref ')) return `refs/heads/main ${commit}\n`;
     if (a === 'ls-tree -z --name-only main:docs/arquitetura') return 'README.md\0vitrine.md\0';
     if (a.startsWith('show ')) { shows.push(a); return a.endsWith('README.md') ? '# Partes\n' : '# Vitrine\n'; }
     return '';
@@ -133,5 +133,65 @@ test('from the main branch, readArch asks git for one commit id and shows the fi
     commit = 'bbb';
     await readArch(root, {}, { exec, mainBranch: 'main' });
     assert.equal(shows.length, 4);
+  } finally { cleanup(root); }
+});
+
+// Work on branches leaves the local main behind origin/main, often by many commits: the map must not vanish then.
+function remoteExec({ local, remote, localOnly = '0', folderOn }) {
+  return async (cwd, args) => {
+    const a = args.join(' ');
+    if (a === 'rev-parse --verify --quiet refs/heads/main') return local ? `${local}\n` : '';
+    if (a.startsWith('for-each-ref ')) {
+      return [local && `refs/heads/main ${local}`, remote && `refs/remotes/origin/main ${remote}`].filter(Boolean).join('\n');
+    }
+    if (a === 'rev-list --count origin/main..main') return `${localOnly}\n`;
+    if (a === `ls-tree -z --name-only ${folderOn}:docs/arquitetura`) return 'README.md\0whatsapp.md\0';
+    if (a.startsWith(`show ${folderOn}:`)) return a.endsWith('README.md') ? '# Partes\n' : '# WhatsApp\n';
+    return '';
+  };
+}
+
+test('a local main behind origin/main reads the folder from origin/main', async () => {
+  const root = repo({ 'src/x.txt': 'x' });
+  try {
+    const d = await detectArch(root, {}, { exec: remoteExec({ local: 'aaa', remote: 'bbb', folderOn: 'origin/main' }) });
+    assert.deepEqual([d.source, d.dir, Object.keys(d.files)], ['main-branch', 'docs/arquitetura', ['README.md', 'whatsapp.md']]);
+  } finally { cleanup(root); }
+});
+
+test('with no local main, origin/main is read', async () => {
+  const root = repo({ 'src/x.txt': 'x' });
+  try {
+    const a = await readArch(root, {}, { exec: remoteExec({ remote: 'bbb', folderOn: 'origin/main' }), mainBranch: 'main' });
+    assert.deepEqual([a.source, a.parts.map((p) => p.id)], ['main-branch', ['whatsapp']]);
+  } finally { cleanup(root); }
+});
+
+test('a local main with commits origin/main lacks stays the one read', async () => {
+  const root = repo({ 'src/x.txt': 'x' });
+  try {
+    const d = await detectArch(root, {}, { exec: remoteExec({ local: 'aaa', remote: 'bbb', localOnly: '2', folderOn: 'main' }) });
+    assert.equal(d.source, 'main-branch');
+  } finally { cleanup(root); }
+});
+
+test('readArch shows the files again when origin/main moves', async () => {
+  const root = repo({ 'src/x.txt': 'x' });
+  let remote = 'bbb';
+  let shows = 0;
+  const base = remoteExec({ local: 'aaa', remote: 'x', folderOn: 'origin/main' });
+  const exec = async (cwd, args) => {
+    const a = args.join(' ');
+    if (a.startsWith('show ')) shows++;
+    if (a.startsWith('for-each-ref ')) return `refs/heads/main aaa\nrefs/remotes/origin/main ${remote}`;
+    return base(cwd, args);
+  };
+  try {
+    const first = await readArch(root, {}, { exec, mainBranch: 'main' });
+    assert.equal(first.parts.length, 1);
+    assert.equal(await readArch(root, {}, { exec, mainBranch: 'main' }), first);
+    remote = 'ccc';
+    await readArch(root, {}, { exec, mainBranch: 'main' });
+    assert.equal(shows, 4);
   } finally { cleanup(root); }
 });
