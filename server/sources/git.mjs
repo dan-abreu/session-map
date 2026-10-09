@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { log } from '../log.mjs';
 
 const TIMEOUT_MS = 5000;
@@ -24,6 +25,15 @@ const authorOf = (name, email) => ({ name, email });
 export async function gitRoot(cwd) {
   const out = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim();
   return out || null;
+}
+
+// A linked worktree belongs to the project of its main checkout: its chats are branch work there, under the same map.
+export async function projectRoot(cwd) {
+  const top = await gitRoot(cwd);
+  if (!top) return null;
+  const common = (await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim().replace(/[\\/]+$/, '');
+  const main = /[\\/]\.git$/.test(common) ? common.replace(/[\\/]\.git$/, '') : null;
+  return main && existsSync(main) ? main : top;
 }
 
 export async function listWorktrees(root) {

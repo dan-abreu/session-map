@@ -19,7 +19,7 @@ import { waitingFor } from './parse/waiting.mjs';
 import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
 import { listLiveSessions, listTranscripts, readHelperCommits, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
 import { autoFetch } from './sources/fetch.mjs';
-import { activityOf, gitRoot, mainBranch } from './sources/git.mjs';
+import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills } from './sources/skills.mjs';
@@ -83,7 +83,7 @@ function readItems(dir, smDir, nowMs) {
 
 async function rootOf(cwd) {
   const key = normalizePath(cwd);
-  if (!roots.has(key)) roots.set(key, (await gitRoot(cwd)) ?? cwd);
+  if (!roots.has(key)) roots.set(key, (await projectRoot(cwd)) ?? cwd);
   return roots.get(key);
 }
 

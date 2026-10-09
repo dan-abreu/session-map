@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { activityOf, aheadOf, gitRoot, lastCommit, listWorktrees, mainBranch } from '../server/sources/git.mjs';
+import { activityOf, aheadOf, gitRoot, lastCommit, listWorktrees, mainBranch, projectRoot } from '../server/sources/git.mjs';
 import { normalizePath } from '../server/paths.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=Ana', '-c', 'user.email=ana@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
@@ -100,4 +100,16 @@ test('git functions return empty values outside a repository', async () => {
     assert.deepEqual(await listWorktrees(dir), []);
     assert.equal(await mainBranch(dir), null);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A linked worktree is branch work of the same project: its chats must not make a second project with the same map.
+test('projectRoot gives the main checkout for a linked worktree and for a subfolder', async () => {
+  const { base, root, wt } = makeRepo();
+  try {
+    mkdirSync(join(wt, 'sub'));
+    assert.equal(normalizePath(await projectRoot(wt)), normalizePath(root));
+    assert.equal(normalizePath(await projectRoot(join(wt, 'sub'))), normalizePath(root));
+    assert.equal(normalizePath(await projectRoot(root)), normalizePath(root));
+    assert.equal(await projectRoot(base), null);
+  } finally { rmSync(base, { recursive: true, force: true }); }
 });
