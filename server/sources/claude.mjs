@@ -1,4 +1,5 @@
-// Everything that depends on Claude Code's undocumented on-disk formats lives in this file.
+// Everything that depends on Claude Code's undocumented on-disk formats lives in this file and in claude-conversation.mjs
+// (the whole conversation as the chat screen shows it).
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -45,7 +46,7 @@ function listDir(dir) {
 }
 
 // A line cut mid-write (the file is live) fails to parse and is simply skipped.
-function parseLines(text) {
+export function parseLines(text) {
   const out = [];
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
@@ -111,7 +112,7 @@ export function listTranscripts(dir, { sinceMs = 0 } = {}) {
 
 // ---- content helpers -------------------------------------------------------
 
-const blocksOf = (entry) => {
+export const blocksOf = (entry) => {
   const content = entry.message?.content;
   if (typeof content === 'string') return [{ type: 'text', text: content }];
   return Array.isArray(content) ? content.filter((b) => b && typeof b === 'object') : [];
@@ -222,7 +223,7 @@ const SECRET_RES = [
 const cutEnd = (s) => (s.length > STEP_MAX ? `${s.slice(0, STEP_MAX - 1)}…` : s);
 const cutStart = (s) => (s.length > STEP_MAX ? `…${s.slice(s.length - STEP_MAX + 1)}` : s);
 
-function relativeTo(cwd, path) {
+export function relativeTo(cwd, path) {
   const p = String(path).replaceAll('\\', '/');
   const base = String(cwd ?? '').replaceAll('\\', '/').replace(/\/+$/, '');
   return base && p.toLowerCase().startsWith(`${base.toLowerCase()}/`) ? p.slice(base.length + 1) : p;
@@ -235,7 +236,7 @@ function commandWords(command) {
   return line;
 }
 
-function stepOf(tool, cwd, answered) {
+export function stepOf(tool, cwd, answered) {
   const input = tool.input ?? {};
   if (tool.name === 'AskUserQuestion') return answered ? null : { kind: 'ask', target: '' };
   const kind = STEP_KIND[tool.name] ?? 'tool';

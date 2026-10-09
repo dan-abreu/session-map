@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { listFiles, mergeBaseOf, readFileForView, safeResolve } from '../server/files.mjs';
+import { findFiles, listFiles, mergeBaseOf, readFileForView, safeResolve } from '../server/files.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'user.name=Ana', '-c', 'user.email=ana@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
 
@@ -111,5 +111,19 @@ test('listFiles expands folder hints into tracked files and ignores unsafe hints
     assert.deepEqual(await listFiles(root, ['src/']), ['src/a.js', 'src/new.js']);
     assert.deepEqual(await listFiles(root, ['src/a.js', 'README.md']), ['README.md', 'src/a.js']);
     assert.deepEqual(await listFiles(root, ['../x', ':(top)', '.git/', '*.js']), [], 'no escapes, no pathspec magic, no globs');
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('findFiles finds tracked and new files by a piece of their name, best match first, for @ mentions (mm22)', async () => {
+  const { base, root } = makeRepo();
+  try {
+    writeFileSync(join(root, 'src', 'untracked-note.md'), 'x\n');
+    writeFileSync(join(root, '.env'), 'SECRET=1\n');
+    assert.deepEqual(await findFiles(root, 'new'), ['src/new.js']);
+    assert.deepEqual(await findFiles(root, 'READ'), ['README.md'], 'case does not matter');
+    assert.deepEqual((await findFiles(root, 'note')), ['src/untracked-note.md'], 'a file not yet committed is found too');
+    assert.deepEqual(await findFiles(root, '.env'), [], 'never a secrets file');
+    assert.ok((await findFiles(root, '')).length >= 3, 'an empty query lists files');
+    assert.deepEqual(await findFiles(root, 'zzz'), []);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

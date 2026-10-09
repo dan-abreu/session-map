@@ -10,7 +10,9 @@ import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
 import { waitingFor } from '../parse/waiting.mjs';
+import { archivedPath } from '../archive.mjs';
 import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
+import { helperPath, maskSecrets, readConversation, readImage, toolDetails } from '../sources/claude-conversation.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
@@ -27,6 +29,11 @@ const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta
 const KEY_RE = /^[0-9a-f]{32}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEXT_MAX = 20_000;
+// Pasted images (mm22): what Claude Code itself accepts, a few per message.
+const IMAGE_MEDIA = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const IMAGES_MAX = 4;
+const IMAGE_DATA_MAX = 5_000_000;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 const TITLE_MAX = 200;
 const EVENTS_MAX = 2000;
 const CHATS_MAX = 6;
@@ -47,6 +54,13 @@ const instructionsOf = (run) => (run.kind === 'fixed' || run.kind === 'settings'
 const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
+// → the images of a message, [] when it has none, null when they are not images we pass on.
+const imagesOf = (v) => {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > IMAGES_MAX) return null;
+  const ok = v.every((i) => i && IMAGE_MEDIA.has(i.media) && typeof i.data === 'string' && i.data.length <= IMAGE_DATA_MAX && BASE64_RE.test(i.data));
+  return ok ? v.map((i) => ({ media: i.media, data: i.data })) : null;
+};
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
 const now = () => new Date().toISOString();
 // What the page remembers of the point a chat was opened on: only the field its kind uses, which contextOf matched against the map.
@@ -121,7 +135,9 @@ export function createChatHub({
     const input = args?.input && typeof args.input === 'object' ? args.input : {};
     if (chat.always.has(toolName)) return { behavior: 'allow', updatedInput: input };
     const requestId = randomBytes(8).toString('hex');
-    emit(chat, 'permission', { requestId, state: 'asked', toolName, toolUseId: args?.tool_use_id ?? null, input: preview(input) });
+    // An edit asks with its before and after, so allowing it reads as accepting the change (mm22).
+    const { diff } = toolDetails(toolName, input, chat.cwd);
+    emit(chat, 'permission', { requestId, state: 'asked', toolName, toolUseId: args?.tool_use_id ?? null, input: maskSecrets(preview(input)), ...(diff ? { diff } : {}) });
     alert(chat, 'waiting', 'permission', { tool: toolName });
     return new Promise((resolve) => {
       const finish = (state, decision) => {
@@ -306,7 +322,7 @@ export function createChatHub({
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
-  function sendTo(chat, shown, prompt = shown, auto = undefined) {
+  function sendTo(chat, shown, prompt = shown, auto = undefined, images = []) {
     clearTimeout(chat.idleTimer);
     if (instructionsOf(chat.run) !== chat.prompted) {
       prompt = withRunNote(chat.run, prompt);
@@ -328,8 +344,8 @@ ${prompt}`;
     // On disk at once: a server that dies mid-turn leaves the mark the next one reads as "cut off" (page-chat pc06).
     // The first message is saved with the rest when claude announces the session.
     if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });
-    emit(chat, 'user', auto ? { text: shown, auto } : { text: shown });
-    chat.driver.send(prompt);
+    emit(chat, 'user', auto ? { text: shown, auto } : { text: shown, ...(images.length ? { images: images.length } : {}) });
+    chat.driver.send(prompt, images);
   }
 
   // body: {projectId, node? ({kind, partId?, layerId?, group?, code?, line?}: the point of the map), partId? (same as a part node),
@@ -337,6 +353,8 @@ ${prompt}`;
   async function start(body, state) {
     if (!body || typeof body !== 'object') return reply(400, { error: 'bad-request' });
     if (!isText(body.text)) return reply(400, { error: 'bad-text' });
+    const images = imagesOf(body.images);
+    if (!images) return reply(400, { error: 'bad-images' });
     const project = state.projects.find((p) => p.id === body.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });
     const { partId } = body;
@@ -365,7 +383,7 @@ ${prompt}`;
         if (body.mode !== undefined) changeMode(driven, body.mode);
         if (asked) changeRun(driven, asked);
         if (driven.restart) return reply(409, { error: 'restarting' });
-        sendTo(driven, body.text);
+        sendTo(driven, body.text, body.text, undefined, images);
         return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: driven.choice === 'settings' && fromSettings.downgraded });
       }
       // A conversation open in VS Code or a terminal is someone else's: writing into it would interleave two drivers.
@@ -429,7 +447,7 @@ ${prompt}`;
       bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run) }), cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
-    sendTo(chat, body.text, prompt);
+    sendTo(chat, body.text, prompt, undefined, images);
     return reply(200, { chatKey: key, mode, downgraded: choice === 'settings' && fromSettings.downgraded });
   }
 
@@ -497,37 +515,79 @@ ${prompt}`;
     return null;
   }
 
+  // Where a conversation the page may show is written: a page conversation, or one of the list (VS Code, a terminal), whose
+  // transcript Claude Code may already have deleted (the archive keeps a copy). null: not one the page knows.
+  function sourceOf(sessionId, state) {
+    if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return null;
+    const page = readPageChats()[sessionId];
+    if (page) return { page, file: transcriptOf(sessionId), cwd: page.cwd ?? page.root ?? '' };
+    const project = state?.projects.find((p) => p.conversations?.some((c) => c.sessionId === sessionId));
+    if (!project) return null;
+    const row = project.conversations.find((c) => c.sessionId === sessionId);
+    const cwd = state[INTERNALS]?.chats.get(sessionId)?.cwd ?? project.root;
+    return { project, row, file: transcriptOf(sessionId) ?? archivedPath(smDir, sessionId), cwd };
+  }
+
+  // The whole conversation as the chat screen shows it (mm22). since: the version the page already has.
+  function itemsOf(src, since, keep = () => true) {
+    const read = src.file ? readConversation(src.file, { cwd: src.cwd }) : { items: [], version: '0' };
+    if (since && since === read.version) return { same: true, version: read.version };
+    const items = read.items.filter(keep);
+    for (const i of items) if (i.type === 'user') i.text = personsWords(i.text);
+    return { items, version: read.version };
+  }
+
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
   // holds as events (those arrive by subscribing), with the first prompt as the person wrote it.
-  function history(sessionId, state) {
+  function history(sessionId, state, { since } = {}) {
     if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
     const page = readPageChats()[sessionId];
-    if (!page) return listedHistory(sessionId, state);
+    if (!page) return listedHistory(sessionId, state, since);
     const driven = drivenNow(sessionId);
-    const file = transcriptOf(sessionId);
-    const messages = (file ? readFullTranscript(file) : []).filter((m) => !driven || !m.ts || m.ts < driven.startedAt);
+    const src = sourceOf(sessionId, state);
+    const before = (m) => !driven || !m.ts || m.ts < driven.startedAt;
+    const rich = itemsOf(src, since, before);
+    if (rich.same) return reply(200, rich);
+    const messages = (src.file ? readFullTranscript(src.file) : []).filter(before);
     for (const m of messages) if (m.role === 'user') m.text = personsWords(m.text);
     const folder = page.root ?? page.cwd;
     const row = state?.projects.find((p) => p.id === page.projectId)?.conversations?.find((c) => c.sessionId === sessionId);
     return reply(200, {
-      sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, chatKey: driven?.key ?? null,
+      sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, ...rich, chatKey: driven?.key ?? null,
       run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
-      costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state),
+      costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state), live: false,
     });
   }
 
   // A conversation of the list the page did not start (VS Code, a terminal): read here, written where it lives, unless
-  // the person resumes a closed one, which makes it a page conversation.
-  function listedHistory(sessionId, state) {
-    const project = state?.projects.find((p) => p.conversations?.some((c) => c.sessionId === sessionId));
-    if (!project) return reply(404, { error: 'unknown-session' });
-    const row = project.conversations.find((c) => c.sessionId === sessionId);
-    const file = transcriptOf(sessionId);
-    const messages = file ? readFullTranscript(file) : [];
+  // the person resumes a closed one, which makes it a page conversation. live: still running elsewhere, so the page
+  // mirrors it by asking again with the version it has.
+  function listedHistory(sessionId, state, since) {
+    const src = sourceOf(sessionId, state);
+    if (!src) return reply(404, { error: 'unknown-session' });
+    const rich = itemsOf(src, since);
+    if (rich.same) return reply(200, rich);
+    const messages = src.file ? readFullTranscript(src.file) : [];
     return reply(200, {
-      sessionId, title: row.title ?? '', mode: 'settings', settings: settingsMode(project.root, dir), messages, chatKey: null, readOnly: true,
-      run: { kind: 'settings' }, mine: settingsRun(project.root, dir), reinforce: reinforceState(), costUSD: Number(row.costUSD) || 0,
+      sessionId, title: src.row.title ?? '', mode: 'settings', settings: settingsMode(src.project.root, dir), messages, ...rich, chatKey: null, readOnly: true,
+      run: { kind: 'settings' }, mine: settingsRun(src.project.root, dir), reinforce: reinforceState(), costUSD: Number(src.row.costUSD) || 0,
+      live: Boolean(src.row.live),
     });
+  }
+
+  // An image pasted into a conversation or returned by one of its steps; null when there is none.
+  function image(sessionId, n, state) {
+    const src = sourceOf(sessionId, state);
+    return src?.file ? readImage(src.file, n) : null;
+  }
+
+  // A helper agent's own conversation, opened from the step that started it.
+  function helper(sessionId, agentId, state) {
+    const src = sourceOf(sessionId, state);
+    const file = src?.file ? helperPath(src.file, agentId) : null;
+    if (!file) return reply(404, { error: 'unknown-helper' });
+    const { items, version } = readConversation(file, { cwd: src.cwd });
+    return reply(200, { items, version });
   }
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);
@@ -538,7 +598,9 @@ ${prompt}`;
     if (chat.ended) return reply(409, { error: 'ended' });
     if (chat.running) return reply(409, { error: 'busy' });
     if (!isText(body?.text)) return reply(400, { error: 'bad-text' });
-    sendTo(chat, body.text);
+    const images = imagesOf(body.images);
+    if (!images) return reply(400, { error: 'bad-images' });
+    sendTo(chat, body.text, body.text, undefined, images);
     return reply(200);
   }
 
@@ -617,6 +679,6 @@ ${prompt}`;
   }
 
   return {
-    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, close, interrupted, drivenIds: () => everDriven,
+    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, interrupted, drivenIds: () => everDriven,
   };
 }

@@ -110,3 +110,13 @@ test('file routes refuse escapes, secrets, missing files and callers without the
     assert.equal((await call('/api/files/shop-abc123?part=src', { cookie: false })).status, 401);
   });
 });
+
+test('GET /api/files/:project?find= lists files for an @ mention, only with the token (mm22)', async () => {
+  await withServer(async ({ call }) => {
+    const found = await call('/api/files/shop-abc123?find=a.js');
+    assert.equal(found.status, 200);
+    assert.deepEqual(found.body.files, ['src/a.js']);
+    assert.equal((await call('/api/files/shop-abc123?find=env')).body.files.length, 0, 'never the secrets file');
+    assert.equal((await call('/api/files/shop-abc123?find=a', { cookie: false })).status, 401);
+  });
+});

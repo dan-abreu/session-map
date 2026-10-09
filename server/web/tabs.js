@@ -1,14 +1,14 @@
 import { api } from './api.js';
 import { boardItems } from './tree.js';
+import { createTranscript, dayName, timeOf, withDays } from './transcript.js';
 import { costRows, estimateTone, budgetTone, aiSpend } from './views.js';
 
 const RANGES = ['today', 'd7', 'd30'];
 const HISTORY_DEBOUNCE_MS = 250;
-const TOOL_LINE = /^\[[A-Za-z][\w:-]*(?: .*)?\]$/;
 
 // The list views beside the mind map: Board, History and Costs (desenho-3 § 2, desenho-2 § 16 and § 18).
 // ctx: h, t (getter), lang (getter), fmt {money, shortDate, relative}, state/project getters, go(projectId, sel),
-// toast, errorText, confirm(text, label) → Promise<boolean>, prefs {archived, setArchived}.
+// toast, errorText, confirm(text, label) → Promise<boolean>, prefs {archived, setArchived}, icon(name, cls)?.
 export function createTabs(ctx) {
   const { h, fmt } = ctx;
   const t = () => ctx.t();
@@ -90,15 +90,27 @@ export function createTabs(ctx) {
       : [h('li', { class: 'view-empty' }, pick.historyQuery ? tt('history.noMatch') : tt('history.empty'))]));
   }
 
-  function messageView(m) {
-    const tt = t();
-    const lines = m.text.split('\n');
-    const tools = m.role === 'assistant' ? lines.filter((l) => TOOL_LINE.test(l.trim())) : [];
-    const prose = tools.length ? lines.filter((l) => !TOOL_LINE.test(l.trim())).join('\n').trim() : m.text;
-    return h('li', { class: `msg ${m.role === 'user' ? 'msg-user' : 'msg-claude'}` },
-      h('span', { class: 'visually-hidden' }, `${m.role === 'user' ? tt('chat.you') : 'Claude'}: `),
-      prose ? h('p', {}, prose) : null,
-      tools.length ? h('details', { class: 'tool-steps' }, h('summary', {}, tt.count('history.tools', tools.length)), h('pre', {}, tools.join('\n'))) : null);
+  // An archived conversation reads like the chat screen (mm22): every step, question, image and helper, with its times.
+  function transcriptOf(sessionId) {
+    const seg = encodeURIComponent(sessionId);
+    const tv = createTranscript({
+      h, t, money: fmt.money, icon: ctx.icon ?? null,
+      time: (ts) => timeOf(ctx.lang(), ts),
+      day: (key) => dayName(t(), ctx.lang(), key),
+      imageUrl: (n) => `/api/conversation/${seg}/image/${n}`,
+      onCopy: (text) => {
+        const done = globalThis.navigator?.clipboard?.writeText?.(text);
+        if (!done) return ctx.toast(t()('chat.copyFailed'));
+        return done.then(() => ctx.toast(t()('chat.copied')), () => ctx.toast(t()('chat.copyFailed')));
+      },
+      onHelper: async (agent, box) => {
+        box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperLoading')));
+        const res = await api.chatHelper(sessionId, agent.id);
+        if (!res.ok) return box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperMissing')));
+        return box.replaceChildren(h('ol', { class: 'helper-items' }, (res.items ?? []).map((i) => tv.node(i))));
+      },
+    });
+    return tv;
   }
 
   async function read(root, entry) {
@@ -133,7 +145,7 @@ export function createTabs(ctx) {
       h('div', { class: 'read-head' }, h('h3', { tabindex: '-1' }, res.title || tt('history.untitled')),
         h('p', { class: 'meta' }, [fmt.shortDate(Date.parse(entry.startedAt || entry.endedAt)), projectOfEntry(entry), fmt.money(entry.costUSD || 0)].join(' · ')),
         h('div', { class: 'actions' }, back, del)),
-      h('ol', { class: 'transcript' }, res.messages.map(messageView)));
+      h('ol', { class: 'transcript' }, withDays(res.items ?? []).map(transcriptOf(entry.sessionId).node)));
     pane.querySelector('h3').focus();
   }
 

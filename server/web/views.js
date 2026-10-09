@@ -117,27 +117,38 @@ function closeStreaming(items) {
   return last?.type === 'assistant' && last.streaming ? [...items.slice(0, -1), { ...last, streaming: false }] : items;
 }
 
+// What a history item may be (server/sources/claude-conversation.mjs): the chat screen draws each of these.
+const HISTORY_TYPES = new Set(['user', 'assistant', 'thinking', 'tool', 'question']);
+
 // The page's chat, folded from SSE events plus the person's own sends ({type: 'local-send'}) and the history of a
-// reopened conversation ({type: 'history', data: {messages}}).
+// reopened conversation ({type: 'history', data: {items}}, or only {messages} from an older server). evt.at: when the
+// page got the event, the time a live item shows.
 export function chatLog(log = EMPTY_LOG, evt) {
   const { type, data } = evt;
   const items = log.items;
   const last = items.at(-1);
+  const ts = evt.at ?? null;
   switch (type) {
     case 'history':
       return {
         ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true,
-        items: data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false })),
+        items: Array.isArray(data.items)
+          ? data.items.filter((i) => HISTORY_TYPES.has(i?.type)).map((i) => (i.type === 'assistant' ? { ...i, streaming: false } : i))
+          : data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),
       };
     case 'local-send':
-      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true }] };
+      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true, ts, ...(data.images?.length ? { localImages: data.images } : {}) }] };
     case 'user': {
       // The server echoes every message it takes: the page's own send is already shown, one from elsewhere is not.
       const mine = items.findIndex((i) => i.type === 'user' && i.local && i.text === data.text);
-      if (mine >= 0) return { ...log, running: true, interrupted: false, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text } : i)) };
+      if (mine >= 0) {
+        return { ...log, running: true, interrupted: false, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text, ts: i.ts ?? ts, ...(i.localImages ? { localImages: i.localImages } : {}) } : i)) };
+      }
       // auto: an answer session-map gave for the person ("may reinforce on its own").
-      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, ...(data.auto ? { auto: data.auto } : {}) }] };
+      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, ts, ...(data.auto ? { auto: data.auto } : {}) }] };
     }
+    case 'thinking':
+      return { ...log, items: [...closeStreaming(items), { type: 'thinking', text: data.text ?? '', ms: null, ts }] };
     case 'mode':
       return { ...log, mode: data.mode };
     case 'run':
@@ -151,21 +162,26 @@ export function chatLog(log = EMPTY_LOG, evt) {
       if (data.partial) {
         return streaming
           ? { ...log, items: [...items.slice(0, -1), { ...last, text: last.text + data.text }] }
-          : { ...log, items: [...items, { type: 'assistant', text: data.text, streaming: true }] };
+          : { ...log, items: [...items, { type: 'assistant', text: data.text, streaming: true, ts }] };
       }
-      const done = { type: 'assistant', text: data.text, streaming: false };
+      const done = { type: 'assistant', text: data.text, streaming: false, ts: streaming ? last.ts ?? ts : ts };
       return { ...log, items: streaming ? [...items.slice(0, -1), done] : [...items, done] };
     }
     case 'tool':
-      if (data.phase === 'use') return { ...log, items: [...closeStreaming(items), { type: 'tool', id: data.id, name: data.name, input: data.input, result: null, isError: false }] };
+      if (data.phase === 'use') {
+        const details = Object.fromEntries(['step', 'diff', 'todos'].filter((k) => data[k] !== undefined).map((k) => [k, data[k]]));
+        return { ...log, items: [...closeStreaming(items), { type: 'tool', id: data.id, name: data.name, input: data.input, ...details, result: null, isError: false, ts }] };
+      }
       return { ...log, items: items.map((i) => (i.type === 'tool' && i.id === data.id ? { ...i, result: data.text, isError: data.isError } : i)) };
     case 'permission':
-      if (data.state === 'asked') return { ...log, items: [...closeStreaming(items), { type: 'permission', requestId: data.requestId, toolName: data.toolName, input: data.input, state: 'asked' }] };
+      if (data.state === 'asked') {
+        return { ...log, items: [...closeStreaming(items), { type: 'permission', requestId: data.requestId, toolName: data.toolName, input: data.input, state: 'asked', ts, ...(data.diff ? { diff: data.diff } : {}) }] };
+      }
       return { ...log, items: items.map((i) => (i.type === 'permission' && i.requestId === data.requestId ? { ...i, state: data.state } : i)) };
     case 'turn-end':
       return { ...log, running: false, costUSD: Number.isFinite(data?.costUSD) ? data.costUSD : log.costUSD, items: closeStreaming(items) };
     case 'error':
-      return { ...log, running: false, items: [...closeStreaming(items), { type: 'error', error: data.error }] };
+      return { ...log, running: false, items: [...closeStreaming(items), { type: 'error', error: data.error, ts }] };
     default:
       return log;
   }

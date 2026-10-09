@@ -83,6 +83,10 @@ const icon = (name, cls) => {
   return el;
 };
 
+// The "/" list of the chat (mm22): the skills on in this project, by the command that calls each.
+const chatCommands = () => (project?.skills ?? []).filter((k) => k.enabled !== false && typeof k.command === 'string')
+  .map((k) => ({ name: k.command, description: k.description ?? '' }));
+
 const money = (usd) => new Intl.NumberFormat(lang, { style: 'currency', currency: state.currency.code, maximumFractionDigits: 2 })
   .format(usd * state.currency.rate);
 const shortDate = (ms) => new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short' }).format(ms);
@@ -1320,7 +1324,7 @@ function wire() {
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
   chat = createChat({
-    root: $('#chat'), h, t: () => t, toast, errorText, relative, money,
+    root: $('#chat'), h, t: () => t, toast, errorText, relative, money, lang: () => lang, icon, commands: chatCommands,
     onSession: () => { convs.render(); setTimeout(poll, 1200); },
     onPcMode: pcMode,
     onClose: () => {
@@ -1364,14 +1368,14 @@ function wire() {
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
-    h, t: () => t, toast, errorText, relative, money, phone: PHONE, onPcMode: pcMode,
+    h, t: () => t, toast, errorText, relative, money, phone: PHONE, onPcMode: pcMode, lang: () => lang, icon, commands: chatCommands,
     project: () => project, tree: () => tree, live: () => marks.live,
     onOpenPart: (partId) => openPartPoint(partId),
     onApplied: () => setTimeout(poll, 600),
   });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   tabs = createTabs({
-    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative },
+    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
     prefs: { archived: () => showArchived, setArchived },
   });

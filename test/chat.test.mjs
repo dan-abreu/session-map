@@ -84,12 +84,19 @@ test('translate maps the stream-json lines of the spike to page events and ignor
   assert.deepEqual(translate({ type: 'system', subtype: 'hook_started', session_id: CLOSED }), []);
   assert.deepEqual(translate({ type: 'rate_limit_event' }), []);
   assert.deepEqual(translate({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'O' } } }), [{ type: 'text', data: { text: 'O', partial: true } }]);
-  assert.deepEqual(translate({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'OK' }] } }), [{ type: 'text', data: { text: 'OK', partial: false } }]);
+  assert.deepEqual(translate({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'OK' }] } }), [{ type: 'thinking', data: { text: '' } }, { type: 'text', data: { text: 'OK', partial: false } }], 'thinking shows as "thinking", even with its words hidden');
   const [use] = translate({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'Write', input: { file_path: 'x.txt', content: 'y'.repeat(1000) } }] } });
   assert.equal(use.type, 'tool');
   assert.equal(use.data.phase, 'use');
   assert.equal(use.data.name, 'Write');
-  assert.ok(use.data.input.length <= 280);
+  assert.ok(!use.data.input.includes('yyyy'), 'the written text shows as the diff, not twice');
+  assert.deepEqual(use.data.step, { kind: 'edit', target: 'x.txt' });
+  assert.equal(use.data.diff.hunks[0].after, 'y'.repeat(1000));
+  const [todo] = translate({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_2', name: 'TodoWrite', input: { todos: [{ content: 'Ship', status: 'pending', activeForm: 'Shipping' }] } }] } });
+  assert.deepEqual(todo.data.todos, [{ text: 'Ship', status: 'pending', active: 'Shipping' }]);
+  const [secret] = translate({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_3', name: 'Bash', input: { command: 'export TOKEN=abc123secret' } }] } });
+  assert.ok(!secret.data.input.includes('abc123secret'), 'a step never shows a secret');
+  assert.deepEqual(translate({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'Weighing it.' }] } }), [{ type: 'thinking', data: { text: 'Weighing it.' } }]);
   assert.deepEqual(translate({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'nope', is_error: true }] } }), [{ type: 'tool', data: { phase: 'result', id: 'toolu_1', isError: true, text: 'nope' } }]);
   const [end] = translate({ type: 'result', subtype: 'error_during_execution', is_error: true, session_id: CLOSED, stop_reason: null, terminal_reason: 'aborted_streaming', permission_denials: [{ tool_name: 'Write' }], total_cost_usd: 0.25 });
   assert.deepEqual(end, { type: 'turn-end', data: { subtype: 'error_during_execution', isError: true, sessionId: CLOSED, terminalReason: 'aborted_streaming', denials: 1, processCostUSD: 0.25 } });
@@ -150,7 +157,7 @@ test('start a new chat: session, text and turn-end arrive in order; the mother i
     const end = await nthTurnEnd(r, 1);
     assert.equal(end.data.isError, false);
     const types = r.events.map((e) => e.type);
-    assert.deepEqual([...new Set(types)], ['user', 'session', 'run', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(types)], ['user', 'session', 'run', 'text', 'thinking', 'turn-end']);
     assert.equal(r.events[0].data.text, 'Hello there', 'the page sees what the person wrote, not the context block');
     assert.ok(r.events.every((e, i) => i === 0 || e.id > r.events[i - 1].id));
     const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
@@ -187,6 +194,7 @@ test('permission allowed: the card reaches the page, the answer reaches the tool
     const asked = await r.until((e) => e.type === 'permission' && e.data.state === 'asked');
     assert.equal(asked.data.toolName, 'Write');
     assert.match(asked.data.input, /x\.txt/);
+    assert.deepEqual(asked.data.diff, { path: 'x.txt', hunks: [{ before: '', after: 'hi' }] }, 'an edit asks with its before and after');
     assert.equal(hub.permission(body.chatKey, { requestId: asked.data.requestId, allow: true, always: false }).status, 200);
     const end = await nthTurnEnd(r, 1);
     assert.equal(end.data.denials, 0);
@@ -509,7 +517,7 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     const { chatKey } = JSON.parse(started.text);
     assert.equal((await readEvents(chatKey)).status, 401, 'local GET of a chat still needs the token');
     const all = await readEvents(chatKey, { cookie: `sm_token=${token}` });
-    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'run', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'run', 'text', 'thinking', 'turn-end']);
     assert.ok(all.events.every((e, i) => i === 0 || e.id > all.events[i - 1].id));
     const tail = await readEvents(chatKey, { cookie: `sm_token=${token}`, 'last-event-id': String(all.events[0].id) });
     assert.deepEqual(tail.events.map((e) => e.id), all.events.slice(1).map((e) => e.id));
@@ -530,6 +538,12 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     assert.equal((await call('GET', `/api/chat/history/${sessionId}`)).status, 401);
     assert.equal((await call('GET', `/api/chat/history/${sessionId}`, { headers: { cookie: `sm_token=${token}` } })).status, 200);
     assert.equal((await call('GET', '/api/chat/history/nope', { headers: { cookie: `sm_token=${token}` } })).status, 400);
+    const { version } = JSON.parse((await call('GET', `/api/chat/history/${sessionId}`, { headers: { cookie: `sm_token=${token}` } })).text);
+    assert.equal(JSON.parse((await call('GET', `/api/chat/history/${sessionId}?since=${version}`, { headers: { cookie: `sm_token=${token}` } })).text).same, true, 'nothing new: the live mirror gets a short answer');
+    assert.equal((await call('GET', `/api/chat/image/${sessionId}/0`)).status, 401, 'images need the token too');
+    assert.equal((await call('GET', `/api/chat/image/${sessionId}/0`, { headers: { cookie: `sm_token=${token}` } })).status, 404);
+    assert.equal((await call('GET', `/api/chat/image/${sessionId}/x`, { headers: { cookie: `sm_token=${token}` } })).status, 404);
+    assert.equal((await call('GET', `/api/chat/helper/${sessionId}/abc`, { headers: { cookie: `sm_token=${token}` } })).status, 404);
     assert.equal((await call('POST', `/api/chat/${fresh.chatKey}/mode`, { headers: writeHeaders, body: { mode: 'acceptEdits' } })).status, 200);
     assert.equal((await call('POST', `/api/chat/${fresh.chatKey}/mode`, { headers: writeHeaders, body: { mode: 'bypassPermissions' } })).status, 400);
   } finally {
@@ -860,5 +874,65 @@ test('the list and the history tell the page what "Same as my Claude" runs and h
       assert.deepEqual(listed.mine, { model: 'opus[1m]', effort: 'high', ultracode: false });
       assert.deepEqual(listed.reinforce, { limitUSD: 20, spentUSD: 0 });
     });
+  });
+});
+
+test('history gives every step, image and helper of a conversation, and says when nothing changed (mm22)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const VS = '88888888-8888-4888-8888-888888888888';
+    const folder = join(dir, 'projects', 'demo');
+    mkdirSync(join(folder, VS, 'subagents'), { recursive: true });
+    const at = (s) => `2026-10-01T10:00:0${s}.000Z`;
+    writeFileSync(join(folder, `${VS}.jsonl`), [
+      { type: 'user', timestamp: at(0), message: { role: 'user', content: [{ type: 'text', text: 'Look' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } }] } },
+      { type: 'assistant', timestamp: at(1), message: { id: 'm1', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'tool_use', id: 't1', name: 'Agent', input: { description: 'Scan', subagent_type: 'Explore', prompt: 'Scan it' } }] } },
+      { type: 'user', timestamp: at(2), toolUseResult: { status: 'completed', agentId: 'abc1' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } },
+      { type: 'assistant', timestamp: at(3), message: { id: 'm2', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'Done.' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n'));
+    writeFileSync(join(folder, VS, 'subagents', 'agent-abc1.jsonl'), [
+      { type: 'user', isSidechain: true, timestamp: at(1), message: { role: 'user', content: 'Scan it' } },
+      { type: 'assistant', isSidechain: true, timestamp: at(2), message: { id: 'h1', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'Scanned.' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n'));
+    await withHub({ dir, env }, async ({ hub, state, root }) => {
+      state.projects[0].conversations = [{ sessionId: VS, title: 'Look', origin: 'vscode', partId: null, chattable: false, live: true, status: 'busy', costUSD: 0.5 }];
+      state[INTERNALS].chats.set(VS, { projectId: 'demo-abc123', root, cwd: root, pid: null });
+      const shown = hub.history(VS, state);
+      assert.equal(shown.status, 200);
+      assert.deepEqual(shown.body.items.map((i) => i.type), ['user', 'tool', 'assistant']);
+      assert.deepEqual(shown.body.items[0].images, [{ n: 0, media: 'image/png' }]);
+      assert.equal(shown.body.items[1].agent.id, 'abc1');
+      assert.equal(shown.body.live, true, 'still running in VS Code: the page mirrors it');
+      assert.equal(typeof shown.body.version, 'string');
+      assert.deepEqual(hub.history(VS, state, { since: shown.body.version }).body, { ok: true, same: true, version: shown.body.version });
+
+      const image = hub.image(VS, 0, state);
+      assert.equal(image.media, 'image/png');
+      assert.deepEqual(image.data, Buffer.from('iVBORw0KGgo=', 'base64'));
+      assert.equal(hub.image(VS, 5, state), null);
+      assert.equal(hub.image('77777777-7777-4777-8777-777777777777', 0, state), null, 'only a conversation the page knows');
+
+      const helper = hub.helper(VS, 'abc1', state);
+      assert.equal(helper.status, 200);
+      assert.deepEqual(helper.body.items.map((i) => [i.type, i.text]), [['user', 'Scan it'], ['assistant', 'Scanned.']]);
+      assert.equal(hub.helper(VS, '../x', state).status, 404);
+    });
+  });
+});
+
+test('a message can carry pasted images, which reach claude as image blocks (mm22)', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const png = { media: 'image/png', data: 'iVBORw0KGgo=' };
+    assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: [{ media: 'text/html', data: 'PGI+' }] }, state)).body.error, 'bad-images');
+    assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: Array(5).fill(png) }, state)).body.error, 'bad-images', 'four at most');
+    const { body } = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: [png] }, state);
+    const r = recorder();
+    hub.subscribe(body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.deepEqual(r.events.find((e) => e.type === 'user').data, { text: 'Look', images: 1 });
+    assert.ok(r.events.some((e) => e.type === 'text' && !e.data.partial && e.data.text.endsWith('[images:1]')), 'claude got the image');
+    assert.equal(hub.send(body.chatKey, { text: 'And this', images: 'nope' }).body.error, 'bad-images');
+    assert.equal(hub.send(body.chatKey, { text: 'And this', images: [png, png] }).status, 200);
+    await nthTurnEnd(r, 2);
+    assert.ok(r.events.some((e) => e.type === 'text' && !e.data.partial && e.data.text.endsWith('[images:2]')));
   });
 });

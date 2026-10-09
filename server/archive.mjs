@@ -157,6 +157,12 @@ export function readArchived(smDir, sessionId) {
   return entry ? readFullTranscript(copyPath(smDir, entry)) : [];
 }
 
+// The gzip copy of a conversation, also after Claude Code deleted its own transcript.
+export function archivedPath(smDir, sessionId) {
+  const entry = entryOf(smDir, sessionId);
+  return entry ? copyPath(smDir, entry) : null;
+}
+
 export function deleteArchived(smDir, sessionId) {
   const entry = entryOf(smDir, sessionId);
   if (!entry) return false;

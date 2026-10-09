@@ -76,6 +76,24 @@ export async function listFiles(root, hints) {
   return (out?.split('\0').filter(Boolean) ?? []).sort().slice(0, LIST_MAX);
 }
 
+const FOUND_MAX = 30;
+
+// Files of the project whose path holds the query, for "@" in the chat (mm22): tracked and new ones (git's ignore rules
+// apply), never a secrets file. A match in the file name ranks above a match in its folder.
+export async function findFiles(root, query) {
+  const { out } = await run(root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
+  const q = String(query ?? '').toLowerCase();
+  const paths = [...new Set(out?.split('\0').filter(Boolean) ?? [])]
+    .filter((p) => !ENV_RE.test(p.split('/').pop()) || ENV_TEMPLATE_RE.test(p));
+  const rank = (p) => {
+    const name = p.split('/').pop().toLowerCase();
+    return name.startsWith(q) ? 0 : name.includes(q) ? 1 : 2;
+  };
+  return paths.filter((p) => p.toLowerCase().includes(q))
+    .sort((a, b) => rank(a) - rank(b) || a.length - b.length || a.localeCompare(b))
+    .slice(0, FOUND_MAX);
+}
+
 const looksBinary = (buf) => buf.subarray(0, 8000).includes(0);
 
 function changesOf(diff) {

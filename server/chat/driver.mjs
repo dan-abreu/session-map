@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { maskSecrets, toolDetails } from '../sources/claude-conversation.mjs';
 import { CHAT_MODES } from './mode.mjs';
 
 const PREVIEW_MAX = 280;
+const RESULT_MAX = 12_000;
 export const PERMISSION_TOOL = 'mcp__sessionmap__approve';
 
 export const preview = (value) => {
@@ -25,7 +27,8 @@ export function buildArgs({ mcpConfigPath, resume, mode = 'default', run = [] })
 }
 
 // One stdout line of the CLI → the page events it stands for (hooks, rate limits and control replies stand for none).
-export function translate(msg) {
+// cwd: the conversation's folder, so an edited file reads as a path inside the project.
+export function translate(msg, cwd = '') {
   switch (msg?.type) {
     case 'system':
       return msg.subtype === 'init' && msg.session_id ? [{ type: 'session', data: { sessionId: msg.session_id, mode: msg.permissionMode, model: typeof msg.model === 'string' ? msg.model : null } }] : [];
@@ -36,13 +39,17 @@ export function translate(msg) {
     case 'assistant':
       return (msg.message?.content ?? []).flatMap((block) => {
         if (block.type === 'text' && block.text) return [{ type: 'text', data: { text: block.text, partial: false } }];
-        if (block.type === 'tool_use') return [{ type: 'tool', data: { phase: 'use', id: block.id, name: block.name, input: preview(block.input) } }];
+        if (block.type === 'thinking') return [{ type: 'thinking', data: { text: typeof block.thinking === 'string' ? block.thinking : '' } }];
+        if (block.type === 'tool_use') return [{ type: 'tool', data: { phase: 'use', id: block.id, name: block.name, ...toolDetails(block.name, block.input, cwd) } }];
         return [];
       });
     case 'user':
       return (Array.isArray(msg.message?.content) ? msg.message.content : [])
         .filter((block) => block.type === 'tool_result')
-        .map((block) => ({ type: 'tool', data: { phase: 'result', id: block.tool_use_id, isError: Boolean(block.is_error), text: preview(resultText(block.content)) } }));
+        .map((block) => {
+          const text = maskSecrets(resultText(block.content) ?? '');
+          return { type: 'tool', data: { phase: 'result', id: block.tool_use_id, isError: Boolean(block.is_error), text: text.length > RESULT_MAX ? `${text.slice(0, RESULT_MAX)}…` : text } };
+        });
     case 'result':
       return [{
         type: 'turn-end',
@@ -68,11 +75,15 @@ export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn }) {
   createInterface({ input: child.stdout }).on('line', (line) => {
     let msg;
     try { msg = JSON.parse(line); } catch { return; }
-    for (const evt of translate(msg)) onEvent(evt);
+    for (const evt of translate(msg, cwd)) onEvent(evt);
   });
   const write = (msg) => child.stdin.writable && child.stdin.write(`${JSON.stringify(msg)}\n`);
   return {
-    send: (text) => write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' }),
+    send: (text, images = []) => write({
+      type: 'user',
+      message: { role: 'user', content: images.length ? [{ type: 'text', text }, ...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.media, data: i.data } }))] : text },
+      parent_tool_use_id: null, session_id: '',
+    }),
     // SIGINT kills outright on Windows; this ends the turn and keeps the process for the next message.
     interrupt: () => write({ type: 'control_request', request_id: `req-${++requests}`, request: { subtype: 'interrupt' } }),
     // Takes effect from the next turn on; claude confirms it in the init line of that turn.

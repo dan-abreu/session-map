@@ -1,9 +1,10 @@
 import { api } from './api.js';
 import { foldReply } from './chatfold.js';
 import { modelName } from './live.js';
+import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } from './transcript.js';
 import { chatLog, chatState, pcModeOffer, runWords } from './views.js';
 
-const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'tool', 'permission', 'turn-end', 'error', 'draft'];
+const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
 const DEFAULT_RUN = { kind: 'auto', selfReinforce: false };
 const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
@@ -12,8 +13,23 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const RUN_KINDS = new Set(['auto', ...WAYS]);
 const usd = (v) => `US$ ${v.toFixed(2)}`;
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
-const MODES = ['settings', 'default', 'acceptEdits', 'auto'];
+const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
 const SAVED = 'sm.chat';
+// What the composer accepts like Claude Code does (the server checks the same): a few images per message.
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const IMAGES_MAX = 4;
+const IMAGE_BYTES_MAX = 3_700_000;
+// A conversation still running in VS Code or a terminal is asked again this often while it is open here.
+const MIRROR_MS = 3000;
+const SUGGEST_MAX = 8;
+
+// A picked or pasted image file as {media, data} (base64), the way the server passes it to claude.
+const readAsBase64 = (file) => new Promise((resolve) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve({ media: file.type, data: String(reader.result).split(',')[1] ?? '' });
+  reader.onerror = () => resolve(null);
+  reader.readAsDataURL(file);
+});
 
 const browserStorage = () => {
   try { return globalThis.localStorage ?? null; } catch { return null; }
@@ -24,10 +40,14 @@ const browserStorage = () => {
 // onPcMode(mode) (the person asked to use the mode on the whole PC), storage (where the open conversation is kept for
 // a reload; savedKey null keeps nothing), relative (a date as "5 min ago"), money (a cost in the person's currency). The flow workshop adds onDraft(text) (the AI
 // redrew the shared draft), beforeSend() (awaited before a message leaves) and showText(text) (what a reply shows).
-// The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own.
+// mm22 adds lang() (for times and dates), icon(name, cls), commands() (the "/" list: [{name, description}]), and for tests
+// schedule/cancel (the live mirror's timer), readImage(file) and debounceMs.
+// The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own; the
+// optional ones (find, tasks, attach, filepick, pending, suggest) are simply left out where a sheet has none.
 export function createChat({
   root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), savedKey = SAVED, relative = () => '',
-  money = usd, onDraft, beforeSend, showText = (text) => text,
+  money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [],
+  schedule = (fn, ms) => setTimeout(fn, ms), cancel = (id) => clearTimeout(id), readImage = readAsBase64, debounceMs = 150,
 }) {
   const q = (role) => root.querySelector(`[data-chat="${role}"]`);
   const logEl = q('log');
@@ -42,6 +62,12 @@ export function createChat({
   const whereEl = q('where');
   const runEl = q('run');
   const panelEl = q('runpanel');
+  const findEl = q('find');
+  const tasksEl = q('tasks');
+  const attachEl = q('attach');
+  const fileEl = q('filepick');
+  const pendingEl = q('pending');
+  const suggestEl = q('suggest');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
   const uid = root.id || 'chat';
   let context = null;
@@ -59,6 +85,45 @@ export function createChat({
   let confirmUltra = false;
   let mine = null;
   let reinforce = null;
+  // mm22: what is drawn (items with their date lines) and the node of each, reused while the item is the same object.
+  let shown = [];
+  let nodes = [];
+  let cache = new WeakMap();
+  let byContent = new Map();
+  let drawn = new Set();
+  let dayCache = new Map();
+  let findQuery = '';
+  let findAt = 0;
+  let jumpKey = '';
+  let tasksOpen = false;
+  let mirror = null;
+  let pending = [];
+  let suggest = null;
+  let suggestSeq = 0;
+  let suggestTimer = null;
+  let findInput = null;
+  let findCount = null;
+  let jumpSel = null;
+  let liveBadge = null;
+
+  const time = (ts) => timeOf(lang(), ts);
+  const dayLabel = (dayKey) => dayName(t(), lang(), dayKey);
+  const shownId = () => sessionId ?? context?.start?.sessionId ?? null;
+  const tv = createTranscript({
+    h, t, time, day: dayLabel, money, icon,
+    imageUrl: (n) => `/api/chat/image/${encodeURIComponent(shownId() ?? '')}/${n}`,
+    onCopy: (text) => {
+      const done = globalThis.navigator?.clipboard?.writeText?.(text);
+      if (!done) return toast(t()('chat.copyFailed'));
+      return done.then(() => toast(t()('chat.copied')), () => toast(t()('chat.copyFailed')));
+    },
+    onHelper: async (agent, box) => {
+      box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperLoading')));
+      const res = await api.chatHelper(shownId(), agent.id);
+      if (!res.ok) return box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperMissing')));
+      return box.replaceChildren(h('ol', { class: 'helper-items' }, (res.items ?? []).map((i) => tv.node(i))));
+    },
+  });
 
   // Blocked storage (private window, a preview) only means a reload does not bring the conversation back.
   function remember(entry) {
@@ -80,7 +145,7 @@ export function createChat({
 
   function apply(evt) {
     if (evt.type === 'draft') return onDraft?.(evt.data.text);
-    log = chatLog(log, evt);
+    log = chatLog(log, { ...evt, at: new Date().toISOString() });
     if (['run', 'turn-end', 'session'].includes(evt.type)) renderRun();
     if (evt.type === 'session' && evt.data.state === 'started') {
       const isNew = sessionId !== evt.data.sessionId;
@@ -120,40 +185,71 @@ export function createChat({
     if (!res.ok) toast(errorText(res.error));
   }
 
-  function itemView(item) {
+  // The kinds the chat itself draws (a reply with its folded blocks, a permission, an error); every other kind is drawn by
+  // the transcript the same way History draws it.
+  function itemView(item, isLast) {
     const tt = t();
     if (item.type === 'user' && item.auto) return h('li', { class: 'msg msg-auto' }, h('p', {}, tt('run.autoAnswered')));
-    if (item.type === 'user') return h('li', { class: 'msg msg-user' }, h('span', { class: 'visually-hidden' }, `${tt('chat.you')}: `), h('p', {}, item.text));
-    if (item.type === 'assistant') {
-      const folded = foldReply(item.text);
-      const asks = folded.run?.level === 'ask-reinforce' && item === log.items.at(-1) && !log.running;
-      return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '),
-        folded.plan ? chip('plan', tt('fold.plan'), h('p', {}, folded.plan)) : null,
-        folded.text || item.streaming ? h('p', {}, showText(folded.text)) : null,
-        folded.card ? chip('card', folded.card.title ? tt('fold.card', { title: folded.card.title }) : tt('fold.cardUntitled'), cardBody(folded.card)) : null,
-        asks ? askCard(folded.run) : null);
+    if (item.type === 'assistant') return claudeView(item, isLast);
+    if (item.type === 'permission') return permissionView(item);
+    if (item.type === 'error') return h('li', { class: 'msg msg-error', role: 'alert' }, errorText(item.error));
+    return tv.node(item);
+  }
+
+  function claudeView(item, isLast) {
+    const tt = t();
+    const folded = foldReply(item.text);
+    const asks = folded.run?.level === 'ask-reinforce' && isLast && !log.running;
+    const text = showText(folded.text);
+    return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '),
+      folded.plan ? chip('plan', tt('fold.plan'), h('p', {}, folded.plan)) : null,
+      text || item.streaming ? h('div', { class: 'md' }, text ? tv.markdown(text) : h('p', {})) : null,
+      folded.card ? chip('card', folded.card.title ? tt('fold.card', { title: folded.card.title }) : tt('fold.cardUntitled'), cardBody(folded.card)) : null,
+      asks ? askCard(folded.run) : null,
+      item.streaming ? null : tv.replyMeta({ ...item, text }));
+  }
+
+  // An edit asks with its before and after, so the answer reads as accepting or rejecting the change, as in Claude Code.
+  function permissionView(item) {
+    const tt = t();
+    const asked = item.state === 'asked' && !log.ended;
+    const edit = Boolean(item.diff);
+    return h('li', { class: `msg msg-permission state-${item.state}` },
+      h('p', { class: 'perm-title' }, edit ? tt('chat.permEdit', { path: item.diff.path }) : tt('chat.permAsk', { tool: item.toolName })),
+      edit ? tv.diffView(item.diff) : h('pre', {}, item.input),
+      asked
+        ? h('div', { class: 'actions' },
+          h('button', { type: 'button', class: 'btn primary', onclick: () => answer(item, true) }, edit ? tt('chat.accept') : tt('chat.allow')),
+          h('button', { type: 'button', class: 'btn', onclick: () => answer(item, false) }, edit ? tt('chat.reject') : tt('chat.deny')),
+          h('button', { type: 'button', class: 'btn', onclick: () => answer(item, true, true) }, tt('chat.always')),
+          h('span', { class: 'perm-timer' }, tt('chat.permTimeout')))
+        : h('p', { class: 'perm-state' }, tt(`chat.perm.${item.state}`)));
+  }
+
+  // A node is drawn once per item object (the log replaces an item that changes), so an open step stays open while new
+  // ones arrive. A reply that may still grow or ask, a permission and an error are drawn fresh.
+  function nodeOf(item, isLast) {
+    if (item.type === 'day') {
+      if (!dayCache.has(item.day)) dayCache.set(item.day, tv.node(item));
+      return dayCache.get(item.day);
     }
-    if (item.type === 'tool') {
-      return h('li', { class: `msg msg-tool${item.isError ? ' is-error' : ''}` },
-        h('details', {},
-          h('summary', {}, h('span', { class: 'tool-name' }, item.name), item.result === null ? h('span', { class: 'tool-state' }, tt('chat.toolRunning')) : null),
-          h('pre', {}, item.input),
-          item.result !== null ? h('pre', { class: 'tool-result' }, item.result) : null));
+    const fresh = item.type === 'permission' || item.type === 'error' || item.streaming || (item.type === 'assistant' && isLast);
+    if (fresh) return itemView(item, isLast);
+    if (cache.has(item)) {
+      drawn.add(cache.get(item));
+      return cache.get(item);
     }
-    if (item.type === 'permission') {
-      const asked = item.state === 'asked' && !log.ended;
-      return h('li', { class: `msg msg-permission state-${item.state}` },
-        h('p', { class: 'perm-title' }, tt('chat.permAsk', { tool: item.toolName })),
-        h('pre', {}, item.input),
-        asked
-          ? h('div', { class: 'actions' },
-            h('button', { type: 'button', class: 'btn primary', onclick: () => answer(item, true) }, tt('chat.allow')),
-            h('button', { type: 'button', class: 'btn', onclick: () => answer(item, false) }, tt('chat.deny')),
-            h('button', { type: 'button', class: 'btn', onclick: () => answer(item, true, true) }, tt('chat.always')),
-            h('span', { class: 'perm-timer' }, tt('chat.permTimeout')))
-          : h('p', { class: 'perm-state' }, tt(`chat.perm.${item.state}`)));
-    }
-    return h('li', { class: 'msg msg-error', role: 'alert' }, errorText(item.error));
+    // A history read again (the live mirror) brings equal items as new objects: same content, same node.
+    const same = JSON.stringify(item);
+    // ponytail: one entry per item drawn; starts over past 5,000, which only costs drawing them again.
+    if (byContent.size > 5000) byContent = new Map();
+    // Two equal items in one conversation still get a node each: a node sits in one place only.
+    const reuse = byContent.get(same);
+    const node = reuse && !drawn.has(reuse) ? reuse : itemView(item, false);
+    drawn.add(node);
+    byContent.set(same, node);
+    cache.set(item, node);
+    return node;
   }
 
   // A block folded out of a reply: one line that opens to show what it said.
@@ -360,6 +456,7 @@ export function createChat({
 
   function statusText(state) {
     const tt = t();
+    if (mirror) return tt('chat.mirror');
     if (state.kind === 'working') return tt('chat.thinking');
     if (state.kind === 'permission') return tt('chat.state.permission');
     if (state.kind === 'interrupted') return tt('chat.state.interrupted');
@@ -368,15 +465,126 @@ export function createChat({
     return log?.mode ? tt('chat.modeNow', { mode: modeName(log.mode) }) : '';
   }
 
+  // ---- find inside the conversation, and jump to a day or an hour ----
+
+  function buildFind() {
+    if (!findEl) return;
+    const tt = t();
+    findInput = h('input', { type: 'search', class: 'chat-find-input', autocomplete: 'off', placeholder: tt('chat.find'), 'aria-label': tt('chat.find'), value: findQuery });
+    findCount = h('span', { class: 'chat-find-count num', role: 'status' });
+    const step = (by) => () => moveFind(by);
+    jumpSel = h('select', { class: 'chat-jump', 'aria-label': tt('chat.jump') });
+    liveBadge = h('span', { class: 'chat-live', title: tt('chat.mirror'), hidden: true });
+    jumpKey = '';
+    findInput.addEventListener('input', () => { findQuery = findInput.value.trim(); findAt = 0; applyFind(true); });
+    findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); moveFind(e.shiftKey ? -1 : 1); }
+      if (e.key === 'Escape' && findInput.value) { e.preventDefault(); e.stopPropagation(); findInput.value = ''; findQuery = ''; applyFind(false); }
+    });
+    jumpSel.addEventListener('change', () => {
+      const at = Number(jumpSel.value);
+      if (jumpSel.value !== '' && nodes[at]) scrollToNode(nodes[at], 'start');
+      jumpSel.value = '';
+    });
+    findEl.replaceChildren(
+      liveBadge,
+      h('div', { class: 'chat-find-box' }, icon ? icon('search', 'chat-find-icon') : null, findInput, findCount,
+        h('button', { type: 'button', class: 'icon-btn small', 'aria-label': tt('chat.findPrev'), title: tt('chat.findPrev'), onclick: step(-1) }, icon ? icon('chevron', 'btn-icon flip-up') : tt('chat.findPrev')),
+        h('button', { type: 'button', class: 'icon-btn small', 'aria-label': tt('chat.findNext'), title: tt('chat.findNext'), onclick: step(1) }, icon ? icon('chevron', 'btn-icon') : tt('chat.findNext'))),
+      jumpSel);
+  }
+
+  // Only the conversation scrolls: scrollIntoView would also move the page and the sheet under the person's eyes.
+  function scrollToNode(node, where) {
+    const gap = node.getBoundingClientRect().top - logEl.getBoundingClientRect().top;
+    const offset = where === 'center' ? (logEl.clientHeight - node.getBoundingClientRect().height) / 2 : 8;
+    if (logEl.scrollTo) logEl.scrollTo({ top: logEl.scrollTop + gap - offset, behavior: 'smooth' });
+    else logEl.scrollTop += gap - offset;
+  }
+
+  function moveFind(by) {
+    const hits = findHits(shown, findQuery);
+    if (!hits.length) return;
+    findAt = (findAt + by + hits.length) % hits.length;
+    applyFind(true);
+  }
+
+  function applyFind(scroll) {
+    if (!findCount) return;
+    const tt = t();
+    const hits = findQuery ? findHits(shown, findQuery) : [];
+    if (findAt >= hits.length) findAt = 0;
+    const lit = new Set(hits);
+    nodes.forEach((node, n) => {
+      node.classList?.toggle('is-hit', lit.has(n));
+      node.classList?.toggle('is-hit-now', hits[findAt] === n);
+    });
+    findCount.replaceChildren(findQuery ? (hits.length ? tt('chat.findCount', { n: findAt + 1, total: hits.length }) : tt('chat.findNone')) : '');
+    if (scroll && hits.length && nodes[hits[findAt]]) scrollToNode(nodes[hits[findAt]], 'center');
+  }
+
+  // The jump list: each day, and the first item of each hour in it.
+  function renderJump() {
+    if (!jumpSel) return;
+    const groups = [];
+    let lastHour = null;
+    shown.forEach((item, n) => {
+      if (item.type === 'day') {
+        groups.push({ label: dayLabel(item.day), options: [{ value: n, label: t()('chat.jumpDayStart') }] });
+        lastHour = null;
+        return;
+      }
+      const at = item.ts ? new Date(item.ts) : null;
+      if (!at || Number.isNaN(at.getTime()) || !groups.length) return;
+      const hour = at.getHours();
+      if (hour !== lastHour) groups.at(-1).options.push({ value: n, label: time(item.ts) });
+      lastHour = hour;
+    });
+    const signature = groups.map((g) => `${g.label}:${g.options.map((o) => o.value).join(',')}`).join('|');
+    if (signature === jumpKey) return;
+    jumpKey = signature;
+    jumpSel.hidden = !groups.length;
+    jumpSel.replaceChildren(h('option', { value: '' }, t()('chat.jump')),
+      ...groups.map((g) => h('optgroup', { label: g.label }, g.options.map((o) => h('option', { value: String(o.value) }, o.label)))));
+    jumpSel.value = '';
+  }
+
+  // ---- the task list Claude keeps, right above the box ----
+
+  function renderTasks() {
+    if (!tasksEl) return;
+    const todos = latestTodos(log?.items ?? []);
+    tasksEl.hidden = !todos;
+    if (!todos) return tasksEl.replaceChildren();
+    const tt = t();
+    const box = h('details', { class: 'chat-tasks-box', open: tasksOpen },
+      h('summary', {}, icon ? icon('check', 'step-icon') : null, h('span', { class: 'tasks-count' }, tt('chat.tasks', { done: todos.done, total: todos.list.length })),
+        todos.now ? h('span', { class: 'tasks-now' }, todos.now) : null),
+      tv.todosView(todos.list));
+    box.addEventListener('toggle', () => { tasksOpen = box.open; });
+    return tasksEl.replaceChildren(box);
+  }
+
   function render() {
     const tt = t();
     renderWhere();
     const items = log?.items ?? [];
     const state = chatState(log, { sessionId });
     const stick = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
-    logEl.replaceChildren(...(items.length ? items.map(itemView) : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]),
+    shown = withDays(items);
+    drawn = new Set();
+    nodes = shown.map((item) => nodeOf(item, item === items.at(-1)));
+    logEl.replaceChildren(...(items.length ? nodes : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]),
       ...(state.kind === 'interrupted' ? [cutCard(state)] : []));
     if (stick || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
+    if (findEl) findEl.hidden = !items.length;
+    if (liveBadge) {
+      liveBadge.hidden = !mirror;
+      liveBadge.replaceChildren(mirror ? tt('chat.mirrorShort') : '');
+    }
+    applyFind(false);
+    renderJump();
+    renderTasks();
     const running = Boolean(log?.running);
     // An ended process is only paused: with its id known, the next message resumes the conversation.
     const stuck = Boolean(log?.ended) && !sessionId;
@@ -385,17 +593,121 @@ export function createChat({
     input.disabled = stuck;
     const statusEl = q('status');
     statusEl.textContent = statusText(state);
-    statusEl.dataset.state = state.kind;
+    statusEl.dataset.state = mirror ? 'mirror' : state.kind;
+  }
+
+  // ---- pasted and picked images ----
+
+  function renderPending() {
+    if (!pendingEl) return;
+    const tt = t();
+    pendingEl.hidden = !pending.length;
+    pendingEl.replaceChildren(...pending.map((img, n) => h('div', { class: 'pending-img' },
+      h('img', { src: img.url, alt: tt('chat.image', { n: n + 1 }) }),
+      h('button', {
+        type: 'button', class: 'pending-remove', 'aria-label': tt('chat.attachRemove'), title: tt('chat.attachRemove'),
+        onclick: () => { pending.splice(n, 1); renderPending(); },
+      }, icon ? icon('close', 'btn-icon') : tt('chat.attachRemove')))));
+  }
+
+  async function addFiles(files) {
+    const tt = t();
+    for (const file of files) {
+      if (!file) continue;
+      if (!IMAGE_TYPES.has(file.type)) { toast(tt('chat.attachOnlyImages')); continue; }
+      if (pending.length >= IMAGES_MAX) { toast(tt('chat.attachMax', { n: IMAGES_MAX })); break; }
+      if (file.size > IMAGE_BYTES_MAX) { toast(tt('chat.attachTooBig')); continue; }
+      const img = await readImage(file);
+      if (img?.data) pending.push({ media: img.media, data: img.data, url: `data:${img.media};base64,${img.data}` });
+    }
+    renderPending();
+  }
+
+  // ---- "@" for a project file and "/" for a command, as in Claude Code ----
+
+  function tokenAt() {
+    const pos = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, pos);
+    const command = /^\/([\w:.-]*)$/.exec(before);
+    if (command) return { kind: 'cmd', query: command[1], start: 0, end: pos };
+    const mention = /(^|\s)@([^\s@]*)$/.exec(before);
+    if (mention) return { kind: 'file', query: mention[2], start: pos - mention[2].length - 1, end: pos };
+    return null;
+  }
+
+  function closeSuggest() {
+    suggest = null;
+    clearTimeout(suggestTimer);
+    if (!suggestEl) return;
+    suggestEl.hidden = true;
+    suggestEl.replaceChildren();
+    input.setAttribute?.('aria-expanded', 'false');
+    input.removeAttribute?.('aria-activedescendant');
+  }
+
+  function renderSuggest() {
+    if (!suggestEl || !suggest) return;
+    suggestEl.hidden = false;
+    suggestEl.replaceChildren(...suggest.options.map((o, n) => h('li', {
+      id: `${uid}-suggest-${n}`, role: 'option', class: `suggest-row${n === suggest.active ? ' is-active' : ''}`, 'aria-selected': String(n === suggest.active),
+      onmousedown: (e) => { e.preventDefault(); choose(n); },
+    }, icon ? icon(suggest.kind === 'file' ? 'file' : 'terminal', 'step-icon') : null, h('span', { class: 'suggest-label' }, o.label), o.hint ? h('span', { class: 'suggest-hint' }, o.hint) : null)));
+    input.setAttribute?.('aria-expanded', 'true');
+    input.setAttribute?.('aria-activedescendant', `${uid}-suggest-${suggest.active}`);
+  }
+
+  function showSuggest(token, options) {
+    if (!options.length) return closeSuggest();
+    suggest = { ...token, options, active: 0 };
+    return renderSuggest();
+  }
+
+  function choose(n) {
+    const option = suggest?.options[n];
+    if (!option) return closeSuggest();
+    const word = suggest.kind === 'file' ? `@${option.value} ` : `${option.value} `;
+    const caret = suggest.start + word.length;
+    input.value = input.value.slice(0, suggest.start) + word + input.value.slice(suggest.end);
+    input.setSelectionRange?.(caret, caret);
+    return closeSuggest();
+  }
+
+  function onType() {
+    if (!suggestEl) return;
+    const token = tokenAt();
+    if (!token) return closeSuggest();
+    const seq = ++suggestSeq;
+    clearTimeout(suggestTimer);
+    if (token.kind === 'cmd') {
+      const query = token.query.toLowerCase();
+      const bare = (c) => c.name.replace(/^\//, '').toLowerCase();
+      const found = commands().filter((c) => bare(c).includes(query))
+        .sort((a, b) => Number(!bare(a).startsWith(query)) - Number(!bare(b).startsWith(query)) || a.name.localeCompare(b.name));
+      return showSuggest(token, found.slice(0, SUGGEST_MAX).map((c) => ({ value: c.name, label: c.name, hint: c.description })));
+    }
+    suggestTimer = setTimeout(async () => {
+      const res = await api.files(context.projectId, { find: token.query });
+      if (seq !== suggestSeq || !context) return;
+      showSuggest(token, (res.ok ? res.files ?? [] : []).slice(0, SUGGEST_MAX).map((f) => ({ value: f, label: f })));
+    }, debounceMs);
+    return undefined;
   }
 
   async function send(text) {
-    log = chatLog(log, { type: 'local-send', data: { text } });
+    const images = pending.map(({ media, data }) => ({ media, data }));
+    const shownImages = pending.map((img) => img.url);
+    pending = [];
+    renderPending();
+    closeSuggest();
+    log = chatLog(log, { type: 'local-send', at: new Date().toISOString(), data: { text, images: shownImages } });
     listEl.hidden = true;
     render();
     await beforeSend?.();
     const live = key && !log.ended;
     const start = sessionId ? { sessionId } : context.start;
-    const res = live ? await api.chatSend(key, text) : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text });
+    const res = live
+      ? await api.chatSend(key, text, images)
+      : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text, ...(images.length ? { images } : {}) });
     if (!res.ok && !(res.error === 'busy' && res.chatKey)) {
       log = chatLog(log, { type: 'error', data: { error: res.error } });
       return render();
@@ -431,6 +743,36 @@ export function createChat({
     listEl.hidden = false;
   }
 
+  const historyData = (res) => ({ messages: res.messages ?? [], items: res.items, costUSD: res.costUSD, interrupted: res.interrupted === true });
+
+  // A conversation still running in VS Code or a terminal: asked again every few seconds with the version the page has,
+  // so an unchanged one costs a short answer; it stops when the conversation ends or the sheet shows something else.
+  function stopMirror() {
+    if (mirror) cancel(mirror.timer);
+    mirror = null;
+  }
+  function startMirror(ctx, version) {
+    stopMirror();
+    mirror = { ctx, version, timer: schedule(() => tickMirror(ctx), MIRROR_MS) };
+  }
+  async function tickMirror(ctx) {
+    if (mirror?.ctx !== ctx) return;
+    const res = await api.chatHistory(ctx.start.sessionId, mirror.version);
+    if (mirror?.ctx !== ctx || context !== ctx) return;
+    if (res.ok && !res.same) {
+      mirror.version = res.version;
+      log = chatLog(log, { type: 'history', data: historyData(res) });
+      renderRun();
+      if (res.live === false) {
+        mirror = null;
+        render();
+        return;
+      }
+      render();
+    }
+    mirror.timer = schedule(() => tickMirror(ctx), MIRROR_MS);
+  }
+
   // A conversation the page opened before: its history, and its running process if there still is one.
   async function loadHistory(ctx) {
     const res = await api.chatHistory(ctx.start.sessionId);
@@ -444,12 +786,18 @@ export function createChat({
     reinforce = res.reinforce ?? reinforce;
     sessionId = ctx.start.sessionId;
     rememberOpen();
-    log = chatLog(log, { type: 'history', data: { messages: res.messages ?? [], costUSD: res.costUSD, interrupted: res.interrupted === true } });
+    log = chatLog(log, { type: 'history', data: historyData(res) });
     if (res.chatKey) watch(res.chatKey);
+    else if (res.readOnly && res.live) startMirror(ctx, res.version);
     renderMode();
     renderRun();
     renderPanel();
     render();
+  }
+
+  async function stopRun() {
+    const res = await api.chatStop(key);
+    if (!res.ok) toast(errorText(res.error));
   }
 
   form.addEventListener('submit', (e) => {
@@ -459,16 +807,55 @@ export function createChat({
     input.value = '';
     send(text);
   });
+  // Claude Code's keys: Enter sends, Shift+Enter is a new line, Esc stops a reply, the arrow up on an empty box brings back
+  // the last message; with the "@" or "/" list open, the arrows move, Enter or Tab picks and Esc closes it.
   input.addEventListener('keydown', (e) => {
+    if (suggest) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        suggest.active = (suggest.active + (e.key === 'ArrowDown' ? 1 : -1) + suggest.options.length) % suggest.options.length;
+        renderSuggest();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); choose(suggest.active); return; }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSuggest(); return; }
+    }
+    if (e.key === 'Escape' && log?.running && key) {
+      e.preventDefault();
+      e.stopPropagation();
+      stopRun();
+      return;
+    }
+    if (e.key === 'ArrowUp' && !input.value) {
+      const last = log?.items.findLast((i) => i.type === 'user' && !i.auto);
+      if (last) { e.preventDefault(); input.value = last.text; }
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       form.requestSubmit();
     }
   });
-  stopBtn.addEventListener('click', async () => {
-    const res = await api.chatStop(key);
-    if (!res.ok) toast(errorText(res.error));
+  input.addEventListener('input', onType);
+  input.addEventListener('blur', () => setTimeout(closeSuggest, 150));
+  input.addEventListener('paste', (e) => {
+    const files = [...(e.clipboardData?.items ?? [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile());
+    if (!files.length) return;
+    e.preventDefault();
+    addFiles(files);
   });
+  form.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes?.('Files')) e.preventDefault(); });
+  form.addEventListener('drop', (e) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    addFiles([...e.dataTransfer.files]);
+  });
+  attachEl?.addEventListener('click', () => fileEl?.click());
+  fileEl?.addEventListener('change', () => {
+    addFiles([...(fileEl.files ?? [])]);
+    fileEl.value = '';
+  });
+  stopBtn.addEventListener('click', stopRun);
   // The choice is per conversation: a running one switches now, otherwise it goes with the next message.
   modeEl.addEventListener('change', async () => {
     choice = MODES.includes(modeEl.value) ? modeEl.value : 'settings';
@@ -480,9 +867,18 @@ export function createChat({
   pcBtn.addEventListener('click', () => { if (!pcBtn.disabled) onPcMode?.(choice); });
   q('close').addEventListener('click', () => close());
 
+  function freshDrawing() {
+    cache = new WeakMap();
+    byContent = new Map();
+    dayCache = new Map();
+    jumpKey = '';
+  }
+
   function open(ctx) {
     if (root.hidden) returnFocus = document.activeElement;
     detach();
+    stopMirror();
+    closeSuggest();
     context = ctx;
     key = null;
     sessionId = null;
@@ -492,6 +888,10 @@ export function createChat({
     run = DEFAULT_RUN;
     lastManual = { kind: 'maestro' };
     confirmUltra = false;
+    findQuery = '';
+    findAt = 0;
+    pending = [];
+    freshDrawing();
     if (panelEl) panelEl.hidden = true;
     listEl.hidden = true;
     listEl.replaceChildren();
@@ -500,6 +900,8 @@ export function createChat({
     input.placeholder = t()('chat.placeholder');
     input.value = ctx.draft ?? '';
     root.hidden = false;
+    buildFind();
+    renderPending();
     renderMode();
     renderRun();
     render();
@@ -516,6 +918,8 @@ export function createChat({
     if (root.hidden) return;
     // The conversation keeps running on the PC; closing only stops watching it here.
     detach();
+    stopMirror();
+    closeSuggest();
     remember(null);
     root.hidden = true;
     onClose?.();
@@ -535,6 +939,16 @@ export function createChat({
     },
     // Left open over another project, the sheet would start its conversation in the old project's folder.
     showProject(projectId) { if (context && context.projectId !== projectId) close(); },
-    relabel() { if (!root.hidden) { input.placeholder = t()('chat.placeholder'); renderMode(); renderRun(); renderPanel(); render(); } },
+    relabel() {
+      if (root.hidden) return;
+      input.placeholder = t()('chat.placeholder');
+      freshDrawing();
+      buildFind();
+      renderPending();
+      renderMode();
+      renderRun();
+      renderPanel();
+      render();
+    },
   };
 }

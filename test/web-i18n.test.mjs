@@ -58,6 +58,8 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['busy', 'waiting', 'idle', 'closed'].map((d) => `convs.dot.${d}`),
     ...['project', 'all'].map((k) => `convs.scope.${k}`),
     ...['edit', 'read', 'run', 'search', 'web', 'agent', 'skill', 'plan', 'ask', 'think', 'tool'].map((k) => `live.step.${k}`),
+    ...['edit', 'read', 'run', 'search', 'web', 'agent', 'skill', 'plan', 'tool'].map((k) => `step.done.${k}`), 'err.bad-images',
+    ...['done', 'now', 'open'].map((k) => `chat.todo.${k}`),
     ...['auto', 'maestro', 'ultracode', 'fixed', 'settings'].flatMap((k) => [`run.way.${k}`, `run.why.${k}`, `run.hint.${k}`]),
     ...['direct', 'helpers', 'reinforced', 'ask-reinforce'].map((l) => `run.level.${l}`),
     ...['low', 'medium', 'high', 'xhigh', 'max'].flatMap((e) => [`run.effort.${e}`, `run.effortHint.${e}`]),

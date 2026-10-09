@@ -230,7 +230,7 @@ test('the workshop sheet: its chats are listed by kind, a draft event redraws in
   sse(stream, 'draft', { text: 'flowchart LR\n  a --> b' }, 2);
   assert.deepEqual(drafts, ['flowchart LR\n  a --> b']);
   const shown = text(part('#chatLog'));
-  assert.ok(shown.includes('Done.\n[d]'), 'the reply shows the folded diagram');
+  assert.ok(shown.includes('Done.') && shown.includes('[d]'), 'the reply shows the folded diagram');
   assert.ok(!shown.includes('a --> b'), 'neither the reply nor the draft event prints the mermaid');
 });
 

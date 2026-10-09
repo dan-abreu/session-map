@@ -208,6 +208,7 @@ export function createFlowView(ctx) {
 
   const chat = createChat({
     root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, money: ctx.money, savedKey: null, onPcMode: ctx.onPcMode,
+    lang: ctx.lang, icon: ctx.icon, commands: ctx.commands,
     onDraft: (text) => {
       if (!hist || text === hist.now) return;
       hist = historyPush(hist, text);

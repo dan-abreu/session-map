@@ -10,7 +10,8 @@ import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
+import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
+import { readConversation, readImage } from './sources/claude-conversation.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
 import { readArch } from './arch/detect.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
@@ -19,7 +20,7 @@ import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
 import { collect } from './collect.mjs';
 import { loadConfig } from './config.mjs';
-import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
+import { findFiles, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
@@ -37,6 +38,8 @@ const SWEEP_MS = 5 * 60_000;
 // How often the watcher looks at every session on the PC, page open or not.
 const WATCH_MS = 10_000;
 const BODY_MAX = 64 * 1024;
+// A chat message may carry pasted images (four of about 3.7 MB each).
+const CHAT_BODY_MAX = 24 * 1024 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
@@ -46,6 +49,7 @@ const FLOW_TEXT_MAX = 60_000;
 const SKIP_MAX = 500;
 const PLACE_TITLE_MAX = 200;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -61,12 +65,12 @@ class HttpError extends Error {
   }
 }
 
-async function readBody(req) {
+async function readBody(req, max = BODY_MAX) {
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > BODY_MAX) throw new HttpError(413, 'too-large');
+    if (size > max) throw new HttpError(413, 'too-large');
     chunks.push(chunk);
   }
   try {
@@ -159,7 +163,7 @@ export function createApp({
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
     const [, , , key, verb] = parts;
     if (req.method === 'POST' && key === 'start' && parts.length === 4) {
-      const result = await chat.start(await readBody(req), await state());
+      const result = await chat.start(await readBody(req, CHAT_BODY_MAX), await state());
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
@@ -168,7 +172,19 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'history' && parts.length === 5) {
-      const result = chat.history(verb, await state());
+      const result = chat.history(verb, await state(), { since: url.searchParams.get('since') ?? undefined });
+      return send(res, result.status, result.body);
+    }
+    // An image of a conversation (mm22): only the image kinds a browser shows, never anything it could run.
+    if (req.method === 'GET' && key === 'image' && parts.length === 6) {
+      const n = /^\d{1,6}$/.test(parts[5]) ? Number(parts[5]) : -1;
+      const found = chat.image(verb, n, await state());
+      if (!found || !IMAGE_TYPES.has(found.media)) throw new HttpError(404, 'not-found');
+      res.writeHead(200, { 'content-type': found.media, 'cache-control': 'private, max-age=86400' });
+      return res.end(found.data);
+    }
+    if (req.method === 'GET' && key === 'helper' && parts.length === 6) {
+      const result = chat.helper(verb, parts[5], await state());
       return send(res, result.status, result.body);
     }
     if (parts.length !== 5) throw new HttpError(404, 'not-found');
@@ -188,7 +204,7 @@ export function createApp({
       return undefined;
     }
     if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
-    const body = await readBody(req);
+    const body = await readBody(req, verb === 'send' ? CHAT_BODY_MAX : BODY_MAX);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
     return send(res, result.status, result.body);
   }
@@ -280,6 +296,7 @@ export function createApp({
     const cell = param('workCell') === null ? null : project.workCells.find((w) => w.id === param('workCell'));
     if (cell === undefined) throw new HttpError(404, 'unknown-front');
     if (parts[2] === 'files') {
+      if (param('find') !== null) return send(res, 200, { ok: true, files: await findFiles(project.root, param('find').slice(0, 200)) });
       if (param('part') !== null) {
         const part = project.arch.parts.find((p) => p.id === param('part'));
         if (!part) throw new HttpError(404, 'unknown-part');
@@ -387,10 +404,23 @@ export function createApp({
       const id = parts[3];
       if (!UUID_RE.test(id)) throw new HttpError(400, 'bad-session');
       if (demo) throw new HttpError(404, 'unknown-session');
+      // With every step's input and output (files it read, commands it ran) it is as sensitive as the chat: token only.
+      if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
       const entry = readIndex(smDir).find((e) => e.sessionId === id);
       const messages = entry && !isAiRunnerCwd(entry.cwd, smDir) ? readArchived(smDir, id) : [];
       if (!messages.length) throw new HttpError(404, 'unknown-session');
-      return send(res, 200, { sessionId: id, title: entry.title, messages });
+      const { items, costUSD } = readConversation(archivedPath(smDir, id), { cwd: entry.cwd ?? '' });
+      return send(res, 200, { sessionId: id, title: entry.title, messages, items, costUSD });
+    }
+    // An image of an archived conversation (mm22), also after Claude Code deleted it: as sensitive as the chat itself.
+    if (req.method === 'GET' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'image' && parts.length === 6) {
+      if (demo) throw new HttpError(404, 'not-found');
+      if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+      const file = UUID_RE.test(parts[3]) ? archivedPath(smDir, parts[3]) : null;
+      const found = file && /^\d{1,6}$/.test(parts[5]) ? readImage(file, Number(parts[5])) : null;
+      if (!found || !IMAGE_TYPES.has(found.media)) throw new HttpError(404, 'not-found');
+      res.writeHead(200, { 'content-type': found.media, 'cache-control': 'private, max-age=86400' });
+      return res.end(found.data);
     }
     if (req.method === 'GET' && path === '/api/catalog') {
       if (demo) throw new HttpError(403, 'demo');

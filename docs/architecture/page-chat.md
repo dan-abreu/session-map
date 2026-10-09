@@ -21,7 +21,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 
 - [x] **Claude:** One chat per map point, with the maintenance rule in the first message `pc01`
 - [x] **Claude:** "New idea" chat that proposes the part and writes only after an OK `pc02`
-- [ ] **detail:** Attach an image to a message `pc03`
+- [x] **Claude:** Attach an image to a message `pc03`
+  - Paste, drop or pick up to four images (PNG, JPG, GIF, WebP); they go to claude as image blocks and show on the message (mm22).
 
 ### Permissions
 

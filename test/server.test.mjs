@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/main.mjs';
@@ -146,12 +146,13 @@ test('--demo serves demo/state.json without touching the user disk', async () =>
 });
 
 test('history search and archived conversation routes validate their input', async () => {
-  await withServer({}, async ({ call }) => {
+  await withServer({}, async ({ call, token }) => {
     const res = await call('GET', '/api/history?q=cart');
     assert.equal(res.status, 200);
     assert.deepEqual(JSON.parse(res.text).results, []);
     assert.equal((await call('GET', '/api/conversation/not-a-uuid')).status, 400);
-    assert.equal((await call('GET', '/api/conversation/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).status, 404);
+    assert.equal((await call('GET', '/api/conversation/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).status, 401, 'an archived conversation needs the token, even locally');
+    assert.equal((await call('GET', '/api/conversation/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { headers: { cookie: `sm_token=${token}` } })).status, 404);
     assert.equal((await call('GET', '/api/nucleus/x-123456/..%2F..')).status, 404);
   });
 });
@@ -229,4 +230,44 @@ test('the disk copy goes out before a collect that holds the event loop starts',
     assert.equal(first.refreshing, true);
     assert.ok(Date.now() - started < 1500, `${Date.now() - started} ms`);
   });
+});
+
+test('an archived conversation reads with every step, like the chat screen (mm22)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-srv-arch-'));
+  const dir = join(root, 'claude');
+  const smDir = join(root, 'sm');
+  cpSync(new URL('./fixtures/claude/', import.meta.url), dir, { recursive: true });
+  const S1 = '11111111-1111-4111-8111-111111111111';
+  assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S1), smDir), 'archived');
+  rmSync(join(dir, 'projects'), { recursive: true, force: true });
+  try {
+    await withServer({ dir, smDir }, async ({ call }) => {
+      const token = loadToken(smDir);
+      const conv = JSON.parse((await call('GET', `/api/conversation/${S1}`, { headers: { cookie: `sm_token=${token}` } })).text);
+      assert.equal(conv.items[0].type, 'user');
+      assert.equal(conv.items[0].text, 'Please add the checkout page');
+      assert.ok(conv.items.some((i) => i.type === 'tool' && i.step.kind === 'edit'), 'Claude Code deleted it; the archive copy still has the steps');
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an image of an archived conversation is served only with the token, and only as an image (mm22)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-srv-img-'));
+  const dir = join(root, 'claude');
+  const S9 = '99999999-9999-4999-8999-999999999999';
+  const folder = join(dir, 'projects', '-work-shop');
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, `${S9}.jsonl`), `${JSON.stringify({ type: 'user', cwd: '/work/shop', sessionId: S9, timestamp: '2026-10-01T10:00:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Look' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } }] } })}
+`);
+  try {
+    await withServer({ dir }, async ({ call, token, smDir }) => {
+      assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S9), smDir), 'archived');
+      const cookie = { cookie: `sm_token=${token}` };
+      assert.equal((await call('GET', `/api/conversation/${S9}/image/0`)).status, 401);
+      const ok = await call('GET', `/api/conversation/${S9}/image/0`, { headers: cookie });
+      assert.equal(ok.status, 200);
+      assert.equal(ok.headers['content-type'], 'image/png');
+      assert.equal((await call('GET', `/api/conversation/${S9}/image/1`, { headers: cookie })).status, 404);
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

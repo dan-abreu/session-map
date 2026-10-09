@@ -136,7 +136,10 @@ function chat() {
       mode = msg.request.mode;
       out({ type: 'control_response', response: { subtype: 'success', request_id: msg.request_id, response: { mode } } });
     } else if (msg.type === 'user') {
-      turn = turn.then(() => run(msg.message.content));
+      // Pasted images arrive as content blocks; the echo counts them.
+      const { content } = msg.message;
+      const said = Array.isArray(content) ? `${content.filter((b) => b.type === 'text').map((b) => b.text).join(' ')} [images:${content.filter((b) => b.type === 'image').length}]` : content;
+      turn = turn.then(() => run(said));
     }
   }).on('close', () => turn.then(() => { mcp?.child.kill(); process.exit(0); }));
 }

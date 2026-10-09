@@ -31,6 +31,7 @@
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.5v11M7 11l5 5 5-5M5 19.5h14"/></symbol>
     <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15.5v-11M7 9l5-5 5 5M5 19.5h14"/></symbol>
+    <symbol id="i-attach" viewBox="0 0 24 24"><path d="M19 11.5l-6.8 6.8a4.5 4.5 0 0 1-6.4-6.4l7.4-7.4a3 3 0 0 1 4.2 4.2l-7.3 7.3a1.5 1.5 0 0 1-2.1-2.1l6.6-6.6"/></symbol>
     <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.5 5L4.5 9l4 4"/><path d="M4.5 9H14a5 5 0 0 1 0 10h-3"/></symbol>
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15.5 5l4 4-4 4"/><path d="M19.5 9H10a5 5 0 0 0 0 10h3"/></symbol>
     <symbol id="i-box" viewBox="0 0 24 24"><rect x="3" y="7" width="12" height="10" rx="2.5"/><path d="M19 9v6M16 12h6"/></symbol>
@@ -215,16 +216,25 @@
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
         <div class="chat-where" data-chat="where" hidden></div>
         <ul id="chatList" data-chat="list" class="plain rows chat-list" hidden></ul>
+        <div class="chat-find" data-chat="find" hidden></div>
         <ol id="chatLog" data-chat="log" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
+        <div class="chat-tasks" data-chat="tasks" hidden></div>
         <form id="chatForm" data-chat="form" class="chat-form">
           <p class="chat-status" id="chatStatus" data-chat="status" role="status"></p>
+          <div class="chat-pending" data-chat="pending" hidden></div>
           <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
-          <textarea id="chatInput" data-chat="input" rows="3" maxlength="20000"></textarea>
+          <div class="chat-input-wrap">
+            <textarea id="chatInput" data-chat="input" rows="3" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="chatSuggest"></textarea>
+            <ul class="chat-suggest" id="chatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
+          </div>
           <div class="chat-bar">
+            <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
+            <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
             <span class="chat-safety" data-i18n="chat.safety"></span>
             <button type="button" class="btn" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
             <button type="submit" class="btn primary" id="chatSend" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
           </div>
+          <p class="chat-keys" data-i18n="chat.keys"></p>
         </form>
       </div>
       <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-details" hidden></div>
@@ -305,16 +315,25 @@
           </div>
           <p class="chat-note" data-chat="note" role="status" hidden></p>
           <ul data-chat="list" class="plain rows chat-list" hidden></ul>
+          <div class="chat-find" data-chat="find" hidden></div>
           <ol data-chat="log" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
+          <div class="chat-tasks" data-chat="tasks" hidden></div>
           <form data-chat="form" class="chat-form">
             <p class="chat-status" data-chat="status" role="status"></p>
+            <div class="chat-pending" data-chat="pending" hidden></div>
             <label class="visually-hidden" for="flowChatInput" data-i18n="chat.inputLabel"></label>
-            <textarea id="flowChatInput" data-chat="input" rows="3" maxlength="20000"></textarea>
+            <div class="chat-input-wrap">
+              <textarea id="flowChatInput" data-chat="input" rows="3" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="flowChatSuggest"></textarea>
+              <ul class="chat-suggest" id="flowChatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
+            </div>
             <div class="chat-bar">
+              <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
+              <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
               <span class="chat-safety" data-i18n="flow.chatSafety"></span>
               <button type="button" class="btn" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
               <button type="submit" class="btn primary" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
             </div>
+            <p class="chat-keys" data-i18n="chat.keys"></p>
           </form>
         </div>
       </aside>

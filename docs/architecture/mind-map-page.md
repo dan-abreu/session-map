@@ -29,11 +29,17 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - In "All projects": one collapsible header per project (name, color, working and waiting counters), like project folders in Claude or ChatGPT and channels in Slack. Every row shows a project badge, also in "This project".
   - Inside a project: the orchestration chat pinned on top, then Working now and Waiting for you, then by date (Today, Yesterday, Last 7 days, Older). The Now strip and the alerts use the same order and badges.
   - Test: in "All projects" no row lacks the project name.
-- [ ] **important:** Show every conversation exactly like Claude Code shows it `mm22`
+- [x] **Claude:** Show every conversation exactly like Claude Code shows it `mm22`
   - Every message from both sides with the same formatting (markdown, tables, code, links), the time of each message and the date when the day changes, Claude's steps (read, ran, edited) as collapsible blocks, multiple-choice questions with the owner's answer, images, nested helper agents, cost per reply and total.
   - Search inside a conversation, jump to a day or time, and a live mirror for a conversation still running. Secrets in steps shown masked.
   - Applies to every origin (VS Code, terminal, map) and to archived conversations, including ones Claude Code already deleted.
-  - The whole chat experience matches Claude Code in VS Code, not only reading: composer with files and pasted images, `@` file mentions and `/` commands; "thinking", the task list and the current step; edits shown as before/after diffs with accept or reject; the same permission cards; stop; plan mode; model and mode picker; the same keyboard shortcuts, scrolling and copying. One chat screen for every conversation in every project.
+  - The chat composer: pasted, dropped or picked images, `@` file mentions and `/` commands (the project's skills); "thinking" and the task list with the current step; edits as before/after diffs, accepted or rejected in the permission card; stop (also Esc); plan mode; model and mode picker; Enter, Shift+Enter, Esc, arrow up for the last message; copy buttons on replies and code.
+  - Where: `server/sources/claude-conversation.mjs` reads it, `server/web/transcript.js` and `md.js` draw it, the same in the chat sheet and in History.
+- [ ] **important:** The rest of the chat experience `mm23`
+  - History opens an archived conversation in the same chat sheet, with search and jump (today it reads in its own pane, with the same drawing but no search bar).
+  - Answer Claude's multiple-choice questions from the page in a page chat, and attach files that are not images (today only images; a project file is pointed at with `@`).
+  - The built-in `/` commands of Claude Code that work in a page chat, beside the skills.
+  - On a phone, the chat sheet uses the whole height under the top bar (today the map's toolbar leaves it about half the screen).
 - [x] **Claude:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
@@ -51,6 +57,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - One visual system: type scale, spacing grid, semantic palette (light and dark, AA contrast), one icon set, identical components with every state, short purposeful motion that respects reduced motion.
   - Empty screens with a simple illustration and a sentence, skeletons while loading, nothing cut off or overlapping on desktop and phone.
   - Screen-by-screen polish with a review of screenshots; the owner approves the screenshots before anything is published. The tokens and components go in `DESIGN.md` for later versions to follow.
+  - The chat panel must leave most of its height to the dialogue (owner's complaint: raw text and a huge input box): messages rendered as markdown like Claude Code (headings, bold, lists, tables, code blocks with copy, links); the input box starts at one line and grows with the text up to about 40% of the panel, then scrolls; compact header (title, model/mode and cost on one line, other controls behind a menu); the permission and mode controls collapse when not in use; on the phone the input stays docked above the keyboard.
 - [x] **Claude:** Global fixed "Now" strip across all projects `mm09`
   - Always visible on every tab, never filtered by the chosen project: switching project, tab or scrolling does not change it. Test: its content is the same whichever project is selected.
   - One card per running job in any repository: where (project › part › item), live last step, how long, model and helpers (n/total). Waiting for you comes first, in amber.
