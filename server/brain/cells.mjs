@@ -157,7 +157,8 @@ export function relativeFiles(files, bases) {
     }
     const np = normalizePath(p);
     const base = roots.find((r) => np.startsWith(`${r}/`));
-    if (base) out.push(p.slice(base.length + 1));
+    // Count the segments below the base on the normalized path and take that many from the original: it keeps the case and survives 8.3 short names, which change the length.
+    if (base) out.push(p.split('/').slice(-np.slice(base.length + 1).split('/').length).join('/'));
   }
   return out;
 }

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { seedUnits, loadUnits, classify, setOverride, readOverrides } from '../server/brain/cells.mjs';
+import { seedUnits, loadUnits, classify, setOverride, readOverrides, relativeFiles } from '../server/brain/cells.mjs';
 import { projectIdOf } from '../server/paths.mjs';
+import { folderWithShortName } from './short-name.mjs';
 
 function tmp() {
   return mkdtempSync(join(tmpdir(), 'sm-cells-'));
@@ -177,4 +178,12 @@ test('seedUnits names a folder unit by its last folder, with the parent only whe
     assert.equal(names['apps/web'], 'Web (apps)');
     assert.equal(names['packages/web'], 'Web (packages)');
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('relativeFiles: an edited file under a root keeps its relative path when the root is spelled with 8.3 short names', { skip: process.platform !== 'win32' }, (t) => {
+  const folder = folderWithShortName(t);
+  if (!folder) return t.skip('8.3 short names are off on this volume');
+  const { long, short } = folder;
+  assert.deepEqual(relativeFiles([join(short, 'src', 'Shop', 'cart.ts')], [long]), ['src/Shop/cart.ts']);
+  assert.deepEqual(relativeFiles([join(long, 'src', 'shop', 'cart.ts')], [short]), ['src/shop/cart.ts']);
 });
