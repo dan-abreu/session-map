@@ -96,20 +96,25 @@ export function createDiscover({ root, h, t, lang, project, toast }) {
     }
   }
 
-  function confirmInstall(item, plugins = null) {
+  // The second step (choose a plugin) comes after the marketplace was added with `chosen` ({scope, projectId}), so it stays locked there.
+  function confirmInstall(item, plugins = null, chosen = null) {
     const tt = t();
     const proj = project();
     const scope = h('select', { id: 'installScope' },
       option('user', tt('discover.scope.user')),
       proj && option('project', tt('discover.scope.project', { name: proj.name })));
+    if (chosen) {
+      scope.value = chosen.scope;
+      scope.disabled = true;
+    }
     const plugin = plugins && h('select', { id: 'installPlugin', 'aria-label': tt('discover.choose') }, plugins.map((p) => option(p, p)));
     const go = h('button', { type: 'button', class: 'btn primary' }, tt('discover.confirm.go'));
     go.addEventListener('click', async () => {
       go.disabled = true;
-      const body = { action: 'install', repo: item.repo, scope: scope.value, ...(scope.value === 'project' ? { projectId: proj.id } : {}), ...(plugin ? { plugin: plugin.value } : {}) };
-      const res = await post(body);
+      const where = chosen ?? { scope: scope.value, ...(scope.value === 'project' ? { projectId: proj.id } : {}) };
+      const res = await post({ action: 'install', repo: item.repo, ...where, ...(plugin ? { plugin: plugin.value } : {}) });
       go.disabled = false;
-      if (res.error === 'choose-plugin') return confirmInstall(item, res.plugins);
+      if (res.error === 'choose-plugin') return confirmInstall(item, res.plugins, where);
       dialog.close();
       toast(res.ok ? tt('discover.done', { id: res.installed }) : errorText(res.error));
       if (res.ok) load();
