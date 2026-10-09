@@ -299,3 +299,20 @@ test('autoFetch fetches new remote branches, shares one run per repo and waits t
     assert.match(git(root, ['branch', '-r']), /origin\/zoe2/);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('backfillMerges with since only reads merges inside the window', async () => {
+  const { base, root } = makeRepo();
+  try {
+    git(root, ['checkout', '-q', '-b', 'feature/old']);
+    commit(root, { 'apps/api/old.js': 'o' }, 'old work');
+    git(root, ['checkout', '-q', 'main']);
+    git(root, ['merge', '-q', '--no-ff', '-m', "Merge branch 'feature/old'", 'feature/old']);
+    const since = new Date(clock + 30_000).toISOString();
+    git(root, ['checkout', '-q', '-b', 'feature/new']);
+    commit(root, { 'apps/api/new.js': 'n' }, 'new work');
+    git(root, ['checkout', '-q', 'main']);
+    git(root, ['merge', '-q', '--no-ff', '-m', "Merge branch 'feature/new'", 'feature/new']);
+    const events = await backfillMerges(root, 'main', { since });
+    assert.deepEqual([...new Set(events.map((e) => e.workCellId))], ['feature/new']);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

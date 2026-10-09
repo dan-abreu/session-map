@@ -46,7 +46,10 @@ const hashOf = (v) => createHash('sha1').update(JSON.stringify(v)).digest('hex')
 
 function git(cwd, args) {
   return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: 10_000, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout));
+    execFile('git', args, { cwd, timeout: 10_000, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
+      resolve(err ? '' : stdout);
+    });
   });
 }
 
@@ -101,13 +104,14 @@ async function gitSide(smDir, root, projectId, main, units, nowIso) {
   const refs = await git(root, ['for-each-ref', '--format=%(refname) %(objectname)']);
   const signature = hashOf([refs, units.map((u) => [u.id, u.paths])]);
   if (signature === memo.signature) return memo;
+  const since = new Date(Date.parse(nowIso) - WINDOW_MS).toISOString();
+  // events.jsonl outlives restarts: once it holds the project, the history was already backfilled.
+  const backfill = !memo.backfilled && readEvents(smDir, projectId).length === 0;
   const workCells = await workCellsOf(root, units, { main, previous: memo.workCells });
   appendEvents(smDir, projectId, detectTransitions(memo.workCells, workCells, nowIso));
-  if (!memo.backfilled) {
-    appendEvents(smDir, projectId, await backfillMerges(root, main));
-    memo.backfilled = true;
-  }
-  memo.activity = await activityOf(root, { since: new Date(Date.parse(nowIso) - WINDOW_MS).toISOString() });
+  if (backfill) appendEvents(smDir, projectId, await backfillMerges(root, main, { since }));
+  memo.backfilled = true;
+  memo.activity = await activityOf(root, { since });
   memo.workCells = workCells;
   memo.signature = signature;
   return memo;

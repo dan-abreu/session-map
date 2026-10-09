@@ -330,3 +330,27 @@ test('one project that throws while being built is skipped; the others still com
   });
   assert.deepEqual(names, ['good-app']);
 });
+
+test('the merge backfill is skipped when events.jsonl already holds the project', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'merged-app'));
+  try {
+    git(root, ['checkout', '-q', '-b', 'feature/x']);
+    writeFileSync(join(root, 'src', 'shop', 'x.ts'), 'x\n');
+    git(root, ['add', '.']);
+    git(root, ['commit', '-q', '-m', 'x']);
+    git(root, ['checkout', '-q', 'main']);
+    git(root, ['merge', '-q', '--no-ff', '-m', "Merge branch 'feature/x'", 'feature/x']);
+    git(root, ['branch', '-q', '-D', 'feature/x']);
+    seedUnitsFile(smDir, root, [{ id: 'shop', name: 'Shop', paths: ['src/shop'] }, { id: 'unsorted', name: 'Unsorted', paths: [] }]);
+    appendEvents(smDir, projectIdOf(root), [{ kind: 'renamed', ts: iso(HOUR), branch: null, unitIds: ['shop'] }]);
+    writeChat(dir, { id: A, cwd: root, title: 'Merged' });
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    assert.equal(readEvents(smDir, projectIdOf(root)).filter((e) => e.kind === 'fused').length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});

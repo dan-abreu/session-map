@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { log } from '../log.mjs';
 
 const TIMEOUT_MS = 5000;
 const REC = '\x01';
@@ -10,6 +11,7 @@ const CO_AUTHOR_RE = /^co-authored-by:\s*(.*?)\s*(?:<[^>]*>)?\s*$/im;
 function git(cwd, args) {
   return new Promise((resolve) => {
     execFile('git', args, { cwd, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
       resolve(err ? '' : stdout);
     });
   });
@@ -52,9 +54,9 @@ export async function lastCommit(path) {
   return { hash, subject, ts: iso(ts) };
 }
 
-async function commitsOf(root) {
+async function commitsOf(root, since) {
   const format = `${REC}%H${FLD}%an${FLD}%ae${FLD}%at${FLD}%P${FLD}%S${FLD}%s${FLD}%b${END}`;
-  const args = ['log', '--all', '--source', '--name-only', `--format=${format}`];
+  const args = ['log', '--all', '--source', '--name-only', ...(since ? [`--since=${since}`] : []), `--format=${format}`];
   const out = await git(root, args);
   return out.split(REC).filter(Boolean).map((rec) => {
     const [head, filesText = ''] = rec.split(END);
@@ -117,7 +119,7 @@ async function pushesOf(root) {
 }
 
 export async function activityOf(root, { since } = {}) {
-  const [commits, tags, pushes] = await Promise.all([commitsOf(root), tagsOf(root), pushesOf(root)]);
+  const [commits, tags, pushes] = await Promise.all([commitsOf(root, since), tagsOf(root), pushesOf(root)]);
   const cutoff = since ? Date.parse(since) : null;
   const recent = (i) => cutoff === null || Number.isNaN(cutoff) || Date.parse(i.ts) >= cutoff;
   return [...commits.filter(recent), ...tags.filter(recent), ...pushes.filter(recent)].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));

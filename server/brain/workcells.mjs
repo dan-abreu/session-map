@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { log } from '../log.mjs';
 import { listWorktrees } from '../sources/git.mjs';
 import { UNSORTED, unitsTouchedBy } from './cells.mjs';
 
@@ -9,6 +10,7 @@ const FLD = '\x1f';
 function run(cwd, args) {
   return new Promise((resolve) => {
     execFile('git', args, { cwd, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
+      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
       resolve({ ok: !err, out: err ? '' : stdout });
     });
   });
@@ -183,8 +185,10 @@ function branchNameOf(subject, secondParent) {
 
 // History from before installation: each merge commit on main's first-parent line is a cell born at its
 // oldest merged commit and fused at the merge. A rebase-only flow leaves no trace here.
-export async function backfillMerges(root, main) {
-  const out = await git(root, ['log', '--merges', '--first-parent', `--format=%P${FLD}%cI${FLD}%s`, `refs/heads/${main}`]);
+// since bounds the walk: one git call per merge would stall the first page load on a long history.
+export async function backfillMerges(root, main, { since } = {}) {
+  const window = since ? [`--since=${since}`] : [];
+  const out = await git(root, ['log', '--merges', '--first-parent', ...window, `--format=%P${FLD}%cI${FLD}%s`, `refs/heads/${main}`]);
   const events = [];
   for (const line of lines(out)) {
     const [parents, mergedAt, subject] = line.split(FLD);
