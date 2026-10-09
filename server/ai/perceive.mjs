@@ -1,11 +1,10 @@
-import { UNSORTED, plain } from '../brain/cells.mjs';
+import { UNSORTED, newUnitId } from '../brain/cells.mjs';
 import { PERCEIVE_SCHEMA, perceivePrompt } from './prompts.mjs';
 
 const NAME_MAX = 40;
 const PURPOSE_MAX = 160;
 const TAG_MAX = 24;
 const TAGS_MAX = 5;
-const ID_MAX = 40;
 
 const text = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
@@ -25,15 +24,6 @@ export const normalizeUnit = (u) => ({
   ...u,
   tags: [...(u.tags ?? [])], paths: [...(u.paths ?? [])], chatIds: [...(u.chatIds ?? [])],
 });
-
-// Ids become nucleus file names, so they stay plain slugs; once given they never change.
-export function newUnitId(name, units) {
-  const base = plain(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, ID_MAX).replace(/-+$/, '') || 'unit';
-  const taken = new Set([UNSORTED, ...units.map((u) => u.id)]);
-  let id = base;
-  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-  return id;
-}
 
 export const isEditable = (u) => u && u.id !== UNSORTED && !u.pinned;
 

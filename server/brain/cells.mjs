@@ -8,6 +8,7 @@ const EDITED_WEIGHT = 3;
 const MENTIONED_WEIGHT = 1;
 const MIN_SCORE = 3;
 const SAFE_NAME = /^[a-z0-9][a-z0-9._-]*$/i;
+const ID_MAX = 40;
 export const UNSORTED = 'unsorted';
 
 // Ids end up in file names, so anything but a plain slug is refused.
@@ -45,6 +46,15 @@ export function readJsonFile(path, fallback) {
 
 export const plain = (s) => String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
+// Ids become nucleus file names, so they stay plain slugs; once given they never change.
+export function newUnitId(name, units) {
+  const base = plain(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, ID_MAX).replace(/-+$/, '') || 'unit';
+  const taken = new Set([UNSORTED, ...units.map((u) => u.id)]);
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
 const slash = (p) => String(p).replaceAll('\\', '/');
 const covers = (path, prefix) => path === prefix || path.startsWith(`${prefix}/`);
 
@@ -79,13 +89,17 @@ export function seedUnits(root, { gitLog = [] } = {}) {
   try {
     specs = readdirSync(specsDir, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== UNSORTED).map((e) => e.name).sort();
   } catch { /* no OpenSpec: fall back to the folders the git log touches most */ }
-  const units = specs.length
-    ? specs.map((name) => {
+  const units = [];
+  const add = (name, paths) => units.push({ id: newUnitId(name, units), name, paths });
+  if (specs.length) {
+    for (const name of specs) {
       let text = '';
       try { text = readFileSync(join(specsDir, name, 'spec.md'), 'utf8'); } catch { /* spec folder without spec.md */ }
-      return { id: name, name, paths: pathsCitedIn(text) };
-    })
-    : foldersByActivity(gitLog).map((folder) => ({ id: folder.replaceAll('/', '-'), name: folder, paths: [folder] }));
+      add(name, pathsCitedIn(text));
+    }
+  } else {
+    for (const folder of foldersByActivity(gitLog)) add(folder, [folder]);
+  }
   return [...units, { id: UNSORTED, name: 'Unsorted', paths: [] }];
 }
 

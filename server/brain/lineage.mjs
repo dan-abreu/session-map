@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { UNSORTED, plain, readJsonFile, relativeFiles, unitsTouchedBy, writeAtomic } from './cells.mjs';
+import { UNSORTED, assertSafeName, plain, readJsonFile, relativeFiles, unitsTouchedBy, writeAtomic } from './cells.mjs';
 
 const MAX_WEIGHT = 4;
 const SPEC_TERM_MIN = 4;
@@ -45,10 +45,10 @@ export function specRefsOf(root, units) {
     .map((u) => ({ id: u.id, terms: [u.id, u.name].map(plain).filter((t) => t.length >= SPEC_TERM_MIN) }));
   const refs = [];
   for (const from of units) {
-    const file = join(root, 'openspec', 'specs', from.id, 'spec.md');
     let text;
     let since;
     try {
+      const file = join(root, 'openspec', 'specs', assertSafeName(from.id, 'unit id'), 'spec.md');
       text = plain(readFileSync(file, 'utf8'));
       since = statSync(file).mtime.toISOString();
     } catch { continue; }

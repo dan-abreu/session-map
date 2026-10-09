@@ -124,3 +124,17 @@ test('linkUnits makes absolute edited files relative to root', () => {
   const links = linkUnits([chat('c1', 'auth', { editedFiles: ['C:\\Dev\\Proj\\apps\\web\\login\\a.ts', 'C:\\Dev\\Proj\\packages\\pay\\b.ts'] })], units, [], [], { root: 'c:/dev/proj' });
   assert.equal(links.length, 1);
 });
+
+test('specRefsOf skips units whose id is not a plain slug instead of reading outside openspec/specs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-spec-'));
+  try {
+    specs(root, { payments: 'Charges are blocked by auth.' });
+    mkdirSync(join(root, 'openspec', 'outside'), { recursive: true });
+    writeFileSync(join(root, 'openspec', 'outside', 'spec.md'), 'mentions payments here');
+    const units = [
+      { id: '../outside', name: 'Outside', paths: [] },
+      { id: 'payments', name: 'Payments', paths: [] },
+    ];
+    assert.deepEqual(specRefsOf(root, units).map((r) => `${r.from}>${r.to}`), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
