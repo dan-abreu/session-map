@@ -502,6 +502,27 @@ export function readHelperCommits(sessionDir) {
   return commits;
 }
 
+// The model a workflow agent runs on, from its meta file ('opus', 'sonnet'...); none when it inherits the conversation's.
+function agentModel(dir, agentId) {
+  if (typeof agentId !== 'string' || !/^[\w-]+$/.test(agentId)) return null;
+  try {
+    const meta = JSON.parse(readText(join(dir, `agent-${agentId}.meta.json`)));
+    return typeof meta?.model === 'string' && meta.model ? meta.model : null;
+  } catch {
+    return null;
+  }
+}
+
+// When a workflow agent last wrote to its own transcript: a killed workflow leaves agents with no result behind forever.
+function agentMovedAt(dir, agentId) {
+  if (typeof agentId !== 'string' || !/^[w-]+$/.test(agentId)) return null;
+  try {
+    return statSync(join(dir, `agent-${agentId}.jsonl`)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 export function readWorkflows(sessionDir) {
   const workflows = [];
   for (const wf of listDir(join(sessionDir, 'subagents', 'workflows'))) {
@@ -518,12 +539,17 @@ export function readWorkflows(sessionDir) {
       const meta = JSON.parse(readText(join(sessionDir, 'workflows', `${wf.name}.json`)));
       if (typeof meta?.name === 'string' && meta.name) name = meta.name;
     } catch { /* no name file: the id stands in */ }
+    const answered = new Set(events.filter((e) => e.type === 'result').map((e) => e.agentId));
     workflows.push({
       id: wf.name,
       name,
       started: new Set(started.map((e) => e.agentId)).size,
-      done: new Set(events.filter((e) => e.type === 'result').map((e) => e.agentId)).size,
+      done: answered.size,
       lastLabel: started.at(-1)?.label ?? null,
+      running: started.filter((e) => !answered.has(e.agentId)).map((e) => {
+        const dir = join(sessionDir, 'subagents', 'workflows', wf.name);
+        return { label: e.label ?? null, model: agentModel(dir, e.agentId), activeAt: new Date(agentMovedAt(dir, e.agentId) ?? mtimeMs).toISOString() };
+      }),
       updatedAt: new Date(mtimeMs).toISOString(),
     });
   }

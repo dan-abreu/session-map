@@ -204,6 +204,13 @@ test('readWorkflows reports progress, name and last label', () => {
   assert.deepEqual(readWorkflows(join(PROJ, B)), []);
 });
 
+test('readWorkflows lists the agents still running, with their label and the model their meta file names', () => {
+  const [one, two] = readWorkflows(join(PROJ, A)).sort((x, y) => x.id.localeCompare(y.id));
+  assert.deepEqual(one.running.map(({ label, model }) => ({ label, model })), [{ label: 'Review', model: 'sonnet' }], 'b1 has its result; b2 still runs, on sonnet');
+  assert.equal(one.running[0].activeAt, one.updatedAt, 'no transcript of its own yet: the journal says when it last moved');
+  assert.deepEqual(two.running, [], 'every agent of wf_two answered');
+});
+
 test('readFullTranscript returns readable messages with tools in one line', () => {
   const msgs = readFullTranscript(transcript(A));
   assert.equal(msgs[0].role, 'user');

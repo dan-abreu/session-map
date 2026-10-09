@@ -61,18 +61,22 @@ function git(cwd, args) {
 
 // ---- reading ---------------------------------------------------------------
 
-function readItems(dir, smDir, nowMs) {
+// liveIds: a live conversation's workflow agents move on while its own transcript sits still, so their journals are read
+// again on every pass (a few small files per live conversation).
+function readItems(dir, smDir, nowMs, liveIds) {
   const items = [];
   for (const ref of listTranscripts(dir, { sinceMs: nowMs - WINDOW_MS })) {
     try {
       const key = `${ref.mtimeMs}:${ref.size}`;
       let hit = summaries.get(ref.path);
+      const sessionDir = join(dirname(ref.path), ref.sessionId);
       if (hit?.key !== key) {
         const summary = readTranscript(ref.path);
         if (!summary) continue;
-        const sessionDir = join(dirname(ref.path), ref.sessionId);
         hit = { key, summary, helperUsage: readHelperUsage(sessionDir), helperCommits: readHelperCommits(sessionDir), workflows: readWorkflows(sessionDir) };
         summaries.set(ref.path, hit);
+      } else if (liveIds.has(ref.sessionId)) {
+        hit.workflows = readWorkflows(sessionDir);
       }
       if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
       const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
@@ -429,7 +433,7 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     life: lifeOf(smDir, userConfig, ai),
     internals: new Map(),
   };
-  const groups = await groupByRoot(readItems(dir, smDir, now.getTime()));
+  const groups = await groupByRoot(readItems(dir, smDir, now.getTime(), ctx.liveById));
   // One broken project must not blank the page for the others.
   const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });

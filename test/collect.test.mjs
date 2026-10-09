@@ -511,3 +511,25 @@ test('conversations lists every conversation of the window, the page ones older 
     assert.equal(state[INTERNALS].chats.get(C).cwd, root, 'an older conversation can still be opened in a terminal');
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
+
+test('collect reads the workflows of a live conversation again on every pass, though its transcript did not change', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Cart page', edits: ['src/shop/cart.ts'] });
+    writeSession(dir, { pid: 4242, id: A, cwd: root, status: 'busy' });
+    const flowDir = join(dir, 'projects', root.replace(/[^a-z0-9]/gi, '-'), A, 'subagents', 'workflows', 'wf_build');
+    mkdirSync(flowDir, { recursive: true });
+    const journal = join(flowDir, 'journal.jsonl');
+    writeFileSync(journal, `${JSON.stringify({ type: 'started', agentId: 'x1', label: 'Write tests' })}\n`);
+    writeFileSync(join(flowDir, 'agent-x1.meta.json'), JSON.stringify({ model: 'haiku' }));
+
+    const first = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects[0].chats[0].workflows[0];
+    assert.deepEqual([first.done, first.started, first.running.map(({ label, model }) => ({ label, model }))], [0, 1, [{ label: 'Write tests', model: 'haiku' }]]);
+
+    writeFileSync(journal, `${JSON.stringify({ type: 'started', agentId: 'x1', label: 'Write tests' })}\n${JSON.stringify({ type: 'result', agentId: 'x1' })}\n`);
+    const second = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects[0].chats[0].workflows[0];
+    assert.deepEqual([second.done, second.running], [1, []], 'the agent that answered leaves the running list');
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
