@@ -113,6 +113,9 @@
         <div class="seg mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
         <button type="button" class="btn primary" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
+        <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
+          <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>
+        </button>
         <button type="button" id="waitingBtn" class="waiting-btn" aria-expanded="false" aria-controls="waitingList">
           <span class="waiting-dot" aria-hidden="true"></span><span id="waitingLabel"></span>
         </button>
@@ -142,6 +145,17 @@
       </div>
       <ul id="waitingCounts" class="waiting-counts"></ul>
       <ul id="waitingItems"></ul>
+    </section>
+
+    <section id="liveList" class="sheet live-list" aria-labelledby="liveTitle" hidden>
+      <div class="sheet-head">
+        <div>
+          <h2 id="liveTitle" data-i18n="live.title"></h2>
+          <p class="meta live-sub" data-live="sub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close="live" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div class="live-body" data-live="body"></div>
     </section>
 
     <aside id="panel" class="sheet panel" aria-labelledby="panelTitle" hidden>

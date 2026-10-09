@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, liveNodes, branchMarks, clashMarks, changedNodes,
+  archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, branchMarks, clashMarks, changedNodes,
   boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder, countLabel, listsDone,
 } from '../server/web/tree.js';
 
@@ -108,11 +108,6 @@ test('searchTree finds items, parts and codes without caring for accents or case
   assert.deepEqual(searchTree(root, 'pãyments').map((m) => m.id), ['pt:pay']);
   assert.deepEqual(searchTree(root, ' '), []);
   assert.deepEqual(ancestorsOf(root, 'i:shop:L22'), ['p', 'l:front', 'pt:shop', 'g:shop:Search']);
-});
-
-test('liveNodes lights the part where a chat is working and every box above it', () => {
-  const root = archTree(project());
-  assert.deepEqual([...liveNodes(project(), root)].sort(), ['l:back', 'p', 'pt:pay']);
 });
 
 test('branchMarks gives each part the initials and colour of who has a branch open there; merged ones are gone', () => {

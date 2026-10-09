@@ -1,4 +1,4 @@
-import { paintCount, pulseOn } from './mindmap.js';
+import { paintCount, paintCaption, pulseOn } from './mindmap.js';
 
 // The same map on a phone (desenho-3 § 2): an indented list whose rows open and close. ctx as in mindmap.js.
 export function createOutline(root, ctx) {
@@ -9,6 +9,7 @@ export function createOutline(root, ctx) {
   function row(node, depth, view) {
     const open = view.open.has(node.id);
     const has = node.children.length > 0;
+    const caption = view.captions?.get(node.id) ?? null;
     const li = document.createElement('li');
     li.className = `ol-item k-${node.kind}`;
     li.dataset.id = node.id;
@@ -18,6 +19,7 @@ export function createOutline(root, ctx) {
     const cls = line.classList;
     cls.toggle('is-selected', view.selected === node.id);
     cls.toggle('is-live', view.live.has(node.id));
+    cls.toggle('is-tip', Boolean(caption?.exact));
     cls.toggle('is-lit', Boolean(view.lit?.has(node.id)));
     cls.toggle('is-dim', Boolean(view.lit) && !view.lit.has(node.id));
     cls.toggle('is-match', Boolean(view.match?.has(node.id)));
@@ -51,6 +53,13 @@ export function createOutline(root, ctx) {
       line.append(btn);
     }
     li.append(line);
+    if (caption) {
+      const el = document.createElement('div');
+      el.className = 'ol-caption';
+      el.style.setProperty('--depth', String(depth));
+      paintCaption(el, caption, {});
+      li.append(el);
+    }
     if (has && open) {
       const kids = document.createElement('ul');
       kids.className = 'ol-kids';

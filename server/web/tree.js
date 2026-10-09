@@ -144,12 +144,6 @@ function withAncestors(root, partIds, extra = []) {
   return lit;
 }
 
-// Where a conversation is working right now: its part, and every box up to the project.
-export function liveNodes(project, root) {
-  const busy = project.chats.filter((c) => c.status === 'busy' && !c.archived);
-  return withAncestors(root, new Set(busy.map((c) => c.partId).filter(Boolean)), busy.length ? [root.id] : []);
-}
-
 // "What changed": the parts with a commit, a branch event or a chat since `since` (ms). Items whose state changed
 // are seen through the commits that edited the part's file, which counts as one of its paths.
 export function changedNodes(project, root, since) {

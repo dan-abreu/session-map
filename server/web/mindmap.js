@@ -8,6 +8,7 @@ const TWEEN_MS = 300;
 const FIT_PAD = 28;
 const SCALE = [0.3, 1.6];
 const READABLE = 0.85;
+const CAPTION_GAP = 6;
 
 // The number of conversations on a box: a small button on its top edge, rebuilt only when it changes.
 export function paintCount(el, count, memo) {
@@ -36,6 +37,25 @@ export function pulseOn(el) {
   el.classList.add('is-pulse');
   clearTimeout(el.pulseTimer);
   el.pulseTimer = setTimeout(() => el.classList.remove('is-pulse'), PULSE_MS);
+}
+
+// The caption under a box where a conversation works now (live.js captionsAt): its last step, then which conversation and
+// when. Plain text only, rebuilt when it changes.
+export function paintCaption(el, caption, memo) {
+  const sig = caption ? `${caption.step}|${caption.meta}|${caption.exact}` : '';
+  if (sig === memo.captionSig) return;
+  memo.captionSig = sig;
+  el.hidden = !caption;
+  if (!caption) return;
+  el.classList.toggle('is-above', !caption.exact);
+  el.title = caption.hint ?? '';
+  const step = document.createElement('span');
+  step.className = 'mm-cap-step';
+  step.textContent = caption.step;
+  const meta = document.createElement('span');
+  meta.className = 'mm-cap-meta';
+  meta.textContent = caption.meta;
+  el.replaceChildren(step, meta);
 }
 
 const svg = (tag, attrs = {}) => {
@@ -99,9 +119,12 @@ export function createMindmap(root, ctx) {
       count.className = 'mm-count';
       count.hidden = true;
       count.addEventListener('click', () => ctx.onCount?.(n.node));
-      el.append(box, toggle, count);
+      const caption = document.createElement('div');
+      caption.className = 'mm-caption';
+      caption.hidden = true;
+      el.append(box, toggle, count, caption);
       world.append(el);
-      n = { el, box, toggle, count, sig: null, countSig: null, node };
+      n = { el, box, toggle, count, caption, pad: 0, sig: null, countSig: null, captionSig: null, node };
       nodes.set(node.id, n);
     }
     n.node = node;
@@ -115,6 +138,7 @@ export function createMindmap(root, ctx) {
       n.sig = sig;
     }
     paintCount(n.count, ctx.count?.(node) ?? null, n);
+    paintCaption(n.caption, view.captions?.get(node.id) ?? null, n);
     const open = view.open.has(node.id);
     const has = node.children.length > 0;
     n.toggle.hidden = !has;
@@ -127,22 +151,29 @@ export function createMindmap(root, ctx) {
     cls.toggle('is-open', open);
     cls.toggle('is-selected', view.selected === node.id);
     cls.toggle('is-live', view.live.has(node.id));
+    cls.toggle('is-tip', Boolean(view.captions?.get(node.id)?.exact));
     cls.toggle('is-lit', Boolean(view.lit?.has(node.id)));
     cls.toggle('is-dim', Boolean(view.lit) && !view.lit.has(node.id));
     cls.toggle('is-match', Boolean(view.match?.has(node.id)));
     n.box.setAttribute('aria-current', view.selected === node.id ? 'true' : 'false');
   }
 
+  // A captioned box keeps room above and below it (pad), so its centre, where the curves meet it, stays the box's centre.
   function place(n, b, opacity) {
-    n.el.style.transform = `translate(${b.x}px, ${b.y}px)`;
+    n.el.style.transform = `translate(${b.x}px, ${b.y + n.pad}px)`;
     n.el.style.opacity = opacity;
   }
 
   function drawEdges(at) {
-    edgeLayer.replaceChildren(...edges.map((e) => {
+    // The curves on the way to a live tip draw last, over the others, with a spark running along them.
+    const ordered = [...edges.filter((e) => !e.live), ...edges.filter((e) => e.live)];
+    edgeLayer.replaceChildren(...ordered.flatMap((e) => {
       const a = at.get(e.from), b = at.get(e.to);
-      return a && b ? svg('path', { d: edgePath(a, b, TOGGLE), class: `mm-edge to-${e.kind}` }) : null;
-    }).filter(Boolean));
+      if (!a || !b) return [];
+      const d = edgePath(a, b, TOGGLE);
+      const line = svg('path', { d, class: `mm-edge to-${e.kind}${e.live ? ' is-live' : ''}` });
+      return e.live ? [line, svg('path', { d, class: 'mm-flow' })] : [line];
+    }));
     relLayer.replaceChildren(...rels.flatMap((l) => {
       const a = at.get(`pt:${l.a}`), b = at.get(`pt:${l.b}`);
       if (!a || !b) return [];
@@ -158,7 +189,8 @@ export function createMindmap(root, ctx) {
     }));
   }
 
-  // Lays the visible tree out again and moves every box from where it is to where it goes. anchor: the id of a box
+  // view: open, selected, live (the ids on the way to a live tip), lit, match, relations, captions (id → {step, meta, exact,
+  // hint}). Lays the visible tree out again and moves every box from where it is to where it goes. anchor: the id of a box
   // that must stay still on screen (the one whose toggle was pressed), so the map does not jump under the pointer.
   function render(tree, view, { anchor = null } = {}) {
     const visible = [];
@@ -180,11 +212,12 @@ export function createMindmap(root, ctx) {
     }
     for (const node of visible) paint(nodeEl(node), node, view);
     const sizes = new Map(visible.map((node) => {
-      const el = nodes.get(node.id).el;
-      return [node.id, { w: el.offsetWidth, h: el.offsetHeight }];
+      const n = nodes.get(node.id);
+      n.pad = n.caption.hidden ? 0 : n.caption.offsetHeight + CAPTION_GAP;
+      return [node.id, { w: n.el.offsetWidth, h: n.el.offsetHeight + 2 * n.pad }];
     }));
     const next = layoutTree(tree, (id) => view.open.has(id), (node) => sizes.get(node.id), { gapX: GAP_X, gapY: GAP_Y });
-    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to) }));
+    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: view.live.has(e.to) }));
     rels = view.relations ?? [];
     wires.setAttribute('width', String(next.width + 400));
     wires.setAttribute('height', String(next.height + 40));

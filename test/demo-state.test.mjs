@@ -114,3 +114,17 @@ test('the demo lists its conversations: every chat of the map, an idea, a new ma
   assert.ok(shop.conversations.some((r) => !r.onMap && r.costUSD === null), 'a page conversation older than the window');
   assert.ok(notes.conversations.some((r) => r.node?.kind === 'create-arch'));
 });
+
+test('the demo shows live work: busy chats carry their item and steps, one runs a workflow, and another project works too', () => {
+  const busy = state.projects.flatMap((p) => p.chats.filter((c) => c.status === 'busy').map((c) => ({ p, c })));
+  for (const { p, c } of busy) {
+    assert.ok(c.liveSteps.length > 0 && c.liveSteps.every((s) => typeof s.kind === 'string' && 'target' in s && s.ts), `${c.title} steps`);
+    const row = p.conversations.find((r) => r.sessionId === c.sessionId);
+    assert.deepEqual(row.lastStep, c.liveSteps.at(-1), `${c.title}: the list shows the same last step`);
+    assert.equal(row.itemCode ?? null, c.itemCode ?? null, `${c.title}: the list and the map agree on the item`);
+  }
+  assert.ok(shop.chats.some((c) => c.status === 'busy' && c.itemCode), 'a chat works on an item, so the way lights down to it');
+  const flows = shop.chats.flatMap((c) => c.workflows);
+  assert.ok(flows.some((w) => w.running.length && w.running.some((a) => a.model)), 'a workflow has agents running, with their model');
+  assert.ok(notes.chats.some((c) => c.status === 'busy'), 'the live list groups more than one project');
+});

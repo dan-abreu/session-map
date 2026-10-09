@@ -1,6 +1,6 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
-  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, liveNodes, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone,
+  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -12,6 +12,7 @@ import { createFiles } from './files.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { createConvList, conversationCounts, listConversations } from './convlist.js';
+import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -42,6 +43,7 @@ let relationsOn = store.get('sm.relations') === '1';
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
 let convCounts = new Map();
+let liveEntries = []; // the conversations working now in the open project (live.js workingIn)
 // While the person types in a panel, polling must not redraw it under their fingers.
 let editing = false;
 
@@ -265,10 +267,27 @@ function selectedNodeId() {
   return partId ? `pt:${partId}` : null;
 }
 
+// The caption under each box where a conversation works now: its last step, then which conversation and how long ago.
+function liveCaptions() {
+  if (!liveEntries.length) return null;
+  const out = new Map();
+  for (const [id, { entry, more, exact }] of captionsAt((nodeId) => open.has(nodeId), liveEntries)) {
+    const title = entry.chat.title || t('chat.untitled');
+    const when = entry.lastStep?.ts ?? entry.chat.updatedAt;
+    out.set(id, {
+      step: stepWords(t, entry.lastStep) || t('chat.busy'),
+      meta: [title, when ? relative(when) : null, more ? t('live.captionMore', { n: more }) : null].filter(Boolean).join(' · '),
+      exact,
+      hint: t('live.captionHint', { title, place: placeWords(t, entry.place) }),
+    });
+  }
+  return out;
+}
+
 function mapView() {
   const lit = changedRange === 'all' ? null : changedNodes(shown, tree, rangeStart(changedRange, Date.parse(state.generatedAt)));
   const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
-  return { open, selected: selectedNodeId(), live: marks.live, lit, match, relations: relationsOn && !PHONE.matches ? relationLinks(shown) : null };
+  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? relationLinks(shown) : null };
 }
 
 const activeMap = () => (PHONE.matches ? outline : mindmap);
@@ -290,7 +309,7 @@ function toggleNode(node) {
 function freeArea() {
   const mm = $('#mindmap').getBoundingClientRect();
   let width = mm.width;
-  for (const sheet of [$('#panel'), $('#chat'), $('#waitingList')]) {
+  for (const sheet of [$('#panel'), $('#chat'), $('#waitingList'), $('#liveList')]) {
     if (sheet.hidden) continue;
     const r = sheet.getBoundingClientRect();
     width = Math.min(width, Math.max(240, r.left - mm.left - 12));
@@ -329,7 +348,7 @@ function renderSummary() {
 }
 
 function goTo(projectId, sel) {
-  closeWaiting();
+  closeLists();
   if (view !== 'map') showView('map');
   if (projectId !== project.id) setProject(projectId);
   if (!sel) return;
@@ -383,13 +402,41 @@ function renderWaiting() {
 function openWaiting() {
   closePanel(false);
   chat.close();
+  live.close();
   $('#waitingList').hidden = false;
   $('#waitingBtn').setAttribute('aria-expanded', 'true');
   $('#waitingList').querySelector('button')?.focus();
 }
-function closeWaiting() {
+// The waiting list and the live list share the corner of the map: closing one closes both.
+function closeLists() {
   $('#waitingList').hidden = true;
   $('#waitingBtn').setAttribute('aria-expanded', 'false');
+  live.close();
+}
+
+// ---- live: what is being worked on now -----------------------------------------------------
+
+function openLive() {
+  closePanel(false);
+  chat.close();
+  $('#waitingList').hidden = true;
+  $('#waitingBtn').setAttribute('aria-expanded', 'false');
+  live.open();
+}
+
+// Opens the way to the box a conversation works on and makes it glow; on a desktop the list stays open beside the map.
+function showOnMap(entry) {
+  if (PHONE.matches) live.close();
+  if (entry.project.id !== project.id) setProject(entry.project.id);
+  revealNode(entry.nodeId, { center: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(entry.nodeId)));
+}
+
+function openFromLive(entry) {
+  const out = listConversations(state, { projectId: entry.project.id, showArchived: true });
+  const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === entry.chat.sessionId);
+  if (hit) openConversation(hit);
+  else goTo(entry.project.id, { type: 'chat', id: entry.chat.sessionId });
 }
 
 // ---- activity --------------------------------------------------------------------------
@@ -467,7 +514,7 @@ let pointNode = null;
 function openPoint(node, { tab = 'chat' } = {}) {
   if (node.kind === 'project') return select({ type: 'project' });
   closePanel(false);
-  closeWaiting();
+  closeLists();
   selection = { type: 'node', id: node.id };
   chat.open({
     projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: nodeRef(node) },
@@ -493,7 +540,7 @@ function plainPoint() {
 function openIdea() {
   if (!hasMap()) return;
   closePanel(false);
-  closeWaiting();
+  closeLists();
   selection = null;
   chat.open({ projectId: project.id, title: t('idea.title'), subtitle: project.name, intro: t('idea.intro'), start: { node: { kind: 'idea' } } });
   plainPoint();
@@ -502,7 +549,7 @@ function openIdea() {
 
 function createArch() {
   closePanel(false);
-  closeWaiting();
+  closeLists();
   chat.open({ projectId: project.id, title: t('arch.chatTitle'), subtitle: project.name, intro: t('arch.chatIntro'), draft: t('arch.createText'), start: { node: { kind: 'create-arch' } } });
   plainPoint();
 }
@@ -524,7 +571,7 @@ function whereOf(row) {
 // conversation (a page one resumes; one from VS Code or a terminal reads here, with where it lives).
 function openConversation({ row, project: p, nodeId, place }) {
   convs.closeDrawer();
-  closeWaiting();
+  closeLists();
   if (view !== 'map') showView('map');
   if (p.id !== project.id) setProject(p.id);
   closePanel(false);
@@ -840,7 +887,7 @@ function openPanel() {
   const panel = $('#panel');
   if (panel.hidden) returnFocus = document.activeElement;
   chat.close();
-  closeWaiting();
+  closeLists();
   panel.hidden = false;
   panel.querySelector('.panel-body').scrollTop = 0;
 }
@@ -926,7 +973,8 @@ async function pcMode(mode) {
 // ---- projects, polling, views ---------------------------------------------------------------
 
 function refreshMarks() {
-  marks = { live: liveNodes(shown, tree), branches: branchMarks(shown), clashes: clashMarks(shown) };
+  liveEntries = workingIn(shown, tree, Date.parse(state.generatedAt));
+  marks = { live: livePaths(liveEntries).nodes, branches: branchMarks(shown), clashes: clashMarks(shown) };
   convCounts = conversationCounts(project, tree, { showArchived });
 }
 
@@ -957,6 +1005,7 @@ function setProject(id) {
   $('#notice').hidden = true;
   renderMap();
   convs.render();
+  live.render();
   requestAnimationFrame(() => activeMap().fit(false));
   refreshView();
 }
@@ -1016,6 +1065,7 @@ function applyState(next) {
   renderBanner();
   renderMap();
   convs.render();
+  live.render();
   if (!editing) rerender();
   refreshView();
   return undefined;
@@ -1044,7 +1094,7 @@ function showView(name) {
   for (const sec of document.querySelectorAll('.view')) sec.hidden = sec.id !== `view-${view}`;
   if (view === 'discover') discover.show();
   else $('#discover').hidden = true;
-  if (view !== 'map') { closePanel(false); chat.close(); closeWaiting(); }
+  if (view !== 'map') { closePanel(false); chat.close(); closeLists(); }
   if (view !== 'flow') flow.hide();
   store.set('sm.view', view);
   refreshView(true);
@@ -1105,6 +1155,7 @@ let mindmap = null;
 let outline = null;
 let flow = null;
 let convs = null;
+let live = null;
 
 function wire() {
   $('#project').addEventListener('change', (e) => setProject(e.target.value));
@@ -1152,6 +1203,10 @@ function wire() {
     onOpen: openConversation,
     onFilter: () => renderMap(),
   });
+  live = createLivePanel({
+    root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,
+    state: () => state, project: () => project, onShow: showOnMap, onOpen: openFromLive,
+  });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
     h, t: () => t, toast, errorText, relative, phone: PHONE, onPcMode: pcMode,
@@ -1166,9 +1221,10 @@ function wire() {
     prefs: { archived: () => showArchived, setArchived },
   });
   for (const v of VIEWS) $(`#tab-${v}`).addEventListener('click', () => showView(v));
-  $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeWaiting()));
-  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"]')) {
-    b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeWaiting()));
+  $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeLists()));
+  $('#liveBtn').addEventListener('click', () => (live.isOpen() ? closeLists() : openLive()));
+  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"]')) {
+    b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
   }
   $('#ptab-chat').addEventListener('click', () => setPointTab('chat'));
   $('#ptab-details').addEventListener('click', () => { setPointTab('details'); renderPointDetails(); });
@@ -1205,7 +1261,7 @@ function wire() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open) return;
     if (convs.isDrawerOpen()) convs.closeDrawer();
-    else if (!$('#waitingList').hidden) closeWaiting();
+    else if (!$('#waitingList').hidden || live.isOpen()) closeLists();
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
@@ -1220,7 +1276,7 @@ function wire() {
 }
 
 // Deep link for screenshots and sharing a view: ?view=<tab>&project=<id>&open=<ids|all>&select=node:<id> (or chat:, workcell:,
-// link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1.
+// link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1&live=1.
 function applyDeepLink() {
   const params = new URLSearchParams(location.search);
   if (params.get('project')) setProject(params.get('project'));
@@ -1257,6 +1313,7 @@ function applyDeepLink() {
   }
   if (params.get('convfilter')) setTimeout(() => convs.filterTo(params.get('convfilter')), 60);
   if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
+  if (params.get('live') === '1') setTimeout(openLive, 60);
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);

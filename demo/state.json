@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-10-09T15:00:00.000Z",
-  "waitingCount": 16,
+  "waitingCount": 15,
   "currency": {
     "code": "USD",
     "rate": 1
@@ -1424,11 +1424,62 @@
             ]
           },
           "costUSD": 14.2,
-          "workflows": [],
+          "workflows": [
+            {
+              "id": "wf_demo_checkout",
+              "name": "checkout-build",
+              "started": 5,
+              "done": 2,
+              "lastLabel": "Update the checkout docs",
+              "running": [
+                {
+                  "label": "Write the decline tests",
+                  "model": "sonnet"
+                },
+                {
+                  "label": "Review the retry groups",
+                  "model": "opus"
+                },
+                {
+                  "label": "Update the checkout docs",
+                  "model": "haiku"
+                }
+              ],
+              "updatedAt": "2026-10-09T14:59:00.000Z"
+            }
+          ],
           "startedAt": "2026-10-03T15:00:00.000Z",
           "updatedAt": "2026-10-09T14:56:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": false,
+          "itemCode": "or03",
+          "liveSteps": [
+            {
+              "kind": "read",
+              "target": "packages/core/src/payments/declines.ts",
+              "ts": "2026-10-09T14:53:00.000Z"
+            },
+            {
+              "kind": "edit",
+              "target": "packages/core/src/payments/declines.ts",
+              "ts": "2026-10-09T14:55:00.000Z"
+            },
+            {
+              "kind": "run",
+              "target": "Run the payment tests",
+              "ts": "2026-10-09T14:56:00.000Z"
+            },
+            {
+              "kind": "agent",
+              "target": "Review the retry groups",
+              "ts": "2026-10-09T14:58:00.000Z"
+            },
+            {
+              "kind": "edit",
+              "target": "packages/core/src/orders/checkout.ts",
+              "ts": "2026-10-09T14:59:00.000Z"
+            }
+          ]
         },
         {
           "sessionId": "708269ae-0043-498d-8cb3-4d811f4db9a4",
@@ -1482,7 +1533,25 @@
           "startedAt": "2026-10-06T15:00:00.000Z",
           "updatedAt": "2026-10-09T14:58:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": false,
+          "itemCode": "se01",
+          "liveSteps": [
+            {
+              "kind": "search",
+              "target": "levenshtein",
+              "ts": "2026-10-09T14:54:00.000Z"
+            },
+            {
+              "kind": "edit",
+              "target": "packages/search/fuzzy.ts",
+              "ts": "2026-10-09T14:57:00.000Z"
+            },
+            {
+              "kind": "run",
+              "target": "Run the search tests",
+              "ts": "2026-10-09T14:58:00.000Z"
+            }
+          ]
         },
         {
           "sessionId": "ed487e1e-87c6-45af-89db-011b2903f20f",
@@ -1764,8 +1833,8 @@
           "waiting": false,
           "lastStep": {
             "kind": "edit",
-            "target": "services/orders/src/retry-groups.ts",
-            "ts": "2026-10-09T14:56:00.000Z"
+            "target": "packages/core/src/orders/checkout.ts",
+            "ts": "2026-10-09T14:59:00.000Z"
           },
           "costUSD": 14.2,
           "startedAt": "2026-10-03T15:00:00.000Z",
@@ -2241,14 +2310,14 @@
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
-          "status": "idle",
+          "status": "busy",
           "entrypoint": "cli",
           "live": true,
           "bridgeUrl": null,
           "lastPrompt": "Notes written offline should sync when the phone is back online.",
           "lastAssistantText": "Sync now merges by paragraph. Should a conflict keep both versions or ask?",
           "waiting": {
-            "strong": true,
+            "strong": false,
             "weak": false,
             "items": []
           },
@@ -2256,9 +2325,26 @@
           "costUSD": 2.4,
           "workflows": [],
           "startedAt": "2026-10-09T07:00:00.000Z",
-          "updatedAt": "2026-10-09T14:20:00.000Z",
+          "updatedAt": "2026-10-09T14:59:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": false,
+          "liveSteps": [
+            {
+              "kind": "read",
+              "target": "src/sync.ts",
+              "ts": "2026-10-09T14:51:00.000Z"
+            },
+            {
+              "kind": "edit",
+              "target": "src/sync.ts",
+              "ts": "2026-10-09T14:56:00.000Z"
+            },
+            {
+              "kind": "think",
+              "target": "",
+              "ts": "2026-10-09T14:59:00.000Z"
+            }
+          ]
         },
         {
           "sessionId": "811d8a9f-e167-44d8-88d7-01fbb7666c38",
@@ -2323,12 +2409,16 @@
           "partId": null,
           "itemCode": null,
           "node": null,
-          "status": "idle",
-          "waiting": true,
-          "lastStep": null,
+          "status": "busy",
+          "waiting": false,
+          "lastStep": {
+            "kind": "think",
+            "target": "",
+            "ts": "2026-10-09T14:59:00.000Z"
+          },
           "costUSD": 2.4,
           "startedAt": "2026-10-09T07:00:00.000Z",
-          "updatedAt": "2026-10-09T14:20:00.000Z",
+          "updatedAt": "2026-10-09T14:59:00.000Z",
           "archived": false,
           "live": true,
           "chattable": false,
