@@ -68,8 +68,9 @@ async function withHub(opts, fn) {
     await fn({ hub, state: makeState(root), smDir, root });
   } finally {
     await hub.close();
-    rmSync(root, { recursive: true, force: true });
-    rmSync(smDir, { recursive: true, force: true });
+    // On Windows the permission relay a killed fake claude started keeps the folder open for a moment after the kill.
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
+    rmSync(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
   }
 }
 

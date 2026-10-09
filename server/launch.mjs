@@ -46,16 +46,20 @@ export function openUrl(url, { platform = process.platform, spawner = spawn } = 
   return detach(spawner, platform === 'darwin' ? 'open' : 'xdg-open', [url]);
 }
 
-function run(cmd, args, env = process.env) {
+// PowerShell's first start can take several seconds on a busy Windows machine (profile, antivirus scan), so it gets longer than the quick tools.
+const TIMEOUT_MS = 5000;
+const POWERSHELL_TIMEOUT_MS = 20_000;
+
+function run(cmd, args, env = process.env, timeout = TIMEOUT_MS) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 5000, windowsHide: true, env }, (err, stdout) => resolve(err ? null : stdout));
+    execFile(cmd, args, { timeout, windowsHide: true, env }, (err, stdout) => resolve(err ? null : stdout));
   });
 }
 
 // Epoch ms, or null when the process is gone or the time cannot be read. Used to spot a reused pid.
 export async function processStart(pid, { platform = process.platform } = {}) {
   const out = platform === 'win32'
-    ? await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Number(pid)}).StartTime.ToUniversalTime().ToString('o')`])
+    ? await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Number(pid)}).StartTime.ToUniversalTime().ToString('o')`], process.env, POWERSHELL_TIMEOUT_MS)
     : await run('ps', ['-p', String(pid), '-o', 'lstart='], { ...process.env, LC_ALL: 'C' });
   const ms = Date.parse(out?.trim() ?? '');
   return Number.isFinite(ms) ? ms : null;
