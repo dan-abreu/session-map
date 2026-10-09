@@ -1,13 +1,16 @@
 import { execFile, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { log } from './log.mjs';
 
 // The Microsoft Store alias lives in WindowsApps, which is not always on the PATH of a server started from a shell.
-function hasWtDefault(env = process.env) {
+// It is a reparse point that stat (and so existsSync) refuses with EACCES; lstat reads it.
+export function hasWt(env = process.env) {
   const dirs = String(env.PATH ?? env.Path ?? '').split(delimiter).filter(Boolean);
   if (env.LOCALAPPDATA) dirs.push(join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps'));
-  return dirs.some((d) => existsSync(join(d, 'wt.exe')));
+  return dirs.some((d) => {
+    try { return lstatSync(join(d, 'wt.exe'), { throwIfNoEntry: false }) !== undefined; } catch { return false; }
+  });
 }
 
 const psQuote = (s) => `'${String(s).replaceAll("'", "''")}'`;
@@ -24,9 +27,9 @@ function detach(spawner, cmd, args, cwd) {
 }
 
 // argv is run as is, never through a shell of ours; values come from the server's own state. An empty argv is a plain shell.
-export function newTerminal(cwd, argv, { platform = process.platform, spawner = spawn, hasWt = hasWtDefault } = {}) {
+export function newTerminal(cwd, argv, { platform = process.platform, spawner = spawn, hasWt: hasWtFn = hasWt } = {}) {
   if (platform === 'win32') {
-    if (hasWt()) return detach(spawner, 'wt.exe', ['-d', wtArg(cwd), ...argv.map(wtArg)], cwd);
+    if (hasWtFn()) return detach(spawner, 'wt.exe', ['-d', wtArg(cwd), ...argv.map(wtArg)], cwd);
     return detach(spawner, 'powershell.exe', argv.length ? ['-NoExit', '-Command', `& ${argv.map(psQuote).join(' ')}`] : ['-NoExit'], cwd);
   }
   if (platform === 'darwin') {

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { INTERNALS, runAction } from '../server/actions.mjs';
-import { newTerminal, openUrl, processStart } from '../server/launch.mjs';
+import { hasWt, newTerminal, openUrl, processStart } from '../server/launch.mjs';
 
 const VS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TERM_CLOSED = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -167,4 +167,17 @@ test('processStart reads the real start time of a running process', async () => 
   assert.ok(Number.isFinite(start), 'a number of ms');
   assert.ok(Math.abs(start - expected) < 5000, `${new Date(start).toISOString()} vs ${new Date(expected).toISOString()}`);
   assert.equal(await processStart(2 ** 22 + 12345), null, 'no such process');
+});
+
+// On Windows 11 wt.exe is a Store app alias: stat on it fails with EACCES, so existsSync says false. lstat sees it.
+test('hasWt finds wt.exe on the PATH or in WindowsApps, and says no when it is in neither', () => {
+  const base = mkdtempSync(join(tmpdir(), 'sm-wt-'));
+  try {
+    const apps = join(base, 'Microsoft', 'WindowsApps');
+    mkdirSync(apps, { recursive: true });
+    assert.equal(hasWt({ PATH: '', LOCALAPPDATA: base }), false);
+    writeFileSync(join(apps, 'wt.exe'), '');
+    assert.equal(hasWt({ PATH: '', LOCALAPPDATA: base }), true);
+    assert.equal(hasWt({ PATH: apps }), true);
+  } finally { rmSync(base, { recursive: true, force: true }); }
 });
