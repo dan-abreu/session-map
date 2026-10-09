@@ -1477,7 +1477,7 @@ body.is-empty .convs { display: none; }
 .lv-group-name { display: flex; align-items: baseline; gap: 8px; margin: 0; padding: 12px 20px 2px; font-size: 0.8125rem; font-weight: 700; color: var(--ink); }
 .lv-group-n { font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }
 .lv-cards { list-style: none; margin: 0; padding: 0; }
-.lv-card { display: grid; gap: 8px; padding: 14px 20px 16px; }
+.lv-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 14px 20px 16px; }
 .lv-card + .lv-card { border-top: 1px solid var(--line); }
 .lv-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .lv-dot { position: relative; flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--active); }
@@ -1488,22 +1488,22 @@ body.is-empty .convs { display: none; }
 .lv-when { flex: none; font-size: 0.75rem; color: var(--ink-2); }
 .lv-path { margin: -4px 0 0 16px; font-size: 0.75rem; color: var(--ink-2); overflow-wrap: anywhere; }
 .lv-path.is-off, .lv-path.is-idea, .lv-path.is-create-arch, .lv-path.is-flow { font-style: italic; }
-.lv-steps { list-style: none; margin: 0 0 0 16px; padding: 0; display: grid; gap: 3px; }
+.lv-steps { list-style: none; margin: 0 0 0 16px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
 .lv-step { display: flex; align-items: baseline; gap: 10px; font-size: 0.8125rem; color: var(--ink-2); }
 .lv-step-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lv-step-when { flex: none; font-size: 0.6875rem; }
 .lv-step.is-now { color: var(--active-ink); font-weight: 650; }
 .lv-card.is-asking .lv-step.is-now { color: var(--waiting-ink); }
 .lv-nosteps { margin: 0 0 0 16px; font-size: 0.8125rem; color: var(--ink-2); }
-.lv-agents { display: grid; gap: 10px; margin-left: 16px; padding: 10px 12px; border-radius: 10px; background: var(--bg-3); }
-.lv-wf { display: grid; gap: 5px; }
+.lv-agents { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-left: 16px; padding: 10px 12px; border-radius: 10px; background: var(--bg-3); }
+.lv-wf { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
 .lv-wf-head { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 0.8125rem; font-weight: 650; }
 .lv-wf-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lv-wf-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lv-wf-n { flex: none; font-size: 0.75rem; color: var(--ink-2); }
 .lv-wf-bar { display: block; height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .lv-wf-bar span { display: block; height: 100%; border-radius: 4px; background: var(--active); }
-.lv-wf-agents { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 4px; }
+.lv-wf-agents { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .lv-wf-agents li { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--ink-2); }
 .lv-agent-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lv-agent-label::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 7px; vertical-align: 1px; border-radius: 50%; background: var(--active); }

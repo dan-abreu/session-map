@@ -136,3 +136,13 @@ test('modelName: a bare alias gets a capital, a full id reads as a person says i
   assert.equal(modelName('claude-opus-5-5'), 'Opus 5.5');
   assert.equal(modelName(null), null);
 });
+
+// A grid track sized "auto" grows to the widest unbroken line, so long steps pushed the panel sideways (seen on the real
+// state, 2026-10-09): every grid of the card keeps its column at the panel's width and lets the text ellipsize.
+test('the live panel card grids clamp their column, so a long step ellipsizes instead of widening the panel', () => {
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  for (const cls of ['lv-card', 'lv-steps', 'lv-agents', 'lv-wf']) {
+    const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, sel]) => sel.split(',').some((s) => s.trim() === `.${cls}`));
+    assert.ok(rules.some(([, , body]) => /grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(body)), `.${cls} has grid-template-columns: minmax(0, 1fr)`);
+  }
+});
