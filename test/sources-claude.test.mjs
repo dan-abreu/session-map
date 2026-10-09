@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   claudeDir, listLiveSessions, listTranscripts, readTranscript,
-  readHelperUsage, readWorkflows, readFullTranscript,
+  readHelperUsage, readWorkflows, readFullTranscript, forEachLine,
 } from '../server/sources/claude.mjs';
 
 const FIX = fileURLToPath(new URL('./fixtures/claude', import.meta.url));
@@ -200,4 +200,16 @@ test('readFullTranscript returns readable messages with tools in one line', () =
   assert.match(msgs[1].text, /Starting the checkout work\./);
   assert.match(msgs[1].text, /\[Edit \/work\/acme-shop\/src\/checkout\.ts\]/);
   assert.ok(!msgs.some((m) => m.text.includes('injected block')));
+});
+
+test('forEachLine reads a file in chunks, keeping lines and multibyte text whole across chunk edges', () => {
+  withTempDir((dir) => {
+    const path = join(dir, 'big.jsonl');
+    const lines = Array.from({ length: 50 }, (_, i) => JSON.stringify({ i, text: 'decisão já tomada ✓ '.repeat(i % 4) }));
+    writeFileSync(path, `${lines.join('\n')}\n`);
+    const seen = [];
+    forEachLine(path, (line, i) => seen.push([i, line]), { chunkBytes: 7 });
+    assert.deepEqual(seen.map(([, l]) => l), lines);
+    assert.deepEqual(seen.map(([i]) => i), lines.map((_, i) => i));
+  });
 });

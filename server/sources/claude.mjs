@@ -300,6 +300,25 @@ function readSlice(path, position, length) {
   }
 }
 
+// Splits on the newline byte, so a UTF-8 character cut by a chunk edge is joined back before decoding.
+// One string per line, never per file: a transcript can outgrow the longest string V8 allows (~512 MB).
+export function forEachLine(path, fn, { chunkBytes = 8 * 1024 * 1024 } = {}) {
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.alloc(chunkBytes);
+    let rest = Buffer.alloc(0);
+    let index = 0;
+    for (let n; (n = readSync(fd, buf, 0, chunkBytes, null)) > 0;) {
+      let data = Buffer.concat([rest, buf.subarray(0, n)]);
+      for (let nl; (nl = data.indexOf(10)) !== -1; data = data.subarray(nl + 1)) fn(data.toString('utf8', 0, nl), index++);
+      rest = Buffer.from(data);
+    }
+    if (rest.length) fn(rest.toString('utf8'), index);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 // Whole-file pass for what the tail cannot tell: full usage, an older card, the title.
 // Only lines that can matter are parsed; cached per file version because the page polls.
 const fullScanCache = new Map();
@@ -310,7 +329,7 @@ function fullScan(path, st) {
   const usageById = new Map();
   let lastCardText = null;
   let aiTitle = null;
-  readFileSync(path, 'utf8').split('\n').forEach((line, i) => {
+  forEachLine(path, (line, i) => {
     if (!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
