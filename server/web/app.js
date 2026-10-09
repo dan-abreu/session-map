@@ -9,6 +9,7 @@ import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
+import { createResizer } from './resize.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -17,6 +18,7 @@ const PHONE = window.matchMedia('(max-width: 719px)');
 const VIEWS = ['map', 'board', 'history', 'costs', 'discover'];
 const RANGES = ['all', 'today', 'd7', 'd30'];
 const SEARCH_MAX = 8;
+const CHAT_WIDTH = 460;
 
 const store = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },
@@ -1078,6 +1080,7 @@ function wire() {
       renderMap();
     },
   });
+  createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative },

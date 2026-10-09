@@ -262,7 +262,9 @@ button, select, input { font: inherit; color: inherit; }
 }
 .fit-btn { position: absolute; right: 16px; bottom: 16px; z-index: 3; box-shadow: var(--shadow); }
 .stage:has(.panel:not([hidden])) .fit-btn { right: calc(var(--panel-w) + 28px); }
-.stage:has(.chat:not([hidden])) .fit-btn { right: calc(min(460px, 100% - 24px) + 28px); }
+.stage:has(.chat:not([hidden])) .fit-btn { right: calc(var(--chat-w, 460px) + 28px); }
+/* The map gives the chat its width instead of drawing under it. */
+.stage:has(.chat:not([hidden])) .mm { margin-right: calc(var(--chat-w, 460px) + 12px); }
 
 .notice {
   position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
@@ -859,7 +861,17 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
 
 /* ---------- chat sheet ---------- */
 
-.chat { top: 10px; right: 12px; bottom: 10px; width: min(460px, calc(100% - 24px)); }
+.chat { top: 10px; right: 12px; bottom: 10px; width: var(--chat-w, min(460px, calc(100% - 24px))); }
+.sheet-resize { position: absolute; left: -7px; top: 16px; bottom: 16px; width: 14px; z-index: 1; cursor: col-resize; touch-action: none; border-radius: 7px; }
+.sheet-resize::after {
+  content: ""; position: absolute; left: 5px; top: 50%; width: 4px; height: 44px; margin-top: -22px;
+  border-radius: 4px; background: var(--line); opacity: 0; transition: opacity 150ms, background-color 150ms;
+}
+.sheet:hover > .sheet-resize::after, .sheet-resize:focus-visible::after { opacity: 1; }
+.sheet-resize:hover::after, body.is-resizing .sheet-resize::after { opacity: 1; background: var(--focus); }
+.sheet-resize:focus-visible { outline-offset: -2px; }
+body.is-resizing { cursor: col-resize; user-select: none; }
+body.is-resizing .sheet { animation: none; }
 .chat .sheet-head h2 { overflow-wrap: anywhere; }
 .chat-mode { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--line); font-size: 0.8125rem; color: var(--ink-2); }
 .chat-mode { flex-wrap: wrap; }
@@ -897,6 +909,7 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
   .hist-read { position: fixed; inset: auto 0 0 0; top: 96px; z-index: 5; max-height: none; border-radius: 16px 16px 0 0; box-shadow: var(--shadow); animation: sheet-up 220ms var(--ease-out); }
   .read-back { display: inline-flex; }
   .chat { max-height: 86%; top: auto; width: auto; }
+  .sheet-resize { display: none; }
   .est-row { grid-template-columns: minmax(0, 1fr); }
   .view-wrap { padding-top: 16px; }
 }
