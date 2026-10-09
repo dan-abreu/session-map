@@ -512,3 +512,31 @@ test('units without a card get a nucleus written by the AI from their chats; a c
     rmSync(join(root, '..'), { recursive: true, force: true });
   }
 });
+
+test('collect tidies an older units.json once: twins merged, readable names, cleaned rename events', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'harbor'));
+  try {
+    seedUnitsFile(smDir, root, [
+      { id: 'comunicacao', name: 'comunicacao', origin: 'seed', paths: [] },
+      { id: 'boats', name: 'Boats', origin: 'ai', paths: [], chatIds: [A] },
+      { id: 'boats-2', name: 'boats', origin: 'ai', paths: [], chatIds: [B] },
+      { id: 'unsorted', name: 'Unsorted', paths: [] },
+    ]);
+    appendEvents(smDir, projectIdOf(root), [{ kind: 'renamed', ts: iso(HOUR), branch: null, author: { name: 'AI', email: '' }, unitIds: ['boats'], subject: 'Docas do docas do porto → Boats' }]);
+    writeChat(dir, { id: A, cwd: root, title: 'Dock A' });
+    writeChat(dir, { id: B, cwd: root, title: 'Dock B' });
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const p = state.projects[0];
+    assert.deepEqual(p.units.map((u) => u.name).sort(), ['Boats', 'Comunicação', 'Unsorted']);
+    assert.equal(p.chats.find((c) => c.sessionId === B).unitId, 'boats');
+    const stored = JSON.parse(readFileSync(join(smDir, 'brain', projectIdOf(root), 'units.json'), 'utf8'));
+    assert.equal(stored.length, 3, 'the tidy tree is saved');
+    assert.equal(p.activity.find((a) => a.kind === 'renamed').subject, 'Docas do porto → Boats');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});

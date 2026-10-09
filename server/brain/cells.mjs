@@ -2,6 +2,9 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import { log } from '../log.mjs';
 import { normalizePath, projectIdOf } from '../paths.mjs';
+import { plain, readableName, sameName } from './names.mjs';
+
+export { plain };
 
 const SEED_FOLDERS_MAX = 12;
 const EDITED_WEIGHT = 3;
@@ -44,7 +47,6 @@ export function readJsonFile(path, fallback) {
   }
 }
 
-export const plain = (s) => String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 // Ids become nucleus file names, so they stay plain slugs; once given they never change.
 export function newUnitId(name, units) {
@@ -61,6 +63,12 @@ const covers = (path, prefix) => path === prefix || path.startsWith(`${prefix}/`
 // Backticked `a/b` or a bare token with at least two slashes; URLs and "/api/x" never match.
 const CITED_PATH_RE = /`([^`\s]+)`|(?<![\w/:.@`-])([\w.@-]+(?:\/[\w.@-]+){2,})/g;
 const PATH_SHAPE_RE = /^[\w@][\w.@-]*(?:\/[\w.@-]+)+$/;
+
+// A spec's own title, unless it is only the generated "<folder> Specification".
+function headingOf(markdown, slug) {
+  const heading = /^#\s+(.+)$/m.exec(markdown)?.[1].replace(/\s+spec(ification)?$/i, '').trim();
+  return heading && !heading.includes('/') && !sameName(heading, slug) ? heading : null;
+}
 
 function pathsCitedIn(markdown) {
   const found = new Set();
@@ -90,15 +98,25 @@ export function seedUnits(root, { gitLog = [] } = {}) {
     specs = readdirSync(specsDir, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== UNSORTED).map((e) => e.name).sort();
   } catch { /* no OpenSpec: fall back to the folders the git log touches most */ }
   const units = [];
-  const add = (name, paths) => units.push({ id: newUnitId(name, units), name, paths });
+  // Ids keep coming from the folder, as before readable names: nucleus files and older units.json rows use them.
+  const add = (slug, name, paths) => {
+    const taken = units.some((u) => sameName(u.name, name));
+    units.push({ id: newUnitId(slug, units), name: taken ? `${name} (${slug})` : name, paths });
+  };
   if (specs.length) {
-    for (const name of specs) {
+    for (const slug of specs) {
       let text = '';
-      try { text = readFileSync(join(specsDir, name, 'spec.md'), 'utf8'); } catch { /* spec folder without spec.md */ }
-      add(name, pathsCitedIn(text));
+      try { text = readFileSync(join(specsDir, slug, 'spec.md'), 'utf8'); } catch { /* spec folder without spec.md */ }
+      add(slug, headingOf(text, slug) ?? readableName(slug), pathsCitedIn(text));
     }
   } else {
-    for (const folder of foldersByActivity(gitLog)) add(folder, [folder]);
+    const folders = foldersByActivity(gitLog);
+    const last = (f) => f.split('/').at(-1);
+    for (const folder of folders) {
+      const twin = folders.some((o) => o !== folder && sameName(readableName(last(o)), readableName(last(folder))));
+      const parent = folder.split('/').at(-2);
+      add(folder, twin && parent ? `${readableName(last(folder))} (${parent})` : readableName(last(folder)), [folder]);
+    }
   }
   return [...units, { id: UNSORTED, name: 'Unsorted', paths: [] }];
 }

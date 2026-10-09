@@ -5,9 +5,10 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiNucleusFile, aiStatus, lifeOf, perceiveChanged, refreshNuclei, startBootstrap, unitsFile } from './ai/life.mjs';
 import { nucleusInputOf } from './ai/nucleus.mjs';
-import { normalizeUnit } from './ai/perceive.mjs';
+import { normalizeUnit, tidyUnits } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { UNSORTED, brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy } from './brain/cells.mjs';
+import { UNSORTED, brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy, writeUnits } from './brain/cells.mjs';
+import { cleanUnitName } from './brain/names.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
 import { linkUnits, parentOf, readLineage, specRefsOf } from './brain/lineage.mjs';
 import { emptyNucleus, mergeNucleus, readNucleus, seedNucleus, withAiNucleus, writeNucleus } from './brain/nucleus.mjs';
@@ -230,7 +231,9 @@ function activityItems(raw, events, units, workCells, items) {
       const cell = cellById.get(e.workCellId);
       return { kind: e.kind, ts: e.ts, branch: cell?.branch ?? e.workCellId, author: cell?.owner ?? NOBODY, unitIds: cell ? [cell.unitId] : [], workCellId: e.workCellId };
     }
-    return { kind: e.kind, ts: e.ts, branch: e.branch ?? '', author: e.author ?? NOBODY, unitIds: e.unitIds ?? [], subject: e.subject };
+    // Names the AI gave before they were cleaned still sit in old rename events.
+    const subject = e.kind === 'renamed' && typeof e.subject === 'string' ? e.subject.split(' → ').map((n) => cleanUnitName(n) || n).join(' → ') : e.subject;
+    return { kind: e.kind, ts: e.ts, branch: e.branch ?? '', author: e.author ?? NOBODY, unitIds: e.unitIds ?? [], subject };
   });
   return [...fromGit, ...fromEvents].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, ACTIVITY_MAX);
 }
@@ -245,7 +248,10 @@ async function buildProject(ctx, { root, items }) {
   const main = await mainBranch(root);
   const isNew = !existsSync(unitsFile(smDir, projectId));
   const gitLog = isNew && main ? (await git(root, ['log', '--name-only', '--format=', '-n', '500'])).split(/\r?\n/).filter(Boolean) : [];
-  const units = loadUnits(smDir, root, { gitLog }).map(normalizeUnit);
+  const loaded = loadUnits(smDir, root, { gitLog }).map(normalizeUnit);
+  // Older trees may hold twins and bare folder names; read, tidied and saved with no await in between.
+  const units = tidyUnits(loaded);
+  if (JSON.stringify(units) !== JSON.stringify(loaded)) writeUnits(smDir, projectId, units);
   const memo = await gitSide(smDir, root, projectId, main, units, nowIso);
   autoFetch(root, config.autoFetchMinutes).then((at) => { memo.fetchedAt = at; });
   const overrides = readOverrides(smDir, projectId);

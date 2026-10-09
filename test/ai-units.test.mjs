@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPerception, perceive } from '../server/ai/perceive.mjs';
+import { applyPerception, perceive, tidyUnits } from '../server/ai/perceive.mjs';
+import { cleanUnitName } from '../server/brain/names.mjs';
 import { applyChanges, consolidate, shouldConsolidate } from '../server/ai/consolidate.mjs';
 import { consolidatePrompt, perceivePrompt } from '../server/ai/prompts.mjs';
 
@@ -214,4 +215,62 @@ test('applyPerception puts the chat in the unit that already has that name inste
   const next = applyPerception(seedUnits(), { sessionId: S1 }, { unitId: null, name: 'coupons', purpose: '', tags: [] }, NOW);
   assert.equal(next.length, seedUnits().length);
   assert.ok(next.find((u) => u.id === 'coupons').chatIds.includes(S1));
+});
+
+test('cleanUnitName collapses repeated words, keeps 40 characters cut at a word and drops trailing punctuation', () => {
+  assert.equal(cleanUnitName('Roteiro de automação do automação do Chrome'), 'Roteiro de automação do Chrome');
+  assert.equal(cleanUnitName('Pix Pix pagamento'), 'Pix pagamento');
+  assert.equal(cleanUnitName('Fluxo do negócio.'), 'Fluxo do negócio');
+  assert.equal(cleanUnitName('Integração com o gateway de pagamentos internacionais'), 'Integração com o gateway de pagamentos');
+  assert.ok(cleanUnitName('x'.repeat(60)).length <= 40);
+});
+
+test('perceive and consolidation clean the names the AI gives', async () => {
+  const p = await perceive(digest, seedUnits(), answering({ unitId: null, name: 'Pix do Pix do checkout:', purpose: '', tags: [] }).ask);
+  assert.equal(p.name, 'Pix do checkout');
+  const changes = await consolidate([unit('a'), unit('b')], [], answering({ changes: [{ kind: 'group', ids: ['a', 'b'], name: 'Tema tema', purpose: '', tags: [] }] }).ask);
+  assert.equal(changes[0].name, 'Tema');
+});
+
+test('applyPerception joins the unit with the same name whatever the accents or case, seeded ones too', () => {
+  const units = [unit('comunicacao', { name: 'comunicacao', origin: 'seed' }), unit('unsorted', { name: 'Unsorted' })];
+  const next = applyPerception(units, { sessionId: S1 }, { unitId: null, name: 'Comunicação', purpose: '', tags: [] }, NOW);
+  assert.equal(next.length, 2);
+  assert.deepEqual(next[0].chatIds, [S1]);
+});
+
+test('consolidation never renames a unit to a name another unit of its level already has, and group reuses one despite spacing', () => {
+  const units = [unit('a', { name: 'Pix' }), unit('b', { name: 'Boleto' }), unit('c'), unit('d'), unit('redes', { level: 'tissue', name: 'Redes sociais' })];
+  const { units: renamed } = applyChanges(units, [{ kind: 'rename', id: 'b', name: 'pix', purpose: null }], NOW);
+  assert.equal(renamed.find((u) => u.id === 'b').name, 'Boleto');
+  const { units: grouped } = applyChanges(units, [{ kind: 'group', ids: ['c', 'd'], name: 'Redes  Sociais', purpose: '', tags: [] }], NOW);
+  assert.equal(grouped.filter((u) => u.level === 'tissue').length, 1);
+  assert.equal(grouped.find((u) => u.id === 'c').parentId, 'redes');
+});
+
+test('tidyUnits merges units of one level that share a name, keeping the pinned one, and makes old names readable', () => {
+  const units = [
+    unit('comunicacao', { name: 'comunicacao', origin: 'seed', paths: ['apps/a'] }),
+    unit('mapa', { name: 'Mapa visual', chatIds: [S1], tags: ['mapa'] }),
+    unit('mapa-2', { name: 'mapa  visual', chatIds: [S2], pinned: true, tags: ['ui'] }),
+    unit('child', { name: 'Child', parentId: 'mapa-tissue' }),
+    unit('mapa-tissue', { name: 'Telas', level: 'tissue' }),
+    unit('mapa-tissue-2', { name: 'Telas', level: 'tissue' }),
+    unit('kid2', { name: 'Kid two', parentId: 'mapa-tissue-2' }),
+    unit('roteiro', { name: 'Roteiro do roteiro do Chrome' }),
+    unit('pinned-seed', { name: 'pedidos', origin: 'seed', pinned: true }),
+    unit('unsorted', { name: 'Unsorted', origin: 'seed' }),
+  ];
+  const next = tidyUnits(units);
+  assert.equal(next.find((u) => u.id === 'comunicacao').name, 'Comunicação');
+  assert.equal(next.find((u) => u.id === 'pinned-seed').name, 'pedidos', 'a pinned name is the person\'s');
+  assert.equal(next.some((u) => u.id === 'mapa'), false);
+  const kept = next.find((u) => u.id === 'mapa-2');
+  assert.deepEqual(kept.chatIds.sort(), [S1, S2].sort());
+  assert.deepEqual(kept.tags.sort(), ['mapa', 'ui']);
+  assert.equal(next.filter((u) => u.level === 'tissue').length, 1);
+  assert.equal(next.find((u) => u.id === 'kid2').parentId, 'mapa-tissue');
+  assert.equal(next.find((u) => u.id === 'roteiro').name, 'Roteiro do Chrome');
+  assert.equal(next.find((u) => u.id === 'unsorted').name, 'Unsorted');
+  assert.deepEqual(tidyUnits(next), next, 'running it again changes nothing');
 });

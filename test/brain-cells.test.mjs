@@ -61,7 +61,7 @@ test('loadUnits seeds once, persists units.json and then reads it back (edits su
     writeFileSync(file, JSON.stringify(edited));
     spec(root, 'later', 'new spec after the first run');
     const second = loadUnits(smDir, root, { gitLog: [] });
-    assert.equal(first[0].name, 'auth');
+    assert.equal(first[0].name, 'Auth');
     assert.equal(second[0].name, 'Renamed by the user');
     assert.ok(!second.some((u) => u.id === 'later'), 'no re-seeding once persisted');
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(smDir, { recursive: true, force: true }); }
@@ -128,11 +128,10 @@ test('seedUnits slugifies folder ids so dot and @ folders keep a nucleus file', 
   try {
     const gitLog = ['.github/workflows/ci.yml', '.github/workflows/ci.yml', 'src/@types/a.d.ts', 'src_x/@types/b.d.ts'];
     const units = seedUnits(root, { gitLog });
-    const byName = Object.fromEntries(units.map((u) => [u.name, u]));
-    assert.equal(byName['.github/workflows'].id, 'github-workflows');
-    assert.deepEqual(byName['.github/workflows'].paths, ['.github/workflows']);
-    assert.equal(byName['src/@types'].id, 'src-types');
-    assert.equal(byName['src_x/@types'].id, 'src-x-types');
+    const byPath = Object.fromEntries(units.map((u) => [u.paths[0], u]));
+    assert.equal(byPath['.github/workflows'].id, 'github-workflows');
+    assert.equal(byPath['src/@types'].id, 'src-types');
+    assert.equal(byPath['src_x/@types'].id, 'src-x-types');
     const ids = units.map((u) => u.id);
     assert.equal(new Set(ids).size, ids.length, 'ids are unique');
     const nucleus = { state: 'ci runs on push', decided: [], todo: ['cache deps'], recent: [] };
@@ -151,6 +150,31 @@ test('seedUnits de-duplicates slugs and slugifies OpenSpec folder ids too', () =
     spec(root, 'billing-v2', 'Twin.\n');
     const units = seedUnits(root, { gitLog: [] });
     assert.deepEqual(units.map((u) => u.id), ['billing-v2', 'billing-v2-2', 'unsorted']);
-    assert.equal(units[0].name, 'Billing_v2');
+    assert.equal(units[0].name, 'Billing v2');
+    assert.notEqual(units[1].name, units[0].name, 'no two units share a name');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('seedUnits names a spec unit by its first heading, else by its folder with capital letter and accents', () => {
+  const root = tmp();
+  try {
+    spec(root, 'auth', '# Login and sessions\n\nWords.\n');
+    spec(root, 'comunicacao', '# comunicacao/envio Specification\n');
+    spec(root, 'configuracoes', 'No heading.\n');
+    spec(root, 'seguranca', '');
+    spec(root, 'design-system', '# design-system Specification\n');
+    const names = Object.fromEntries(seedUnits(root, { gitLog: [] }).map((u) => [u.id, u.name]));
+    assert.deepEqual(names, { auth: 'Login and sessions', comunicacao: 'Comunicação', configuracoes: 'Configurações', seguranca: 'Segurança', 'design-system': 'Design system', unsorted: 'Unsorted' });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('seedUnits names a folder unit by its last folder, with the parent only when two would clash', () => {
+  const root = tmp();
+  try {
+    const gitLog = ['src/shop/a.ts', 'apps/web/x.ts', 'packages/web/y.ts'];
+    const names = Object.fromEntries(seedUnits(root, { gitLog }).map((u) => [u.paths[0] ?? u.id, u.name]));
+    assert.equal(names['src/shop'], 'Shop');
+    assert.equal(names['apps/web'], 'Web (apps)');
+    assert.equal(names['packages/web'], 'Web (packages)');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

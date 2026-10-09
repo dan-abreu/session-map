@@ -1,8 +1,8 @@
 import { CONSOLIDATE_SCHEMA, consolidatePrompt } from './prompts.mjs';
+import { cleanUnitName, sameName } from '../brain/names.mjs';
 import { cleanTags, isEditable, newUnit, normalizeUnit } from './perceive.mjs';
 
 const LEVELS = ['cell', 'tissue', 'organ'];
-const NAME_MAX = 40;
 const PURPOSE_MAX = 160;
 const PERCEPTIONS_PER_PASS = 5;
 const DAY = 24 * 60 * 60 * 1000;
@@ -29,8 +29,8 @@ export const shouldConsolidate = (perceptionsSince, lastAtMs, now) =>
 function shapeOf(c) {
   if (!c || typeof c !== 'object') return null;
   if (c.kind === 'fuse') return { kind: 'fuse', ids: ids(c.ids), into: c.into };
-  if (c.kind === 'group') return { kind: 'group', ids: ids(c.ids), name: text(c.name, NAME_MAX), purpose: text(c.purpose, PURPOSE_MAX), tags: cleanTags(c.tags) };
-  if (c.kind === 'rename') return { kind: 'rename', id: c.id, name: text(c.name, NAME_MAX), purpose: text(c.purpose, PURPOSE_MAX) || null };
+  if (c.kind === 'group') return { kind: 'group', ids: ids(c.ids), name: cleanUnitName(c.name), purpose: text(c.purpose, PURPOSE_MAX), tags: cleanTags(c.tags) };
+  if (c.kind === 'rename') return { kind: 'rename', id: c.id, name: cleanUnitName(c.name), purpose: text(c.purpose, PURPOSE_MAX) || null };
   if (c.kind === 'move') return { kind: 'move', id: c.id, parentId: c.parentId ?? null };
   return null;
 }
@@ -52,7 +52,9 @@ function isValid(units, c) {
       return level < LEVELS.length - 1 && c.ids.every((id) => rank(byId.get(id)) === level);
     }
     case 'rename':
-      return Boolean(c.name) && free(c.id);
+      // Two units of one level with one name read as one on the map.
+      return Boolean(c.name) && free(c.id)
+        && !units.some((u) => u.id !== c.id && u.level === byId.get(c.id).level && sameName(u.name, c.name));
     case 'move':
       if (!free(c.id) || !leftParentFree(c.id)) return false;
       // Parents always sit at a higher level, so a move can never close a loop.
@@ -96,8 +98,8 @@ export function applyChanges(units, changes, now = new Date().toISOString()) {
       const level = rank(children[0]) + 1;
       const shared = parents.size === 1 ? byId.get(children[0].parentId) : null;
       const parentId = shared && rank(shared) > level ? shared.id : null;
-      const sameName = (u) => u.level === LEVELS[level] && plainName(u.name) === plainName(c.name) && isEditable(u);
-      const parent = next.find(sameName) ?? newUnit(next, { ...c, level: LEVELS[level], parentId }, now);
+      const named = (u) => u.level === LEVELS[level] && sameName(u.name, c.name) && isEditable(u);
+      const parent = next.find(named) ?? newUnit(next, { ...c, level: LEVELS[level], parentId }, now);
       for (const child of children) child.parentId = parent.id;
       if (!next.includes(parent)) next.push(parent);
       events.push(event('grouped', now, [parent.id, ...c.ids], parent.name));
@@ -116,7 +118,6 @@ export function applyChanges(units, changes, now = new Date().toISOString()) {
   return { units: withoutEmptyGroups(next), events };
 }
 
-const plainName = (name) => String(name).toLowerCase().replace(/s+/g, ' ').trim();
 
 // A tissue or organ the AI made is only its members; once they all left, it is noise on the map.
 function withoutEmptyGroups(units) {
