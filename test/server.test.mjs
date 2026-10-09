@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, editUnits } from '../server/main.mjs';
 import { loadToken, sameToken } from '../server/auth.mjs';
+import { archiveTranscript } from '../server/archive.mjs';
+import { listTranscripts } from '../server/sources/claude.mjs';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 
@@ -55,7 +57,6 @@ test('locally the page and an empty state open without a token', async () => {
     const page = await call('GET', '/');
     assert.equal(page.status, 200);
     assert.match(page.headers['content-type'], /text\/html/);
-    assert.match(page.headers['set-cookie'][0], /^sm_token=[0-9a-f]{64}; .*HttpOnly.*SameSite=Strict/);
     const state = await call('GET', '/api/state');
     assert.equal(state.status, 200);
     const body = JSON.parse(state.text);
@@ -83,6 +84,22 @@ test('from the network: no token is 401 and leaks nothing; ?k= sets the cookie a
   });
 });
 
+test('a plain local GET never hands out the token cookie; only the ?k= link does', async () => {
+  await withServer({}, async ({ call, token, port }) => {
+    for (const path of ['/', '/api/state', '/app.js']) {
+      const res = await call('GET', path);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers['set-cookie'], undefined, path);
+    }
+    const write = { 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' };
+    const body = { action: 'open', sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+    assert.equal((await call('POST', '/api/action', { headers: write, body })).status, 401);
+    const link = await call('GET', `/?k=${token}`);
+    assert.equal(link.status, 302);
+    assert.match(link.headers['set-cookie'][0], /^sm_token=[0-9a-f]{64}; .*HttpOnly.*SameSite=Strict/);
+  });
+});
+
 test('a loopback request with a foreign Host (DNS rebinding) is treated as remote', async () => {
   await withServer({}, async ({ call }) => {
     assert.equal((await call('GET', '/api/state', { headers: { host: 'evil.example:4001' } })).status, 401);
@@ -106,11 +123,26 @@ test('writes need the custom header, a same-origin Origin and the token, even lo
 });
 
 test('--demo serves demo/state.json without touching the user disk', async () => {
-  await withServer({ demo: true }, async ({ call }) => {
-    const res = await call('GET', '/api/state');
-    assert.equal(res.status, 200);
-    assert.deepEqual(JSON.parse(res.text), DEMO);
-  });
+  const root = mkdtempSync(join(tmpdir(), 'sm-srv-demo-'));
+  const dir = join(root, 'claude');
+  const smDir = join(root, 'sm');
+  cpSync(new URL('./fixtures/claude/', import.meta.url), dir, { recursive: true });
+  const S1 = '11111111-1111-4111-8111-111111111111';
+  assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S1), smDir), 'archived');
+  try {
+    await withServer({ demo: true, dir, smDir }, async ({ call }) => {
+      const res = await call('GET', '/api/state');
+      assert.equal(res.status, 200);
+      assert.deepEqual(JSON.parse(res.text), DEMO);
+      const history = await call('GET', '/api/history?q=checkout');
+      assert.equal(history.status, 200);
+      assert.deepEqual(JSON.parse(history.text).results, []);
+      assert.doesNotMatch(history.text, /Checkout page work/);
+      const conv = await call('GET', `/api/conversation/${S1}`);
+      assert.equal(conv.status, 404);
+      assert.doesNotMatch(conv.text, /Checkout/);
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('history search and archived conversation routes validate their input', async () => {

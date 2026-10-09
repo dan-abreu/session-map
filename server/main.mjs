@@ -157,13 +157,16 @@ export function createApp({
     const path = url.pathname;
     const parts = path.split('/').map((p) => decodeURIComponent(p));
     if (req.method === 'GET' && path === '/api/state') return send(res, 200, await state());
+    // The demo is for screenshots: the real archive stays out of it.
     if (req.method === 'GET' && path === '/api/history') {
+      if (demo) return send(res, 200, { results: [] });
       const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir));
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20 }) });
     }
     if (req.method === 'GET' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       const id = parts[3];
       if (!UUID_RE.test(id)) throw new HttpError(400, 'bad-session');
+      if (demo) throw new HttpError(404, 'unknown-session');
       const entry = readIndex(smDir).find((e) => e.sessionId === id);
       const messages = entry && !isAiRunnerCwd(entry.cwd, smDir) ? readArchived(smDir, id) : [];
       if (!messages.length) throw new HttpError(404, 'unknown-session');
@@ -225,7 +228,6 @@ export function createApp({
     const auth = authorize(req, url, { token, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
     if (auth.status !== 200) return send(res, auth.status, auth.status === 401 ? 'token required' : 'forbidden');
-    if (auth.cookie) res.setHeader('set-cookie', auth.cookie);
     try {
       await route(req, res, url);
     } catch (err) {
@@ -256,9 +258,9 @@ export function start(argv = process.argv.slice(2)) {
   const app = createApp({ dir, smDir, demo: values.demo, token });
   const host = values.lan ? '0.0.0.0' : '127.0.0.1';
   app.listen(port, host, () => {
-    const links = { local: `http://127.0.0.1:${port}/` };
+    // The person's own terminal: the links carry the token, the only way a page gets the cookie it needs to write.
+    const links = { local: `http://127.0.0.1:${port}/?k=${token}` };
     const ip = values.lan && lanAddress();
-    // The person's own terminal: the network link has to carry the token to be usable from the phone.
     if (ip) links.lan = `http://${ip}:${port}/?k=${token}`;
     log('info', 'listening', links);
   });

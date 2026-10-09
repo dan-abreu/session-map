@@ -52,7 +52,7 @@ function sameOrigin(req) {
   }
 }
 
-// → {status: 200, cookie?} to go on, {status: 302, cookie, location} after ?k=, or {status: 401|403}.
+// → {status: 200} to go on, {status: 302, cookie, location} after ?k=, or {status: 401|403}.
 export function authorize(req, url, { token, address }) {
   const fromCookie = sameToken(cookieToken(req), token);
   if (WRITE_METHODS.has(req.method)) {
@@ -65,8 +65,7 @@ export function authorize(req, url, { token, address }) {
     url.searchParams.delete('k');
     return { status: 302, cookie: tokenCookie(token), location: `${url.pathname}${url.search}` };
   }
-  const local = isLocal(address, req.headers.host);
-  if (!local && !fromCookie) return { status: 401 };
-  // The local page gets the cookie so its own writes carry the token.
-  return local && !fromCookie ? { status: 200, cookie: tokenCookie(token) } : { status: 200 };
+  // Local reads are open, but the cookie only comes from ?k=: any local process could otherwise fetch the token with
+  // one GET, including another OS user who cannot read the 0600 token file.
+  return fromCookie || isLocal(address, req.headers.host) ? { status: 200 } : { status: 401 };
 }
