@@ -239,3 +239,11 @@ test('readTranscript lists the item codes the conversation cites, counted, in th
     assert.deepEqual(readTranscript(transcript(C)).mentionedCodes.filter((m) => m.code === 'sf01'), []);
   });
 });
+
+test('a code with a longer word after the dash (pf-lacuna2) is cited too', () => {
+  withTempDir((dir) => {
+    const p = join(dir, `${A}.jsonl`);
+    writeFileSync(p, `${JSON.stringify({ type: 'user', sessionId: A, cwd: '/work/acme', timestamp: '2026-10-09T10:00:00.000Z', message: { role: 'user', content: 'Review `pf-lacuna2` today' } })}\n`);
+    assert.deepEqual(readTranscript(p).mentionedCodes, [{ code: 'pf-lacuna2', n: 1 }]);
+  });
+});

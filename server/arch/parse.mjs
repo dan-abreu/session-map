@@ -7,7 +7,7 @@ export const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/
 
 const MISSING_HEADINGS = { oquefalta: 'pt', whatsmissing: 'en', whatismissing: 'en', todo: 'en' };
 const CODE_PATHS_HEADINGS = { ondeestanocodigo: 'pt', whereinthecode: 'en' };
-const CODE_RE = /^[a-z]{1,4}(?:-[a-z]{1,4})?\d{1,4}$/i;
+const CODE_RE = /^[a-z]{1,4}(?:-[a-z]{1,8})?\d{1,4}$/i;
 const ITEM_RE = /^[-*+]\s+\[([ xX])\]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const FENCE_RE = /^\s*(```|~~~)/;

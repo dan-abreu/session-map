@@ -123,3 +123,8 @@ test('a part lists the other parts its file links to, never itself or a file out
   assert.deepEqual(part(a, 'payments').refs, []);
   assert.deepEqual(part(a, 'storefront').refs, ['payments']);
 });
+
+test('an item code may have a longer word after the dash', () => {
+  const a = parseArch('docs/arquitetura', { 'README.md': '# P\n', 'vero.md': '# Verô\n\n## O que falta\n\n- [ ] Pente fino nas mensagens `pf-lacuna1`\n- [ ] Outra `pf-pc24`\n' });
+  assert.deepEqual(a.parts[0].groups[0].items.map((i) => [i.code, i.title]), [['pf-lacuna1', 'Pente fino nas mensagens'], ['pf-pc24', 'Outra']]);
+});

@@ -18,8 +18,8 @@ const HEAD_BYTES = 64 * 1024;
 const PROMPT_MAX = 1000;
 const TITLE_MAX = 80;
 const MENTIONED_LINES = 200;
-// The shape of an item code of the architecture convention (wa04, pa-x12); only codes the map knows count later.
-const ITEM_CODE_RE = /(?<![\w-])([a-z]{1,4}(?:-[a-z]{1,4})?\d{1,4})(?![\w-])/gi;
+// The shape of an item code of the architecture convention (wa04, pa-x12, pf-lacuna2); only codes the map knows count later.
+const ITEM_CODE_RE = /(?<![\w-])([a-z]{1,4}(?:-[a-z]{1,8})?\d{1,4})(?![\w-])/gi;
 const CODES_MAX = 100;
 
 export function claudeDir() {
