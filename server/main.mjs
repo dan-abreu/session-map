@@ -10,7 +10,7 @@ import { cleanTags, newUnit, normalizeUnit } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
-import { UNSORTED, brainDir, readJsonFile, setOverride, writeUnits } from './brain/cells.mjs';
+import { UNSORTED, brainDir, readJsonFile, setOverride, writeAtomic, writeUnits } from './brain/cells.mjs';
 import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { collect } from './collect.mjs';
@@ -23,6 +23,7 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
 const DEMO_STATE = join(here, '..', 'demo', 'state.json');
 const STATE_TTL_MS = 3000;
+const STATE_SAVE_MS = 60_000;
 const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const NAME_MAX = 40;
@@ -141,18 +142,37 @@ async function serveFile(res, path) {
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir }),
-  catalog = {},
+  catalog = {}, stateTtlMs = STATE_TTL_MS,
 } = {}) {
+  // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
+  const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
+  let ready = false;
+  let savedAt = 0;
   let cached = null;
   const state = () => {
-    if (!cached || Date.now() - cached.at > STATE_TTL_MS) {
+    // A collect still running is shared, whatever its age: a second one would only slow both down.
+    if (!cached || (cached.done && Date.now() - cached.at > stateTtlMs)) {
       const promise = demo
         ? readFile(DEMO_STATE, 'utf8').then(JSON.parse)
         : Promise.resolve(collectFn({ dir, smDir, ...(ai ? { ai } : {}) }));
-      cached = { at: Date.now(), promise };
-      promise.catch(() => { cached = null; });
+      const entry = { at: Date.now(), promise, done: false };
+      cached = entry;
+      promise.then((s) => {
+        Object.assign(entry, { done: true, at: Date.now() });
+        ready = true;
+        if (!demo && stateCopy && Date.now() - savedAt >= STATE_SAVE_MS) {
+          savedAt = Date.now();
+          try { writeAtomic(stateCopy, JSON.stringify(s)); } catch (err) { log('warn', 'state-copy-failed', { error: err.message }); }
+        }
+      }, () => { if (cached === entry) cached = null; });
     }
     return cached.promise;
+  };
+  const firstAnswer = async () => {
+    const pending = state();
+    if (ready || demo || !stateCopy) return pending;
+    const copy = readJsonFile(stateCopy, null);
+    return copy && Array.isArray(copy.projects) ? { ...copy, refreshing: true } : pending;
   };
   const fresh = () => { cached = null; };
 
@@ -243,7 +263,7 @@ export function createApp({
   async function route(req, res, url) {
     const path = url.pathname;
     const parts = path.split('/').map((p) => decodeURIComponent(p));
-    if (req.method === 'GET' && path === '/api/state') return send(res, 200, await state());
+    if (req.method === 'GET' && path === '/api/state') return send(res, 200, await firstAnswer());
     // The demo is for screenshots: the real archive stays out of it.
     if (req.method === 'GET' && path === '/api/history') {
       if (demo) return send(res, 200, { results: [] });

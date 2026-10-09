@@ -208,3 +208,41 @@ test('nucleus edit, override and unit edits write only for a project and unit in
     assert.equal(smDirSeen, smDir);
   });
 });
+
+test('the first /api/state answers from the disk copy at once, marked refreshing, while the fresh collect runs', { timeout: 10_000 }, async () => {
+  let release;
+  const slow = new Promise((resolve) => { release = resolve; });
+  const fresh = { ...DEMO, generatedAt: '2026-10-09T12:00:00.000Z' };
+  await withServer({ collectFn: () => slow }, async ({ call, smDir }) => {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(join(smDir, 'state-cache.json'), JSON.stringify({ ...DEMO, generatedAt: '2026-10-08T09:00:00.000Z' }));
+    const started = Date.now();
+    const first = await call('GET', '/api/state');
+    assert.ok(Date.now() - started < 2000);
+    const body = JSON.parse(first.text);
+    assert.equal(body.refreshing, true);
+    assert.equal(body.generatedAt, '2026-10-08T09:00:00.000Z');
+    release(fresh);
+    await slow;
+    const second = JSON.parse((await call('GET', '/api/state')).text);
+    assert.equal(second.generatedAt, '2026-10-09T12:00:00.000Z');
+    assert.equal(second.refreshing, undefined);
+    const saved = JSON.parse(readFileSync(join(smDir, 'state-cache.json'), 'utf8'));
+    assert.equal(saved.generatedAt, '2026-10-09T12:00:00.000Z', 'the fresh state is the next start\'s copy');
+  });
+});
+
+test('a collect still running is shared by every request, even past the state lifetime', { timeout: 10_000 }, async () => {
+  let runs = 0;
+  let release;
+  const collectFn = () => { runs++; return new Promise((resolve) => { release = () => resolve(DEMO); }); };
+  await withServer({ collectFn, stateTtlMs: 10 }, async ({ call }) => {
+    const a = call('GET', '/api/state');
+    await new Promise((r) => setTimeout(r, 50));
+    const b = call('GET', '/api/state');
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    await Promise.all([a, b]);
+    assert.equal(runs, 1);
+  });
+});

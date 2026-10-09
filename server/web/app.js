@@ -212,6 +212,8 @@ function renderSummary() {
   parts.push(h('span', {}, t.count('summary.chats', chats.length)));
   if (busy) parts.push(h('span', { class: 'tone-active' }, t('summary.working', { n: busy })));
   parts.push(h('span', { class: 'num' }, t('summary.cost', { v: money(project.cost.d30) })));
+  // A restart shows the last saved map at once; the fresh one replaces it on a later poll.
+  if (state.refreshing) parts.push(h('span', { class: 'organizing', role: 'status' }, t('state.refreshing')));
   const boot = bootstrapOf(project);
   if (boot) {
     parts.push(h('span', { class: 'organizing', role: 'status' },
@@ -961,6 +963,7 @@ function poll() {
     if (res.ok) {
       const { ok, status, error, ...next } = res;
       applyState(next);
+      if (next.refreshing) setTimeout(poll, 2000);
     } else if (state) {
       toast(t('state.offline'));
     }
