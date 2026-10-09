@@ -29,12 +29,17 @@ const walk = (el, out = []) => {
 };
 const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c === 'string')).join(' ');
 
+// chat.js finds each part by its data-chat role; the tests name them by the map sheet's ids.
+const ROLES = {
+  '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
+  '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close',
+};
 function sheet() {
-  const sels = ['#chatLog', '#chatForm', '#chatInput', '#chatSend', '#chatStop', '#chatTitle', '#chatContext', '#chatStatus', '#chatMode', '#chatList', '#chatNote', '#chatPcMode', '[data-close="chat"]'];
-  const parts = new Map(sels.map((s) => [s, new El()]));
+  const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
+  const byRole = new Map(Object.entries(ROLES).map(([s, role]) => [`[data-chat="${role}"]`, parts.get(s)]));
   const root = new El();
   root.hidden = true;
-  root.querySelector = (sel) => parts.get(sel);
+  root.querySelector = (sel) => byRole.get(sel);
   return { root, part: (sel) => parts.get(sel) };
 }
 
@@ -67,9 +72,9 @@ function memoryStorage(initial = {}) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const tt = () => (key, vars) => (vars ? `${key}(${Object.values(vars).join(',')})` : key);
 
-function makeChat({ storage = memoryStorage(), onClose = () => {}, onPcMode = () => {} } = {}) {
+function makeChat({ storage = memoryStorage(), onClose = () => {}, onPcMode = () => {}, ...extra } = {}) {
   const s = sheet();
-  const chat = createChat({ root: s.root, h, t: tt, toast() {}, errorText: (e) => e, onClose, onPcMode, storage, relative: () => 'just now' });
+  const chat = createChat({ root: s.root, h, t: tt, toast() {}, errorText: (e) => e, onClose, onPcMode, storage, relative: () => 'just now', ...extra });
   return { chat, ...s, storage };
 }
 
@@ -202,4 +207,42 @@ test('"use this mode on the whole PC" waits for a real mode, then hands it to th
   assert.equal(btn.disabled, false);
   btn.fire('click');
   assert.deepEqual(asked, ['acceptEdits']);
+});
+
+// ---- the flow workshop's sheet --------------------------------------------------------------
+
+const sse = (stream, type, data, id) => { for (const fn of stream.listeners[type] ?? []) fn({ data: JSON.stringify(data), lastEventId: String(id) }); };
+
+test('the workshop sheet: its chats are listed by kind, a draft event redraws instead of joining the log, and a reply shows its diagram folded', async () => {
+  const { calls, streams } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const drafts = [];
+  const { chat, part } = makeChat({ onDraft: (text) => drafts.push(text), showText: (text) => text.replace(/```mermaid[\s\S]*?```/g, '[d]') });
+  chat.open({ projectId: 'acme-shop', title: 'Flow workshop', intro: 'intro', start: { node: { kind: 'flow' } } });
+  await settle();
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&kind=flow'));
+  part('#chatInput').value = 'Add billing';
+  part('#chatForm').fire('submit');
+  await settle();
+  const stream = streams.at(-1);
+  sse(stream, 'text', { text: 'Done.\n```mermaid\nflowchart LR\n  a --> b\n```', partial: false }, 1);
+  sse(stream, 'draft', { text: 'flowchart LR\n  a --> b' }, 2);
+  assert.deepEqual(drafts, ['flowchart LR\n  a --> b']);
+  const shown = text(part('#chatLog'));
+  assert.ok(shown.includes('Done.\n[d]'), 'the reply shows the folded diagram');
+  assert.ok(!shown.includes('a --> b'), 'neither the reply nor the draft event prints the mermaid');
+});
+
+test('the workshop sheet saves the draft before a message leaves, and remembers no conversation for a reload', async () => {
+  const order = [];
+  const { streams } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => { order.push('start'); return { chatKey: KEY }; } });
+  const storage = memoryStorage();
+  const { chat, part } = makeChat({ storage, savedKey: null, beforeSend: async () => { await settle(); order.push('saved'); } });
+  chat.open({ projectId: 'acme-shop', title: 'Flow workshop', intro: 'intro', start: { node: { kind: 'flow' } } });
+  part('#chatInput').value = 'Draw it';
+  part('#chatForm').fire('submit');
+  await settle();
+  await settle();
+  assert.deepEqual(order, ['saved', 'start']);
+  sse(streams.at(-1), 'session', { sessionId: S1, state: 'started' }, 1);
+  assert.equal(storage.items.size, 0, 'nothing kept for a reload');
 });

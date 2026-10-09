@@ -10,12 +10,13 @@ import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createResizer } from './resize.js';
+import { createFlowView } from './flowview.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
-const VIEWS = ['map', 'board', 'history', 'costs', 'discover'];
+const VIEWS = ['map', 'flow', 'board', 'history', 'costs', 'discover'];
 const RANGES = ['all', 'today', 'd7', 'd30'];
 const SEARCH_MAX = 8;
 const CHAT_WIDTH = 460;
@@ -110,6 +111,7 @@ function applyStaticText() {
   renderChanged();
   discover?.relabel();
   chat?.relabel();
+  flow?.relabel();
 }
 
 let toastTimer = 0;
@@ -992,12 +994,19 @@ function showView(name) {
   if (view === 'discover') discover.show();
   else $('#discover').hidden = true;
   if (view !== 'map') { closePanel(false); chat.close(); closeWaiting(); }
+  if (view !== 'flow') flow.hide();
   store.set('sm.view', view);
   refreshView(true);
 }
 
 function refreshView(first = false) {
-  if (!state?.projects.length || !['board', 'history', 'costs'].includes(view)) return;
+  if (!state?.projects.length) return;
+  if (view === 'flow') {
+    if (first) flow.show();
+    else flow.refresh();
+    return;
+  }
+  if (!['board', 'history', 'costs'].includes(view)) return;
   const root = $(`#view-${view}`);
   if (first) tabs.render(view, root);
   else tabs.refresh(view, root);
@@ -1043,6 +1052,7 @@ let files = null;
 let tabs = null;
 let mindmap = null;
 let outline = null;
+let flow = null;
 
 function wire() {
   $('#project').addEventListener('change', (e) => setProject(e.target.value));
@@ -1081,6 +1091,12 @@ function wire() {
     },
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
+  flow = createFlowView({
+    h, t: () => t, toast, errorText, relative, phone: PHONE, onPcMode: pcMode,
+    project: () => project, tree: () => tree, live: () => marks.live,
+    onOpenPart: (partId) => openPartPoint(partId),
+    onApplied: () => setTimeout(poll, 600),
+  });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative },
@@ -1125,7 +1141,7 @@ function wire() {
   search.addEventListener('blur', () => setTimeout(() => { if (!$('#searchBox').contains(document.activeElement)) closeResults(); }, 150));
   search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open) return;
+    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open) return;
     if (!$('#waitingList').hidden) closeWaiting();
     else if (chat.isOpen()) chat.close();
     else closePanel();
@@ -1172,6 +1188,15 @@ function applyDeepLink() {
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);
+  // ?view=flow&flowmode=workshop&flowtool=box&flowtext=1, or &flowimport=1: the Flow tab's states, for screenshots.
+  if (view === 'flow') {
+    (async () => {
+      if (params.get('flowmode') === 'workshop') await flow.setMode('workshop');
+      if (params.get('flowtool')) flow.openTool(params.get('flowtool'));
+      if (params.get('flowtext') === '1') flow.openText();
+      if (params.get('flowimport') === '1') flow.openImport();
+    })();
+  }
 }
 
 async function main() {

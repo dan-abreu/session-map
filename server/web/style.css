@@ -289,7 +289,7 @@ button, select, input { font: inherit; color: inherit; }
 /* ---------- the mind map ---------- */
 
 .mm-area { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-body[data-view]:not([data-view="map"]) .mm-tools { display: none; }
+body[data-view]:not([data-view="map"]) .mm-tools, body[data-view]:not([data-view="map"]) .fit-btn { display: none; }
 body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.no-map #newIdea { display: none; }
 .mm {
   position: relative; flex: 1; min-height: 0; overflow: hidden;
@@ -698,7 +698,7 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .btn.danger-quiet:not(:disabled):hover { border-color: var(--clash); }
 .btn.small-btn { height: 28px; padding: 0 10px; font-size: 0.75rem; }
 .btn-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-#chatStop .btn-icon { fill: currentColor; stroke: none; }
+[data-chat="stop"] .btn-icon { fill: currentColor; stroke: none; }
 
 .tools { margin-top: 16px; display: grid; gap: 8px; }
 .tools .actions { margin-top: 0; }
@@ -917,6 +917,204 @@ body.is-resizing .sheet { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .msg-claude.is-streaming p::after, .bx-live::after { animation: none; }
   .hist-read { animation: none; }
+}
+
+/* ---------- the Flow tab: diagram, workshop and import ---------- */
+
+.view.flow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden; background: var(--canvas);
+}
+.view.flow[hidden] { display: none; }
+.fl-bar, .fl-tools, .fl-body { grid-column: 1; min-width: 0; }
+.fl-bar { grid-row: 1; }
+.fl-tools { grid-row: 2; }
+.fl-body { grid-row: 3; }
+.fl-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.fl-heading { flex: 1 1 340px; min-width: 0; }
+.fl-heading h2 { margin: 0; font-size: 1.0625rem; font-weight: 650; letter-spacing: -0.015em; line-height: 1.3; text-wrap: balance; }
+.fl-source { margin: 3px 0 0; max-width: 78ch; color: var(--ink-2); font-size: 0.8125rem; line-height: 1.45; text-wrap: pretty; }
+.fl-source .meta-link { color: var(--active-ink); font-weight: 600; text-decoration-color: color-mix(in srgb, var(--active) 45%, transparent); }
+.fl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.flow[data-mode="workshop"] .fl-actions #flowImport { display: none; }
+
+.fl-tools { border-bottom: 1px solid var(--line); background: var(--bg); }
+.fl-tools[hidden] { display: none; }
+.fl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 16px; }
+.fl-group { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.fl-group + .fl-group { padding-left: 14px; border-left: 1px solid var(--line); }
+.fl-group.fl-end { margin-left: auto; gap: 8px; border-left: 0; padding-left: 0; }
+.fl-tool {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px;
+  border: 1px solid transparent; border-radius: 8px; background: none;
+  color: var(--ink-2); font-weight: 600; font-size: 0.8125rem; cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.fl-tool svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.fl-tool:hover { background: var(--bg-3); color: var(--ink); }
+.fl-tool[aria-expanded="true"], .fl-tool[aria-pressed="true"] { background: var(--lv0-bg); border-color: var(--lv0-line); color: var(--lv0-ink); }
+.fl-tool:disabled { opacity: 0.4; cursor: not-allowed; background: none; }
+.fl-tool.icon-only { width: 32px; padding: 0; justify-content: center; }
+.fl-saved { font-size: 0.75rem; color: var(--ink-2); }
+.fl-saved:empty { display: none; }
+
+.fl-form {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px;
+  padding: 12px 16px 14px; border-top: 1px solid var(--line); background: var(--bg-2);
+  animation: fl-form-in 180ms var(--ease-out);
+}
+.fl-form[hidden] { display: none; }
+.fl-form .field { flex: 0 1 220px; min-width: 150px; }
+.fl-form .btn { flex: none; }
+.fl-form-note { flex: 1 1 100%; margin: 0; font-size: 0.75rem; color: var(--ink-2); }
+@keyframes fl-form-in { from { transform: translateY(-4px); opacity: 0; } }
+
+.fl-body { display: flex; min-height: 0; }
+.fl-editor {
+  display: flex; flex-direction: column; flex: 0 0 clamp(280px, 38%, 520px); min-height: 0;
+  border-right: 1px solid var(--line); background: var(--bg-2);
+}
+.fl-editor[hidden] { display: none; }
+.fl-editor-label { padding: 10px 16px 0; font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }
+.fl-editor textarea {
+  flex: 1; min-height: 0; margin: 0; padding: 10px 16px 16px; border: 0; resize: none; outline: none;
+  background: none; color: var(--ink); tab-size: 2;
+  font: 0.8125rem/1.6 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+.fl-editor:focus-within { box-shadow: inset 0 0 0 2px var(--focus); }
+.fl-editor-error { margin: 0; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 0.75rem; font-weight: 600; color: var(--waiting-ink); }
+.fl-editor-error:empty { display: none; }
+
+.fl-canvas-wrap { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fl-canvas {
+  flex: 1; min-height: 0; overflow: auto; padding: 28px 28px 76px;
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.2px); background-size: 22px 22px;
+  overscroll-behavior: contain;
+}
+.fl-canvas > svg { display: block; margin: 0 auto; height: auto; }
+.fl-loading { margin: 18vh auto 0; text-align: center; color: var(--ink-2); }
+.fl-error { margin: 14vh auto 0; max-width: 60ch; color: var(--waiting-ink); font-weight: 550; text-align: center; overflow-wrap: anywhere; }
+.fl-error code { display: block; margin-top: 6px; font: 0.8125rem/1.5 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; color: var(--ink-2); font-weight: 400; }
+.fl-empty {
+  max-width: 54ch; margin: 12vh auto 0; padding: 22px 24px;
+  border: 1px solid var(--lv0-line); border-radius: 14px; background: var(--lv0-bg); color: var(--lv0-ink);
+}
+.fl-empty h3 { margin: 0 0 6px; font-size: 1.0625rem; letter-spacing: -0.01em; text-wrap: balance; }
+.fl-empty p { margin: 0 0 8px; line-height: 1.5; }
+.fl-empty .muted { color: color-mix(in srgb, var(--lv0-ink) 72%, var(--lv0-bg)); }
+.fl-empty .actions { margin-top: 14px; }
+
+.fl-legend {
+  position: absolute; left: 16px; bottom: 14px; z-index: 1;
+  display: flex; flex-wrap: wrap; gap: 4px 14px; max-width: calc(100% - 32px);
+  list-style: none; margin: 0; padding: 7px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  box-shadow: var(--shadow); font-size: 0.75rem; color: var(--ink-2);
+}
+.fl-legend[hidden], .fl-legend:empty { display: none; }
+.lg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lg-mark { width: 14px; height: 10px; border-radius: 3px; border: 1.5px solid var(--wire); background: var(--bg-2); }
+.lg-live .lg-mark { border-color: var(--active); background: var(--active-fill); box-shadow: 0 0 0 2px color-mix(in srgb, var(--active) 22%, transparent); }
+.lg-doing .lg-mark { border-color: var(--doing); background: var(--doing-fill); }
+.lg-done .lg-mark { border-color: var(--closed); background: var(--bg-3); }
+.lg-free .lg-mark { border-style: dashed; border-color: var(--link); background: none; }
+.lg-blocks .lg-mark, .lg-waiting .lg-mark { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--clash); }
+.lg-waiting .lg-mark { background: var(--waiting); }
+
+/* The boxes mermaid draws, recoloured by how each part is doing. mermaid scopes its own theme under the diagram's id,
+   which no class selector outranks, hence !important on these few declarations. */
+.fl-canvas g.node :is(rect, polygon, circle, ellipse, path).label-container,
+.fl-canvas g.node > :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { transition: fill 160ms, stroke 160ms; }
+.fl-canvas g.fl-part { cursor: pointer; }
+.fl-canvas g.fl-todo :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--bg-2) !important; stroke: var(--wire) !important; stroke-width: 1.5px !important; }
+.fl-canvas g.fl-doing :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--doing-fill) !important; stroke: var(--doing) !important; stroke-width: 1.75px !important; }
+.fl-canvas g.fl-live :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--active-fill) !important; stroke: var(--active) !important; stroke-width: 2.25px !important; animation: fl-live 2.4s ease-in-out infinite; }
+.fl-canvas g.fl-done :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--bg-3) !important; stroke: var(--closed) !important; stroke-width: 1.25px !important; }
+.fl-canvas g.fl-done text { fill: var(--ink-2) !important; }
+.fl-canvas g.fl-done .nodeLabel { color: var(--ink-2) !important; }
+.fl-canvas g.fl-free :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: color-mix(in srgb, var(--bg-2) 60%, transparent) !important; stroke: var(--link) !important; stroke-dasharray: 5 4; }
+.fl-canvas g.fl-part:hover :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { stroke-width: 2.5px !important; }
+.fl-canvas g.node[role="button"] { outline: none; }
+.fl-canvas g.node[role="button"]:focus-visible :is(rect, polygon, circle, ellipse, path):not(.fl-flag),
+.fl-canvas g.node.is-picked :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { stroke: var(--focus) !important; stroke-width: 3px !important; }
+.flow[data-mode="workshop"] .fl-canvas g.node[role="button"] { cursor: pointer; }
+.fl-canvas .fl-flag { stroke: var(--canvas) !important; stroke-width: 2px !important; }
+.fl-canvas .fl-flag-blocks { fill: var(--clash) !important; }
+.fl-canvas .fl-flag-waiting { fill: var(--waiting) !important; }
+@keyframes fl-live { 50% { stroke-opacity: 0.45; } }
+
+/* The workshop's chat is a column of the tab: the drawing gives it room instead of hiding under it. */
+.flow .fl-chat {
+  position: relative; inset: auto; grid-column: 2; grid-row: 1 / -1;
+  width: var(--flow-chat-w, 460px); margin: 10px 12px 10px 0; min-height: 0;
+}
+.flow .fl-chat[hidden] { display: none; }
+.flow[data-mode="view"] #flowChatToggle { display: none; }
+@media (min-width: 720px) {
+  .stage:has(#chat:not([hidden])) .view.flow { padding-right: calc(var(--chat-w, 460px) + 12px); }
+  .flow:has(.fl-chat:not([hidden])) #flowChatToggle { display: none; }
+}
+
+.fl-dialog { width: min(760px, calc(100% - 32px)); max-height: min(88vh, 900px); overflow-y: auto; }
+.fl-import { display: grid; gap: 12px; }
+.fl-import h2 { margin: 0; }
+.fl-dialog-lede { margin: 0; color: var(--ink-2); line-height: 1.5; max-width: 70ch; }
+.fl-import textarea {
+  width: 100%; min-height: 200px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; resize: vertical;
+  background: var(--bg); color: var(--ink); font: 0.8125rem/1.55 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+.fl-import textarea:focus-visible { outline-offset: 0; border-color: var(--focus); }
+.fl-file { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fl-file label.btn { cursor: pointer; }
+.fl-file:has(input:focus-visible) label.btn { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fl-dialog-status { margin: 0; font-size: 0.8125rem; color: var(--ink-2); }
+.fl-dialog-status:empty { display: none; }
+.fl-import .actions { margin-top: 4px; align-items: center; }
+.fl-preview {
+  height: 280px; overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: 10px;
+  background-color: var(--canvas); background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.2px); background-size: 22px 22px;
+}
+.fl-preview > svg { display: block; margin: 0 auto; height: auto; }
+.fl-changes { display: grid; gap: 14px; }
+.fl-change h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 0.875rem; font-weight: 650; }
+.fl-count { padding: 0 7px; border-radius: 999px; background: var(--bg-3); font-size: 0.6875rem; line-height: 1.6; color: var(--ink-2); }
+.fl-change-note { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-2); }
+.fl-change ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.fl-change li { overflow-wrap: anywhere; }
+.fl-check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.fl-check input { margin: 3px 0 0; width: 16px; height: 16px; flex: none; }
+.fl-path { display: block; font: 0.75rem/1.5 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; color: var(--ink-2); }
+.fl-arrow { color: var(--ink-2); }
+
+@media (max-width: 719px) {
+  .view.flow { grid-template-columns: minmax(0, 1fr); }
+  .fl-bar { padding: 10px 16px; }
+  .fl-heading { flex-basis: 100%; }
+  .fl-modes { order: 2; }
+  .fl-actions { order: 3; margin-left: auto; }
+  .fl-actions .btn span { display: none; }
+  .fl-actions .btn { width: 40px; padding: 0; justify-content: center; }
+  .fl-toolbar { padding: 8px 12px; gap: 6px 8px; }
+  .fl-tool span { display: none; }
+  .fl-tool { width: 36px; height: 36px; padding: 0; justify-content: center; }
+  .fl-group + .fl-group { padding-left: 8px; }
+  .fl-group.fl-end { flex: 1 1 100%; margin-left: 0; justify-content: flex-end; }
+  .fl-saved { margin-right: auto; }
+  .fl-body { flex-direction: column; }
+  .fl-editor { flex: 0 0 38%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .fl-canvas { padding: 16px 12px 24px; }
+  .fl-legend { position: static; max-width: none; gap: 3px 12px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 0; box-shadow: none; background: var(--bg); }
+  .fl-canvas { padding-bottom: 24px; }
+  .flow .fl-chat { position: absolute; grid-column: auto; grid-row: auto; left: 0; right: 0; bottom: 0; top: auto; width: auto; margin: 0; max-height: 86%; }
+  .fl-dialog { width: calc(100% - 16px); max-height: 92vh; padding: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-canvas g.fl-live :is(rect, polygon, circle, ellipse, path) { animation: none; }
+  .fl-form { animation: none; }
 }
 
 /* ---------- phone ---------- */

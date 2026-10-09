@@ -26,6 +26,7 @@
         "source": "worktree",
         "dir": "docs/architecture",
         "lang": "en",
+        "mermaid": "flowchart LR\n  subgraph entry[\"Where people come in\"]\n    SF[\"Storefront\"]\n    CA[\"Courier app\"]\n    AP[\"Admin panel\"]\n  end\n  subgraph engine[\"What makes it work\"]\n    OR[\"Orders and cart\"]\n    PA[\"Payments\"]\n    SE[\"Search\"]\n    NO[\"Notifications\"]\n  end\n  subgraph base[\"What holds it up\"]\n    AC[\"Accounts and security\"]\n    DA[(\"Data and backups\")]\n    HO[\"Hosting and deploys\"]\n  end\n  BANK([\"Card processor\"])\n  SF -->|browse| SE\n  SF -->|checkout| OR\n  OR -->|charge| PA\n  PA -.-> BANK\n  OR --> NO\n  NO -->|delivery| CA\n  AP --> DA\n  OR --> DA\n  PA --> AC\n  SF --> AC",
         "layers": [
           {
             "id": "entry",
@@ -1921,6 +1922,7 @@
         "source": "none",
         "dir": null,
         "lang": "en",
+        "mermaid": null,
         "layers": [],
         "parts": [],
         "links": []

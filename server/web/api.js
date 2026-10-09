@@ -37,5 +37,11 @@ export const api = {
   settingsMode: () => call('GET', '/api/settings/permission-mode'),
   setSettingsMode: (mode) => call('POST', '/api/settings/permission-mode', { mode }),
   undoSettingsMode: () => call('DELETE', '/api/settings/permission-mode'),
+  flowExport: (projectId) => call('GET', `/api/arch/${seg(projectId)}/mermaid`),
+  flowPreview: (projectId, text) => call('POST', `/api/arch/${seg(projectId)}/mermaid/preview`, { text }),
+  flowApply: (projectId, text, skip) => call('POST', `/api/arch/${seg(projectId)}/mermaid/apply`, { text, skip }),
+  flowDraft: (projectId) => call('GET', `/api/arch/${seg(projectId)}/draft`),
+  flowSaveDraft: (projectId, text) => call('PUT', `/api/arch/${seg(projectId)}/draft`, { text }),
+  flowDiscard: (projectId) => call('DELETE', `/api/arch/${seg(projectId)}/draft`),
   chatEvents: (key) => new EventSource(`/api/chat/${seg(key)}/events`),
 };

@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { chatLog, pcModeOffer } from './views.js';
 
-const SSE_TYPES = ['user', 'session', 'mode', 'text', 'tool', 'permission', 'turn-end', 'error'];
+const SSE_TYPES = ['user', 'session', 'mode', 'text', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
 const MODES = ['settings', 'default', 'acceptEdits', 'auto'];
 const SAVED = 'sm.chat';
@@ -13,18 +13,23 @@ const browserStorage = () => {
 // The chat that runs through the person's own claude CLI (desenho-2 § 22). One conversation at a time in the sheet.
 // ctx: root (the sheet), h, t (translator getter), toast, errorText, onSession (a new conversation got its id),
 // onPcMode(mode) (the person asked to use the mode on the whole PC), storage (where the open conversation is kept for
-// a reload), relative (a date as "5 min ago").
-export function createChat({ root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), relative = () => '' }) {
-  const q = (sel) => root.querySelector(sel);
-  const logEl = q('#chatLog');
-  const form = q('#chatForm');
-  const input = q('#chatInput');
-  const sendBtn = q('#chatSend');
-  const stopBtn = q('#chatStop');
-  const modeEl = q('#chatMode');
-  const listEl = q('#chatList');
-  const noteEl = q('#chatNote');
-  const pcBtn = q('#chatPcMode');
+// a reload; savedKey null keeps nothing), relative (a date as "5 min ago"). The flow workshop adds onDraft(text) (the AI
+// redrew the shared draft), beforeSend() (awaited before a message leaves) and showText(text) (what a reply shows).
+// The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own.
+export function createChat({
+  root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), savedKey = SAVED, relative = () => '',
+  onDraft, beforeSend, showText = (text) => text,
+}) {
+  const q = (role) => root.querySelector(`[data-chat="${role}"]`);
+  const logEl = q('log');
+  const form = q('form');
+  const input = q('input');
+  const sendBtn = q('send');
+  const stopBtn = q('stop');
+  const modeEl = q('mode');
+  const listEl = q('list');
+  const noteEl = q('note');
+  const pcBtn = q('pcmode');
   let context = null;
   let key = null;
   let sessionId = null;
@@ -38,12 +43,13 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
   // Blocked storage (private window, a preview) only means a reload does not bring the conversation back.
   function remember(entry) {
     try {
-      if (entry) storage?.setItem(SAVED, JSON.stringify(entry));
-      else storage?.removeItem(SAVED);
+      if (!savedKey) return;
+      if (entry) storage?.setItem(savedKey, JSON.stringify(entry));
+      else storage?.removeItem(savedKey);
     } catch { /* not remembered */ }
   }
   function remembered() {
-    try { return JSON.parse(storage?.getItem(SAVED) ?? 'null'); } catch { return null; }
+    try { return savedKey ? JSON.parse(storage?.getItem(savedKey) ?? 'null') : null; } catch { return null; }
   }
   const rememberOpen = () => remember({ projectId: context.projectId, sessionId, title: context.title, subtitle: context.subtitle ?? '' });
 
@@ -53,6 +59,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
   }
 
   function apply(evt) {
+    if (evt.type === 'draft') return onDraft?.(evt.data.text);
     log = chatLog(log, evt);
     if (evt.type === 'session' && evt.data.state === 'started') {
       const isNew = sessionId !== evt.data.sessionId;
@@ -96,7 +103,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
     const tt = t();
     if (item.type === 'user') return h('li', { class: 'msg msg-user' }, h('span', { class: 'visually-hidden' }, `${tt('chat.you')}: `), h('p', {}, item.text));
     if (item.type === 'assistant') {
-      return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '), h('p', {}, item.text));
+      return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '), h('p', {}, showText(item.text)));
     }
     if (item.type === 'tool') {
       return h('li', { class: `msg msg-tool${item.isError ? ' is-error' : ''}` },
@@ -150,13 +157,14 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
     if (running) status = tt('chat.thinking');
     else if (log?.ended) status = sessionId ? tt('chat.paused') : tt('chat.ended');
     else if (log?.mode) status = tt('chat.modeNow', { mode: modeName(log.mode) });
-    q('#chatStatus').textContent = status;
+    q('status').textContent = status;
   }
 
   async function send(text) {
     log = chatLog(log, { type: 'local-send', data: { text } });
     listEl.hidden = true;
     render();
+    await beforeSend?.();
     const live = key && !log.ended;
     const start = sessionId ? { sessionId } : context.start;
     const res = live ? await api.chatSend(key, text) : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, text });
@@ -172,7 +180,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
   async function loadList(ctx) {
     const node = ctx.start?.node;
     let scope = {};
-    if (node?.kind === 'idea' || node?.kind === 'create-arch') scope = { kind: node.kind };
+    if (node?.kind === 'idea' || node?.kind === 'create-arch' || node?.kind === 'flow') scope = { kind: node.kind };
     else if (node?.partId) scope = { partId: node.partId, ...(node.kind === 'item' && node.code ? { code: node.code } : {}) };
     else if (ctx.start?.workCellId) scope = { workCellId: ctx.start.workCellId };
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
@@ -231,7 +239,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
     if (!res.ok) toast(errorText(res.error));
   });
   pcBtn.addEventListener('click', () => { if (!pcBtn.disabled) onPcMode?.(choice); });
-  q('[data-close="chat"]').addEventListener('click', () => close());
+  q('close').addEventListener('click', () => close());
 
   function open(ctx) {
     if (root.hidden) returnFocus = document.activeElement;
@@ -244,8 +252,8 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, o
     choice = 'settings';
     listEl.hidden = true;
     listEl.replaceChildren();
-    q('#chatTitle').textContent = ctx.title;
-    q('#chatContext').textContent = ctx.subtitle ?? '';
+    q('title').textContent = ctx.title;
+    q('context').textContent = ctx.subtitle ?? '';
     input.placeholder = t()('chat.placeholder');
     input.value = ctx.draft ?? '';
     root.hidden = false;
