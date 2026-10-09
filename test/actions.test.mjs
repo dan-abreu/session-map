@@ -45,12 +45,12 @@ function fixture() {
   return { dir, smDir, deps, spawned, killed, session, cleanup };
 }
 
-test('open on a VS Code chat opens the vscode:// link as the only argument of start', async () => {
+test('open on a VS Code chat hands the vscode:// link to the protocol handler as one argument', async () => {
   const f = fixture();
   try {
     const res = await runAction({ action: 'open', sessionId: VS }, f.deps);
     assert.equal(res.status, 200);
-    assert.deepEqual(f.spawned.map((s) => [s.cmd, s.args]), [['cmd.exe', ['/c', 'start', '', `vscode://anthropic.claude-code/open?session=${VS}`]]]);
+    assert.deepEqual(f.spawned.map((s) => [s.cmd, s.args]), [['rundll32.exe', ['url.dll,FileProtocolHandler', `vscode://anthropic.claude-code/open?session=${VS}`]]]);
   } finally { f.cleanup(); }
 });
 

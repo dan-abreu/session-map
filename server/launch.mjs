@@ -36,9 +36,10 @@ export function newTerminal(cwd, argv, { platform = process.platform, spawner = 
   return detach(spawner, 'x-terminal-emulator', argv.length ? ['-e', ...argv] : [], cwd);
 }
 
-// Windows: `start` takes a window title first, so "" goes before the URL.
+// Windows: the protocol handler gets the URL as is. `cmd /c start` would expand %NAME% inside it (%CD% is always set),
+// and percent-encoding is made of %. The URL must hold no space or quote: rundll32 reads its raw command line.
 export function openUrl(url, { platform = process.platform, spawner = spawn } = {}) {
-  if (platform === 'win32') return detach(spawner, 'cmd.exe', ['/c', 'start', '', url]);
+  if (platform === 'win32') return detach(spawner, 'rundll32.exe', ['url.dll,FileProtocolHandler', url]);
   return detach(spawner, platform === 'darwin' ? 'open' : 'xdg-open', [url]);
 }
 

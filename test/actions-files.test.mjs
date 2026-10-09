@@ -38,7 +38,7 @@ test('open-file hands the vscode:// link of a checked file to the system, with t
   try {
     const res = await runAction({ action: 'open-file', projectId: 'shop-abc123', path: 'src/a.js', line: 7 }, f.deps);
     assert.equal(res.status, 200);
-    assert.deepEqual(f.spawned.at(-1).args.slice(0, 3), ['/c', 'start', '']);
+    assert.deepEqual([f.spawned.at(-1).cmd, f.spawned.at(-1).args.length, f.spawned.at(-1).args[0]], ['rundll32.exe', 2, 'url.dll,FileProtocolHandler']);
     assert.equal(urlOf(f.spawned), `vscode://file/${slash(join(f.root, 'src', 'a.js')).split('/').map((s, i) => (i === 0 && /^[a-z]:$/i.test(s) ? s : encodeURIComponent(s))).join('/').replace(/^\//, '')}:7`);
     await runAction({ action: 'open-file', projectId: 'shop-abc123', workCell: 'feature/cart', path: 'src/cart.js' }, f.deps);
     assert.ok(urlOf(f.spawned).endsWith('/shop-cart/src/cart.js:1'), 'a branch with a folder opens inside it; no line means line 1');
@@ -51,6 +51,19 @@ test('open-file leaves no shell metacharacter in the link', async () => {
     assert.equal((await runAction({ action: 'open-file', projectId: 'shop-abc123', path: 'src/a&b (1).js' }, f.deps)).status, 200);
     assert.match(urlOf(f.spawned), /^[A-Za-z0-9\-._~%:/]+$/);
     assert.ok(urlOf(f.spawned).includes('a%26b%20%281%29.js'));
+  } finally { f.cleanup(); }
+});
+
+// U+0340 encodes to %CD%80, and cmd expands %CD% to its own folder: the link must never pass through cmd.
+test('open-file on Windows hands the link to the protocol handler, not to cmd', async () => {
+  const f = fixture();
+  try {
+    writeFileSync(join(f.root, 'src', 'àf.txt'), 'x');
+    assert.equal((await runAction({ action: 'open-file', projectId: 'shop-abc123', path: 'src/àf.txt', line: 3 }, f.deps)).status, 200);
+    const { cmd, args } = f.spawned.at(-1);
+    assert.notEqual(cmd, 'cmd.exe');
+    assert.deepEqual([cmd, args[0]], ['rundll32.exe', 'url.dll,FileProtocolHandler']);
+    assert.ok(args[1].endsWith('/src/a%CD%80f.txt:3'), args[1]);
   } finally { f.cleanup(); }
 });
 

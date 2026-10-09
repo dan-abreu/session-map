@@ -121,7 +121,7 @@ export async function readFileForView(root, rel, { diffBase, ref } = {}) {
   return { ok: true, text, lines: lineCount(text), changes };
 }
 
-// Every segment is encoded: the link goes to `cmd /c start` on Windows, where & ^ % ( ) are not plain text.
+// Every segment is encoded, so the link has no space or quote for the Windows protocol handler to split on.
 export function vscodeUrl(abs, line) {
   const encode = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   const parts = abs.replaceAll('\\', '/').split('/').map((s, i) => (i === 0 && /^[a-z]:$/i.test(s) ? s : encode(s)));
