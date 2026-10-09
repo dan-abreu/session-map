@@ -75,8 +75,8 @@ test('the file list of a branch is its diff, of a part the tracked files under i
     assert.deepEqual(cell.body.files.map((f) => `${f.status} ${f.path}`), ['M src/a.js', 'A src/new.js', 'D src/gone.js']);
     const part = await call('/api/files/shop-abc123?part=src');
     assert.deepEqual(part.body.files, [
-      { path: 'src/a.js', status: 'M', workCell: 'feature/x' }, { path: 'src/gone.js', status: 'D', workCell: 'feature/x' }, { path: 'src/new.js', status: 'A', workCell: 'feature/x' },
-    ], 'the branch files show up even where the folder on disk does not have them yet');
+      { path: 'src/a.js', status: 'M', workCell: 'feature/x', lines: 3, kind: 'code' }, { path: 'src/gone.js', status: 'D', workCell: 'feature/x' }, { path: 'src/new.js', status: 'A', workCell: 'feature/x' },
+    ], 'the branch files show up even where the folder on disk does not have them yet; a counted file says its lines and kind (mm25)');
     assert.deepEqual((await call('/api/files/shop-abc123?part=empty')).body.files, []);
     assert.equal((await call('/api/files/shop-abc123?part=ghost')).status, 404);
     assert.equal((await call('/api/files/shop-abc123?workCell=ghost')).status, 404);

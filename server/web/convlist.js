@@ -24,6 +24,17 @@ export function conversationsOf(project) {
   }));
 }
 
+// The conversations born in another project that work in this one (mm24); a server older than them sends none.
+export const visitorsOf = (project) => (Array.isArray(project.visitors) ? project.visitors : []);
+
+// "Born in X · working in Y" (mm24): the project a conversation is listed in first and the other projects where it edits
+// (or looks, before its first edit), biggest share first. null when it works only at home.
+export function workWords(row, project) {
+  const born = row.bornIn ?? { projectId: project.id, name: project.name };
+  const working = (row.footprint?.places ?? []).filter((p) => p.projectId !== born.projectId && p.share > 0).map((p) => p.name);
+  return working.length ? { born: born.name, working } : null;
+}
+
 // id → {node, path (the ids above it, the project first)}, built once per list.
 function indexOf(tree) {
   const index = new Map();
@@ -69,7 +80,7 @@ const visible = (row, showArchived) => showArchived || !row.archived;
 const DAY_MS = 86_400_000;
 export const DATE_GROUPS = ['today', 'yesterday', 'week', 'older'];
 // The groups of a project's section, top to bottom (mm04).
-export const SECTION_GROUPS = ['pinned', 'working', 'waiting', ...DATE_GROUPS];
+export const SECTION_GROUPS = ['pinned', 'working', 'waiting', 'visiting', ...DATE_GROUPS];
 
 // By calendar day on this device, like Claude and ChatGPT: late last night is yesterday though less than a day ago.
 export function dateGroup(iso, nowMs) {
@@ -89,16 +100,18 @@ export const projectHue = (project) => ownerHue(project.id);
 const isPinned = (row) => row.node?.kind === 'orchestration';
 
 function sectionOf(project, entries, nowMs) {
-  const sec = { project, hue: projectHue(project), pinned: [], working: [], waiting: [], today: [], yesterday: [], week: [], older: [] };
+  const sec = { project, hue: projectHue(project), pinned: [], working: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [] };
+  const own = entries.filter((e) => !e.home);
   for (const e of [...entries].sort(newest)) {
-    if (isPinned(e.row)) sec.pinned.push(e);
+    if (e.home) sec.visiting.push(e);
+    else if (isPinned(e.row)) sec.pinned.push(e);
     else if (e.row.status === 'busy') sec.working.push(e);
     else if (e.row.waiting) sec.waiting.push(e);
     else sec[dateGroup(e.row.updatedAt, nowMs)].push(e);
   }
   sec.counts = {
-    working: entries.filter((e) => e.row.status === 'busy').length,
-    waiting: entries.filter((e) => e.row.status !== 'busy' && e.row.waiting).length,
+    working: own.filter((e) => e.row.status === 'busy').length,
+    waiting: own.filter((e) => e.row.status !== 'busy' && e.row.waiting).length,
     total: entries.length,
   };
   sec.newest = entries.reduce((m, e) => (String(e.row.updatedAt ?? '') > m ? String(e.row.updatedAt) : m), '');
@@ -109,8 +122,8 @@ function sectionOf(project, entries, nowMs) {
 const bySection = (a, b) => (b.counts.working > 0) - (a.counts.working > 0) || (b.counts.waiting > 0) - (a.counts.waiting > 0) || b.newest.localeCompare(a.newest);
 
 // opts: projectId, scope ('project' | 'all'), query, nodeId (only that box and below, in the open project), showArchived.
-// Each entry: {row, project, nodeId, place}. Working now, then waiting for the person, then the rest, newest first in each;
-// sections: the same entries per project, in SECTION_GROUPS (mm04).
+// Each entry: {row, project, nodeId, place, home (a visitor's own project, mm24)}. Working now, then waiting for the person,
+// then the rest, newest first in each; visitors apart; sections: the same entries per project, in SECTION_GROUPS (mm04).
 export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false } = {}) {
   const q = plain(query);
   const projects = scope === 'all' ? state.projects : state.projects.filter((p) => p.id === projectId);
@@ -120,28 +133,32 @@ export function listConversations(state, { projectId, scope = 'project', query =
   for (const project of projects) {
     const mine = [];
     const index = indexOf(archTree(project));
-    for (const row of conversationsOf(project)) {
+    const homeOf = (row) => state.projects.find((p) => p.id === row.bornIn.projectId) ?? { id: row.bornIn.projectId, name: row.bornIn.name };
+    const rows = [...conversationsOf(project).map((row) => ({ row })), ...visitorsOf(project).map((row) => ({ row, home: homeOf(row) }))];
+    for (const { row, home } of rows) {
       if (!visible(row, showArchived)) continue;
       const at = nodeIn(index, row);
       if (nodeId && project.id === projectId && at !== nodeId && !index.get(at).path.includes(nodeId)) continue;
       const place = placeIn(index, row, at);
       if (q && !plain([row.title, ...place.path, scope === 'all' ? project.name : ''].join(' ')).includes(q)) continue;
-      mine.push({ row, project, nodeId: at, place });
+      mine.push(home ? { row, project, nodeId: at, place, home } : { row, project, nodeId: at, place });
     }
     entries.push(...mine);
     if (mine.length) sections.push(sectionOf(project, mine, nowMs));
   }
-  const working = entries.filter((e) => e.row.status === 'busy').sort(newest);
-  const waiting = entries.filter((e) => e.row.status !== 'busy' && e.row.waiting).sort(newest);
-  const recent = entries.filter((e) => e.row.status !== 'busy' && !e.row.waiting).sort(newest);
-  return { working, waiting, recent, total: entries.length, sections: sections.sort(bySection) };
+  const own = entries.filter((e) => !e.home);
+  const working = own.filter((e) => e.row.status === 'busy').sort(newest);
+  const waiting = own.filter((e) => e.row.status !== 'busy' && e.row.waiting).sort(newest);
+  const recent = own.filter((e) => e.row.status !== 'busy' && !e.row.waiting).sort(newest);
+  const visiting = entries.filter((e) => e.home).sort(newest);
+  return { working, waiting, recent, visiting, total: entries.length, sections: sections.sort(bySection) };
 }
 
 // How many conversations each box holds, itself and below: the number on the box, which filters the list to it.
 export function conversationCounts(project, tree, { showArchived = false } = {}) {
   const index = indexOf(tree);
   const counts = new Map();
-  for (const row of conversationsOf(project)) {
+  for (const row of [...conversationsOf(project), ...visitorsOf(project)]) {
     if (!visible(row, showArchived)) continue;
     const at = nodeIn(index, row);
     for (const id of [...index.get(at).path, at]) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -159,7 +176,8 @@ const DATED = new Set(DATE_GROUPS);
 
 const toneOf = (row) => (row.status === 'busy' ? 'busy' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
 
-// ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), phone (media query), state(),
+// ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), list(names) (joined in the
+// page's language), phone (media query), state(),
 // project(), showArchived(), current() (the conversation the chat sheet shows), nodeLabel(id), onOpen(entry), onMove(entry)
 // (move or rename it), onFilter() (the box filter changed: the map redraws its pressed numbers), store {get, set}.
 export function createConvList(ctx) {
@@ -186,6 +204,7 @@ export function createConvList(ctx) {
     return (full ? e.place.path : e.place.path.slice(-2)).join(' › ');
   };
   const stepText = (step) => (STEP_KINDS.has(step.kind) ? ctx.t()(`live.step.${step.kind}`, { target: step.target }) : '');
+  const workText = (work) => (work ? ctx.t()('convs.work', { born: work.born, where: ctx.list(work.working) }) : '');
 
   const projectBadge = (project) => h('span', { class: 'cv-proj', style: `--p-h:${projectHue(project)}` },
     h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, project.name));
@@ -204,7 +223,8 @@ export function createConvList(ctx) {
     const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
     const title = row.title || tt('chat.untitled');
     const where = placeWords(e);
-    return h('li', { class: 'cv-item' },
+    const work = workText(workWords(row, e.project));
+    return h('li', { class: `cv-item${e.home ? ' is-visitor' : ''}` },
       h('button', {
         type: 'button', class: `cv-row tone-${tone}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
         title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
@@ -214,6 +234,7 @@ export function createConvList(ctx) {
       h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
       step ? h('span', { class: 'cv-step' }, step) : null,
       h('span', { class: `cv-where${e.place.special ? ` is-${e.place.special}` : ''}` }, projectBadge(e.project), where ? h('span', { class: 'cv-path' }, where) : null),
+      work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null,
       h('span', { class: 'cv-meta' },
         originBadge(row.origin),
         row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null)),
@@ -233,7 +254,7 @@ export function createConvList(ctx) {
     const id = `cv-g-${sec.project.id}-${name}`;
     return h('section', { class: `cv-group g-${name}`, 'aria-labelledby': id },
       h(heading, { id, class: 'cv-group-head' },
-        name === 'pinned' ? icon('compass', 'cv-group-icon') : h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }),
+        name === 'pinned' ? icon('compass', 'cv-group-icon') : name === 'visiting' ? icon('connect', 'cv-group-icon') : h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }),
         tt(`convs.group.${name}`), h('span', { class: 'cv-group-n num' }, String(entries.length))),
       h('ul', { class: 'cv-rows' }, shown.map(rowView)),
       rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll.add(key); render(); } }, tt('convs.more', { n: rest })) : null);

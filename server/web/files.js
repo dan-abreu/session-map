@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { filesByFolder } from './tree.js';
+import { filesByFolder, kindCounts } from './tree.js';
 import { changedLines } from './views.js';
 
 const LIST_TTL_MS = 30_000;
@@ -11,16 +11,24 @@ const SLICE = 1500;
 export function createFiles({ dialog, h, t, toast, errorText, project }) {
   const lists = new Map();
 
+  // The box's files by kind (mm25): "Screens 3 · Code 12 · Tests 4".
+  function kinds(files) {
+    const tt = t();
+    const list = kindCounts(files);
+    return list.length ? h('p', { class: 'files-kinds' }, list.map((k) => h('span', { class: `files-kind fk-${k.kind}`, title: tt('files.lines', { n: k.lines }) }, tt(`files.kind.${k.kind}`), h('span', { class: 'num' }, String(k.files))))) : null;
+  }
+
   function rows(files, onOpen) {
     const tt = t();
-    return h('div', { class: 'organelle-list' }, filesByFolder(files).map((group) => h('div', { class: 'folder' },
+    const lines = (f) => (f.lines !== undefined ? h('span', { class: 'file-lines num' }, tt('files.lines', { n: f.lines })) : null);
+    return h('div', { class: 'organelle-list' }, kinds(files), filesByFolder(files).map((group) => h('div', { class: 'folder' },
       h('span', { class: 'folder-name' }, group.folder || tt('wc.root')),
       h('ul', {}, group.files.map((f) => {
         const status = f.status ? [h('span', { class: 'file-status', 'aria-hidden': 'true' }, f.status), h('span', { class: 'visually-hidden' }, `${tt(`wc.status.${f.status}`)}: `)] : [];
         // A removed file has nothing left to read.
         if (f.status === 'D') return h('li', { class: 'file st-D', title: tt('files.removed') }, status, f.name);
         return h('li', { class: `file${f.status ? ` st-${f.status}` : ''}` },
-          h('button', { type: 'button', class: 'file-open', onclick: () => onOpen(f) }, status, f.name));
+          h('button', { type: 'button', class: 'file-open', onclick: () => onOpen(f) }, status, f.name, lines(f)));
       })))));
   }
 

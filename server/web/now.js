@@ -1,7 +1,7 @@
 // The "Now" strip (mm09) and the project picker's badges (mm10): every job on the PC, whatever project the page has open.
 // The pure part on top is what node:test loads; createNowStrip touches the DOM only when called.
 import { archTree } from './tree.js';
-import { nodeOfConversation, placeOf, projectHue, originIcon } from './convlist.js';
+import { nodeOfConversation, placeOf, projectHue, originIcon, workWords } from './convlist.js';
 import { modelName, runningWorkflows, stepWords } from './live.js';
 import { kindMark } from './blocks.js';
 
@@ -21,7 +21,8 @@ function kindOf(chat, unseen, nowMs) {
 }
 
 // Never takes the open project: the strip reads the same with any project selected (mm09).
-// Each card: {kind, project, hue, chat, nodeId, place, lastStep, origin, model, helpers {done, total} | null, since}.
+// Each card: {kind, project, hue, chat, nodeId, place, lastStep, work (born in · working in, mm24), origin, model,
+// helpers {done, total} | null, since}.
 export function nowJobs(state, { unseen = new Set(), nowMs = Date.parse(state.generatedAt) } = {}) {
   const cards = [];
   for (const project of state.projects) {
@@ -40,6 +41,7 @@ export function nowJobs(state, { unseen = new Set(), nowMs = Date.parse(state.ge
         nodeId: nodeOfConversation(tree, row),
         place: placeOf(tree, row),
         lastStep,
+        work: workWords(chat, project),
         origin: listed?.origin ?? null,
         model: chat.model ?? null,
         helpers: workflows.length ? { done: workflows.reduce((n, w) => n + w.done, 0), total: workflows.reduce((n, w) => n + w.started, 0) } : null,
@@ -98,7 +100,7 @@ function shorten(text, max) {
 }
 
 // ctx: root (the strip), line (its one-line button), counts, cards (the list), h, t (translator getter), icon(name, cls),
-// relative(iso), phone (media query), store {get, set}, onOpen(card). It is handed the jobs and never asks which project
+// relative(iso), list(names) (joined in the page's language), phone (media query), store {get, set}, onOpen(card). It is handed the jobs and never asks which project
 // the page has open, so switching project, tab or scrolling leaves it as it is (mm09).
 export function createNowStrip(ctx) {
   const { root, line, h, icon, store } = ctx;
@@ -138,6 +140,7 @@ export function createNowStrip(ctx) {
           when ? h('span', { class: 'now-when num' }, when) : null),
         h('span', { class: 'now-card-title' }, kindMark({ h, icon, t: tt }, 'chats'), h('span', { class: 'now-card-name' }, title)),
         h('span', { class: 'now-where' }, where(card)),
+        card.work ? h('span', { class: 'now-work', title: tt('convs.workTitle') }, icon('connect', 'now-work-icon'), h('span', { class: 'now-work-text' }, tt('convs.work', { born: card.work.born, where: ctx.list(card.work.working) }))) : null,
         h('span', { class: 'now-detail' }, detail(card)),
         meta.length ? h('span', { class: 'now-meta' }, meta) : null));
   }

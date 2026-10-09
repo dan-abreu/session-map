@@ -7,7 +7,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - The first evening: a map of every chat: id01, id02, id03, id04, id05, id06, id07, id08, id09, id10, id11, id12
 - The picture of the project: id13, id14, id15, id17, id18, id19
 - The model, the orchestration and other AIs: id20, id21
-- Following the work live: id29, id31, id32, id34, id35, id36
+- Following the work live: id29, id31, id32, id34, id35, id36, id37, id38
 - Files, terminal and the first use of a repository: id40
 - The Flow: id43, id44
 
@@ -195,6 +195,18 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: the strip's content is the same whichever project is selected; a card's click switches project and opens the point and its chat; the picker shows a pulsing dot on a project with work running.
   - Where it went: `mm09`, `mm10`.
   - Status: done (on main, ships in the release after v0.2.2).
+- [x] Show where the work really happens, file by file, even from another chat `id37`
+  - Asked: 2026-10-09 14:52 — "acho que as bolhas ficaram muito genericas ou ficam pontuais de mais, tipo não da pra falar que só aquilo é tudo e que aquilo realmente é tudo, ficou complexo, é como se a IA fosse mexer em uma coisa só mas mexe em mais coisas"; 2026-10-09 16:07 — "voce esta trabalhando no session map e eu nao to vendo onde"; 2026-10-09 16:08 — "eu quero isso pega real onde está sendo feito os trabalhos, mesmo em um chat diferente"
+  - What it means: a conversation lights every part and project whose files it really edits (its own edits, its helpers' and its workflows'), in proportion, live as it edits; a middle level of components between a part and its items; an item that spans parts shows in each.
+  - How to confirm it is done: a chat opened in project A that edits files of project B appears in both ("born in A · working in B"), and the parts it edited light in proportion to the files edited; Live lights the part of the file in its last step.
+  - Where it went: `mm24`; what is left in `mm34`.
+  - Status: done (on main): listed in every project it edits, "born in A · working in B", its parts with their share, Live on the part of its latest file. "Will touch" and the middle level go on in `mm34`.
+- [x] Files, lines and share of the program in every box `id38`
+  - Asked: 2026-10-09 16:15 — "era bom para cada balão que é colocado, ter a quatidade de arquivos que é daquele balão, quantidade de linhas, as contagens que já estamos fazendo para o programa mais colocando nos blões assim fica facil saber porque aquele balao é aquilo mesmo na arquitetura"
+  - What it means: each box shows its number of files, lines and its share of the whole program, summed up the tree; a Files panel lists them by folder; the root shows how many files have no box.
+  - How to confirm it is done: the root's file count equals the census total; each layer's count equals the sum of its parts; the "files with no box" number matches the census list of unowned files.
+  - Where it went: `mm25`; what changed in the period in `mm34`; exact numbers from `fd01`.
+  - Status: done (on main): files, lines and share in every box, summed upward, and the files with no box on the root, counted by session-map itself; the census (`fd01`) refines the numbers.
 
 ### Files, terminal and the first use of a repository
 

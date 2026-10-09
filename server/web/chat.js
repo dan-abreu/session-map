@@ -956,7 +956,8 @@ export function createChat({
       if (saved && saved.projectId === projectId && typeof saved.sessionId === 'string') resume(saved);
     },
     // Left open over another project, the sheet would start its conversation in the old project's folder.
-    showProject(projectId) { if (context && context.projectId !== projectId) close(); },
+    // mapProjectId: a conversation born in one project opened from the map of another (mm24) stays open on that map.
+    showProject(projectId) { if (context && (context.mapProjectId ?? context.projectId) !== projectId) close(); },
     relabel() {
       if (root.hidden) return;
       input.placeholder = t()('chat.placeholder');

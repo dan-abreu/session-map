@@ -89,3 +89,14 @@ test('translator uses the plural form for zero', () => {
   assert.equal(translator('pt-BR').count('summary.chats', 0), '0 conversas');
   assert.equal(translator('en').count('summary.chats', 0), '0 conversations');
 });
+
+test('no text is written twice in one language: a second copy would silently replace the first', () => {
+  const source = readFileSync(new URL('../server/web/i18n.js', import.meta.url), 'utf8');
+  for (const name of ['en', 'ptBR']) {
+    const start = source.indexOf(`const ${name} = {`);
+    const body = source.slice(start, source.indexOf('\n};', start));
+    const keys = [...body.matchAll(/^  '([^']+)':/gm)].map((m) => m[1]);
+    const twice = keys.filter((k, i) => keys.indexOf(k) !== i);
+    assert.deepEqual(twice, [], name);
+  }
+});

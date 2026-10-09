@@ -24,6 +24,7 @@ import { findFiles, listFiles, mergeBaseOf, readFileForView } from './files.mjs'
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
+import { countRepo } from './sources/count.mjs';
 import { setPlacement } from './placements.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
 
@@ -302,7 +303,8 @@ export function createApp({
         if (!part) throw new HttpError(404, 'unknown-part');
         const marks = new Map(project.workCells.filter((w) => w.partId === part.id).flatMap((w) => w.files.map((f) => [f.path, { status: f.status, workCell: w.id }])));
         const paths = [...new Set([...await listFiles(project.root, [...part.codePaths, part.file]), ...marks.keys()])].sort();
-        return send(res, 200, { ok: true, files: paths.map((path) => ({ path, status: null, ...marks.get(path) })) });
+        const counted = new Map((await countRepo(project.root)).files.map((f) => [f.path, { lines: f.lines, kind: f.kind }]));
+        return send(res, 200, { ok: true, files: paths.map((path) => ({ path, status: null, ...marks.get(path), ...counted.get(path) })) });
       }
       if (!cell) throw new HttpError(400, 'bad-request');
       return send(res, 200, { ok: true, files: cell.files.map(({ path, status }) => ({ path, status })) });

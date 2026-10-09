@@ -2372,3 +2372,26 @@ h2[data-help] { display: inline; }
 /* Item codes are for Claude and the map: shown only with the technical words on. */
 body:not(.is-tech) .bx-code, body:not(.is-tech) .code-chip { display: none; }
 .btn:active:not(:disabled), .icon-btn:active:not(:disabled), .seg button:active { transform: translateY(1px); }
+
+/* Files, lines and share of the program in every box (mm25); the open conversation's share of edits (mm24). */
+.bx-size { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: var(--fs-2xs); font-weight: 550; color: color-mix(in srgb, var(--lv-ink) 70%, var(--lv-bg)); }
+.bx-size-count { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.bx-share { padding: 0 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--lv-ink) 9%, transparent); color: var(--lv-ink); font-weight: 650; white-space: nowrap; }
+.bx-size .sep { color: color-mix(in srgb, var(--lv-ink) 35%, var(--lv-bg)); }
+.bx-size-icon, .bx-foot-icon, .cv-work-icon, .now-work-icon { flex: none; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bx-chip.is-unowned { justify-self: start; width: fit-content; background: var(--clash-fill); color: var(--clash-ink); }
+.bx-chip.is-foot { gap: 4px; background: var(--k-chats-fill); color: var(--k-chats-ink); }
+.mm-node:has(.is-foot) > .mm-box, .ol-row:has(.is-foot) .ol-box { border-color: color-mix(in srgb, var(--k-chats) 60%, var(--lv-line)); }
+.cv-work, .now-work { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--k-chats-ink); }
+.cv-work { grid-column: 2 / -1; }
+.cv-work-text, .now-work-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-lead { margin: 0 0 var(--sp-2); }
+.pf-head { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 650; }
+.pf-head.is-unowned { color: var(--clash-ink); }
+.pf-paths { margin: var(--sp-1) 0 0; gap: 2px; font-size: var(--fs-xs); }
+.pf-paths li { overflow-wrap: anywhere; }
+.pf-left { margin: var(--sp-1) 0 0; font-size: var(--fs-sm); }
+.pf-left summary { cursor: pointer; }
+.file-open .file-lines { margin-left: auto; padding-left: var(--sp-2); font-size: var(--fs-2xs); color: var(--ink-2); white-space: nowrap; }
+.files-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--sp-2); }
+.files-kind { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-pill); background: var(--k-files-fill); color: var(--k-files-ink); font-size: var(--fs-2xs); font-weight: 650; line-height: 1.8; }

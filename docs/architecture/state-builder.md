@@ -6,6 +6,8 @@ Joins the readers' answers into the one state the page draws: projects, chats, b
 
 `collect` reads every project, hangs each chat and branch on a part of the architecture (the owner's own move or rename first, then the rules), and works out costs and the "waiting for you" list. The AI step (your own `claude` CLI, `haiku`) names chats and picks a part for the ones the code cannot place; it is capped per hour and can be switched off.
 
+Each conversation also gets its real footprint (`footprint.mjs`): every git repository and part whose files it, its helpers or its workflow agents edited, with the share of each. It stays listed at home and shows in the other projects as a visitor.
+
 ## Where in the code
 
 - `server/collect.mjs`
@@ -13,6 +15,7 @@ Joins the readers' answers into the one state the page draws: projects, chats, b
 - `server/brain/`
 - `server/cost.mjs`
 - `server/placements.mjs`
+- `server/footprint.mjs`
 - `server/store.mjs`
 
 ## Rules that must not break

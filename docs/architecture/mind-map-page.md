@@ -107,14 +107,19 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Where the work really is
 
-- [ ] **important:** Real footprint of every conversation, file by file `mm24`
+- [x] **Claude:** Real footprint of every conversation, file by file `mm24`
   - From each conversation's edited and mentioned files, plus the edits of its helpers and workflows, find every project and part it really touches (by the parts' paths): it shows in each project it touches ("born in A · working in B"), and its parts light in proportion to the files edited there.
   - Live lights the part of the file in the latest step; before work starts, the orchestration says "will touch: A, B, C". A middle level of components sits between a part and its items (level 2 of `fl09`, also on the mind map), and an item that spans parts shows in each, linked. Refined later with the census (`fd01`).
   - How to confirm it is done: a chat opened in project A that edits files of project B is listed in both with "born in A · working in B"; the parts it edited light with a share matching the files edited; Live lights the part of the file named in its last step.
-- [ ] **important:** Files, lines and share of the program in every box `mm25`
+  - Done on main: the project of each edited file is the git repository it lives in (a worktree counts as its main checkout), the part is the one owning the file on that map; libraries, generated files, binaries and the Claude folder never count; a project only edited shows up though no conversation started there. The conversation stays listed (with its cost) at home and shows elsewhere under "Also working here"; its parts there carry a "This conversation · 40%" chip while it is open; a step outside its folder shows only its last folders. "Will touch", the middle level and items spanning parts moved to `mm34`.
+- [x] **Claude:** Files, lines and share of the program in every box `mm25`
   - Each box shows its files, lines and % of the program, summed on the levels above; a Files panel per box lists them by folder (lines per file), split by kind (screens, server, tests, docs) and what changed in the period; the root shows "N files with no box on the map" in a strong color.
   - Base: files assigned to parts by their paths over `git ls-files`, counted by session-map itself; exact numbers from the census (`fd01`).
   - How to confirm it is done: the root's count equals the number of tracked files minus the ones left out on purpose; every layer equals the sum of its parts; the "no box" number equals the census list of files without an owner.
+  - Done on main: `server/sources/count.mjs` counts every tracked file line by line (no dependency, recounted at most every 30 s and only the files that changed) and `server/arch/sizes.mjs` gives each file one owner (the deepest path; the first part on a tie). The project panel lists the files with no box and what was left out, by reason; a part's Files tab shows lines per file and the split by kind. What changed in the period inside the Files tab moved to `mm34`; the census (`fd01`) refines the numbers.
+- [ ] **important:** The rest of the real footprint `mm34`
+  - What is left of `mm24` and `mm25`: before work starts, the orchestration says "will touch: A, B, C"; a middle level of components between a part and its items (level 2 of `fl09`, also on the mind map); an item that spans parts shows in each, linked; the Files tab of a box marks what changed in the period.
+  - How to confirm it is done: an orchestration plan lights the parts it names before the first edit; a part opens into its components with the files of each; an item whose files sit in two parts shows in both with a link; the Files tab with "last 7 days" picked marks the files changed in that week.
 - [ ] **important:** Walk through the files of a box `mm26`
   - A file tree per box like VS Code's explorer; code colored, with line numbers and search in the file; jump to the files it uses and the files that use it (import graph); Open in VS Code at the line.
   - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.

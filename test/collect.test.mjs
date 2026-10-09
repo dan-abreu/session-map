@@ -258,7 +258,9 @@ test('a project without architecture shows only the project and loose chats, and
     const ai = { bin: 'fake-claude', run: async () => { calls++; return { ok: true, value: { partId: null }, costUSD: 0.001 }; } };
     const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
     await settleAi(smDir);
-    assert.deepEqual(p.arch, { source: 'none', dir: null, lang: 'en', mermaid: null, layers: [], parts: [], links: [] });
+    const { sizes, ...arch } = p.arch;
+    assert.deepEqual(arch, { source: 'none', dir: null, lang: 'en', mermaid: null, layers: [], parts: [], links: [] });
+    assert.deepEqual([sizes.total, sizes.unowned.files], [{ files: 1, lines: 1 }, 1], 'with no map, every file of the program has no box');
     assert.equal(p.chats[0].partId, null);
     assert.equal(p.chats[0].partSource, 'none');
     assert.equal(calls, 0);

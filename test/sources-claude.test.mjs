@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   claudeDir, listLiveSessions, listTranscripts, readTranscript,
-  readHelperUsage, readWorkflows, readFullTranscript, forEachLine,
+  readHelperUsage, readHelperWork, readWorkflows, readFullTranscript, forEachLine, stepOf,
 } from '../server/sources/claude.mjs';
 import { firstPrompt } from '../server/chat/prompt.mjs';
 
@@ -325,7 +325,7 @@ test('liveSteps: a prompt with no answer yet is "thinking", and an unanswered qu
 });
 
 test('liveSteps: a long target is cut at 80 characters, keeping the end of a path', () => {
-  const deep = `/elsewhere/${'very-long-folder-name/'.repeat(5)}final-file.mjs`;
+  const deep = `/elsewhere/${'very-long-folder-name-that-keeps-going/'.repeat(5)}final-file.mjs`;
   const [edit, run] = steps([use('01', 'Write', { file_path: deep, content: 'x' }), use('02', 'Bash', { command: `echo ${'y'.repeat(120)}` })]);
   assert.equal(edit.target.length, 80);
   assert.ok(edit.target.startsWith('…') && edit.target.endsWith('final-file.mjs'));
@@ -341,4 +341,41 @@ test('readTranscript keeps where the conversation runs: the first entrypoint it 
     writeFileSync(file, `${prompt('01', 'hi')}\n`);
     assert.equal(readTranscript(file).entrypoint, '');
   });
+});
+
+const editLine = (id, name, file, ts = '2026-10-09T10:00:00.000Z') => JSON.stringify({
+  type: 'assistant', sessionId: 's', cwd: '/work/a', timestamp: ts,
+  message: { id, model: 'claude-fake-1', role: 'assistant', content: [{ type: 'tool_use', id: `t-${id}`, name, input: { file_path: file } }], usage: { input_tokens: 1, output_tokens: 1 } },
+});
+
+test('readHelperWork: the files the helpers and workflow agents edited belong to the conversation, with their commits', () => {
+  withTempDir((dir) => {
+    const session = join(dir, 'sess');
+    mkdirSync(join(session, 'subagents', 'workflows', 'wf_x'), { recursive: true });
+    writeFileSync(join(session, 'subagents', 'agent-h1.jsonl'), `${editLine('h1', 'Edit', '/work/b/src/one.js')}\n${editLine('h2', 'Read', '/work/b/src/read-only.js')}\n`);
+    writeFileSync(join(session, 'subagents', 'workflows', 'wf_x', 'agent-w1.jsonl'), `${editLine('w1', 'Write', '/work/b/src/two.js')}\n${editLine('w2', 'Edit', '/work/b/src/one.js')}\n`);
+    utimesSync(join(session, 'subagents', 'agent-h1.jsonl'), 1_700_000_000, 1_700_000_000);
+    const work = readHelperWork(session);
+    assert.deepEqual(work.editedFiles.sort(), ['/work/b/src/one.js', '/work/b/src/two.js']);
+    assert.deepEqual(work.commits, []);
+    assert.equal(work.last.file, '/work/b/src/one.js', 'the newest agent step that names a file');
+    assert.deepEqual(readHelperWork(join(dir, 'none')), { editedFiles: [], commits: [], last: null });
+  });
+});
+
+test('readTranscript keeps the file of the latest step that names one, and every edit even beyond the tail it reads', () => {
+  withTempDir((dir) => {
+    const file = join(dir, 's.jsonl');
+    const filler = Array.from({ length: 40 }, (_, i) => JSON.stringify({ type: 'user', sessionId: 's', cwd: '/work/a', timestamp: '2026-10-09T10:01:00.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `x${i}`, content: 'y'.repeat(100) }] } }));
+    writeFileSync(file, [editLine('e1', 'Edit', '/work/a/old.js'), ...filler, editLine('e2', 'Edit', '/work/a/new.js'), editLine('e3', 'Read', '/work/b/look.js'), editLine('e4', 'Bash', undefined)].join('\n') + '\n');
+    const s = readTranscript(file, { tailBytes: 1500 });
+    assert.equal(s.lastFile, '/work/b/look.js');
+    assert.deepEqual(s.editedFiles.sort(), ['/work/a/new.js', '/work/a/old.js']);
+  });
+});
+
+test('stepOf names a file outside the conversation\'s folder by its last folders only, never by the whole path of the PC', () => {
+  assert.deepEqual(stepOf({ name: 'Edit', input: { file_path: '/work/a/src/x.js' } }, '/work/a', true), { kind: 'edit', target: 'src/x.js' });
+  assert.deepEqual(stepOf({ name: 'Edit', input: { file_path: 'D:\\home\\ana\\work\\shop\\server\\pay\\provider.ts' } }, 'D:/home/ana/work/panel', true), { kind: 'edit', target: '…/server/pay/provider.ts' });
+  assert.deepEqual(stepOf({ name: 'Read', input: { file_path: '/b/c.js' } }, '/work/a', true), { kind: 'read', target: '/b/c.js' }, 'a short path stays whole');
 });

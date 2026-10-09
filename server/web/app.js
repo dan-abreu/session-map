@@ -1,6 +1,7 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
   archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, clashChip, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
+  sizeOf, shareText,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -11,7 +12,7 @@ import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
-import { createConvList, conversationCounts, listConversations, projectHue } from './convlist.js';
+import { createConvList, conversationCounts, listConversations, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
@@ -277,17 +278,75 @@ function itemBody(node) {
   ];
 }
 
+// ---- files, lines and share of the program in every box (mm25) ----------------------------------
+
+const numText = (n) => n.toLocaleString(lang);
+const listText = (names) => new Intl.ListFormat(lang, { type: 'conjunction' }).format(names);
+const plural = (key, n) => t(`${key}.${n === 1 ? 'one' : 'other'}`, { n: numText(n) });
+
+function sizeLine(node) {
+  const size = sizeOf(project.arch?.sizes, node);
+  if (!size) return null;
+  const files = plural('size.files', size.files);
+  const lines = plural('size.lines', size.lines);
+  const share = shareText(size.share);
+  return h('span', { class: 'bx-size num', title: t(node.kind === 'project' ? 'size.titleProgram' : 'size.title', { files, lines, share }) },
+    h('span', { class: 'bx-size-count' }, icon('file', 'bx-size-icon'), joinDots([h('span', {}, files), h('span', {}, lines)])),
+    node.kind === 'project' ? null : h('span', { class: 'bx-share' }, t('size.share', { share })));
+}
+
+function unownedChip(node) {
+  const n = node.kind === 'project' ? project.arch?.sizes?.unowned?.files : 0;
+  return n ? h('span', { class: 'bx-chip is-unowned', title: t('size.unownedTitle') }, plural('size.unowned', n)) : null;
+}
+
+const PATHS_SHOWN = 30;
+const pathList = (paths, n) => (paths.length ? h('ul', { class: 'plain rows pf-paths' },
+  paths.slice(0, PATHS_SHOWN).map((path) => h('li', {}, h('code', { class: 'path' }, path))),
+  n > PATHS_SHOWN ? h('li', { class: 'muted' }, t('files.morePaths', { n: numText(n - PATHS_SHOWN) })) : null) : null);
+
+// The project panel's count: the whole program, the files no box owns (to give them one) and what was left out, by reason.
+function programFiles(sizes) {
+  if (!sizes?.total) return null;
+  const unowned = sizes.unowned.files;
+  return kblock('files', { title: t('files.program'), from: t('files.programFrom') },
+    h('p', { class: 'pf-lead num' }, t('files.programLead', { files: plural('size.files', sizes.total.files), lines: plural('size.lines', sizes.total.lines) })),
+    h('h4', { class: `pf-head${unowned ? ' is-unowned' : ''}` }, unowned ? plural('size.unowned', unowned) : t('files.allOwned')),
+    unowned ? h('p', { class: 'muted small' }, t('files.unownedHint')) : null,
+    pathList(sizes.unowned.paths, unowned),
+    h('h4', { class: 'pf-head' }, t('files.left')),
+    ['dep', 'generated', 'binary'].map((k) => (sizes.left[k].files
+      ? h('details', { class: 'pf-left' }, h('summary', {}, t(`files.left.${k}`, { n: numText(sizes.left[k].files) })), pathList(sizes.left[k].paths, sizes.left[k].files))
+      : h('p', { class: 'pf-left muted small' }, t(`files.left.${k}`, { n: '0' })))));
+}
+
+// ---- the open conversation's footprint (mm24): its share of edits in each part of this map ------------------------------
+
+function footShares() {
+  const id = chat?.isOpen() ? chat.current() : null;
+  if (!id) return null;
+  const row = [...project.conversations ?? [], ...visitorsOf(project), ...project.chats].find((r) => r.sessionId === id && r.footprint);
+  const place = row?.footprint.places.find((p) => p.projectId === project.id);
+  return place ? new Map(place.parts.filter((x) => x.share > 0).map((x) => [x.partId, x.share])) : null;
+}
+
+function footChip(node) {
+  const share = node.kind === 'part' ? footShares()?.get(node.partId) : undefined;
+  return share ? h('span', { class: 'bx-chip is-foot', title: t('box.footTitle', { share: shareText(share) }) }, icon('chat', 'bx-foot-icon'), t('box.foot', { share: shareText(share) })) : null;
+}
+
 function boxContent(node) {
   const live = marks.live.has(node.id) ? liveDot() : null;
   if (node.kind === 'item') return [...itemBody(node), live].filter(Boolean);
   const c = node.counts;
   if (node.kind === 'project') {
     const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
-    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), hasMap() ? progress(c) : null, live].filter(Boolean);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), hasMap() ? progress(c) : null, live].filter(Boolean);
   }
   return [
     h('span', { class: 'bx-title' }, node.label),
-    h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), ...(node.kind === 'part' ? partBadges(node) : [])),
+    h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), ...(node.kind === 'part' ? partBadges(node) : []), footChip(node)),
+    sizeLine(node),
     c.total ? progress(c) : null,
     live,
   ].filter(Boolean);
@@ -296,7 +355,8 @@ function boxContent(node) {
 function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
-    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length]);
+    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length,
+    sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part)]);
 }
 
 const toggleLabel = (node, isOpen) => t(isOpen ? 'map.collapse' : 'map.expand', { name: node.label });
@@ -701,7 +761,8 @@ function whereOf(row) {
 
 // A row of the list: the map opens the way to its box, centres it and makes it glow, and the chat opens beside with the
 // conversation (a page one resumes; one from VS Code or a terminal reads here, with where it lives).
-function openConversation({ row, project: p, nodeId, place }) {
+// home: a visitor's own project (mm24); the map stays on the project it works in, the chat runs where it was born.
+function openConversation({ row, project: p, nodeId, place, home }) {
   markSeen(row.sessionId);
   convs.closeDrawer();
   closeLists();
@@ -712,7 +773,7 @@ function openConversation({ row, project: p, nodeId, place }) {
   selection = { type: 'node', id: node.id };
   const subtitle = [project.name, ...(place.special ? [t(`convs.place.${place.special}`)] : place.path)].join(' › ');
   chat.open({
-    projectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
+    projectId: home?.id ?? project.id, mapProjectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
     where: row.origin === 'map' ? null : () => whereOf(row),
   });
   if (node.kind === 'project') plainPoint();
@@ -1314,6 +1375,7 @@ function renderProjectPanel() {
         h('dt', {}, t('range.d7')), h('dd', { class: 'num' }, money(p.cost.d7)),
         h('dt', {}, t('range.d30')), h('dd', { class: 'num' }, money(p.cost.d30)),
         p.fetchedAt ? [h('dt', {}, t('project.fetched')), h('dd', {}, clock(p.fetchedAt))] : null),
+      programFiles(p.arch.sizes),
       section(hasMap() ? t('project.offMap') : t('project.chats'), chatRows(loose)),
       section(t('project.ai'), p.ai
         ? [h('p', {}, t('project.aiOn', { model: p.ai.model, cost: money(p.ai.spentUSDToday) })), p.ai.queue ? h('p', { class: 'muted small' }, t.count('costs.aiQueue', p.ai.queue)) : null]
@@ -1418,7 +1480,7 @@ async function pcMode(mode) {
 // ---- projects, polling, views ---------------------------------------------------------------
 
 function refreshMarks() {
-  liveEntries = workingIn(shown, tree, Date.parse(state.generatedAt));
+  liveEntries = workingIn(shown, tree, Date.parse(state.generatedAt), { visitors: true });
   marks = { live: livePaths(liveEntries).nodes, branches: branchMarks(shown), clashes: clashMarks(shown, ignoredClash) };
   convCounts = conversationCounts(project, tree, { showArchived });
 }
@@ -1675,15 +1737,16 @@ function wire() {
     },
   });
   convs = createConvList({
-    root: $('#convs'), h, t: () => t, icon, relative, money, phone: PHONE, store,
+    root: $('#convs'), h, t: () => t, icon, relative, money, list: listText, phone: PHONE, store,
     state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(),
     nodeLabel: (id) => (tree ? nodeById(tree, id)?.label ?? null : null),
     onOpen: openConversation,
-    onMove: openPlace,
+    // A visitor (mm24) is moved and renamed from the project it was born in.
+    onMove: (e) => openPlace({ ...e, project: e.home ?? e.project }),
     onFilter: () => renderMap(),
   });
   now = createNowStrip({
-    root: $('#now'), line: $('#nowLine'), counts: $('#nowCounts'), cards: $('#nowCards'), h, t: () => t, icon, relative, phone: PHONE, store,
+    root: $('#now'), line: $('#nowLine'), counts: $('#nowCounts'), cards: $('#nowCards'), h, t: () => t, icon, relative, list: listText, phone: PHONE, store,
     onOpen: openFromLive,
   });
   picker = createProjectPicker({

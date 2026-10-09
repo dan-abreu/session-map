@@ -3,7 +3,7 @@
 // when called. Only step words cross here (never a file's contents or a command's output): the server already cut them.
 import { emptyState } from './empty.js';
 import { archTree, ancestorsOf } from './tree.js';
-import { nodeOfConversation, placeOf } from './convlist.js';
+import { nodeOfConversation, placeOf, visitorsOf } from './convlist.js';
 
 const newest = (a, b) => String(b.chat.updatedAt ?? '').localeCompare(String(a.chat.updatedAt ?? ''));
 
@@ -25,12 +25,17 @@ export const runningWorkflows = (chat, nowMs) => (chat.workflows ?? []).flatMap(
 
 // The conversations working now in one project, newest first: {project, chat, nodeId, pathIds (project → tip), place,
 // steps (newest first), lastStep, workflows (only the ones still running, with their running agents)}. nowMs: the state's time.
-export function workingIn(project, tree, nowMs = Date.now()) {
+// The tip is the part of the file in the latest step when that is not the conversation's own part (mm24); visitors: the
+// conversations born elsewhere that work here too, for the map (the Live panel lists each once, at home).
+export function workingIn(project, tree, nowMs = Date.now(), { visitors = false } = {}) {
   const points = new Map((project.conversations ?? []).map((r) => [r.sessionId, r.node ?? null]));
-  return project.chats
+  return [...project.chats, ...(visitors ? visitorsOf(project) : [])]
     .filter((c) => c.status === 'busy' && !c.archived)
     .map((chat) => {
-      const row = { partId: chat.partId, itemCode: chat.itemCode ?? null, node: points.get(chat.sessionId) ?? null };
+      const moved = Boolean(chat.stepPartId) && chat.stepPartId !== chat.partId;
+      const row = moved
+        ? { partId: chat.stepPartId, itemCode: null, node: null }
+        : { partId: chat.partId, itemCode: chat.itemCode ?? null, node: points.get(chat.sessionId) ?? null };
       const nodeId = nodeOfConversation(tree, row);
       const steps = [...(chat.liveSteps ?? [])].reverse();
       return {

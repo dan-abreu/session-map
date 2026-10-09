@@ -8,7 +8,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 
 - The picture of the project: id16
 - The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28
-- Following the work live: id30, id33, id37, id38, id39
+- Following the work live: id30, id33, id39
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50
 - Clarity and polish: id51, id52, id53, id54, id55, id56
@@ -43,7 +43,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 06:12 — "Dentro das próprias celulas tem as linhas mostrando uma coisa ligada na outra?"; 2026-10-09 06:14 — "Sim"
   - What it means: inside one part, its components (screens, routes, modules, files) and the real links between them, not only links between parts.
   - How to confirm it is done: a double click on a part opens its inner view with components and labeled arrows taken from the code; a component lights while a chat edits one of its files.
-  - Where it went: `fl09`, `mm15`, the middle level of `mm24`.
+  - Where it went: `fl09`, `mm15`, the middle level in `mm34` (it was part of `mm24`).
   - Status: accepted.
 
 ### The model, the orchestration and other AIs
@@ -105,18 +105,6 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
   - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, is done on main; `mm23` is open; the list that shows at a glance where each chat comes from and what it is doing is open in `mm33`; `rd04` waits for the owner's OK).
-- [ ] Show where the work really happens, file by file, even from another chat `id37`
-  - Asked: 2026-10-09 14:52 — "acho que as bolhas ficaram muito genericas ou ficam pontuais de mais, tipo não da pra falar que só aquilo é tudo e que aquilo realmente é tudo, ficou complexo, é como se a IA fosse mexer em uma coisa só mas mexe em mais coisas"; 2026-10-09 16:07 — "voce esta trabalhando no session map e eu nao to vendo onde"; 2026-10-09 16:08 — "eu quero isso pega real onde está sendo feito os trabalhos, mesmo em um chat diferente"
-  - What it means: a conversation lights every part and project whose files it really edits (its own edits, its helpers' and its workflows'), in proportion, live as it edits; a middle level of components between a part and its items; an item that spans parts shows in each.
-  - How to confirm it is done: a chat opened in project A that edits files of project B appears in both ("born in A · working in B"), and the parts it edited light in proportion to the files edited; Live lights the part of the file in its last step.
-  - Where it went: `mm24`.
-  - Status: accepted.
-- [ ] Files, lines and share of the program in every box `id38`
-  - Asked: 2026-10-09 16:15 — "era bom para cada balão que é colocado, ter a quatidade de arquivos que é daquele balão, quantidade de linhas, as contagens que já estamos fazendo para o programa mais colocando nos blões assim fica facil saber porque aquele balao é aquilo mesmo na arquitetura"
-  - What it means: each box shows its number of files, lines and its share of the whole program, summed up the tree; a Files panel lists them by folder; the root shows how many files have no box.
-  - How to confirm it is done: the root's file count equals the census total; each layer's count equals the sum of its parts; the "files with no box" number matches the census list of unowned files.
-  - Where it went: `mm25`; exact numbers from `fd01`.
-  - Status: accepted.
 - [ ] Walk through the files of a box `id39`
   - Asked: 2026-10-09 16:17 — "e tem como percorrer nos arquivos? seria muito bom"
   - What it means: a file tree per box like VS Code's explorer, the code colored with line numbers and search, jumps to the files it uses and that use it, and Open in VS Code at the line.

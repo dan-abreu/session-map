@@ -251,3 +251,29 @@ export function countLabel(counts, ticks) {
   if (!counts.total) return { kind: 'empty' };
   return ticks ? { kind: 'done', done: counts.done, total: counts.total } : { kind: 'open', open: counts.total - counts.done };
 }
+
+const round3 = (n) => Math.round(n * 1000) / 1000;
+
+// The files and lines of a box (mm25) and its share of the program's lines: the program, a layer or a part; null for a
+// group or an item, which own no files, and when the server sent no counts.
+export function sizeOf(sizes, node) {
+  if (!sizes?.total) return null;
+  if (!['project', 'layer', 'part'].includes(node.kind)) return null;
+  const own = node.kind === 'project' ? sizes.total : node.kind === 'layer' ? sizes.layers?.[node.layerId] : sizes.parts?.[node.partId];
+  const files = own?.files ?? 0;
+  const lines = own?.lines ?? 0;
+  return { files, lines, share: sizes.total.lines ? round3(lines / sizes.total.lines) : 0 };
+}
+
+// A share as a whole percent; a box with something in it never reads 0%.
+export const shareText = (share) => (share > 0 && share < 0.005 ? '<1%' : `${Math.round(share * 100)}%`);
+
+const FILE_KINDS = ['screen', 'code', 'test', 'doc'];
+
+// A box's files by kind (mm25), in a fixed order; only kinds it has, and only files the server counted.
+export function kindCounts(files) {
+  return FILE_KINDS.map((kind) => {
+    const mine = files.filter((f) => f.kind === kind);
+    return { kind, files: mine.length, lines: mine.reduce((n, f) => n + (f.lines ?? 0), 0) };
+  }).filter((k) => k.files > 0);
+}

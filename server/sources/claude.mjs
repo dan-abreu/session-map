@@ -173,6 +173,13 @@ function* stringsIn(value, depth = 0) {
   }
 }
 
+// The files an assistant line edits (the real footprint, mm24).
+function editsIn(entry) {
+  if (entry.type !== 'assistant') return [];
+  return blocksOf(entry).filter((b) => b.type === 'tool_use' && EDIT_TOOLS.has(b.name))
+    .map((b) => b.input?.file_path ?? b.input?.notebook_path).filter((p) => typeof p === 'string');
+}
+
 function pathsMentioned(entries) {
   const found = new Set();
   for (const entry of entries) {
@@ -229,6 +236,17 @@ export function relativeTo(cwd, path) {
   return base && p.toLowerCase().startsWith(`${base.toLowerCase()}/`) ? p.slice(base.length + 1) : p;
 }
 
+const TAIL_SEGMENTS = 3;
+
+// A step's file: relative inside the conversation's folder; outside it (another project, mm24), only its last folders, so
+// the page never shows the whole path of the PC.
+function stepPath(cwd, path) {
+  const rel = relativeTo(cwd, path);
+  if (rel !== String(path).replaceAll('\\', '/')) return rel;
+  const segments = rel.split('/').filter(Boolean);
+  return segments.length > TAIL_SEGMENTS ? `…/${segments.slice(-TAIL_SEGMENTS).join('/')}` : rel;
+}
+
 // A command's first line, without what looks like a secret: the step is shown on a page other people may see.
 function commandWords(command) {
   let line = String(command).split('\n')[0].trim();
@@ -240,7 +258,7 @@ export function stepOf(tool, cwd, answered) {
   const input = tool.input ?? {};
   if (tool.name === 'AskUserQuestion') return answered ? null : { kind: 'ask', target: '' };
   const kind = STEP_KIND[tool.name] ?? 'tool';
-  if (kind === 'edit' || kind === 'read') return { kind, target: cutStart(relativeTo(cwd, input.file_path ?? input.notebook_path ?? '')) };
+  if (kind === 'edit' || kind === 'read') return { kind, target: cutStart(stepPath(cwd, input.file_path ?? input.notebook_path ?? '')) };
   if (kind === 'run') return { kind, target: cutEnd(typeof input.description === 'string' && input.description.trim() ? input.description.trim() : commandWords(input.command ?? '')) };
   if (kind === 'search') return { kind, target: cutEnd(String(input.pattern ?? '')) };
   if (kind === 'web') {
@@ -346,6 +364,7 @@ function summarize(entries, sessionId) {
 
   const editedFiles = [...new Set(toolUses.filter((t) => EDIT_TOOLS.has(t.name)).map((t) => t.input.file_path ?? t.input.notebook_path).filter((p) => typeof p === 'string'))];
   const lastTool = toolUses.at(-1);
+  const lastFile = [...toolUses].reverse().map((t) => t.input.file_path ?? t.input.notebook_path).find((p) => typeof p === 'string') ?? null;
   const bash = toolUses.filter((t) => t.name === 'Bash' && typeof t.input.command === 'string');
 
   const commits = [];
@@ -382,6 +401,7 @@ function summarize(entries, sessionId) {
     pendingQuestion: lastTool?.name === 'AskUserQuestion' && !results.has(lastTool.id),
     liveSteps: liveStepsOf(entries, cwd),
     editedFiles,
+    lastFile,
     commits,
     pushes,
     mentionedPaths: pathsMentioned(entries.slice(-MENTIONED_LINES)),
@@ -431,18 +451,20 @@ function fullScan(path, st) {
   const hit = fullScanCache.get(path);
   if (hit?.key === key) return hit.value;
   const usageById = new Map();
+  const edited = new Set();
   let lastCardText = null;
   let aiTitle = null;
   forEachLine(path, (line, i) => {
-    if (!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"')) return;
+    if (!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
     const row = usageRowOf(entry, `line-${i}`);
     if (row) addUsage(usageById, row);
     for (const card of cardsIn(entry)) lastCardText = card;
     if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') aiTitle = entry.aiTitle;
+    for (const file of editsIn(entry)) edited.add(file);
   });
-  const value = { usage: [...usageById.values()], lastCardText, aiTitle };
+  const value = { usage: [...usageById.values()], lastCardText, aiTitle, editedFiles: [...edited] };
   fullScanCache.set(path, { key, value });
   return value;
 }
@@ -460,6 +482,7 @@ export function readTranscript(path, { tailBytes = 2_000_000 } = {}) {
       const full = fullScan(path, st);
       const head = summarize(parseLines(readSlice(path, 0, HEAD_BYTES).replace(/\n[^\n]*$/, '')), summary.sessionId);
       summary.usage = full.usage;
+      summary.editedFiles = [...new Set([...full.editedFiles, ...summary.editedFiles])];
       summary.lastCardText ??= full.lastCardText;
       summary.startedAt = head.startedAt ?? summary.startedAt;
       summary.aiTitle ??= full.aiTitle;
@@ -499,14 +522,31 @@ export function readHelperUsage(sessionDir) {
   return [...usageById.values()];
 }
 
-// Workflow agents commit from their own transcripts; those commits belong to the chat that started them.
-export function readHelperCommits(sessionDir) {
+// Helpers and workflow agents commit and edit from their own transcripts; that work belongs to the chat that started them.
+// A live conversation's agents are read on every pass, so each agent's transcript is read again only when it changed.
+// last: the file of the newest step among the agents that name one, with when that agent last wrote.
+const helperMemo = new Map();
+export function readHelperWork(sessionDir) {
   const commits = [];
+  const edited = new Set();
+  let last = null;
   for (const file of helperFiles(sessionDir)) {
-    const text = readText(file);
-    if (text !== null) commits.push(...summarize(parseLines(text), basename(file, '.jsonl')).commits);
+    const st = statSync(file, { throwIfNoEntry: false });
+    if (!st) continue;
+    const sig = `${st.mtimeMs}:${st.size}`;
+    let hit = helperMemo.get(file);
+    if (hit?.sig !== sig) {
+      const text = readText(file);
+      if (text === null) continue;
+      const s = summarize(parseLines(text), basename(file, '.jsonl'));
+      hit = { sig, commits: s.commits, editedFiles: s.editedFiles, lastFile: s.lastFile, at: st.mtimeMs };
+      helperMemo.set(file, hit);
+    }
+    commits.push(...hit.commits);
+    for (const f of hit.editedFiles) edited.add(f);
+    if (hit.lastFile && (!last || hit.at > last.at)) last = { file: hit.lastFile, at: hit.at };
   }
-  return commits;
+  return { commits, editedFiles: [...edited], last };
 }
 
 // The model a workflow agent runs on, from its meta file ('opus', 'sonnet'...); none when it inherits the conversation's.

@@ -5,19 +5,22 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { attachToParts, itemByCodes, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
+import { attachToParts, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { norm } from './arch/parse.mjs';
+import { sizesOf } from './arch/sizes.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
 import { parentOf, readLineage } from './brain/lineage.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
+import { footprintOf, touchesOf } from './footprint.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
 import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
-import { listLiveSessions, listTranscripts, readHelperCommits, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { listLiveSessions, listTranscripts, readHelperUsage, readHelperWork, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { countRepo } from './sources/count.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
 import { readPlacements } from './placements.mjs';
@@ -65,8 +68,13 @@ function git(cwd, args) {
 
 // ---- reading ---------------------------------------------------------------
 
-// liveIds: a live conversation's workflow agents move on while its own transcript sits still, so their journals are read
-// again on every pass (a few small files per live conversation).
+function helperWork(sessionDir) {
+  const work = readHelperWork(sessionDir);
+  return { helperCommits: work.commits, helperEdits: work.editedFiles, helperLast: work.last };
+}
+
+// liveIds: a live conversation's workflow agents move on while its own transcript sits still, so their journals and the
+// files they edit are read again on every pass (each agent's transcript only when it changed).
 function readItems(dir, smDir, nowMs, liveIds) {
   const items = [];
   for (const ref of listTranscripts(dir, { sinceMs: nowMs - WINDOW_MS })) {
@@ -77,10 +85,10 @@ function readItems(dir, smDir, nowMs, liveIds) {
       if (hit?.key !== key) {
         const summary = readTranscript(ref.path);
         if (!summary) continue;
-        hit = { key, summary, helperUsage: readHelperUsage(sessionDir), helperCommits: readHelperCommits(sessionDir), workflows: readWorkflows(sessionDir) };
+        hit = { key, summary, helperUsage: readHelperUsage(sessionDir), workflows: readWorkflows(sessionDir), ...helperWork(sessionDir) };
         summaries.set(ref.path, hit);
       } else if (liveIds.has(ref.sessionId)) {
-        hit.workflows = readWorkflows(sessionDir);
+        Object.assign(hit, { workflows: readWorkflows(sessionDir), ...helperWork(sessionDir) });
       }
       if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
       const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
@@ -158,7 +166,7 @@ function placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts, placeme
   if (byCode) return { partId: byCode, partSource: 'code' };
   const byPage = pageParts.get(s.sessionId);
   if (byPage && arch.parts.some((p) => p.id === byPage)) return { partId: byPage, partSource: 'page' };
-  const byFiles = placeFiles(repoFiles(s.editedFiles ?? [], root, s.cwd)).partId;
+  const byFiles = placeFiles(repoFiles([...s.editedFiles ?? [], ...item.helperEdits ?? []], root, s.cwd)).partId;
   if (byFiles) return { partId: byFiles, partSource: 'files' };
   const byAi = aiAnswers[s.sessionId]?.partId;
   if (byAi && arch.parts.some((p) => p.id === byAi)) return { partId: byAi, partSource: 'ai' };
@@ -189,6 +197,64 @@ function placeInWorkCell(summary, card, workCells) {
   const byBranch = summary.gitBranch && workCells.find((w) => w.branch === summary.gitBranch);
   if (byBranch) return { workCellId: byBranch.id, workCellSource: 'branch' };
   return { workCellId: null, workCellSource: 'cwd' };
+}
+
+// ---- the real footprint (mm24) ------------------------------------------------------
+
+const touchMemo = new Map();
+
+// Where a conversation's files fall, by repository: its own edits, its helpers' and workflow agents', what its last steps
+// looked at, and the file of its newest step (an agent's, when an agent wrote last). Redone when any of those change.
+function touchOf(item, root, skip) {
+  const s = item.summary;
+  const lastFile = item.helperLast && item.helperLast.at > item.ref.mtimeMs ? item.helperLast.file : s.lastFile;
+  const sig = [item.ref.mtimeMs, item.ref.size, root, item.helperEdits.length, lastFile].join('|');
+  const hit = touchMemo.get(s.sessionId);
+  if (hit?.sig === sig) return hit;
+  const touch = touchesOf({ root, cwd: s.cwd, edited: [...s.editedFiles, ...item.helperEdits], seen: s.mentionedPaths, skip });
+  const [stepAt] = lastFile ? touchesOf({ root, cwd: s.cwd, edited: [lastFile], skip }) : [];
+  const out = { sig, touch, step: stepAt ? { key: stepAt[0], rel: stepAt[1].edited[0] } : null };
+  touchMemo.set(s.sessionId, out);
+  return out;
+}
+
+// A conversation listed in the project it was born in, seen from another one it works in: no cost (it stays at home) and
+// no page point of the home map; partId is where most of its work there went.
+function visitorOf(row, chat, place, born, stepPartId) {
+  return {
+    ...row,
+    partId: place.parts[0]?.partId ?? null, partSource: 'files', itemCode: null, node: null, costUSD: null, onMap: false,
+    bornIn: { projectId: born.id, name: born.name }, stepPartId,
+    liveSteps: chat?.liveSteps ?? [], workflows: chat?.workflows ?? [],
+  };
+}
+
+// Hangs each conversation's footprint on its row and chat, and lists it in every other project it edits (or reads while it
+// works) as a visitor. built: [{project, key, ownersOf}].
+function hangFootprints(built, touches) {
+  const homes = new Map(built.map((b) => [b.key, { projectId: b.project.id, name: b.project.name, ownersOf: b.ownersOf }]));
+  const byId = new Map(built.map((b) => [b.project.id, b]));
+  for (const b of built) {
+    const chatById = new Map(b.project.chats.map((c) => [c.sessionId, c]));
+    for (const row of b.project.conversations) {
+      const t = touches.get(row.sessionId);
+      const footprint = t && footprintOf(t.touch, homes);
+      if (!footprint) continue;
+      const chat = chatById.get(row.sessionId);
+      const stepIn = (target) => (t.step && t.step.key === target.key ? target.ownersOf([t.step.rel])[0] : null);
+      row.footprint = footprint;
+      if (chat) {
+        chat.footprint = footprint;
+        chat.stepPartId = stepIn(b);
+      }
+      for (const place of footprint.places) {
+        const target = byId.get(place.projectId);
+        if (target === b || !(place.edited || (row.status === 'busy' && place.seen))) continue;
+        target.project.visitors.push(visitorOf(row, chat, place, b.project, stepIn(target)));
+      }
+    }
+  }
+  for (const b of built) b.project.visitors.sort((x, y) => String(y.updatedAt ?? '').localeCompare(String(x.updatedAt ?? '')));
 }
 
 // ---- one project -----------------------------------------------------------------
@@ -319,6 +385,7 @@ async function buildProject(ctx, { root, items }) {
   const topLevel = topLevelOf(root);
   const placeFiles = (files) => partOfFiles(files, arch, { topLevel });
   const memo = await gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso);
+  const sizes = sizesOf(await countRepo(root), arch, { topLevel });
   autoFetch(root, config.autoFetchMinutes).then((at) => { memo.fetchedAt = at; });
   const lineage = readLineage(smDir);
   const openspec = readOpenSpec(root);
@@ -420,10 +487,10 @@ async function buildProject(ctx, { root, items }) {
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
-      arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }) },
+      arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }), sizes },
       workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
-      activity, chats, conversations, roadmap: milestones,
+      activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [
         ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),
         ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId),
@@ -434,6 +501,8 @@ async function buildProject(ctx, { root, items }) {
       costByDay: dailyCost(allRows, prices),
     },
     rows: allRows,
+    key: normalizePath(root),
+    ownersOf: (files) => ownersOf(files, arch, { topLevel }),
   };
 }
 
@@ -460,11 +529,23 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     placements: readPlacements(smDir),
   };
   const groups = await groupByRoot(readItems(dir, smDir, now.getTime(), ctx.liveById), ctx.placements);
+  const touches = new Map();
+  for (const g of groups) for (const item of g.items) touches.set(item.summary.sessionId, touchOf(item, g.root, [dir, smDir]));
+  // A repository a conversation edits shows as a project of its own, though no conversation started there.
+  const known = new Set(groups.map((g) => normalizePath(g.root)));
+  for (const { touch } of touches.values()) {
+    for (const [key, t] of touch) {
+      if (!t.edited.length || known.has(key) || !isDir(t.root)) continue;
+      known.add(key);
+      groups.push({ root: t.root, items: [] });
+    }
+  }
   // One broken project must not blank the page for the others.
   const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });
     return null;
   })))).filter(Boolean);
+  hangFootprints(built, touches);
   const projects = built.map((b) => b.project);
 
   const sum = (key) => round6(projects.reduce((s, p) => s + p.cost[key], 0));

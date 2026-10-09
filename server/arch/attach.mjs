@@ -51,8 +51,9 @@ function depthIn(file, c) {
   return 0;
 }
 
-// For each file, the parts holding its deepest matching path (several on a tie) and whether that path is broad.
-function bestByFile(files, arch, topLevel) {
+// For each file, the parts holding its deepest matching path (several on a tie) and whether that path is broad; null when
+// no part matches.
+function bestOf(files, arch, topLevel) {
   const cands = arch.parts.map((p) => ({ id: p.id, list: candidatesOf(p, topLevel) }));
   return files.map((f) => {
     const file = String(f).replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean);
@@ -69,10 +70,17 @@ function bestByFile(files, arch, topLevel) {
       }
     }
     return best;
-  }).filter(Boolean);
+  });
 }
 
+const bestByFile = (files, arch, topLevel) => bestOf(files, arch, topLevel).filter(Boolean);
+
 const inPartOrder = (arch, ids) => arch.parts.map((p) => p.id).filter((id) => ids.has(id));
+
+// One owner per file, so the sizes add up (mm25): the part with its deepest path, the first in map order on a tie, or null.
+export function ownersOf(files, arch, { topLevel } = {}) {
+  return bestOf(files, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids)[0] : null));
+}
 
 // files: paths relative to the project root. A tie at the top places nothing; votes through a broad path count only
 // when no file reached a specific one.
