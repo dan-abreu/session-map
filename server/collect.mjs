@@ -16,7 +16,7 @@ import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
 import { normalizePath, projectIdOf } from './paths.mjs';
-import { listLiveSessions, listTranscripts, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { listLiveSessions, listTranscripts, readHelperCommits, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, gitRoot, mainBranch } from './sources/git.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
@@ -65,7 +65,7 @@ function readItems(dir, smDir, nowMs) {
         const summary = readTranscript(ref.path);
         if (!summary) continue;
         const sessionDir = join(dirname(ref.path), ref.sessionId);
-        hit = { key, summary, helperUsage: readHelperUsage(sessionDir), workflows: readWorkflows(sessionDir) };
+        hit = { key, summary, helperUsage: readHelperUsage(sessionDir), helperCommits: readHelperCommits(sessionDir), workflows: readWorkflows(sessionDir) };
         summaries.set(ref.path, hit);
       }
       if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
@@ -206,7 +206,10 @@ function clashesOf(workCells, projectId) {
 }
 
 function activityItems(raw, events, units, workCells, items) {
-  const commitSessions = items.flatMap((i) => i.summary.commits.filter((c) => c.hash).map((c) => [c.hash, i.summary.sessionId]));
+  const commitsOf = (i) => [...i.summary.commits, ...i.helperCommits].map((c) => ({ ...c, sessionId: i.summary.sessionId }));
+  const byHash = items.flatMap(commitsOf).filter((c) => c.hash);
+  // `git commit -q` prints no hash: the subject is the only trace left in the transcript.
+  const bySubject = new Map(items.flatMap(commitsOf).filter((c) => !c.hash).map((c) => [c.subject, c.sessionId]));
   const pushSessions = items.flatMap((i) => i.summary.pushes.map((p) => ({ ...p, sessionId: i.summary.sessionId })));
   const cellById = new Map(workCells.map((w) => [w.id, w]));
   const fromGit = raw.map((a) => {
@@ -214,7 +217,7 @@ function activityItems(raw, events, units, workCells, items) {
     if (a.files) item.files = a.files.slice(0, ACTIVITY_FILES_MAX);
     const sessionId = a.kind === 'push'
       ? pushSessions.find((p) => p.branch === a.branch && Math.abs(Date.parse(p.ts) - Date.parse(a.ts)) <= PUSH_MATCH_MS)?.sessionId
-      : commitSessions.find(([hash]) => a.hash?.startsWith(hash))?.[1];
+      : byHash.find((c) => a.hash?.startsWith(c.hash))?.sessionId ?? bySubject.get(a.subject);
     if (sessionId) item.sessionId = sessionId;
     if (cellById.has(a.branch)) item.workCellId = a.branch;
     return item;

@@ -395,6 +395,16 @@ export function readHelperUsage(sessionDir) {
   return [...usageById.values()];
 }
 
+// Workflow agents commit from their own transcripts; those commits belong to the chat that started them.
+export function readHelperCommits(sessionDir) {
+  const commits = [];
+  for (const file of helperFiles(sessionDir)) {
+    const text = readText(file);
+    if (text !== null) commits.push(...summarize(parseLines(text), basename(file, '.jsonl')).commits);
+  }
+  return commits;
+}
+
 export function readWorkflows(sessionDir) {
   const workflows = [];
   for (const wf of listDir(join(sessionDir, 'subagents', 'workflows'))) {

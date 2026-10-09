@@ -366,3 +366,38 @@ test('tunnelUrl comes from the machine-wide config and only when it is an https 
   assert.deepEqual(await withConfig({ tunnelUrl: 42 }), [null, null]);
   assert.deepEqual(await withConfig({}), [null, null]);
 });
+
+// `git commit -q` prints no "[branch hash]" line, and Workflow agents commit from their own transcripts.
+test('collect ties commits to the chat by subject when no hash was printed, including commits made by its agents', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'shop'));
+  try {
+    writeFileSync(join(root, 'src', 'shop', 'cart.ts'), 'b\n');
+    git(root, ['commit', '-q', '-am', 'cart totals']);
+    writeFileSync(join(root, 'src', 'shop', 'cart.ts'), 'c\n');
+    git(root, ['commit', '-q', '-am', 'tax rule']);
+    writeChat(dir, { id: A, cwd: root, title: 'Cart' });
+    const projDir = join(dir, 'projects', root.replace(/[^a-z0-9]/gi, '-'));
+    const commitLines = (id, subject) => [
+      { sessionId: A, cwd: root, timestamp: iso(HOUR), type: 'assistant', message: { id: `${id}-m`, role: 'assistant', content: [{ type: 'tool_use', id: `${id}-t`, name: 'Bash', input: { command: `git add . && git commit -q -m "${subject}"` } }] } },
+      { sessionId: A, cwd: root, timestamp: iso(HOUR), type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `${id}-t`, content: '' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n') + '\n';
+    const main = join(projDir, `${A}.jsonl`);
+    writeFileSync(main, readFileSync(main, 'utf8') + commitLines('c1', 'cart totals'));
+    const t = (NOW.getTime() - HOUR) / 1000;
+    utimesSync(main, t, t);
+    mkdirSync(join(projDir, A, 'subagents'), { recursive: true });
+    writeFileSync(join(projDir, A, 'subagents', 'agent-1.jsonl'), commitLines('c2', 'tax rule'));
+
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const bySubject = (s) => p.activity.find((i) => i.kind === 'commit' && i.subject === s);
+    assert.equal(bySubject('cart totals').sessionId, A);
+    assert.equal(bySubject('tax rule').sessionId, A);
+    assert.equal(bySubject('init').sessionId, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});
