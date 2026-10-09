@@ -33,6 +33,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Every message from both sides with the same formatting (markdown, tables, code, links), the time of each message and the date when the day changes, Claude's steps (read, ran, edited) as collapsible blocks, multiple-choice questions with the owner's answer, images, nested helper agents, cost per reply and total.
   - Search inside a conversation, jump to a day or time, and a live mirror for a conversation still running. Secrets in steps shown masked.
   - Applies to every origin (VS Code, terminal, map) and to archived conversations, including ones Claude Code already deleted.
+  - The whole chat experience matches Claude Code in VS Code, not only reading: composer with files and pasted images, `@` file mentions and `/` commands; "thinking", the task list and the current step; edits shown as before/after diffs with accept or reject; the same permission cards; stop; plan mode; model and mode picker; the same keyboard shortcuts, scrolling and copying. One chat screen for every conversation in every project.
 - [ ] **important:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
