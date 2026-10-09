@@ -168,3 +168,49 @@ test('in "All projects" every row carries its project, and the projects with wor
   for (const e of rows) assert.ok(e.project.name, `${e.row.sessionId} has no project name`);
   assert.notEqual(projectHue(state.projects[0]), projectHue(state.projects[1]), 'each project has its own color');
 });
+
+// Just enough DOM for createConvList to draw into: elements with children, text, listeners and a class list.
+class El {
+  constructor(tag = 'div', id = null) { Object.assign(this, { tag, id, attrs: {}, children: [], listeners: {}, textContent: '', hidden: false, scrollTop: 0, value: '' }); this.classList = { toggle() {}, contains: () => false }; }
+  setAttribute(k, v) { this.attrs[k] = v; }
+  append(c) { this.children.push(typeof c === 'string' ? Object.assign(new El('#text'), { textContent: c }) : c); }
+  replaceChildren(...cs) { this.children = []; for (const c of cs) this.append(c); }
+  addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
+  fire(type) { for (const fn of this.listeners[type] ?? []) fn({ key: '', stopPropagation() {} }); }
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+  contains() { return false; }
+  get text() { return this.textContent + this.children.map((c) => c.text).join(''); }
+}
+function fakeH(tag, attrs = {}, ...children) {
+  const el = new El(tag);
+  for (const [k, v] of Object.entries(attrs ?? {})) if (v != null && v !== false && !k.startsWith('on')) el.setAttribute(k, v);
+  for (const c of children.flat(Infinity)) if (c != null && c !== false) el.append(c);
+  return el;
+}
+
+test('the column draws the "nothing matches" screen for a search with no result, instead of throwing', async () => {
+  const { createConvList } = await import('../server/web/convlist.js');
+  const els = new Map();
+  const realDocument = globalThis.document;
+  globalThis.document = { activeElement: null, getElementById: (id) => els.get(id) ?? els.set(id, new El('div', id)).get(id) };
+  try {
+    const state = shop([row('a'), row('b')]);
+    const convs = createConvList({
+      root: new El('aside'), h: fakeH, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
+      t: () => (key, vars) => (vars?.q ? `${key}:${vars.q}` : key), relative: () => '1h', money: (v) => `$${v}`, phone: { matches: false },
+      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null,
+      onOpen() {}, onMove() {}, onFilter() {},
+    });
+    convs.render();
+    const list = els.get('convsList');
+    assert.equal(list.children.length > 0 && list.text.includes('chat a'), true, 'first the two rows');
+    const search = els.get('convsSearch');
+    search.value = 'zzqqxxnomatch';
+    search.fire('input');
+    assert.equal(list.text.includes('chat a'), false, 'the old rows go away');
+    assert.match(list.text, /convs\.noMatch:zzqqxxnomatch/, 'and the empty screen says nothing matches the word');
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
