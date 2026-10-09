@@ -2,12 +2,13 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJsonFile, writeAtomic } from './brain/cells.mjs';
 import { installFromCatalog } from './sources/catalog.mjs';
-import { killProcess, newTerminal, openUrl, processName as processNameDefault } from './launch.mjs';
+import { killProcess, newTerminal, openUrl, processName as processNameDefault, processStart as processStartDefault } from './launch.mjs';
 import { log } from './log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install']);
 const CLAUDE_PROCESS_RE = /claude|node/i;
+const PID_START_SLACK_MS = 5000;
 
 // The key collect uses to hand the actions what the page must not see (cwd, pid); Symbol.for so neither file imports the other.
 export const INTERNALS = Symbol.for('session-map.internals');
@@ -49,12 +50,17 @@ function setArchived(smDir, sessionId, on) {
   writeAtomic(file, `${JSON.stringify([...ids])}\n`);
 }
 
-async function close(chat, info, { dir, processName, kill }) {
+async function close(chat, info, { dir, processName, processStart, kill }) {
   if (chat.status === 'busy') return reply(409, { error: 'busy' });
   if (!chat.live || !Number.isInteger(info?.pid)) return reply(409, { error: 'not-running' });
   const session = sessionFile(dir, info.pid);
   if (session?.sessionId !== chat.sessionId || session.status === 'busy') return reply(409, { error: 'session-changed' });
   if (!CLAUDE_PROCESS_RE.test(await processName(info.pid))) return reply(409, { error: 'not-claude' });
+  // A crashed session leaves its file behind; a process that started after it holds a reused pid.
+  if (Number.isFinite(session.startedAt)) {
+    const started = await processStart(info.pid);
+    if (started === null || started > session.startedAt + PID_START_SLACK_MS) return reply(409, { error: 'session-changed' });
+  }
   return (await kill(info.pid)) ? reply(200) : reply(409, { error: 'kill-refused' });
 }
 
@@ -115,9 +121,9 @@ function logAction(smDir, body, status) {
   }
 }
 
-// deps: state (from collect), dir, smDir; spawner, processName, kill and platform are replaceable for tests.
-export async function runAction(body, { processName = processNameDefault, kill = killProcess, ...deps }) {
-  const res = await dispatch(body, { processName, kill, ...deps });
+// deps: state (from collect), dir, smDir; spawner, processName, processStart, kill and platform are replaceable for tests.
+export async function runAction(body, { processName = processNameDefault, processStart = processStartDefault, kill = killProcess, ...deps }) {
+  const res = await dispatch(body, { processName, processStart, kill, ...deps });
   logAction(deps.smDir, body, res.status);
   return res;
 }

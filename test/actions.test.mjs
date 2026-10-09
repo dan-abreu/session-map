@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { INTERNALS, runAction } from '../server/actions.mjs';
-import { newTerminal, openUrl } from '../server/launch.mjs';
+import { newTerminal, openUrl, processStart } from '../server/launch.mjs';
 
 const VS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TERM_CLOSED = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -12,6 +12,7 @@ const TERM_LIVE = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const TERM_BUSY = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const UNKNOWN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
+const STARTED = Date.parse('2026-09-10T10:00:00Z');
 const chat = (sessionId, entrypoint, status) => ({ sessionId, entrypoint, status, live: status !== 'closed', archived: false });
 
 function fixture() {
@@ -27,7 +28,7 @@ function fixture() {
   const info = (pid) => ({ projectId: 'shop-abc123', root: '/work/shop', cwd: '/work/shop/app', pid });
   Object.defineProperty(state, INTERNALS, { value: { chats: new Map([[VS, info(11)], [TERM_CLOSED, info(null)], [TERM_LIVE, info(12)], [TERM_BUSY, info(13)]]) } });
   mkdirSync(join(dir, 'sessions'));
-  const session = (pid, sessionId, status) => writeFileSync(join(dir, 'sessions', `${pid}.json`), JSON.stringify({ pid, sessionId, status, cwd: '/work/shop/app' }));
+  const session = (pid, sessionId, status) => writeFileSync(join(dir, 'sessions', `${pid}.json`), JSON.stringify({ pid, sessionId, status, cwd: '/work/shop/app', startedAt: STARTED }));
   session(12, TERM_LIVE, 'idle');
   session(13, TERM_BUSY, 'busy');
   const spawned = [];
@@ -36,6 +37,8 @@ function fixture() {
     state, dir, smDir, platform: 'win32', hasWt: () => true,
     spawner: (cmd, args, opts) => { spawned.push({ cmd, args, opts }); return { unref() {}, on() {} }; },
     processName: async () => 'claude.exe',
+    // The process starts a moment before Claude Code writes its session file.
+    processStart: async () => STARTED - 700,
     kill: async (pid) => { killed.push(pid); return true; },
   };
   const cleanup = () => { rmSync(dir, { recursive: true, force: true }); rmSync(smDir, { recursive: true, force: true }); };
@@ -143,4 +146,25 @@ test('newTerminal falls back to PowerShell without wt, and uses osascript and x-
   openUrl('vscode://x', { platform: 'darwin', spawner });
   openUrl('vscode://x', { platform: 'linux', spawner });
   assert.deepEqual(calls.slice(3).map((c) => [c.cmd, c.args]), [['open', ['vscode://x']], ['xdg-open', ['vscode://x']]]);
+});
+
+test('close refuses a pid reused by a newer process with a claude-like name', async () => {
+  const f = fixture();
+  try {
+    const reused = { ...f.deps, processName: async () => 'node.exe', processStart: async () => STARTED + 3_600_000 };
+    const res = await runAction({ action: 'close', sessionId: TERM_LIVE }, reused);
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error, 'session-changed');
+    const unknown = { ...f.deps, processStart: async () => null };
+    assert.equal((await runAction({ action: 'close', sessionId: TERM_LIVE }, unknown)).body.error, 'session-changed', 'unknown start time is refused');
+    assert.deepEqual(f.killed, []);
+  } finally { f.cleanup(); }
+});
+
+test('processStart reads the real start time of a running process', async () => {
+  const start = await processStart(process.pid);
+  const expected = Date.now() - process.uptime() * 1000;
+  assert.ok(Number.isFinite(start), 'a number of ms');
+  assert.ok(Math.abs(start - expected) < 5000, `${new Date(start).toISOString()} vs ${new Date(expected).toISOString()}`);
+  assert.equal(await processStart(2 ** 22 + 12345), null, 'no such process');
 });

@@ -42,10 +42,19 @@ export function openUrl(url, { platform = process.platform, spawner = spawn } = 
   return detach(spawner, platform === 'darwin' ? 'open' : 'xdg-open', [url]);
 }
 
-function run(cmd, args) {
+function run(cmd, args, env = process.env) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 5000, windowsHide: true }, (err, stdout) => resolve(err ? null : stdout));
+    execFile(cmd, args, { timeout: 5000, windowsHide: true, env }, (err, stdout) => resolve(err ? null : stdout));
   });
+}
+
+// Epoch ms, or null when the process is gone or the time cannot be read. Used to spot a reused pid.
+export async function processStart(pid, { platform = process.platform } = {}) {
+  const out = platform === 'win32'
+    ? await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Number(pid)}).StartTime.ToUniversalTime().ToString('o')`])
+    : await run('ps', ['-p', String(pid), '-o', 'lstart='], { ...process.env, LC_ALL: 'C' });
+  const ms = Date.parse(out?.trim() ?? '');
+  return Number.isFinite(ms) ? ms : null;
 }
 
 export async function processName(pid, { platform = process.platform } = {}) {
