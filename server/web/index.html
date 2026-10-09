@@ -5,36 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>session-map</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%232f7a5f' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%232f7a5f'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2.5' y='12' width='9' height='8' rx='3' fill='%237c6bd6'/%3E%3Crect x='19' y='4' width='10.5' height='8' rx='3' fill='%233f8fd2'/%3E%3Crect x='19' y='20' width='10.5' height='8' rx='3' fill='%232f9a6f'/%3E%3Cpath d='M11.5 16C16 16 15 8 19 8M11.5 16C16 16 15 24 19 24' fill='none' stroke='%2394a3b8' stroke-width='1.8'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true">
-    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
-    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
     <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
     <symbol id="i-commit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M3 12h5.5M15.5 12H21"/></symbol>
     <symbol id="i-push" viewBox="0 0 24 24"><path d="M12 19V5M6.5 10.5L12 5l5.5 5.5"/></symbol>
     <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="7" cy="5.5" r="2"/><circle cx="7" cy="18.5" r="2"/><circle cx="17" cy="8.5" r="2"/><path d="M7 7.5v9M17 10.5c0 4-4 5.5-9.2 6.4"/></symbol>
     <symbol id="i-tag" viewBox="0 0 24 24"><path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.6" cy="8.6" r="1.2"/></symbol>
-    <symbol id="i-born" viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="17.5" cy="12" r="3"/></symbol>
-    <symbol id="i-fuse" viewBox="0 0 24 24"><circle cx="13" cy="12" r="6.5"/><circle cx="5.5" cy="7" r="2.2"/><path d="M7.2 8.4l1.6 1.2"/></symbol>
-    <symbol id="i-group" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="9.3" cy="10" r="2.6"/><circle cx="14.6" cy="13.8" r="2.6"/></symbol>
-    <symbol id="i-rename" viewBox="0 0 24 24"><path d="M14.5 5.5l4 4L9 19H5v-4z"/><path d="M12.5 7.5l4 4"/></symbol>
-    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.8 6L6.5 13h11l-2.7-3L14 4M12 13v7"/></symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M7 7l2 2M15 15l2 2M17 7l-2 2M9 15l-2 2"/></symbol>
+    <symbol id="i-born" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="9" r="2"/><path d="M7 8v8M17 11c0 3-4 4-8.5 5.5"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 12h13M12.5 6.5L18 12l-5.5 5.5"/></symbol>
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
-    <symbol id="i-seed" viewBox="0 0 24 24"><path d="M5 19c0-7 4-12 14-14-1 10-6 14-14 14z"/><path d="M5 19l7-7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l4.5 4.5"/></symbol>
+    <symbol id="i-idea" viewBox="0 0 24 24"><path d="M9 17.5h6M10 20.5h4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.8.6 1.3 1.5 1.3 2.4v.2h4v-.2c0-.9.5-1.8 1.3-2.4A5.5 5.5 0 0 0 12 3.5z"/></symbol>
+    <symbol id="i-links" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6c6 0 7.5 3 7.5 9.5" stroke-dasharray="2 2.6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 6.5h14v9H10l-4 3.5v-3.5H5z"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="8" r="2"/><path d="M7 8v8M17 10c0 3.5-3 5-8 6"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><rect x="2.5" y="9.5" width="6" height="5" rx="1.6"/><rect x="15.5" y="4" width="6" height="5" rx="1.6"/><rect x="15.5" y="15" width="6" height="5" rx="1.6"/><path d="M8.5 12c4 0 3-5.5 7-5.5M8.5 12c4 0 3 5.5 7 5.5"/></symbol>
   </svg>
 
   <header class="bar">
     <div class="bar-start">
-      <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11.5" class="mark-membrane"/><circle cx="16" cy="16" r="4.5" class="mark-nucleus"/><circle cx="25" cy="8" r="2.4" class="mark-neuron"/></svg>
-      </span>
+      <span class="mark" aria-hidden="true"><svg><use href="#i-map"/></svg></span>
       <span class="brand" data-i18n="app.name"></span>
       <label class="project">
         <span class="visually-hidden" data-i18n="project.label"></span>
@@ -43,8 +41,7 @@
       </label>
     </div>
     <nav class="tabs" data-i18n-aria="tabs.label">
-      <button type="button" class="tab" id="tab-brain" aria-current="page" data-i18n="tab.brain"></button>
-      <button type="button" class="tab" id="tab-map" aria-current="false" data-i18n="tab.map"></button>
+      <button type="button" class="tab" id="tab-map" aria-current="page" data-i18n="tab.map"></button>
       <button type="button" class="tab" id="tab-board" aria-current="false" data-i18n="tab.board"></button>
       <button type="button" class="tab" id="tab-history" aria-current="false" data-i18n="tab.history"></button>
       <button type="button" class="tab" id="tab-costs" aria-current="false" data-i18n="tab.costs"></button>
@@ -59,13 +56,39 @@
   </header>
 
   <main class="stage" id="stage">
-    <svg id="brain" class="brain" role="group"></svg>
+    <div class="mm-tools" id="tools">
+      <p class="summary" id="summary"></p>
+      <div class="mm-actions">
+        <div class="mm-search" id="searchBox">
+          <svg class="mm-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <label class="visually-hidden" for="search" data-i18n="search.label"></label>
+          <input type="search" id="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list" data-i18n-placeholder="search.placeholder">
+          <ul id="searchResults" class="mm-results" role="listbox" data-i18n-aria="search.results" hidden></ul>
+        </div>
+        <div class="seg mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
+        <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
+        <button type="button" class="btn primary" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
+        <button type="button" id="waitingBtn" class="waiting-btn" aria-expanded="false" aria-controls="waitingList">
+          <span class="waiting-dot" aria-hidden="true"></span><span id="waitingLabel"></span>
+        </button>
+      </div>
+    </div>
 
-    <p class="summary" id="summary"></p>
+    <section class="arch-banner" id="archBanner" aria-labelledby="archBannerTitle" hidden>
+      <div class="arch-banner-text">
+        <h2 id="archBannerTitle" data-i18n="arch.bannerTitle"></h2>
+        <p data-i18n="arch.bannerLede"></p>
+        <ul id="archBannerList"></ul>
+        <p class="muted small" data-i18n="arch.bannerSafe"></p>
+      </div>
+      <button type="button" class="btn primary" id="createArch" data-i18n="arch.create"></button>
+    </section>
 
-    <button type="button" id="waitingBtn" class="waiting-btn" aria-expanded="false" aria-controls="waitingList">
-      <span class="waiting-dot" aria-hidden="true"></span><span id="waitingLabel"></span>
-    </button>
+    <div class="mm-area">
+    <div class="mm" id="mindmap" data-i18n-aria="map.label" role="group"></div>
+    <div class="ol" id="outline" data-i18n-aria="map.label" role="group"></div>
+
+    <button type="button" id="fit" class="icon-btn fit-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
 
     <section id="waitingList" class="sheet waiting-list" aria-labelledby="waitingTitle" hidden>
       <div class="sheet-head">
@@ -84,55 +107,45 @@
       <div id="panelBody" class="panel-body"></div>
     </aside>
 
-    <details class="legend" id="legend">
-      <summary data-i18n="legend.title"></summary>
-      <ul>
-        <li><svg viewBox="-12 -12 24 24"><circle r="10.5" class="lg-organ"/><circle cx="-3" cy="-1" r="5" class="lg-tissue"/><circle cx="-4" cy="-2" r="1.8" class="lg-cell"/><circle cx="-1.5" cy="1.2" r="1.6" class="lg-cell"/><circle cx="5.5" cy="3" r="3" class="lg-cell"/></svg><span data-i18n="legend.levels"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-busy"/></svg><span data-i18n="legend.busy"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-idle"/></svg><span data-i18n="legend.idle"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><circle r="4.2" class="lg-closed"/></svg><span data-i18n="legend.closed"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><circle r="7.5" class="lg-waiting"/><path d="M0,-3.6V0.6" class="lg-glyph"/><circle cy="2.9" r="1.1" class="lg-glyph-dot"/></svg><span data-i18n="legend.waiting"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><g class="lg-unsure"><circle r="5.6"/><path d="M-1.9,-1.9a1.95,1.95 0 1 1 2.4,1.9c-0.5,0.15-0.5,0.5-0.5,1.1"/><circle class="ask-dot" cy="2.7" r="0.85"/></g></svg><span data-i18n="legend.unsure"></span></li>
-        <li><svg viewBox="-10 -10 20 20"><circle r="8" class="lg-bud"/><text class="lg-bud-initial" dy="0.35em" text-anchor="middle">A</text></svg><span data-i18n="legend.branch"></span></li>
-        <li><svg viewBox="0 0 28 14"><circle cx="5" cy="7" r="4.5" class="lg-bud lg-clash"/><circle cx="23" cy="7" r="4.5" class="lg-bud lg-clash"/><path d="M9.5,7H18.5" class="lg-clash-bridge"/></svg><span data-i18n="legend.clash"></span></li>
-        <li><svg viewBox="0 0 28 12"><path d="M2,6H26" class="lg-tether"/></svg><span data-i18n="legend.tether"></span></li>
-        <li><svg viewBox="0 0 28 12"><path d="M2,9Q14,-1 26,9" class="lg-parent"/></svg><span data-i18n="legend.parent"></span></li>
-        <li><svg viewBox="0 0 28 12"><path d="M4,8Q14,1 24,8" class="lg-axon"/><circle cx="4" cy="8" r="2.6" class="lg-bulb"/><circle cx="24" cy="8" r="2.6" class="lg-bulb"/></svg><span data-i18n="legend.related"></span></li>
-      </ul>
-    </details>
-
-    <button type="button" id="fit" class="icon-btn fit-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
-
     <p class="notice" id="notice" role="status"></p>
 
     <aside id="chat" class="sheet chat" aria-labelledby="chatTitle" hidden>
       <div class="sheet-head">
         <div>
+          <p class="meta crumbs" id="chatContext"></p>
           <h2 id="chatTitle"></h2>
-          <p class="meta" id="chatContext"></p>
         </div>
         <button type="button" class="icon-btn" data-close="chat" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
       </div>
-      <div class="chat-mode">
-        <label for="chatMode" data-i18n="chat.modeLabel"></label>
-        <select id="chatMode"></select>
+      <div class="seg point-tabs" id="pointTabs" role="tablist" hidden>
+        <button type="button" role="tab" id="ptab-chat" aria-selected="true" aria-controls="chatPane" data-i18n="point.chat"></button>
+        <button type="button" role="tab" id="ptab-details" aria-selected="false" aria-controls="pointDetails" data-i18n="point.details"></button>
       </div>
-      <p class="chat-note" id="chatNote" role="status" hidden></p>
-      <ul id="chatList" class="plain rows chat-list" hidden></ul>
-      <ol id="chatLog" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
-      <form id="chatForm" class="chat-form">
-        <p class="chat-status" id="chatStatus" role="status"></p>
-        <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
-        <textarea id="chatInput" rows="3" maxlength="20000"></textarea>
-        <div class="chat-bar">
-          <span class="chat-safety" data-i18n="chat.safety"></span>
-          <button type="button" class="btn" id="chatStop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
-          <button type="submit" class="btn primary" id="chatSend"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
+      <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
+        <div class="chat-mode">
+          <label for="chatMode" data-i18n="chat.modeLabel"></label>
+          <select id="chatMode"></select>
+          <button type="button" class="btn small-btn" id="chatPcMode" data-i18n="pcmode.button"></button>
         </div>
-      </form>
+        <p class="chat-note" id="chatNote" role="status" hidden></p>
+        <ul id="chatList" class="plain rows chat-list" hidden></ul>
+        <ol id="chatLog" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
+        <form id="chatForm" class="chat-form">
+          <p class="chat-status" id="chatStatus" role="status"></p>
+          <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
+          <textarea id="chatInput" rows="3" maxlength="20000"></textarea>
+          <div class="chat-bar">
+            <span class="chat-safety" data-i18n="chat.safety"></span>
+            <button type="button" class="btn" id="chatStop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+            <button type="submit" class="btn primary" id="chatSend"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
+          </div>
+        </form>
+      </div>
+      <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-details" hidden></div>
     </aside>
 
-    <section id="view-map" class="view" aria-labelledby="tab-map" hidden></section>
+    </div>
+
     <section id="view-board" class="view" aria-labelledby="tab-board" hidden></section>
     <section id="view-history" class="view" aria-labelledby="tab-history" hidden></section>
     <section id="view-costs" class="view" aria-labelledby="tab-costs" hidden></section>
@@ -155,24 +168,12 @@
     </section>
   </main>
 
-  <footer class="timeline">
-    <button type="button" id="play" class="icon-btn play-btn"><svg><use href="#i-play"/></svg></button>
-    <div class="track">
-      <svg id="growth" class="growth" aria-hidden="true" preserveAspectRatio="none"></svg>
-      <div id="marks" class="marks" aria-hidden="true"></div>
-      <input type="range" id="time" min="0" max="1000" step="1" value="1000">
-    </div>
-    <output id="timeLabel" for="time" class="time-label"></output>
-  </footer>
-
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="fileDialog" class="file-dialog" aria-labelledby="fileTitle"></dialog>
   <dialog id="confirmDialog" class="dv-dialog" data-i18n-aria="confirm.label"></dialog>
 
   <script src="vendor/d3-dispatch.min.js"></script>
-  <script src="vendor/d3-quadtree.min.js"></script>
   <script src="vendor/d3-timer.min.js"></script>
-  <script src="vendor/d3-force.min.js"></script>
   <script src="vendor/d3-selection.min.js"></script>
   <script src="vendor/d3-color.min.js"></script>
   <script src="vendor/d3-interpolate.min.js"></script>

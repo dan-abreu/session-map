@@ -36,17 +36,21 @@ test('every literal key the page asks for exists', () => {
 test('keys built at runtime exist: server errors, permission states, columns, ranges', () => {
   const dynamic = [
     ...['already-open', 'busy', 'not-running', 'session-changed', 'not-claude', 'kill-refused', 'no-folder', 'live-chat', 'too-many-chats',
-      'claude-not-found', 'exited', 'spawn-failed', 'ended', 'unknown-session', 'unknown-unit', 'unknown-front', 'unknown-project',
-      'unknown-chat', 'bad-edit', 'bad-nucleus', 'token-required', 'network', 'demo', 'generic', 'bad-path', 'sensitive', 'not-found', 'too-large', 'binary', 'bad-line', 'bad-project', 'bad-request'].map((c) => `err.${c}`),
+      'claude-not-found', 'exited', 'spawn-failed', 'ended', 'unknown-session', 'unknown-front', 'unknown-project', 'unknown-part', 'unknown-layer', 'unknown-group', 'unknown-item', 'no-arch', 'arch-exists', 'bad-node', 'settings-unreadable', 'nothing-to-undo',
+      'unknown-chat', 'token-required', 'network', 'demo', 'generic', 'bad-path', 'sensitive', 'not-found', 'too-large', 'binary', 'bad-line', 'bad-project', 'bad-request'].map((c) => `err.${c}`),
     'action.why.already-open', 'action.why.busy', 'action.archive', 'action.unarchive', 'action.archived', 'action.unarchived',
     ...['allowed', 'denied', 'timeout'].map((s) => `chat.perm.${s}`),
     ...['default', 'acceptEdits', 'plan', 'auto', 'dontAsk'].map((m) => `chat.modeName.${m}`), 'err.bad-mode',
-    ...['todo', 'doing', 'waiting', 'done'].flatMap((k) => [`board.${k}`, `board.${k}.empty`]),
-    'stage.done', 'stage.open',
+    ...['todo', 'doing', 'done'].flatMap((k) => [`board.${k}`, `board.${k}.empty`, `item.status.${k}`]),
+    ...['blocks', 'important', 'detail'].map((w) => `item.weight.${w}`),
+    ...['layer', 'part', 'group', 'item'].map((k) => `point.intro.${k}`),
+    ...['code', 'page', 'files', 'ai', 'none'].map((s) => `chat.placedBy.${s}`),
+    ...['all', 'today', 'd7', 'd30'].map((r) => `changed.${r}`),
+    ...['shared-chat', 'shared-branch', 'lineage', 'file-ref'].map((k) => `link.kind.${k}`),
+    ...['question', 'item', 'decision', 'clash', 'ends'].flatMap((k) => [`waiting.count.${k}.one`, `waiting.count.${k}.other`]),
     ...['today', 'd7', 'd30'].flatMap((r) => [`costs.range.${r}`, `costs.total.${r}`]),
     ...['user', 'project', 'plugin'].map((o) => `skills.origin.${o}`),
-    ...['grouped', 'fused-by-meaning', 'renamed'].map((k) => `activity.${k}`),
-    ...['clash', 'card', 'decision', 'question'].map((k) => `waiting.${k}`),
+    ...['clash', 'decision', 'question'].map((k) => `waiting.${k}`),
   ];
   assert.deepEqual(dynamic.filter((k) => !(k in LANGS.en)), []);
 });
@@ -60,7 +64,7 @@ test('translator counts with plural forms and falls back to English', () => {
   const t = translator('pt-BR');
   assert.equal(t.count('summary.chats', 1), '1 conversa');
   assert.equal(t.count('summary.chats', 3), '3 conversas');
-  assert.equal(translator('xx')('tab.brain'), 'Brain');
+  assert.equal(translator('xx')('tab.map'), 'Map');
 });
 
 // CLDR puts 0 in the "one" form for Portuguese, but nobody writes "0 conversa".

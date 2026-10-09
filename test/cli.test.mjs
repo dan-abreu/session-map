@@ -7,19 +7,21 @@ import { loadState, renderState, run } from '../server/cli.mjs';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 
-test('renderState draws organs, tissues and cells with their marks and costs', () => {
+test('renderState draws layers and parts with their marks, counts, chats and branches', () => {
   const lines = renderState(DEMO, { lang: 'en' }).split('\n');
   const line = (name) => lines.find((l) => l.includes(name));
-  assert.match(line('Storefront'), /^! Storefront/, 'a waiting organ starts the line at column 0');
-  assert.match(line('Product pages'), /^ {2}● Product pages/);
-  assert.match(line('Pay button states'), /^ {4}● Pay button states/);
-  assert.match(line('Image gallery'), /^ {4}○ Image gallery/);
-  assert.match(line('Typo tolerance'), /^ {4}! Typo tolerance/);
-  assert.match(line('Unsorted'), /^\? Unsorted/);
-  assert.match(lines[0], /\$10\.80/, 'the header carries today’s cost');
+  assert.match(line('Where people come in'), /^Where people come in {2}\d+\/\d+ done/, 'a layer starts the line at column 0');
+  assert.match(line('Storefront'), /^ {2}! Storefront {2}2\/6 done · 2 with you · 1 blocking · 1 chat · \$2\.90$/, 'items with a person mark the part');
+  assert.match(line('Orders and cart'), /^ {2}● Orders and cart/, 'a working chat marks the part');
+  assert.match(line('Courier app'), /^ {2}○ Courier app/);
+  assert.match(line('feat/typo-search'), /^ {4}! feat\/typo-search {2}Rui Costa · 4 commits/, 'a clashing branch hangs under its part');
+  assert.ok(!lines.some((l) => l.includes('feat/magic-link')), 'merged branches are left out');
+  assert.ok(lines.includes('Not on the map: 1 chat'));
+  assert.ok(lines.includes('No architecture map yet · 3 chats'), 'the notes app has no map');
+  assert.match(lines[0], /\$12\.00/,'the header carries today’s cost');
   const waiting = lines.slice(lines.findIndex((l) => l === 'Waiting for you'));
+  assert.ok(waiting.some((l) => l.includes('Approve the cookie banner text') && l.includes('Storefront')));
   assert.ok(waiting.some((l) => l.includes('Retry failed payments')));
-  assert.ok(waiting.some((l) => l.includes('Back-in-stock alerts')));
 });
 
 test('renderState keeps a project to its own tree and the waiting list of the project', () => {
@@ -34,8 +36,9 @@ test('renderState keeps a project to its own tree and the waiting list of the pr
 test('renderState speaks Portuguese, shows branches that are growing and handles an empty machine', () => {
   const pt = renderState(DEMO, { lang: 'pt-BR' });
   assert.ok(pt.includes('Esperando você'));
-  assert.ok(pt.includes('feat/typo-search'), 'branches that are still growing hang under their cell');
-  assert.ok(!pt.includes('feat/magic-link'), 'fused branches are left out');
+  assert.ok(pt.includes('feat/typo-search'), 'branches that are still growing hang under their part');
+  assert.ok(pt.includes('com você'));
+  assert.ok(!pt.includes('feat/magic-link'), 'merged branches are left out');
   assert.match(renderState({ ...DEMO, projects: [], waitingCount: 0 }, { lang: 'en' }), /No Claude Code conversations/);
 });
 

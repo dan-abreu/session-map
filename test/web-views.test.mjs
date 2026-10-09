@@ -2,93 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  structureKey, lifeEventsSince, nameAt, mapTree, boardColumns, costRows, estimateTone, budgetTone,
-  aiSpend, bootstrapOf, chatButtons, chatLog, visibleProject, unitMoves, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
+  costRows, estimateTone, budgetTone, aiSpend, chatButtons, chatLog, visibleProject, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
+  waitingKind, rangeStart, pcModeOffer,
 } from '../server/web/views.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const shop = () => clone(DEMO.projects[0]);
-
-test('structureKey ignores status changes but sees a moved chat or a new unit', () => {
-  const a = shop();
-  const b = clone(a);
-  b.chats[0].status = 'busy';
-  b.chats[0].waiting = { strong: true, weak: false, items: [] };
-  b.units[0].status = 'waiting';
-  assert.equal(structureKey(a), structureKey(b), 'status alone does not rebuild the graph');
-  const moved = clone(a);
-  moved.chats[0].unitId = 'unsorted';
-  assert.notEqual(structureKey(a), structureKey(moved));
-  const grown = clone(a);
-  grown.units.push({ ...grown.units[0], id: 'new-cell', parentId: null, chatIds: [] });
-  assert.notEqual(structureKey(a), structureKey(grown));
-  const renamed = clone(a);
-  renamed.units[1].name = 'Other name';
-  assert.notEqual(structureKey(a), structureKey(renamed));
-});
-
-test('lifeEventsSince returns only the AI and branch events that arrived since the last poll', () => {
-  const before = shop();
-  const after = clone(before);
-  const grouped = { kind: 'grouped', ts: '2026-10-09T10:00:00.000Z', subject: 'Search', branch: null, author: { name: 'AI', email: '' }, unitIds: ['search', 'typo'] };
-  const commit = { kind: 'commit', ts: '2026-10-09T10:01:00.000Z', subject: 'x', branch: 'main', author: { name: 'A', email: 'a@x' }, unitIds: ['typo'] };
-  after.activity = [commit, grouped, ...after.activity];
-  assert.deepEqual(lifeEventsSince(before, after), [grouped]);
-  assert.deepEqual(lifeEventsSince(null, after), [], 'the first load animates nothing');
-  assert.deepEqual(lifeEventsSince(after, after), []);
-});
-
-test('nameAt shows the old name before an AI rename and the new one after', () => {
-  const unit = { id: 'pay', name: 'Payments' };
-  const activity = [
-    { kind: 'renamed', ts: '2026-10-05T00:00:00Z', unitIds: ['pay'], subject: 'Money → Billing' },
-    { kind: 'renamed', ts: '2026-10-07T00:00:00Z', unitIds: ['pay'], subject: 'Billing → Payments' },
-    { kind: 'renamed', ts: '2026-10-06T00:00:00Z', unitIds: ['other'], subject: 'A → B' },
-    { kind: 'renamed', ts: '2026-10-08T00:00:00Z', unitIds: ['pay'], subject: 'A sentence without an arrow' },
-  ];
-  assert.equal(nameAt(unit, activity, Date.parse('2026-10-04')), 'Money');
-  assert.equal(nameAt(unit, activity, Date.parse('2026-10-06')), 'Billing');
-  assert.equal(nameAt(unit, activity, Date.parse('2026-10-09')), 'Payments');
-  assert.equal(nameAt(unit, [], 0), 'Payments');
-});
-
-test('mapTree: roadmap stages hold their branch and chats; branches off the roadmap and main chats stay apart', () => {
-  const p = shop();
-  const tree = mapTree(p);
-  assert.deepEqual(tree.phases.map((ph) => ph.name), ['Launch', 'After launch']);
-  const oneClick = tree.phases[0].stages.find((s) => s.milestone.id === '2');
-  assert.equal(oneClick.workCell.id, 'feat/one-click-checkout');
-  assert.ok(oneClick.chats.length >= 3 && oneClick.chats.every((c) => c.workCellId === 'feat/one-click-checkout'));
-  assert.ok(tree.loose.some((l) => l.workCell.id === 'feat/category-speed'), 'a branch with no stage is off the roadmap');
-  assert.ok(!tree.loose.some((l) => l.workCell.id === 'feat/typo-search'));
-  assert.ok(tree.main.length > 0 && tree.main.every((c) => c.workCellId === null));
-  const empty = mapTree({ ...p, roadmap: null });
-  assert.equal(empty.phases, null);
-  assert.equal(empty.loose.length, p.workCells.length);
-});
-
-test('mapTree hides archived chats unless asked', () => {
-  const p = shop();
-  const target = p.chats.find((c) => c.workCellId === null);
-  target.archived = true;
-  assert.ok(!mapTree(p).main.includes(target));
-  assert.ok(mapTree(p, { archived: true }).main.some((c) => c.sessionId === target.sessionId));
-});
-
-test('boardColumns sorts stages, branches and conversations into the four columns', () => {
-  const p = shop();
-  const now = Date.parse(DEMO.generatedAt);
-  const cols = boardColumns(p, now);
-  assert.deepEqual(cols.todo.map((i) => i.milestone.id), ['4'], 'open stage without a branch');
-  assert.ok(cols.doing.some((i) => i.kind === 'workcell' && i.workCell.id === 'feat/one-click-checkout'));
-  assert.ok(!cols.doing.some((i) => i.workCell?.status === 'merged'));
-  assert.ok(cols.waiting.some((i) => i.kind === 'decision' && i.decision.kind === 'clash'));
-  assert.ok(cols.waiting.filter((i) => i.kind === 'chat').every((i) => i.chat.waiting.strong || i.chat.waiting.weak || i.chat.waiting.items.length));
-  assert.ok(cols.done.some((i) => i.kind === 'milestone' && i.milestone.id === '1'));
-  const late = boardColumns(p, Date.parse('2026-12-01T00:00:00Z'));
-  assert.ok(!late.done.some((i) => i.kind === 'workcell'), 'fused branches leave Done after 7 days');
-});
 
 test('costRows lists the conversations active in the period, most expensive first', () => {
   const state = clone(DEMO);
@@ -119,13 +39,6 @@ test('aiSpend sums what the map itself spent on the AI today', () => {
   assert.equal(spend.todayUSD, DEMO.projects[0].ai.spentUSDToday);
   assert.deepEqual(spend.projects.map((x) => x.project.id), [DEMO.projects[0].id]);
   assert.equal(aiSpend({ projects: [] }).todayUSD, 0);
-});
-
-test('bootstrapOf shows progress only while the first organisation runs', () => {
-  assert.deepEqual(bootstrapOf({ ai: { bootstrap: { done: 12, total: 60, estimatedUSD: 0.18 } } }), { done: 12, total: 60, estimatedUSD: 0.18 });
-  assert.equal(bootstrapOf({ ai: { bootstrap: { done: 60, total: 60, estimatedUSD: 0.18 } } }), null);
-  assert.equal(bootstrapOf({ ai: null }), null);
-  assert.equal(bootstrapOf({ ai: { enabled: true } }), null);
 });
 
 test('chatButtons: terminal chats open only when closed, close only when idle, page chat only when not live', () => {
@@ -212,21 +125,9 @@ test('visibleProject drops archived chats from the map unless asked', () => {
   gone.archived = true;
   const v = visibleProject(p, false);
   assert.ok(!v.chats.some((c) => c.sessionId === gone.sessionId));
-  assert.ok(!v.units.some((u) => u.chatIds.includes(gone.sessionId)));
+  assert.ok(!v.arch.parts.some((part) => part.chatIds.includes(gone.sessionId)), 'its part no longer counts it');
+  assert.equal(p.arch.parts.find((part) => part.id === gone.partId).chatIds.includes(gone.sessionId), true, 'the original is left alone');
   assert.equal(visibleProject(p, true), p);
-});
-
-test('unitMoves offers only higher-level units outside the unit, plus the top level', () => {
-  const units = [
-    { id: 'o', level: 'organ', parentId: null },
-    { id: 't', level: 'tissue', parentId: 'o' },
-    { id: 't2', level: 'tissue', parentId: null },
-    { id: 'c', level: 'cell', parentId: 't' },
-    { id: 'unsorted', level: 'cell', parentId: null },
-  ];
-  assert.deepEqual(unitMoves(units, 'c').map((u) => u?.id ?? null), [null, 'o', 't2']);
-  assert.deepEqual(unitMoves(units, 't').map((u) => u?.id ?? null), [null], 'already in its organ; no other organ');
-  assert.deepEqual(unitMoves(units, 'o'), [], 'an organ is already top level');
 });
 
 test('waitingEntries ranks strong questions first, then decisions and items, and skips archived chats', () => {
@@ -271,4 +172,25 @@ test('clashWords picks "your branches" for one owner and names both people other
     { key: 'waiting.clashMine', vars: { a: 'a', b: 'b', ownerA: 'Ana', ownerB: 'Ana', files: 'x.ts' } });
   assert.equal(clashWords({ kind: 'clash', sameOwner: false, branches: ['a', 'b'], owners: ['Ana', 'Rui'], files: ['x.ts', 'y.ts'] }).key, 'waiting.clashOthers');
   assert.equal(clashWords({ kind: 'clash', text: 'older server' }), null);
+});
+
+test('waitingKind: an item waiting on a person is its own kind, after questions and before decisions', () => {
+  const p = { id: 'p' };
+  assert.equal(waitingKind({ project: p, decision: { kind: 'item' } }), 'item');
+  const entries = [{ project: p, decision: { kind: 'decision' } }, { project: p, decision: { kind: 'item' } }, { project: p, decision: { kind: 'item' } }];
+  assert.deepEqual(waitingCounts(entries), [{ kind: 'item', n: 2 }, { kind: 'decision', n: 1 }]);
+});
+
+test('rangeStart: today starts at local midnight, 7 and 30 days count back from now', () => {
+  const now = new Date(2026, 9, 9, 15, 30).getTime();
+  assert.equal(rangeStart('today', now), new Date(2026, 9, 9).getTime());
+  assert.equal(rangeStart('d7', now), now - 7 * 864e5);
+  assert.equal(rangeStart('d30', now), now - 30 * 864e5);
+});
+
+test('pcModeOffer: only a real mode can go to the whole PC, and saying the same mode again is no change', () => {
+  assert.deepEqual(pcModeOffer('settings', 'default'), { mode: null, same: false });
+  assert.deepEqual(pcModeOffer('acceptEdits', 'default'), { mode: 'acceptEdits', same: false });
+  assert.deepEqual(pcModeOffer('auto', 'auto'), { mode: 'auto', same: true });
+  assert.deepEqual(pcModeOffer('bypassPermissions', null), { mode: null, same: false });
 });

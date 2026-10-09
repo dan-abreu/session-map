@@ -4,8 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { collect } from './collect.mjs';
 import { claudeDir } from './sources/claude.mjs';
-import { unitTree } from './web/body.js';
 import { pickLang, translator } from './web/i18n.js';
+import { archTree } from './web/tree.js';
 import { waitingEntries } from './web/views.js';
 
 const WATCH_MS = 5000;
@@ -33,23 +33,38 @@ const pickProjects = (state, name) => {
 
 const trim = (text) => (text.length > TITLE_MAX ? `${text.slice(0, TITLE_MAX - 1)}…` : text);
 
-function unitLines(project, t, money) {
-  const tree = unitTree(project.units);
+function partMark(project, node) {
+  if (project.chats.some((c) => c.partId === node.partId && c.status === 'busy' && !c.archived)) return '●';
+  if (node.counts.withUser) return '!';
+  return node.counts.total && node.counts.done === node.counts.total ? '✓' : '○';
+}
+
+const countWords = (counts, t) => [
+  t('cli.done', { done: counts.done, total: counts.total }),
+  counts.withUser ? t('cli.withYou', { n: counts.withUser }) : null,
+  counts.blocks ? t('cli.blocking', { n: counts.blocks }) : null,
+];
+
+function archLines(project, t, money) {
+  const shown = project.chats.filter((c) => !c.archived);
+  const root = archTree(project);
+  if (!root.children.length) return [[t('cli.noArch'), shown.length ? t.count('label.chats', shown.length) : null].filter(Boolean).join(' · ')];
   const lines = [];
-  const walk = (unit, depth) => {
-    const indent = '  '.repeat(depth);
-    const ids = new Set([unit.id, ...tree.descendants(unit.id).map((u) => u.id)]);
-    const cost = project.chats.filter((c) => ids.has(c.unitId)).reduce((sum, c) => sum + c.costUSD, 0);
-    const mark = unit.id === 'unsorted' ? '?' : unit.status === 'waiting' ? '!' : unit.status === 'active' ? '●' : '○';
-    const meta = [t(`level.${unit.level}`), unit.work.chats ? t.count('label.chats', unit.work.chats) : null, cost > 0 ? money(cost) : null].filter(Boolean).join(' · ');
-    lines.push(`${indent}${mark} ${unit.id === 'unsorted' ? t('unit.unsorted') : unit.name}  ${meta}`);
-    for (const w of project.workCells.filter((x) => x.unitId === unit.id && x.status !== 'merged')) {
-      const branchMark = w.clashWith.length ? '!' : w.status === 'active' ? '●' : '○';
-      lines.push(`${indent}  ${branchMark} ${w.branch}  ${w.owner.name} · ${t.count('wc.commitsCount', w.ahead)}`);
+  for (const layer of root.children) {
+    lines.push(`${layer.label}  ${countWords(layer.counts, t).filter(Boolean).join(' · ')}`);
+    for (const part of layer.children) {
+      const chats = shown.filter((c) => c.partId === part.partId);
+      const cost = chats.reduce((sum, c) => sum + c.costUSD, 0);
+      const meta = [...countWords(part.counts, t), chats.length ? t.count('label.chats', chats.length) : null, cost > 0 ? money(cost) : null].filter(Boolean).join(' · ');
+      lines.push(`  ${partMark(project, part)} ${part.label}  ${meta}`);
+      for (const w of project.workCells.filter((x) => x.partId === part.partId && x.status !== 'merged')) {
+        const branchMark = w.clashWith.length ? '!' : w.status === 'active' ? '●' : '○';
+        lines.push(`    ${branchMark} ${w.branch}  ${w.owner.name} · ${t.count('wc.commitsCount', w.ahead)}`);
+      }
     }
-    for (const child of tree.children(unit.id)) walk(child, depth + 1);
-  };
-  for (const root of tree.roots) walk(root, 0);
+  }
+  const loose = shown.filter((c) => !c.partId).length;
+  if (loose) lines.push(t.count('cli.loose', loose));
   return lines;
 }
 
@@ -58,10 +73,11 @@ function waitingLines(state, t) {
   if (!entries.length) return [t('waiting.none')];
   const many = state.projects.length > 1;
   return entries.map(({ project, chat, decision }) => {
-    const unit = project.units.find((u) => u.id === chat?.unitId);
-    const where = [many ? project.name : null, unit && unit.id !== 'unsorted' ? unit.name : null].filter(Boolean).join(' · ');
+    const partId = chat?.partId ?? decision?.partId;
+    const part = partId && project.arch.parts.find((x) => x.id === partId);
+    const where = [many ? project.name : null, part ? part.name : null].filter(Boolean).join(' · ');
     const reason = decision
-      ? t(`waiting.${decision.kind}`)
+      ? t(decision.kind === 'item' ? 'waiting.withYou' : `waiting.${decision.kind}`)
       : t(chat.waiting.strong ? 'waiting.question' : chat.waiting.items.length ? 'waiting.item' : 'waiting.ends');
     return `! ${reason}: ${trim(decision ? decision.text : chat.title)}${where ? `  (${where})` : ''}`;
   });
@@ -77,7 +93,7 @@ export function renderState(state, { lang = 'en', project } = {}) {
   const lines = [`session-map · ${t('cli.totals', { today: sum('today'), d7: sum('d7'), d30: sum('d30') })}`, t('cli.legend')];
   for (const p of shown) {
     lines.push('', `${p.name}${p.mainBranch ? ` (${p.mainBranch})` : ''}`);
-    lines.push(...(p.units.length ? unitLines(p, t, money) : [t('state.emptyProject')]));
+    lines.push(...archLines(p, t, money));
   }
   lines.push('', t('waiting.title'), ...waitingLines({ ...state, projects: shown }, t));
   return lines.join('\n');

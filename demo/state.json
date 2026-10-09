@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-10-08T15:00:00.000Z",
-  "waitingCount": 4,
+  "generatedAt": "2026-10-09T15:00:00.000Z",
+  "waitingCount": 16,
   "currency": {
     "code": "USD",
     "rate": 1
   },
   "totals": {
-    "today": 10.8,
-    "d7": 26.65,
-    "d30": 88.45
+    "today": 12,
+    "d7": 44.9,
+    "d30": 57
   },
   "budget": {
     "monthlyUSD": 150,
-    "used": 88.45
+    "used": 57
   },
   "projects": [
     {
@@ -20,1451 +20,839 @@
       "name": "acme-shop",
       "root": "/home/dev/code/acme-shop",
       "mainBranch": "main",
-      "fetchedAt": "2026-10-08T14:50:00.000Z",
-      "units": [
-        {
-          "id": "storefront",
-          "level": "organ",
-          "parentId": null,
-          "name": "Storefront",
-          "purpose": "What shoppers see before they buy: products, listings and search.",
-          "tags": [
-            "catalog",
-            "search",
-            "browsing"
-          ],
-          "origin": "seed",
-          "pinned": false,
-          "paths": [
-            "src/catalog/",
-            "src/search/",
-            "openspec/changes/typo-tolerant-search/"
-          ],
-          "nucleus": {
-            "state": "Product pages are done; search is learning to forgive typos, and the category listing is being sped up.",
-            "decided": [
-              "Gallery images lazy-load below the fold",
-              "Unavailable variants stay focusable",
-              "Cursor pagination instead of page numbers",
-              "No external search service for now",
-              "Highlight color meets contrast in both themes"
-            ],
-            "todo": [
-              "Cache the first listing page",
-              "Product reviews",
-              "Cache the first page",
-              "Update listing tests",
-              "Decide on indexing the brand field"
-            ],
-            "recent": [
-              {
-                "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
-                "title": "Faster category listing",
-                "date": "2026-10-07",
-                "line": "The listing query scans every variant."
-              },
-              {
-                "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
-                "title": "Fuzzy matching on product names",
-                "date": "2026-10-05",
-                "line": "Fuzzy matching works on product names with a similarity threshold of 0.3."
-              },
-              {
-                "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
-                "title": "Typo-tolerant search proposal",
-                "date": "2026-09-24",
-                "line": "Proposal written: trigram index on product names, 6 tasks, no new service needed."
-              },
-              {
-                "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
-                "title": "Variant picker for sizes and colors",
-                "date": "2026-09-20",
-                "line": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them."
-              },
-              {
-                "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
-                "title": "Search result highlighting",
-                "date": "2026-09-18",
-                "line": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes."
-              },
-              {
-                "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
-                "title": "Product page image gallery",
-                "date": "2026-09-11",
-                "line": "The gallery now supports swipe and keyboard arrows."
-              }
+      "fetchedAt": "2026-10-09T14:50:00.000Z",
+      "tunnelUrl": null,
+      "arch": {
+        "source": "worktree",
+        "dir": "docs/architecture",
+        "lang": "en",
+        "layers": [
+          {
+            "id": "entry",
+            "name": "Where people come in",
+            "partIds": [
+              "storefront",
+              "courier",
+              "admin"
             ]
           },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 6,
-            "commits": 7,
-            "decisions": 6
+          {
+            "id": "engine",
+            "name": "What makes it work",
+            "partIds": [
+              "orders",
+              "payments",
+              "search",
+              "notifications"
+            ]
           },
-          "status": "waiting",
-          "bornAt": "2026-09-25T09:00:00.000Z"
-        },
-        {
-          "id": "product-pages",
-          "level": "tissue",
-          "parentId": "storefront",
-          "name": "Product pages",
-          "purpose": "Everything on a single product and the lists that lead to it.",
-          "tags": [
-            "catalog",
-            "gallery",
-            "variants",
-            "listing"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/catalog/"
-          ],
-          "nucleus": {
-            "state": "Product pages are complete. Category listing is being sped up right now.",
-            "decided": [
-              "Gallery images lazy-load below the fold",
-              "Unavailable variants stay focusable",
-              "Cursor pagination instead of page numbers"
+          {
+            "id": "base",
+            "name": "What holds it up",
+            "partIds": [
+              "accounts",
+              "data",
+              "hosting"
+            ]
+          }
+        ],
+        "parts": [
+          {
+            "id": "accounts",
+            "name": "Accounts and security",
+            "file": "docs/architecture/accounts.md",
+            "about": "Sign-in by magic link, sessions, and who may see what.",
+            "codePaths": [
+              "packages/core/src/auth/",
+              "apps/api/src/plugins/auth.ts"
             ],
-            "todo": [
-              "Cache the first listing page",
-              "Product reviews",
-              "Cache the first page",
-              "Update listing tests"
-            ],
-            "recent": [
+            "groups": [
               {
-                "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
-                "title": "Faster category listing",
-                "date": "2026-10-07",
-                "line": "The listing query scans every variant."
+                "name": "Sign-in",
+                "items": [
+                  {
+                    "code": "ac01",
+                    "title": "Magic link sign-in",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 48
+                  },
+                  {
+                    "code": "ac02",
+                    "title": "Lock the account after five wrong codes",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "blocks",
+                    "milestone": null,
+                    "line": 49
+                  }
+                ]
               },
               {
-                "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
-                "title": "Variant picker for sizes and colors",
-                "date": "2026-09-20",
-                "line": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them."
-              },
-              {
-                "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
-                "title": "Product page image gallery",
-                "date": "2026-09-11",
-                "line": "The gallery now supports swipe and keyboard arrows."
+                "name": "Privacy",
+                "items": [
+                  {
+                    "code": "ac03",
+                    "title": "Export my data button",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "Ana and Claude",
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 50
+                  },
+                  {
+                    "code": "ac04",
+                    "title": "Review the privacy policy wording",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Rui",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 51
+                  }
+                ]
               }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 3,
-            "commits": 4,
-            "decisions": 3
-          },
-          "status": "active",
-          "bornAt": "2026-09-21T21:00:00.000Z"
-        },
-        {
-          "id": "gallery",
-          "level": "cell",
-          "parentId": "product-pages",
-          "name": "Image gallery",
-          "purpose": "Swipeable, keyboard-friendly product photos.",
-          "tags": [
-            "gallery",
-            "images",
-            "keyboard"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/catalog/gallery.tsx"
-          ],
-          "nucleus": {
-            "state": "The gallery now supports swipe and keyboard arrows.",
-            "decided": [
-              "Gallery images lazy-load below the fold"
             ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
-                "title": "Product page image gallery",
-                "date": "2026-09-11",
-                "line": "The gallery now supports swipe and keyboard arrows."
-              }
-            ]
-          },
-          "chatIds": [
-            "8732a63f-a8ca-457e-a6f4-075340d65154"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-11T15:00:00.000Z"
-        },
-        {
-          "id": "variants",
-          "level": "cell",
-          "parentId": "product-pages",
-          "name": "Variant picker",
-          "purpose": "Choosing size and color, including sold-out options.",
-          "tags": [
-            "variants",
-            "accessibility",
-            "product"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/catalog/variant-picker.tsx"
-          ],
-          "nucleus": {
-            "state": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them.",
-            "decided": [
-              "Unavailable variants stay focusable"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
-                "title": "Variant picker for sizes and colors",
-                "date": "2026-09-20",
-                "line": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them."
-              }
-            ]
-          },
-          "chatIds": [
-            "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-20T15:00:00.000Z"
-        },
-        {
-          "id": "category-speed",
-          "level": "cell",
-          "parentId": "product-pages",
-          "name": "Category listing speed",
-          "purpose": "Make long category pages load fast.",
-          "tags": [
-            "performance",
-            "pagination",
-            "listing"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/catalog/listing.ts"
-          ],
-          "nucleus": {
-            "state": "Adding cursor pagination to the category endpoint",
-            "decided": [
-              "Cursor pagination instead of page numbers"
-            ],
-            "todo": [
-              "Cache the first page",
-              "Update listing tests"
-            ],
-            "recent": [
-              {
-                "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
-                "title": "Faster category listing",
-                "date": "2026-10-07",
-                "line": "The listing query scans every variant."
-              }
-            ]
-          },
-          "chatIds": [
-            "28fac6de-3493-4fc8-ade1-a93bf6866e47"
-          ],
-          "workCellIds": [
-            "feat/category-speed"
-          ],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "active",
-          "bornAt": "2026-10-07T13:00:00.000Z"
-        },
-        {
-          "id": "search",
-          "level": "tissue",
-          "parentId": "storefront",
-          "name": "Search",
-          "purpose": "Finding the right product from a few typed words.",
-          "tags": [
-            "search",
-            "relevance"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/search/",
-            "openspec/changes/typo-tolerant-search/",
-            "src/catalog/"
-          ],
-          "nucleus": {
-            "state": "Typo-tolerant search is being built on a trigram index.",
-            "decided": [
-              "No external search service for now",
-              "Highlight color meets contrast in both themes",
-              "Trigram index on product names"
-            ],
-            "todo": [
-              "Decide on indexing the brand field",
-              "Benchmark on the full catalog",
-              "Index the brand field?"
-            ],
-            "recent": [
-              {
-                "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
-                "title": "Fuzzy matching on product names",
-                "date": "2026-10-05",
-                "line": "Fuzzy matching works on product names with a similarity threshold of 0.3."
-              },
-              {
-                "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
-                "title": "Typo-tolerant search proposal",
-                "date": "2026-09-24",
-                "line": "Proposal written: trigram index on product names, 6 tasks, no new service needed."
-              },
-              {
-                "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
-                "title": "Search result highlighting",
-                "date": "2026-09-18",
-                "line": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 3,
-            "commits": 3,
-            "decisions": 3
-          },
-          "status": "waiting",
-          "bornAt": "2026-09-24T19:00:00.000Z"
-        },
-        {
-          "id": "highlighting",
-          "level": "cell",
-          "parentId": "search",
-          "name": "Result highlighting",
-          "purpose": "Show why each result matched.",
-          "tags": [
-            "search",
-            "results",
-            "ui"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/search/results.tsx"
-          ],
-          "nucleus": {
-            "state": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes.",
-            "decided": [
-              "Highlight color meets contrast in both themes"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
-                "title": "Search result highlighting",
-                "date": "2026-09-18",
-                "line": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes."
-              }
-            ]
-          },
-          "chatIds": [
-            "2dead93c-33e6-4e31-ac79-99ba974fa7c9"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-18T15:00:00.000Z"
-        },
-        {
-          "id": "typo",
-          "level": "cell",
-          "parentId": "search",
-          "name": "Typo tolerance",
-          "purpose": "Find products even when the name is misspelled.",
-          "tags": [
-            "search",
-            "trigram",
-            "fuzzy",
-            "performance"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "openspec/changes/typo-tolerant-search/proposal.md",
-            "src/search/fuzzy.ts",
-            "src/catalog/index-names.ts"
-          ],
-          "nucleus": {
-            "state": "Tuning the similarity threshold",
-            "decided": [
-              "No external search service for now",
-              "Trigram index on product names"
-            ],
-            "todo": [
-              "Index the brand field?",
-              "Benchmark on the full catalog"
-            ],
-            "recent": [
-              {
-                "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
-                "title": "Fuzzy matching on product names",
-                "date": "2026-10-05",
-                "line": "Fuzzy matching works on product names with a similarity threshold of 0.3."
-              },
-              {
-                "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
-                "title": "Typo-tolerant search proposal",
-                "date": "2026-09-24",
-                "line": "Proposal written: trigram index on product names, 6 tasks, no new service needed."
-              }
-            ]
-          },
-          "chatIds": [
-            "cb361ee4-1b48-425d-a4de-121de0988e28",
-            "694b2b06-89b1-4985-a7cf-d87fcacf6870"
-          ],
-          "workCellIds": [
-            "feat/typo-search"
-          ],
-          "work": {
-            "chats": 2,
-            "commits": 2,
-            "decisions": 2
-          },
-          "status": "waiting",
-          "bornAt": "2026-09-24T15:00:00.000Z"
-        },
-        {
-          "id": "buying",
-          "level": "organ",
-          "parentId": null,
-          "name": "Buying",
-          "purpose": "Turning a cart into a paid order that reaches the customer.",
-          "tags": [
-            "checkout",
-            "payments",
-            "orders"
-          ],
-          "origin": "seed",
-          "pinned": false,
-          "paths": [
-            "openspec/changes/one-click-checkout/",
-            "src/payments/",
-            "src/account/",
-            "src/checkout/",
-            "src/orders/",
-            "src/email/"
-          ],
-          "nucleus": {
-            "state": "One-click checkout is halfway and waiting on you; orders and shipping are quiet.",
-            "decided": [
-              "Cards are tokenized by the provider, never stored raw",
-              "One-click only for signed-in customers",
-              "Saved cards are tokenized by the payment provider, never stored raw",
-              "Customers can remove a saved card from their account page",
-              "Decline codes fall into three groups"
-            ],
-            "todo": [
-              "Retry policy for declined cards",
-              "Receipt email",
-              "End-to-end test with test cards",
-              "Retry policy",
-              "Customer-facing error copy"
-            ],
-            "recent": [
-              {
-                "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
-                "title": "Checkout button states",
-                "date": "2026-10-08",
-                "line": "Working on it: the button now disables while paying and shows the decline message inline."
-              },
-              {
-                "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
-                "title": "Retry failed payments",
-                "date": "2026-10-06",
-                "line": "I mapped the decline codes into three groups."
-              },
-              {
-                "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-                "title": "Order status timeline",
-                "date": "2026-10-02",
-                "line": "The order page now shows a status timeline: paid, packed, shipped, delivered."
-              },
-              {
-                "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
-                "title": "Order summary redesign",
-                "date": "2026-09-27",
-                "line": "The summary now collapses line items on small screens and keeps the total always visible."
-              },
-              {
-                "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-                "title": "Saved cards with tokenization",
-                "date": "2026-09-22",
-                "line": "Done"
-              },
-              {
-                "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-                "title": "Plan one-click checkout",
-                "date": "2026-09-16",
-                "line": "The proposal is in openspec/changes/one-click-checkout with 9 tasks."
-              },
-              {
-                "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
-                "title": "Shipping label export",
-                "date": "2026-09-15",
-                "line": "Daily label export is in place: one PDF per day, sorted by carrier."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 7,
-            "commits": 11,
-            "decisions": 6
-          },
-          "status": "waiting",
-          "bornAt": "2026-10-06T20:05:00.000Z"
-        },
-        {
-          "id": "one-click",
-          "level": "tissue",
-          "parentId": "buying",
-          "name": "One-click checkout",
-          "purpose": "Pay with a saved card in a single tap.",
-          "tags": [
-            "checkout",
-            "payments",
-            "saved cards"
-          ],
-          "origin": "user",
-          "pinned": true,
-          "paths": [
-            "openspec/changes/one-click-checkout/",
-            "src/payments/",
-            "src/account/"
-          ],
-          "nucleus": {
-            "state": "One-click checkout is halfway: saved cards work, retry and button states are in progress.",
-            "decided": [
-              "Cards are tokenized by the provider, never stored raw",
-              "One-click only for signed-in customers",
-              "Saved cards are tokenized by the payment provider, never stored raw",
-              "Customers can remove a saved card from their account page",
-              "Decline codes fall into three groups"
-            ],
-            "todo": [
-              "Retry policy for declined cards",
-              "Receipt email",
-              "End-to-end test with test cards",
-              "Retry policy",
-              "Customer-facing error copy"
-            ],
-            "recent": [
-              {
-                "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
-                "title": "Checkout button states",
-                "date": "2026-10-08",
-                "line": "Working on it: the button now disables while paying and shows the decline message inline."
-              },
-              {
-                "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
-                "title": "Retry failed payments",
-                "date": "2026-10-06",
-                "line": "I mapped the decline codes into three groups."
-              },
-              {
-                "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-                "title": "Saved cards with tokenization",
-                "date": "2026-09-22",
-                "line": "Done"
-              },
-              {
-                "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-                "title": "Plan one-click checkout",
-                "date": "2026-09-16",
-                "line": "The proposal is in openspec/changes/one-click-checkout with 9 tasks."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [
-            "feat/one-click-checkout"
-          ],
-          "work": {
-            "chats": 4,
-            "commits": 4,
-            "decisions": 4
-          },
-          "status": "waiting",
-          "bornAt": "2026-10-06T20:00:00.000Z"
-        },
-        {
-          "id": "saved-cards",
-          "level": "cell",
-          "parentId": "one-click",
-          "name": "Saved cards",
-          "purpose": "Store cards safely through the payment provider.",
-          "tags": [
-            "payments",
-            "tokens",
-            "security"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "openspec/changes/one-click-checkout/proposal.md",
-            "src/payments/saved-cards.ts",
-            "src/account/cards.tsx"
-          ],
-          "nucleus": {
-            "state": "Saved cards work end to end with the provider sandbox.",
-            "decided": [
-              "Saved cards are tokenized by the payment provider, never stored raw",
-              "One-click only for signed-in customers",
-              "Customers can remove a saved card from their account page"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-                "title": "Saved cards with tokenization",
-                "date": "2026-09-22",
-                "line": "Done"
-              },
-              {
-                "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-                "title": "Plan one-click checkout",
-                "date": "2026-09-16",
-                "line": "The proposal is in openspec/changes/one-click-checkout with 9 tasks."
-              }
-            ]
-          },
-          "chatIds": [
-            "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-            "cb9f444b-8c33-42fe-a521-421ab317fa3b"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 2,
-            "commits": 3,
-            "decisions": 3
-          },
-          "status": "idle",
-          "bornAt": "2026-09-16T15:00:00.000Z"
-        },
-        {
-          "id": "retries",
-          "level": "cell",
-          "parentId": "one-click",
-          "name": "Payment retries",
-          "purpose": "Recover declined payments with clear messages.",
-          "tags": [
-            "payments",
-            "errors",
-            "retry"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/payments/declines.ts"
-          ],
-          "nucleus": {
-            "state": "Mapping decline codes to messages",
-            "decided": [
-              "Decline codes fall into three groups"
-            ],
-            "todo": [
-              "Retry policy",
-              "Customer-facing error copy"
-            ],
-            "recent": [
-              {
-                "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
-                "title": "Retry failed payments",
-                "date": "2026-10-06",
-                "line": "I mapped the decline codes into three groups."
-              }
-            ]
-          },
-          "chatIds": [
-            "b2cbeb37-65fd-4a78-afbe-34c19803d09c"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "waiting",
-          "bornAt": "2026-10-06T15:00:00.000Z"
-        },
-        {
-          "id": "pay-button",
-          "level": "cell",
-          "parentId": "one-click",
-          "name": "Pay button states",
-          "purpose": "Loading, success and error states of the pay button.",
-          "tags": [
-            "checkout",
-            "ui",
-            "states"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [],
-          "nucleus": {
-            "state": "Working on it: the button now disables while paying and shows the decline message inline.",
-            "decided": [],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
-                "title": "Checkout button states",
-                "date": "2026-10-08",
-                "line": "Working on it: the button now disables while paying and shows the decline message inline."
-              }
-            ]
-          },
-          "chatIds": [
-            "a7b85b90-4018-47df-a818-cb376816bc8c"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 0,
-            "decisions": 0
-          },
-          "status": "active",
-          "bornAt": "2026-10-08T11:00:00.000Z"
-        },
-        {
-          "id": "orders",
-          "level": "tissue",
-          "parentId": "buying",
-          "name": "Orders and shipping",
-          "purpose": "What happens after the customer pays.",
-          "tags": [
-            "orders",
-            "shipping"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/checkout/",
-            "src/orders/",
-            "src/email/",
-            "src/shipping/"
-          ],
-          "nucleus": {
-            "state": "Customers can follow their order; labels export daily.",
-            "decided": [
-              "One label PDF per day, sorted by carrier",
-              "Statuses: paid, packed, shipped, delivered"
-            ],
-            "todo": [
-              "Partial refunds"
-            ],
-            "recent": [
-              {
-                "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-                "title": "Order status timeline",
-                "date": "2026-10-02",
-                "line": "The order page now shows a status timeline: paid, packed, shipped, delivered."
-              },
-              {
-                "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
-                "title": "Order summary redesign",
-                "date": "2026-09-27",
-                "line": "The summary now collapses line items on small screens and keeps the total always visible."
-              },
-              {
-                "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
-                "title": "Shipping label export",
-                "date": "2026-09-15",
-                "line": "Daily label export is in place: one PDF per day, sorted by carrier."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [
-            "origin/fix/shipping-rates"
-          ],
-          "work": {
-            "chats": 3,
-            "commits": 7,
-            "decisions": 2
-          },
-          "status": "idle",
-          "bornAt": "2026-09-27T19:00:00.000Z"
-        },
-        {
-          "id": "order-summary",
-          "level": "cell",
-          "parentId": "orders",
-          "name": "Order summary",
-          "purpose": "The order recap on small screens.",
-          "tags": [
-            "orders",
-            "mobile",
-            "ui"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/checkout/summary.tsx"
-          ],
-          "nucleus": {
-            "state": "The summary now collapses line items on small screens and keeps the total always visible.",
-            "decided": [],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
-                "title": "Order summary redesign",
-                "date": "2026-09-27",
-                "line": "The summary now collapses line items on small screens and keeps the total always visible."
-              }
-            ]
-          },
-          "chatIds": [
-            "82deffef-f504-460a-af9d-5690e87ad768"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 0
-          },
-          "status": "idle",
-          "bornAt": "2026-09-27T15:00:00.000Z"
-        },
-        {
-          "id": "order-timeline",
-          "level": "cell",
-          "parentId": "orders",
-          "name": "Order timeline",
-          "purpose": "Let customers follow their order step by step.",
-          "tags": [
-            "orders",
-            "status",
-            "email"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/orders/timeline.tsx",
-            "src/email/order-shipped.tsx"
-          ],
-          "nucleus": {
-            "state": "The order page now shows a status timeline: paid, packed, shipped, delivered.",
-            "decided": [
-              "Statuses: paid, packed, shipped, delivered"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-                "title": "Order status timeline",
-                "date": "2026-10-02",
-                "line": "The order page now shows a status timeline: paid, packed, shipped, delivered."
-              }
-            ]
-          },
-          "chatIds": [
-            "a98f62e0-89dc-4009-a78f-63fad5422b31"
-          ],
-          "workCellIds": [
-            "feat/order-timeline"
-          ],
-          "work": {
-            "chats": 1,
-            "commits": 3,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-10-02T15:00:00.000Z"
-        },
-        {
-          "id": "shipping-labels",
-          "level": "cell",
-          "parentId": "orders",
-          "name": "Shipping labels",
-          "purpose": "One printable label file per day.",
-          "tags": [
-            "shipping",
-            "pdf",
-            "carriers"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/shipping/labels.ts"
-          ],
-          "nucleus": {
-            "state": "Daily label export is in place: one PDF per day, sorted by carrier.",
-            "decided": [
-              "One label PDF per day, sorted by carrier"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
-                "title": "Shipping label export",
-                "date": "2026-09-15",
-                "line": "Daily label export is in place: one PDF per day, sorted by carrier."
-              }
-            ]
-          },
-          "chatIds": [
-            "8f355f13-d5c6-485a-abeb-dec3de7070d3"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-15T15:00:00.000Z"
-        },
-        {
-          "id": "customers",
-          "level": "organ",
-          "parentId": null,
-          "name": "Customers",
-          "purpose": "Who the customers are and what they hear from the shop.",
-          "tags": [
-            "accounts",
-            "sign-in",
-            "email"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/auth/",
-            "src/email/",
-            "src/notifications/"
-          ],
-          "nucleus": {
-            "state": "Sign-in is finished; back-in-stock alerts are ready but need a sender address from you.",
-            "decided": [
-              "Reset links expire after 30 minutes",
-              "Magic links expire after 15 minutes",
-              "Alerts are sent in batches every 15 minutes"
-            ],
-            "todo": [
-              "Two-step sign in for admins",
-              "Turn alerts on in production",
-              "Add an unsubscribe link test"
-            ],
-            "recent": [
-              {
-                "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
-                "title": "Back-in-stock alerts",
-                "date": "2026-10-04",
-                "line": "Alerts are queued and sent in batches every 15 minutes."
-              },
-              {
-                "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
-                "title": "Sign in with magic link",
-                "date": "2026-09-29",
-                "line": "Magic links are live behind a setting."
-              },
-              {
-                "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-                "title": "Password reset emails",
-                "date": "2026-09-13",
-                "line": "Reset tokens now expire after 30 minutes and are single-use."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 3,
-            "commits": 8,
-            "decisions": 3
-          },
-          "status": "waiting",
-          "bornAt": "2026-10-04T20:00:00.000Z"
-        },
-        {
-          "id": "sign-in",
-          "level": "tissue",
-          "parentId": "customers",
-          "name": "Sign-in",
-          "purpose": "Getting customers into their account safely.",
-          "tags": [
-            "auth",
-            "accounts",
-            "email"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/auth/",
-            "src/email/"
-          ],
-          "nucleus": {
-            "state": "Sign in works with password or email link. Nothing in progress.",
-            "decided": [
-              "Reset links expire after 30 minutes",
-              "Magic links expire after 15 minutes"
-            ],
-            "todo": [
-              "Two-step sign in for admins"
-            ],
-            "recent": [
-              {
-                "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
-                "title": "Sign in with magic link",
-                "date": "2026-09-29",
-                "line": "Magic links are live behind a setting."
-              },
-              {
-                "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-                "title": "Password reset emails",
-                "date": "2026-09-13",
-                "line": "Reset tokens now expire after 30 minutes and are single-use."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 2,
-            "commits": 5,
-            "decisions": 2
-          },
-          "status": "idle",
-          "bornAt": "2026-09-29T21:00:00.000Z"
-        },
-        {
-          "id": "password-reset",
-          "level": "cell",
-          "parentId": "sign-in",
-          "name": "Password reset",
-          "purpose": "Single-use reset links by email.",
-          "tags": [
-            "auth",
-            "email",
-            "tokens"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/auth/reset.ts",
-            "src/email/layout.tsx"
-          ],
-          "nucleus": {
-            "state": "Reset tokens now expire after 30 minutes and are single-use.",
-            "decided": [
-              "Reset links expire after 30 minutes"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-                "title": "Password reset emails",
-                "date": "2026-09-13",
-                "line": "Reset tokens now expire after 30 minutes and are single-use."
-              }
-            ]
-          },
-          "chatIds": [
-            "c9f9f690-b2e9-47fa-aed5-c0b21c302416"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 2,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-13T15:00:00.000Z"
-        },
-        {
-          "id": "magic-link",
-          "level": "cell",
-          "parentId": "sign-in",
-          "name": "Magic link",
-          "purpose": "Sign in from an email link, no password.",
-          "tags": [
-            "auth",
-            "email",
-            "passwordless"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/auth/magic-link.ts"
-          ],
-          "nucleus": {
-            "state": "Magic links are live behind a setting.",
-            "decided": [
-              "Magic links expire after 15 minutes"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
-                "title": "Sign in with magic link",
-                "date": "2026-09-29",
-                "line": "Magic links are live behind a setting."
-              }
-            ]
-          },
-          "chatIds": [
-            "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962"
-          ],
-          "workCellIds": [
-            "feat/magic-link"
-          ],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-29T15:00:00.000Z"
-        },
-        {
-          "id": "stock-alerts",
-          "level": "cell",
-          "parentId": "customers",
-          "name": "Back-in-stock alerts",
-          "purpose": "Tell customers when a product returns.",
-          "tags": [
-            "email",
-            "alerts",
-            "batching"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/email/layout.tsx",
-            "src/email/order-shipped.tsx",
-            "src/notifications/stock-alerts.ts"
-          ],
-          "nucleus": {
-            "state": "Waiting on the sender address",
-            "decided": [
-              "Alerts are sent in batches every 15 minutes"
-            ],
-            "todo": [
-              "Turn alerts on in production",
-              "Add an unsubscribe link test"
-            ],
-            "recent": [
-              {
-                "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
-                "title": "Back-in-stock alerts",
-                "date": "2026-10-04",
-                "line": "Alerts are queued and sent in batches every 15 minutes."
-              }
-            ]
-          },
-          "chatIds": [
-            "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 3,
-            "decisions": 1
-          },
-          "status": "waiting",
-          "bornAt": "2026-10-04T15:00:00.000Z"
-        },
-        {
-          "id": "sales-dashboard",
-          "level": "cell",
-          "parentId": null,
-          "name": "Sales dashboard",
-          "purpose": "Weekly revenue at a glance for the team.",
-          "tags": [
-            "admin",
-            "revenue",
-            "charts"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/admin/home.tsx",
-            "src/orders/totals.ts"
-          ],
-          "nucleus": {
-            "state": "Added the weekly revenue chart with a 12-week window and a table fallback for screen readers.",
-            "decided": [
-              "Charts render on the server, no client chart library",
-              "Charts render on the server"
-            ],
-            "todo": [
-              "Export reports as CSV"
-            ],
-            "recent": [
-              {
-                "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
-                "title": "Sales dashboard charts",
-                "date": "2026-09-09",
-                "line": "Added the weekly revenue chart with a 12-week window and a table fallback for screen readers."
-              }
-            ]
-          },
-          "chatIds": [
-            "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 2
-          },
-          "status": "idle",
-          "bornAt": "2026-09-09T15:00:00.000Z"
-        },
-        {
-          "id": "test-tooling",
-          "level": "cell",
-          "parentId": null,
-          "name": "Test tooling",
-          "purpose": "Keep the test runner current and fast.",
-          "tags": [
-            "tests",
-            "tooling",
-            "upkeep"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "package.json"
-          ],
-          "nucleus": {
-            "state": "The test runner is on its latest major version; nothing in progress.",
-            "decided": [
-              "Stay on the latest major of the test runner"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
-                "title": "Upgrade the test runner",
-                "date": "2026-09-26",
-                "line": "Upgraded."
-              }
-            ]
-          },
-          "chatIds": [
-            "8cd76f72-58cc-4d73-af50-bee0f053f5bc"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-26T15:00:00.000Z"
-        },
-        {
-          "id": "unsorted",
-          "level": "cell",
-          "parentId": null,
-          "name": "Unsorted",
-          "purpose": "Conversations the AI has not read yet.",
-          "tags": [],
-          "origin": "seed",
-          "pinned": false,
-          "paths": [
-            "src/flags.ts"
-          ],
-          "nucleus": {
-            "state": "The AI reads this conversation on its next pass (1 in the queue).",
-            "decided": [],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
-                "title": "Clean up old feature flags",
-                "date": "2026-10-03",
-                "line": "Removed 6 flags that were fully rolled out and deleted their dead branches."
-              }
-            ]
-          },
-          "chatIds": [
-            "3fbce6fc-f22d-44f0-a630-516b16d603c9"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 0
-          },
-          "status": "idle",
-          "bornAt": "2026-10-03T15:00:00.000Z"
-        }
-      ],
-      "unitLinks": [
-        {
-          "a": "one-click",
-          "b": "sign-in",
-          "weight": 2,
-          "since": "2026-09-16T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-chat",
-              "text": "Saved cards also changed the account page, where customers remove a saved card.",
-              "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b"
+            "refs": [],
+            "counts": {
+              "todo": 3,
+              "doing": 0,
+              "done": 1,
+              "withUser": 2,
+              "blocks": 1
             },
-            {
-              "kind": "spec-ref",
-              "text": "The one-click checkout proposal limits one-click to signed-in customers.",
-              "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e"
-            }
-          ]
-        },
-        {
-          "a": "one-click",
-          "b": "stock-alerts",
-          "weight": 1,
-          "since": "2026-09-16T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "spec-ref",
-              "text": "The receipt email in the one-click plan reuses the alert email layout.",
-              "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e"
-            }
-          ]
-        },
-        {
-          "a": "product-pages",
-          "b": "search",
-          "weight": 3,
-          "since": "2026-10-05T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-branch",
-              "text": "The typo-search branch also changes the product listing query."
+            "chatIds": [
+              "b40981aa-b759-42c5-82f5-55f50769d878"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "admin",
+            "name": "Admin panel",
+            "file": "docs/architecture/admin.md",
+            "about": "Where the team edits products, answers orders and reads the sales numbers.",
+            "codePaths": [
+              "apps/admin/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "ad01",
+                    "title": "Weekly revenue chart on the home page",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 30
+                  },
+                  {
+                    "code": "ad02",
+                    "title": "Bulk price change with a preview",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 31
+                  },
+                  {
+                    "code": "ad03",
+                    "title": "Pick who can issue refunds",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Rui",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 32
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "data"
+            ],
+            "counts": {
+              "todo": 2,
+              "doing": 0,
+              "done": 1,
+              "withUser": 1,
+              "blocks": 0
             },
-            {
-              "kind": "shared-chat",
-              "text": "Fuzzy matching touched the product name index used by listings.",
-              "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870"
+            "chatIds": [
+              "abf72c05-c8c3-427e-89fb-658e95200455"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "courier",
+            "name": "Courier app",
+            "file": "docs/architecture/courier.md",
+            "about": "The phone app couriers use to see the day's route and mark each stop as delivered.",
+            "codePaths": [
+              "apps/courier/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "co01",
+                    "title": "Recalculate the route when a stop is cancelled",
+                    "detail": [],
+                    "status": "doing",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 27
+                  },
+                  {
+                    "code": "co02",
+                    "title": "Offline mode for basements and lifts",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 28
+                  },
+                  {
+                    "code": "co03",
+                    "title": "Photo proof of delivery",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 29
+                  }
+                ]
+              }
+            ],
+            "refs": [],
+            "counts": {
+              "todo": 1,
+              "doing": 1,
+              "done": 1,
+              "withUser": 0,
+              "blocks": 0
             },
-            {
-              "kind": "meaning",
-              "text": "Both are about shoppers finding products quickly (catalog, search, performance)."
-            }
-          ]
-        },
-        {
-          "a": "orders",
-          "b": "stock-alerts",
-          "weight": 1,
-          "since": "2026-10-02T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-chat",
-              "text": "The order timeline added the shipped email next to the alert emails.",
-              "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31"
-            }
-          ]
-        },
-        {
-          "a": "sign-in",
-          "b": "stock-alerts",
-          "weight": 2,
-          "since": "2026-09-13T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-chat",
-              "text": "Password reset introduced the shared layout every account email uses.",
-              "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416"
+            "chatIds": [
+              "fc166eb8-1361-4f31-879c-d3c83da3bfe0"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "data",
+            "name": "Data and backups",
+            "file": "docs/architecture/data.md",
+            "about": "The database, its migrations and the nightly backups.",
+            "codePaths": [
+              "packages/db/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "da01",
+                    "title": "Test a full restore from last night's backup",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Rui",
+                    "weight": "blocks",
+                    "milestone": null,
+                    "line": 52
+                  },
+                  {
+                    "code": "da02",
+                    "title": "Archive orders older than two years",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "detail",
+                    "milestone": null,
+                    "line": 53
+                  }
+                ]
+              }
+            ],
+            "refs": [],
+            "counts": {
+              "todo": 2,
+              "doing": 0,
+              "done": 0,
+              "withUser": 1,
+              "blocks": 1
             },
-            {
-              "kind": "meaning",
-              "text": "Both send transactional email to customers (email, tokens)."
-            }
-          ]
-        },
-        {
-          "a": "sales-dashboard",
-          "b": "orders",
-          "weight": 2,
-          "since": "2026-09-09T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-chat",
-              "text": "The revenue chart reads order totals.",
-              "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
+            "chatIds": [
+              "89121dc9-9c7d-49ce-8553-a093a2ab29e0"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "hosting",
+            "name": "Hosting and deploys",
+            "file": "docs/architecture/hosting.md",
+            "about": "Where the shop runs, how a change reaches it and how we know it is healthy.",
+            "codePaths": [
+              "infra/",
+              ".github/workflows/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "ho01",
+                    "title": "Preview deploy for every branch",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 54
+                  },
+                  {
+                    "code": "ho02",
+                    "title": "Alert when checkout errors pass 1 %",
+                    "detail": [],
+                    "status": "doing",
+                    "who": "Claude",
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 55
+                  }
+                ]
+              }
+            ],
+            "refs": [],
+            "counts": {
+              "todo": 0,
+              "doing": 1,
+              "done": 1,
+              "withUser": 0,
+              "blocks": 0
             },
-            {
-              "kind": "meaning",
-              "text": "Both read and present order totals (orders, revenue)."
-            }
-          ]
-        },
-        {
-          "a": "order-summary",
-          "b": "order-timeline",
-          "weight": 1,
-          "since": "2026-10-02T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "lineage",
-              "text": "The order timeline continued the order summary conversation.",
-              "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31"
-            }
-          ]
-        },
-        {
-          "a": "test-tooling",
-          "b": "unsorted",
-          "weight": 1,
-          "since": "2026-10-03T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "meaning",
-              "text": "Both are housekeeping: a test runner upgrade and removing old feature flags."
-            }
-          ]
-        }
-      ],
+            "chatIds": [
+              "338908d7-7d67-4385-88ef-234c32233b9c"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "notifications",
+            "name": "Notifications",
+            "file": "docs/architecture/notifications.md",
+            "about": "Emails and push messages: what is sent, when, and how people turn them off.",
+            "codePaths": [
+              "packages/notify/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "no01",
+                    "title": "One unsubscribe link for every email",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "blocks",
+                    "milestone": null,
+                    "line": 46
+                  },
+                  {
+                    "code": "no02",
+                    "title": "Push message when the courier is two stops away",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": null,
+                    "milestone": null,
+                    "line": 47
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "courier"
+            ],
+            "counts": {
+              "todo": 2,
+              "doing": 0,
+              "done": 0,
+              "withUser": 0,
+              "blocks": 1
+            },
+            "chatIds": [],
+            "workCellIds": []
+          },
+          {
+            "id": "orders",
+            "name": "Orders and cart",
+            "file": "docs/architecture/orders.md",
+            "about": "The engine: keeps the cart, splits it by warehouse and follows each order until delivery.",
+            "codePaths": [
+              "packages/core/src/orders/",
+              "apps/api/src/routes/orders.ts"
+            ],
+            "groups": [
+              {
+                "name": "Cart",
+                "items": [
+                  {
+                    "code": "or01",
+                    "title": "Keep the cart for 30 days",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 33
+                  },
+                  {
+                    "code": "or02",
+                    "title": "Back-in-stock alerts",
+                    "detail": [],
+                    "status": "doing",
+                    "who": "Rui and Claude",
+                    "weight": null,
+                    "milestone": "5",
+                    "line": 34
+                  }
+                ]
+              },
+              {
+                "name": "Checkout",
+                "items": [
+                  {
+                    "code": "or03",
+                    "title": "One-click checkout with a saved card",
+                    "detail": [
+                      "Declined cards fall in three retry groups."
+                    ],
+                    "status": "doing",
+                    "who": "Ana and Claude",
+                    "weight": "blocks",
+                    "milestone": "4",
+                    "line": 35
+                  },
+                  {
+                    "code": "or04",
+                    "title": "Order status emails in plain words",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "detail",
+                    "milestone": null,
+                    "line": 36
+                  },
+                  {
+                    "code": "or05",
+                    "title": "Decide the free-shipping threshold",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Ana",
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 37
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "payments"
+            ],
+            "counts": {
+              "todo": 2,
+              "doing": 2,
+              "done": 1,
+              "withUser": 3,
+              "blocks": 1
+            },
+            "chatIds": [
+              "3f6deaa7-d502-4b63-8668-8f974fe613ae",
+              "ed487e1e-87c6-45af-89db-011b2903f20f"
+            ],
+            "workCellIds": [
+              "feat/one-click-checkout",
+              "feat/stock-alerts"
+            ]
+          },
+          {
+            "id": "payments",
+            "name": "Payments",
+            "file": "docs/architecture/payments.md",
+            "about": "Talks to the card provider, saves card tokens and settles refunds. Never stores a card number.",
+            "codePaths": [
+              "packages/core/src/payments/",
+              "apps/api/src/payments/"
+            ],
+            "groups": [
+              {
+                "name": "Cards",
+                "items": [
+                  {
+                    "code": "pa01",
+                    "title": "Retry failed payments with backoff",
+                    "detail": [],
+                    "status": "doing",
+                    "who": "Claude",
+                    "weight": "blocks",
+                    "milestone": null,
+                    "line": 38
+                  },
+                  {
+                    "code": "pa02",
+                    "title": "Map decline codes to messages people understand",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 39
+                  },
+                  {
+                    "code": "pa03",
+                    "title": "Pick the second card provider",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Ana",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 40
+                  }
+                ]
+              },
+              {
+                "name": "Refunds",
+                "items": [
+                  {
+                    "code": "pa04",
+                    "title": "Partial refunds from the admin panel",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 41
+                  },
+                  {
+                    "code": "pa05",
+                    "title": "Refund receipt email",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": null,
+                    "milestone": null,
+                    "line": 42
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "accounts"
+            ],
+            "counts": {
+              "todo": 3,
+              "doing": 1,
+              "done": 1,
+              "withUser": 1,
+              "blocks": 1
+            },
+            "chatIds": [
+              "708269ae-0043-498d-8cb3-4d811f4db9a4",
+              "9446aedb-93c9-4b13-8346-b7c917ca9a1f"
+            ],
+            "workCellIds": []
+          },
+          {
+            "id": "search",
+            "name": "Search",
+            "file": "docs/architecture/search.md",
+            "about": "Finds products as people type, forgiving typos and odd plurals.",
+            "codePaths": [
+              "packages/search/"
+            ],
+            "groups": [
+              {
+                "name": "",
+                "items": [
+                  {
+                    "code": "se01",
+                    "title": "Typo tolerance for product names",
+                    "detail": [],
+                    "status": "doing",
+                    "who": "Rui and Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 43
+                  },
+                  {
+                    "code": "se02",
+                    "title": "Filters by size and colour",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 44
+                  },
+                  {
+                    "code": "se03",
+                    "title": "Search results in under 100 ms",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 45
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "storefront"
+            ],
+            "counts": {
+              "todo": 1,
+              "doing": 1,
+              "done": 1,
+              "withUser": 1,
+              "blocks": 0
+            },
+            "chatIds": [
+              "020f67b1-1f52-4721-8e55-44a99eea3406"
+            ],
+            "workCellIds": [
+              "feat/typo-search"
+            ]
+          },
+          {
+            "id": "storefront",
+            "name": "Storefront",
+            "file": "docs/architecture/storefront.md",
+            "about": "The site where people browse products, fill the cart and start checkout.",
+            "codePaths": [
+              "apps/web/src/catalog/",
+              "apps/web/src/pages/"
+            ],
+            "groups": [
+              {
+                "name": "Product pages",
+                "items": [
+                  {
+                    "code": "sf01",
+                    "title": "Real product photos for the autumn range",
+                    "detail": [
+                      "Large photos still need resizing."
+                    ],
+                    "status": "doing",
+                    "who": "Ana and Claude",
+                    "weight": null,
+                    "milestone": "4",
+                    "line": 21
+                  },
+                  {
+                    "code": "sf02",
+                    "title": "Size guide next to the size picker",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "important",
+                    "milestone": null,
+                    "line": 22
+                  },
+                  {
+                    "code": "sf03",
+                    "title": "Gallery swipe and keyboard support",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 23
+                  }
+                ]
+              },
+              {
+                "name": "Navigation",
+                "items": [
+                  {
+                    "code": "sf04",
+                    "title": "Approve the cookie banner text",
+                    "detail": [],
+                    "status": "todo",
+                    "who": "with Ana",
+                    "weight": "blocks",
+                    "milestone": null,
+                    "line": 24
+                  },
+                  {
+                    "code": "sf05",
+                    "title": "Friendlier 404 page",
+                    "detail": [],
+                    "status": "done",
+                    "who": "Claude",
+                    "weight": null,
+                    "milestone": null,
+                    "line": 25
+                  },
+                  {
+                    "code": "sf06",
+                    "title": "Breadcrumbs on category pages",
+                    "detail": [],
+                    "status": "todo",
+                    "who": null,
+                    "weight": "detail",
+                    "milestone": null,
+                    "line": 26
+                  }
+                ]
+              }
+            ],
+            "refs": [
+              "orders"
+            ],
+            "counts": {
+              "todo": 3,
+              "doing": 1,
+              "done": 2,
+              "withUser": 2,
+              "blocks": 1
+            },
+            "chatIds": [
+              "2e58e0c1-ea67-4cd2-8bd3-a55a2fc11779"
+            ],
+            "workCellIds": []
+          }
+        ],
+        "links": [
+          {
+            "a": "orders",
+            "b": "payments",
+            "weight": 3,
+            "since": "2026-10-03T15:00:00.000Z",
+            "reasons": [
+              {
+                "kind": "shared-branch",
+                "text": "feat/one-click-checkout"
+              },
+              {
+                "kind": "shared-chat",
+                "text": "One-click checkout",
+                "sessionId": "3f6deaa7-d502-4b63-8668-8f974fe613ae"
+              },
+              {
+                "kind": "file-ref",
+                "text": "Orders and cart → Payments"
+              }
+            ]
+          },
+          {
+            "a": "notifications",
+            "b": "orders",
+            "weight": 2,
+            "since": "2026-10-05T15:00:00.000Z",
+            "reasons": [
+              {
+                "kind": "shared-branch",
+                "text": "feat/stock-alerts"
+              },
+              {
+                "kind": "shared-chat",
+                "text": "Back-in-stock alerts",
+                "sessionId": "ed487e1e-87c6-45af-89db-011b2903f20f"
+              }
+            ]
+          },
+          {
+            "a": "accounts",
+            "b": "orders",
+            "weight": 1,
+            "since": "2026-10-03T15:00:00.000Z",
+            "reasons": [
+              {
+                "kind": "shared-branch",
+                "text": "feat/one-click-checkout"
+              }
+            ]
+          },
+          {
+            "a": "accounts",
+            "b": "payments",
+            "weight": 1,
+            "since": null,
+            "reasons": [
+              {
+                "kind": "file-ref",
+                "text": "Payments → Accounts and security"
+              }
+            ]
+          },
+          {
+            "a": "orders",
+            "b": "storefront",
+            "weight": 1,
+            "since": null,
+            "reasons": [
+              {
+                "kind": "file-ref",
+                "text": "Storefront → Orders and cart"
+              }
+            ]
+          },
+          {
+            "a": "search",
+            "b": "storefront",
+            "weight": 1,
+            "since": null,
+            "reasons": [
+              {
+                "kind": "file-ref",
+                "text": "Search → Storefront"
+              }
+            ]
+          },
+          {
+            "a": "courier",
+            "b": "notifications",
+            "weight": 1,
+            "since": null,
+            "reasons": [
+              {
+                "kind": "file-ref",
+                "text": "Notifications → Courier app"
+              }
+            ]
+          },
+          {
+            "a": "admin",
+            "b": "data",
+            "weight": 1,
+            "since": null,
+            "reasons": [
+              {
+                "kind": "file-ref",
+                "text": "Admin panel → Data and backups"
+              }
+            ]
+          }
+        ]
+      },
       "workCells": [
         {
           "id": "feat/one-click-checkout",
           "branch": "feat/one-click-checkout",
           "remote": false,
-          "path": "/home/dev/code/acme-shop-checkout",
+          "path": "/home/dev/code/acme-shop-one-click-checkout",
           "owner": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
@@ -1475,62 +863,36 @@
               "email": "ana.lima@example.com"
             }
           ],
-          "unitId": "one-click",
+          "partId": "orders",
           "touches": [
-            "sign-in",
-            "stock-alerts"
+            "payments",
+            "accounts"
           ],
           "ahead": 7,
           "commits": 7,
           "files": [
             {
-              "path": "openspec/changes/one-click-checkout/proposal.md",
-              "status": "A"
-            },
-            {
-              "path": "openspec/changes/one-click-checkout/tasks.md",
-              "status": "A"
-            },
-            {
-              "path": "src/payments/tokens.ts",
-              "status": "A"
-            },
-            {
-              "path": "src/payments/provider.ts",
+              "path": "packages/core/src/orders/checkout.ts",
               "status": "M"
             },
             {
-              "path": "src/payments/declines.ts",
+              "path": "packages/core/src/payments/tokens.ts",
               "status": "A"
             },
             {
-              "path": "src/checkout/pay-button.tsx",
-              "status": "M"
-            },
-            {
-              "path": "src/checkout/retry.ts",
+              "path": "packages/core/src/payments/declines.ts",
               "status": "A"
             },
             {
-              "path": "src/checkout/legacy-cart.ts",
-              "status": "D"
-            },
-            {
-              "path": "src/account/saved-cards.tsx",
-              "status": "M"
-            },
-            {
-              "path": "src/email/layout.tsx",
+              "path": "apps/web/src/pages/cart.tsx",
               "status": "M"
             }
           ],
           "nucleus": {
             "doing": "Mapping card decline codes to three retry groups",
             "todo": [
-              "Retry policy for declined cards",
-              "Pay button loading and error states",
-              "Receipt email",
-              "End-to-end test with test cards"
+              "Pay button states",
+              "Receipt email"
             ]
           },
           "openspec": {
@@ -1538,35 +900,31 @@
             "done": 5,
             "total": 9,
             "todo": [
-              "Retry policy for declined cards",
-              "Pay button loading and error states",
-              "Receipt email",
-              "End-to-end test with test cards"
+              "Pay button states",
+              "Receipt email"
             ]
           },
           "chatIds": [
-            "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-            "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-            "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
-            "a7b85b90-4018-47df-a818-cb376816bc8c"
+            "3f6deaa7-d502-4b63-8668-8f974fe613ae",
+            "708269ae-0043-498d-8cb3-4d811f4db9a4"
           ],
           "estimateUSD": 30,
-          "costUSD": 22.5,
+          "costUSD": 20.3,
           "lastCommit": {
-            "hash": "4bf812f9f2a3cdac8868d323ef3f76ae8757f0ef",
+            "hash": "48f1f4c2d0515959aa3ee2e498b7139e8498a0e4",
             "subject": "Map decline codes to three groups",
-            "ts": "2026-10-08T11:00:00.000Z"
+            "ts": "2026-10-09T11:00:00.000Z"
           },
           "status": "active",
-          "bornAt": "2026-09-16T19:00:00.000Z",
+          "bornAt": "2026-10-03T15:00:00.000Z",
           "mergedAt": null,
           "clashWith": []
         },
         {
-          "id": "feat/typo-search",
-          "branch": "feat/typo-search",
+          "id": "feat/stock-alerts",
+          "branch": "feat/stock-alerts",
           "remote": false,
-          "path": "/home/dev/code/acme-shop-search",
+          "path": "/home/dev/code/acme-shop-stock-alerts",
           "owner": {
             "name": "Rui Costa",
             "email": "rui.costa@example.com"
@@ -1577,77 +935,104 @@
               "email": "rui.costa@example.com"
             }
           ],
-          "unitId": "typo",
+          "partId": "orders",
           "touches": [
-            "product-pages"
+            "notifications"
           ],
           "ahead": 3,
           "commits": 3,
           "files": [
             {
-              "path": "openspec/changes/typo-tolerant-search/proposal.md",
+              "path": "packages/core/src/orders/stock.ts",
               "status": "A"
             },
             {
-              "path": "src/search/trigram.ts",
+              "path": "packages/notify/templates/stock.tsx",
               "status": "A"
             },
             {
-              "path": "src/search/index.ts",
+              "path": "apps/web/src/pages/product.tsx",
               "status": "M"
-            },
-            {
-              "path": "src/products/query.ts",
-              "status": "M"
-            },
-            {
-              "path": "migrations/0007_trigram_index.sql",
-              "status": "A"
             }
           ],
           "nucleus": {
-            "doing": "Tuning the similarity threshold for fuzzy matches",
-            "todo": [
-              "Similarity threshold setting",
-              "Brand field",
-              "Benchmark",
-              "Docs"
-            ]
+            "doing": null,
+            "todo": []
           },
-          "openspec": {
-            "change": "typo-tolerant-search",
-            "done": 2,
-            "total": 6,
-            "todo": [
-              "Similarity threshold setting",
-              "Brand field",
-              "Benchmark",
-              "Docs"
-            ]
-          },
+          "openspec": null,
           "chatIds": [
-            "cb361ee4-1b48-425d-a4de-121de0988e28",
-            "694b2b06-89b1-4985-a7cf-d87fcacf6870"
+            "ed487e1e-87c6-45af-89db-011b2903f20f"
           ],
-          "estimateUSD": 12,
-          "costUSD": 8.25,
+          "estimateUSD": null,
+          "costUSD": 3.2,
           "lastCommit": {
-            "hash": "6010e340b557b5d97aab0a68aeacc73fd55c214a",
-            "subject": "Trigram similarity on product names",
-            "ts": "2026-10-06T11:00:00.000Z"
+            "hash": "a416afd1a25570a1ef8b2d118283945d10fded58",
+            "subject": "Store alert subscriptions per product",
+            "ts": "2026-10-08T19:00:00.000Z"
           },
           "status": "active",
-          "bornAt": "2026-09-24T17:00:00.000Z",
+          "bornAt": "2026-10-05T15:00:00.000Z",
           "mergedAt": null,
           "clashWith": [
-            "feat/category-speed"
+            "feat/typo-search"
           ]
         },
         {
-          "id": "feat/category-speed",
-          "branch": "feat/category-speed",
+          "id": "feat/typo-search",
+          "branch": "feat/typo-search",
           "remote": false,
-          "path": "/home/dev/code/acme-shop",
+          "path": "/home/dev/code/acme-shop-typo-search",
+          "owner": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "authors": [
+            {
+              "name": "Rui Costa",
+              "email": "rui.costa@example.com"
+            }
+          ],
+          "partId": "search",
+          "touches": [],
+          "ahead": 4,
+          "commits": 4,
+          "files": [
+            {
+              "path": "packages/search/fuzzy.ts",
+              "status": "A"
+            },
+            {
+              "path": "apps/web/src/pages/product.tsx",
+              "status": "M"
+            }
+          ],
+          "nucleus": {
+            "doing": "Forgiving one wrong letter in product names",
+            "todo": []
+          },
+          "openspec": null,
+          "chatIds": [
+            "020f67b1-1f52-4721-8e55-44a99eea3406"
+          ],
+          "estimateUSD": null,
+          "costUSD": 4.4,
+          "lastCommit": {
+            "hash": "ae96533b70c16140096dba1feebceb0b5cabf338",
+            "subject": "Edit distance for long words",
+            "ts": "2026-10-09T14:30:00.000Z"
+          },
+          "status": "active",
+          "bornAt": "2026-10-06T15:00:00.000Z",
+          "mergedAt": null,
+          "clashWith": [
+            "feat/stock-alerts"
+          ]
+        },
+        {
+          "id": "feat/magic-link",
+          "branch": "feat/magic-link",
+          "remote": false,
+          "path": "/home/dev/code/acme-shop-magic-link",
           "owner": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
@@ -1658,77 +1043,13 @@
               "email": "ana.lima@example.com"
             }
           ],
-          "unitId": "category-speed",
-          "touches": [
-            "search"
-          ],
-          "ahead": 1,
-          "commits": 1,
-          "files": [
-            {
-              "path": "src/catalog/listing.ts",
-              "status": "M"
-            },
-            {
-              "path": "src/catalog/cursor.ts",
-              "status": "A"
-            },
-            {
-              "path": "src/products/query.ts",
-              "status": "M"
-            }
-          ],
-          "nucleus": {
-            "doing": "Adding cursor pagination to the category endpoint",
-            "todo": [
-              "Cache the first page",
-              "Update listing tests"
-            ]
-          },
-          "openspec": null,
-          "chatIds": [
-            "28fac6de-3493-4fc8-ade1-a93bf6866e47"
-          ],
-          "estimateUSD": null,
-          "costUSD": 2.15,
-          "lastCommit": {
-            "hash": "c268854ce8ae9a6146149b265f5c77b32cd5124b",
-            "subject": "Cursor pagination for the category endpoint",
-            "ts": "2026-10-08T11:00:00.000Z"
-          },
-          "status": "active",
-          "bornAt": "2026-10-08T11:00:00.000Z",
-          "mergedAt": null,
-          "clashWith": [
-            "feat/typo-search"
-          ]
-        },
-        {
-          "id": "origin/fix/shipping-rates",
-          "branch": "fix/shipping-rates",
-          "remote": true,
-          "path": null,
-          "owner": {
-            "name": "Bia Souza",
-            "email": "bia.souza@example.com"
-          },
-          "authors": [
-            {
-              "name": "Bia Souza",
-              "email": "bia.souza@example.com"
-            }
-          ],
-          "unitId": "orders",
+          "partId": "accounts",
           "touches": [],
-          "ahead": 2,
-          "commits": 2,
+          "ahead": 0,
+          "commits": 0,
           "files": [
             {
-              "path": "src/shipping/rates.ts",
-              "status": "M"
-            },
-            {
-              "path": "src/shipping/free-threshold.ts",
+              "path": "packages/core/src/auth/magic.ts",
               "status": "A"
             }
           ],
@@ -1741,20 +1062,20 @@
           "estimateUSD": null,
           "costUSD": 0,
           "lastCommit": {
-            "hash": "9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
-            "subject": "Free shipping above a cart threshold",
-            "ts": "2026-10-07T14:00:00.000Z"
+            "hash": "f13718c35b427731091c2a1b0464267da5d6fa15",
+            "subject": "Magic link sign-in",
+            "ts": "2026-09-21T15:00:00.000Z"
           },
-          "status": "active",
-          "bornAt": "2026-10-07T13:00:00.000Z",
-          "mergedAt": null,
+          "status": "merged",
+          "bornAt": "2026-09-18T15:00:00.000Z",
+          "mergedAt": "2026-09-21T15:00:00.000Z",
           "clashWith": []
         },
         {
-          "id": "feat/magic-link",
-          "branch": "feat/magic-link",
+          "id": "feat/revenue-chart",
+          "branch": "feat/revenue-chart",
           "remote": false,
-          "path": null,
+          "path": "/home/dev/code/acme-shop-revenue-chart",
           "owner": {
             "name": "Rui Costa",
             "email": "rui.costa@example.com"
@@ -1765,22 +1086,14 @@
               "email": "rui.costa@example.com"
             }
           ],
-          "unitId": "magic-link",
+          "partId": "admin",
           "touches": [],
           "ahead": 0,
-          "commits": 1,
+          "commits": 0,
           "files": [
             {
-              "path": "src/auth/magic-link.ts",
-              "status": "A"
-            },
-            {
-              "path": "src/auth/settings.ts",
+              "path": "apps/admin/src/home.tsx",
               "status": "M"
-            },
-            {
-              "path": "src/email/magic-link.tsx",
-              "status": "A"
             }
           ],
           "nucleus": {
@@ -1788,902 +1101,61 @@
             "todo": []
           },
           "openspec": null,
-          "chatIds": [
-            "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962"
-          ],
+          "chatIds": [],
           "estimateUSD": null,
-          "costUSD": 4.1,
+          "costUSD": 0,
           "lastCommit": {
-            "hash": "580baf2e56983815c9ea793b79ed71a6a7262243",
-            "subject": "Sign in with a magic link behind a setting",
-            "ts": "2026-09-29T18:00:00.000Z"
+            "hash": "cde106f2767ade444353ebbe1a4f2a876b6c0ce9",
+            "subject": "Weekly revenue chart",
+            "ts": "2026-09-27T15:00:00.000Z"
           },
           "status": "merged",
-          "bornAt": "2026-09-29T18:00:00.000Z",
-          "mergedAt": "2026-09-30T15:00:00.000Z",
-          "clashWith": []
-        },
-        {
-          "id": "feat/order-timeline",
-          "branch": "feat/order-timeline",
-          "remote": false,
-          "path": null,
-          "owner": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "authors": [
-            {
-              "name": "Ana Lima",
-              "email": "ana.lima@example.com"
-            }
-          ],
-          "unitId": "order-timeline",
-          "touches": [
-            "stock-alerts"
-          ],
-          "ahead": 0,
-          "commits": 2,
-          "files": [
-            {
-              "path": "src/orders/timeline.tsx",
-              "status": "A"
-            },
-            {
-              "path": "src/orders/page.tsx",
-              "status": "M"
-            },
-            {
-              "path": "src/email/shipped.tsx",
-              "status": "A"
-            }
-          ],
-          "nucleus": {
-            "doing": null,
-            "todo": []
-          },
-          "openspec": null,
-          "chatIds": [
-            "a98f62e0-89dc-4009-a78f-63fad5422b31"
-          ],
-          "estimateUSD": null,
-          "costUSD": 3.4,
-          "lastCommit": {
-            "hash": "c3f5d9d7237d2db2f977c83ab3c799a4f6166cd2",
-            "subject": "Shipped email template",
-            "ts": "2026-10-02T17:36:00.000Z"
-          },
-          "status": "merged",
-          "bornAt": "2026-10-02T17:00:00.000Z",
-          "mergedAt": "2026-10-02T19:00:00.000Z",
+          "bornAt": "2026-09-26T15:00:00.000Z",
+          "mergedAt": "2026-09-27T15:00:00.000Z",
           "clashWith": []
         }
       ],
       "ai": {
         "enabled": true,
         "model": "haiku",
-        "spentUSDToday": 0.04,
-        "queue": 1,
-        "bootstrap": null
+        "spentUSDToday": 0.03,
+        "queue": 0
       },
       "activity": [
         {
           "kind": "commit",
-          "ts": "2026-09-09T17:00:00.000Z",
-          "hash": "ecf5f48b5022adfeb534164932d10f83bae92c67",
-          "subject": "Add weekly revenue chart to the admin home",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
-          "files": [
-            "src/admin/home.tsx",
-            "src/orders/totals.ts"
-          ],
-          "unitIds": [
-            "sales-dashboard"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-11T17:30:00.000Z",
-          "hash": "d7a4fe41d869310e28a616a7949958fb8437a79c",
-          "subject": "Swipe and keyboard support in the product gallery",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
-          "files": [
-            "src/catalog/gallery.tsx"
-          ],
-          "unitIds": [
-            "gallery"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-13T16:30:00.000Z",
-          "hash": "c5c98e68a1faf5d4e851d6d9aa65c1c1a4d41a0c",
-          "subject": "Single-use reset tokens with a 30 minute expiry",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Haiku 4.5",
-          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-          "files": [
-            "src/auth/reset.ts"
-          ],
-          "unitIds": [
-            "password-reset"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-13T17:30:00.000Z",
-          "hash": "3b60be77f6fc07aed4a3ef33c5f65e68426387c2",
-          "subject": "Shared layout for account emails",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Haiku 4.5",
-          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-          "files": [
-            "src/email/layout.tsx"
-          ],
-          "unitIds": [
-            "password-reset",
-            "stock-alerts"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-09-14T15:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "sales-dashboard",
-            "product-pages",
-            "sign-in",
-            "stock-alerts"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-15T17:00:00.000Z",
-          "hash": "ff16e719dc82e48a30dc75ac486530632caf4193",
-          "subject": "Export shipping labels as one PDF per day",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
-          "files": [
-            "src/shipping/labels.ts"
-          ],
-          "unitIds": [
-            "shipping-labels"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-16T19:00:00.000Z",
-          "hash": "b11744f830b36520be9d240ddfd0af14b11420b6",
-          "subject": "Add the one-click checkout proposal",
-          "branch": "feat/one-click-checkout",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-          "files": [
-            "openspec/changes/one-click-checkout/proposal.md"
-          ],
-          "unitIds": [
-            "saved-cards"
-          ],
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "kind": "born",
-          "ts": "2026-09-16T19:00:00.000Z",
-          "branch": "feat/one-click-checkout",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "subject": "feat/one-click-checkout",
-          "unitIds": [
-            "one-click"
-          ],
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-18T16:00:00.000Z",
-          "hash": "3ea981e71af45778bbb449f522e9745cf6a24e8a",
-          "subject": "Highlight matched words in search results",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
-          "files": [
-            "src/search/results.tsx"
-          ],
-          "unitIds": [
-            "highlighting"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-20T20:00:00.000Z",
-          "hash": "e53cd62bbc02fb5bc18817a19c0eca0e56eeb1ce",
-          "subject": "Keep unavailable variants focusable",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
-          "files": [
-            "src/catalog/variant-picker.tsx"
-          ],
-          "unitIds": [
-            "variants"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-09-21T15:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "unitIds": [
-            "orders",
-            "search",
-            "product-pages"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-21T21:00:00.000Z",
-          "subject": "Grouped Image gallery and Variant picker into Product pages",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "product-pages",
-            "gallery",
-            "variants"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-22T18:00:00.000Z",
-          "hash": "1e9ad92290a679f7b0b250a6eeebd77376a71609",
-          "subject": "Tokenized saved cards through the payment provider",
-          "branch": "feat/one-click-checkout",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-          "files": [
-            "src/payments/saved-cards.ts"
-          ],
-          "unitIds": [
-            "saved-cards"
-          ],
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-22T22:00:00.000Z",
-          "hash": "462b89e4f3581fe9f8da2bd7a6148ca1c702768a",
-          "subject": "Remove a saved card from the account page",
-          "branch": "feat/one-click-checkout",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-          "files": [
-            "src/account/cards.tsx"
-          ],
-          "unitIds": [
-            "saved-cards",
-            "sign-in"
-          ],
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "kind": "push",
-          "ts": "2026-09-23T15:00:00.000Z",
-          "branch": "feat/one-click-checkout",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "unitIds": [
-            "one-click",
-            "sign-in"
-          ],
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-24T17:00:00.000Z",
-          "hash": "8e4993f64f9673e0e7293ea9328ac4efed8cd1e2",
-          "subject": "Add the typo-tolerant search proposal",
+          "ts": "2026-10-09T14:30:00.000Z",
+          "hash": "ae96533b70c16140096dba1feebceb0b5cabf338",
+          "subject": "Edit distance for long words",
           "branch": "feat/typo-search",
           "author": {
             "name": "Rui Costa",
             "email": "rui.costa@example.com"
           },
           "coAuthor": "Claude Opus 5.5",
-          "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
+          "sessionId": "020f67b1-1f52-4721-8e55-44a99eea3406",
           "files": [
-            "openspec/changes/typo-tolerant-search/proposal.md"
+            "packages/search/fuzzy.ts"
           ],
-          "unitIds": [
-            "typo"
-          ],
-          "workCellId": "feat/typo-search"
-        },
-        {
-          "kind": "born",
-          "ts": "2026-09-24T17:00:00.000Z",
-          "branch": "feat/typo-search",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "subject": "feat/typo-search",
-          "unitIds": [
-            "typo"
-          ],
-          "workCellId": "feat/typo-search"
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-24T19:00:00.000Z",
-          "subject": "Grouped Result highlighting and Typo tolerance into Search",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "search",
-            "highlighting",
-            "typo"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-25T09:00:00.000Z",
-          "subject": "Product pages and Search became the Storefront organ",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "storefront",
-            "product-pages",
+          "partIds": [
             "search"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-26T16:00:00.000Z",
-          "hash": "cd6e0f3991caa040a423a03ccc097e0d978406d1",
-          "subject": "Upgrade the test runner to the latest major",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Haiku 4.5",
-          "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
-          "files": [
-            "package.json"
-          ],
-          "unitIds": [
-            "test-tooling"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-27T17:00:00.000Z",
-          "hash": "bbabb57a83b4aa6063a3940833e6a36ab0a9cde2",
-          "subject": "Collapse the order summary on small screens",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
-          "files": [
-            "src/checkout/summary.tsx"
-          ],
-          "unitIds": [
-            "order-summary"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-27T19:00:00.000Z",
-          "subject": "Grouped Order summary and Shipping labels into Orders and shipping",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "orders",
-            "order-summary",
-            "shipping-labels"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-29T18:00:00.000Z",
-          "hash": "580baf2e56983815c9ea793b79ed71a6a7262243",
-          "subject": "Sign in with a magic link behind a setting",
-          "branch": "feat/magic-link",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
-          "files": [
-            "src/auth/magic-link.ts"
-          ],
-          "unitIds": [
-            "magic-link"
-          ],
-          "workCellId": "feat/magic-link"
-        },
-        {
-          "kind": "born",
-          "ts": "2026-09-29T18:00:00.000Z",
-          "branch": "feat/magic-link",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "subject": "feat/magic-link",
-          "unitIds": [
-            "magic-link"
-          ],
-          "workCellId": "feat/magic-link"
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-29T21:00:00.000Z",
-          "subject": "Grouped Password reset and Magic link into Sign-in",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "sign-in",
-            "password-reset",
-            "magic-link"
-          ]
-        },
-        {
-          "kind": "merge",
-          "ts": "2026-09-30T15:00:00.000Z",
-          "hash": "6bb8f7f532950484789b3685320eb3bf553f3317",
-          "subject": "Merge feat/magic-link into main",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "sign-in"
-          ]
-        },
-        {
-          "kind": "fused",
-          "ts": "2026-09-30T15:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "subject": "feat/magic-link",
-          "unitIds": [
-            "magic-link"
-          ],
-          "workCellId": "feat/magic-link"
-        },
-        {
-          "kind": "push",
-          "ts": "2026-09-30T16:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "unsorted",
-            "one-click",
-            "sign-in"
-          ]
-        },
-        {
-          "kind": "tag",
-          "ts": "2026-09-30T17:00:00.000Z",
-          "hash": "08ee7fbd19641a881ceb12c35d5b214f2810eb66",
-          "subject": "v1.2.0",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "sign-in",
-            "one-click",
-            "product-pages",
-            "search",
-            "orders",
-            "unsorted"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-02T17:00:00.000Z",
-          "hash": "4c14cd64fb4f4a4a857a80d9b1ba23ef682ca075",
-          "subject": "Order status timeline on the order page",
-          "branch": "feat/order-timeline",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-          "files": [
-            "src/orders/timeline.tsx"
-          ],
-          "unitIds": [
-            "order-timeline"
-          ],
-          "workCellId": "feat/order-timeline"
-        },
-        {
-          "kind": "born",
-          "ts": "2026-10-02T17:00:00.000Z",
-          "branch": "feat/order-timeline",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "subject": "feat/order-timeline",
-          "unitIds": [
-            "order-timeline"
-          ],
-          "workCellId": "feat/order-timeline"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-02T17:36:00.000Z",
-          "hash": "c3f5d9d7237d2db2f977c83ab3c799a4f6166cd2",
-          "subject": "Shipped email template",
-          "branch": "feat/order-timeline",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-          "files": [
-            "src/email/order-shipped.tsx"
-          ],
-          "unitIds": [
-            "order-timeline",
-            "stock-alerts"
-          ],
-          "workCellId": "feat/order-timeline"
-        },
-        {
-          "kind": "merge",
-          "ts": "2026-10-02T19:00:00.000Z",
-          "hash": "3f9c2ab14de07c5b8a6e2f19d0c4b7a8e5f6d1c2",
-          "subject": "Merge feat/order-timeline into main",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "unitIds": [
-            "order-timeline"
-          ]
-        },
-        {
-          "kind": "fused",
-          "ts": "2026-10-02T19:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "subject": "feat/order-timeline",
-          "unitIds": [
-            "order-timeline"
-          ],
-          "workCellId": "feat/order-timeline"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-03T15:48:00.000Z",
-          "hash": "d0e796c860860f12ccfb5b55d93feb8355c77ddf",
-          "subject": "Remove six fully rolled-out feature flags",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Haiku 4.5",
-          "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
-          "files": [
-            "src/flags.ts"
-          ],
-          "unitIds": [
-            "unsorted"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-10-03T17:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "unitIds": [
-            "orders",
-            "stock-alerts",
-            "unsorted"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-04T18:00:00.000Z",
-          "hash": "7f9fcd136f6c82c2a38abb6457e261b41778b2b9",
-          "subject": "Queue back-in-stock alerts in 15 minute batches",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
-          "files": [
-            "src/notifications/stock-alerts.ts"
-          ],
-          "unitIds": [
-            "stock-alerts"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-10-04T20:00:00.000Z",
-          "subject": "Sign-in and Back-in-stock alerts became the Customers organ",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "customers",
-            "sign-in",
-            "stock-alerts"
-          ]
-        },
-        {
-          "kind": "fused-by-meaning",
-          "ts": "2026-10-06T09:00:00.000Z",
-          "subject": "Fuzzy name matching fused into Typo tolerance: same goal, same files",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "typo"
-          ],
-          "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-06T11:00:00.000Z",
-          "hash": "6010e340b557b5d97aab0a68aeacc73fd55c214a",
-          "subject": "Trigram similarity on product names",
-          "branch": "feat/typo-search",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
-          "files": [
-            "src/search/fuzzy.ts",
-            "src/catalog/index-names.ts"
-          ],
-          "unitIds": [
-            "typo",
-            "product-pages"
           ],
           "workCellId": "feat/typo-search"
         },
         {
-          "kind": "grouped",
-          "ts": "2026-10-06T20:00:00.000Z",
-          "subject": "Grouped Saved cards and Payment retries into Checkout flow",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "one-click",
-            "saved-cards",
-            "retries"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-10-06T20:05:00.000Z",
-          "subject": "Checkout flow and Orders and shipping became the Buying organ",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "buying",
-            "one-click",
-            "orders"
-          ]
-        },
-        {
-          "kind": "renamed",
-          "ts": "2026-10-06T21:00:00.000Z",
-          "subject": "Fuzzy search → Typo tolerance",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "typo"
-          ]
-        },
-        {
-          "kind": "renamed",
-          "ts": "2026-10-07T09:30:00.000Z",
-          "subject": "Renamed Checkout flow to One-click checkout and pinned it",
-          "branch": "main",
+          "kind": "push",
+          "ts": "2026-10-09T11:01:00.000Z",
+          "branch": "feat/one-click-checkout",
           "author": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
           },
-          "unitIds": [
-            "one-click"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-10-07T12:00:00.000Z",
-          "branch": "feat/typo-search",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "search",
-            "product-pages"
-          ],
-          "workCellId": "feat/typo-search"
+          "partIds": []
         },
         {
           "kind": "commit",
-          "ts": "2026-10-07T13:00:00.000Z",
-          "hash": "4c1d7e2a9b3f50618e2d4c7a9b0e1f2a3b4c5d6e",
-          "subject": "Read shipping rates from one table",
-          "branch": "fix/shipping-rates",
-          "author": {
-            "name": "Bia Souza",
-            "email": "bia.souza@example.com"
-          },
-          "unitIds": [
-            "orders"
-          ],
-          "workCellId": "origin/fix/shipping-rates",
-          "files": [
-            "src/shipping/rates.ts"
-          ]
-        },
-        {
-          "kind": "born",
-          "ts": "2026-10-07T13:00:00.000Z",
-          "branch": "fix/shipping-rates",
-          "author": {
-            "name": "Bia Souza",
-            "email": "bia.souza@example.com"
-          },
-          "subject": "fix/shipping-rates",
-          "unitIds": [
-            "orders"
-          ],
-          "workCellId": "origin/fix/shipping-rates"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-07T14:00:00.000Z",
-          "hash": "9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f",
-          "subject": "Free shipping above a cart threshold",
-          "branch": "fix/shipping-rates",
-          "author": {
-            "name": "Bia Souza",
-            "email": "bia.souza@example.com"
-          },
-          "unitIds": [
-            "orders"
-          ],
-          "workCellId": "origin/fix/shipping-rates",
-          "files": [
-            "src/shipping/free-threshold.ts"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-10-07T14:10:00.000Z",
-          "branch": "fix/shipping-rates",
-          "author": {
-            "name": "Bia Souza",
-            "email": "bia.souza@example.com"
-          },
-          "unitIds": [
-            "orders"
-          ],
-          "workCellId": "origin/fix/shipping-rates"
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-08T11:00:00.000Z",
-          "hash": "4bf812f9f2a3cdac8868d323ef3f76ae8757f0ef",
+          "ts": "2026-10-09T11:00:00.000Z",
+          "hash": "48f1f4c2d0515959aa3ee2e498b7139e8498a0e4",
           "subject": "Map decline codes to three groups",
           "branch": "feat/one-click-checkout",
           "author": {
@@ -2691,166 +1163,369 @@
             "email": "ana.lima@example.com"
           },
           "coAuthor": "Claude Opus 5.5",
-          "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+          "sessionId": "3f6deaa7-d502-4b63-8668-8f974fe613ae",
           "files": [
-            "src/payments/declines.ts"
+            "packages/core/src/payments/declines.ts",
+            "packages/core/src/orders/checkout.ts"
           ],
-          "unitIds": [
-            "retries"
+          "partIds": [
+            "payments",
+            "orders"
           ],
           "workCellId": "feat/one-click-checkout"
         },
         {
           "kind": "commit",
-          "ts": "2026-10-08T11:00:00.000Z",
-          "hash": "c268854ce8ae9a6146149b265f5c77b32cd5124b",
-          "subject": "Cursor pagination for the category endpoint",
-          "branch": "feat/category-speed",
+          "ts": "2026-10-09T10:00:00.000Z",
+          "hash": "5493071d880edbe1070cf5dc78151c4ebcf07e32",
+          "subject": "Resize the autumn photos",
+          "branch": "main",
           "author": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
           },
           "coAuthor": "Claude Opus 5.5",
-          "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
+          "sessionId": "2e58e0c1-ea67-4cd2-8bd3-a55a2fc11779",
           "files": [
-            "src/catalog/listing.ts"
+            "apps/web/src/catalog/photos.ts"
           ],
-          "unitIds": [
-            "category-speed"
-          ],
-          "workCellId": "feat/category-speed"
+          "partIds": [
+            "storefront"
+          ]
         },
         {
-          "kind": "born",
-          "ts": "2026-10-08T11:00:00.000Z",
-          "branch": "feat/category-speed",
+          "kind": "commit",
+          "ts": "2026-10-09T09:00:00.000Z",
+          "hash": "a9193d18bca6be67b0b99f17dbdc53cd109cab7f",
+          "subject": "Fix the setup steps in the readme",
+          "branch": "main",
           "author": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
           },
-          "subject": "feat/category-speed",
-          "unitIds": [
-            "category-speed"
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "f78a71af-8bbf-4cc2-86f3-13549d4da14b",
+          "files": [
+            "README.md"
           ],
-          "workCellId": "feat/category-speed"
+          "partIds": []
         },
         {
-          "kind": "push",
-          "ts": "2026-10-08T12:00:00.000Z",
+          "kind": "commit",
+          "ts": "2026-10-09T07:00:00.000Z",
+          "hash": "eb67269b09a780079280ddddb9834f9c563ac064",
+          "subject": "Mark co01 as in progress",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "files": [
+            "docs/architecture/courier.md"
+          ],
+          "partIds": [
+            "courier"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-08T19:00:00.000Z",
+          "hash": "a416afd1a25570a1ef8b2d118283945d10fded58",
+          "subject": "Store alert subscriptions per product",
+          "branch": "feat/stock-alerts",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "ed487e1e-87c6-45af-89db-011b2903f20f",
+          "files": [
+            "packages/core/src/orders/stock.ts",
+            "packages/notify/templates/stock.tsx"
+          ],
+          "partIds": [
+            "orders",
+            "notifications"
+          ],
+          "workCellId": "feat/stock-alerts"
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-08T17:00:00.000Z",
+          "hash": "c28b10c1bcf41696f17469db98c4021f1c4994d5",
+          "subject": "Alert on checkout errors",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "338908d7-7d67-4385-88ef-234c32233b9c",
+          "files": [
+            "infra/alerts.yml"
+          ],
+          "partIds": [
+            "hosting"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-06T17:00:00.000Z",
+          "hash": "8745dbdbbc3ae1b51d824142e243cc2031f47357",
+          "subject": "Partial refund notes",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "9446aedb-93c9-4b13-8346-b7c917ca9a1f",
+          "files": [
+            "docs/architecture/payments.md"
+          ],
+          "partIds": [
+            "payments"
+          ]
+        },
+        {
+          "kind": "born",
+          "ts": "2026-10-06T15:00:00.000Z",
+          "branch": "feat/typo-search",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "partIds": [
+            "search"
+          ],
+          "workCellId": "feat/typo-search"
+        },
+        {
+          "kind": "born",
+          "ts": "2026-10-05T15:00:00.000Z",
+          "branch": "feat/stock-alerts",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "partIds": [
+            "orders"
+          ],
+          "workCellId": "feat/stock-alerts"
+        },
+        {
+          "kind": "born",
+          "ts": "2026-10-03T15:00:00.000Z",
           "branch": "feat/one-click-checkout",
           "author": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
           },
-          "unitIds": [
-            "one-click"
+          "partIds": [
+            "orders"
           ],
           "workCellId": "feat/one-click-checkout"
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-27T15:00:00.000Z",
+          "hash": "cde106f2767ade444353ebbe1a4f2a876b6c0ce9",
+          "subject": "Weekly revenue chart",
+          "branch": "feat/revenue-chart",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "abf72c05-c8c3-427e-89fb-658e95200455",
+          "files": [
+            "apps/admin/src/home.tsx"
+          ],
+          "partIds": [
+            "admin"
+          ],
+          "workCellId": "feat/revenue-chart"
+        },
+        {
+          "kind": "fused",
+          "ts": "2026-09-27T15:00:00.000Z",
+          "branch": "feat/revenue-chart",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "partIds": [
+            "admin"
+          ],
+          "workCellId": "feat/revenue-chart"
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-21T15:00:00.000Z",
+          "hash": "f13718c35b427731091c2a1b0464267da5d6fa15",
+          "subject": "Magic link sign-in",
+          "branch": "feat/magic-link",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "b40981aa-b759-42c5-82f5-55f50769d878",
+          "files": [
+            "packages/core/src/auth/magic.ts"
+          ],
+          "partIds": [
+            "accounts"
+          ],
+          "workCellId": "feat/magic-link"
+        },
+        {
+          "kind": "fused",
+          "ts": "2026-09-21T15:00:00.000Z",
+          "branch": "feat/magic-link",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "partIds": [
+            "accounts"
+          ],
+          "workCellId": "feat/magic-link"
         }
       ],
       "chats": [
         {
-          "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
-          "title": "Sales dashboard charts",
-          "unitId": "sales-dashboard",
-          "unitSource": "card",
-          "workCellId": null,
-          "workCellSource": "cwd",
+          "sessionId": "3f6deaa7-d502-4b63-8668-8f974fe613ae",
+          "title": "One-click checkout",
+          "partId": "orders",
+          "partSource": "code",
+          "workCellId": "feat/one-click-checkout",
+          "workCellSource": "branch",
           "parentId": null,
-          "status": "closed",
+          "status": "busy",
           "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Add a weekly revenue chart to the admin home page.",
-          "lastAssistantText": "Added the weekly revenue chart with a 12-week window and a table fallback for screen readers. Tests pass.",
+          "live": true,
+          "bridgeUrl": "https://claude.ai/code/session_one-click",
+          "lastPrompt": "Work on or03: split declined cards into retry groups.",
+          "lastAssistantText": "Mapping the provider's decline codes to three groups: retry now, retry later and ask for another card. Tests for the first group pass.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": {
-            "title": "Sales dashboard charts",
-            "doing": "Done",
-            "decided": [
-              "Charts render on the server, no client chart library"
-            ],
-            "area": "Sales dashboard"
+            "title": "One-click checkout",
+            "doing": "Mapping decline codes to three retry groups",
+            "todo": [
+              "Pay button states",
+              "Receipt email"
+            ]
           },
-          "costUSD": 5.2,
+          "costUSD": 14.2,
           "workflows": [],
-          "startedAt": "2026-09-09T15:00:00.000Z",
-          "updatedAt": "2026-09-09T18:00:00.000Z",
+          "startedAt": "2026-10-03T15:00:00.000Z",
+          "updatedAt": "2026-10-09T14:56:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
-          "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
-          "title": "Product page image gallery",
-          "unitId": "gallery",
-          "unitSource": "card",
-          "workCellId": null,
-          "workCellSource": "cwd",
+          "sessionId": "708269ae-0043-498d-8cb3-4d811f4db9a4",
+          "title": "Retry failed payments",
+          "partId": "payments",
+          "partSource": "code",
+          "workCellId": "feat/one-click-checkout",
+          "workCellSource": "branch",
           "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
+          "status": "idle",
+          "entrypoint": "claude-vscode",
+          "live": true,
           "bridgeUrl": null,
-          "lastPrompt": "Make the product gallery swipeable on phones.",
-          "lastAssistantText": "The gallery now supports swipe and keyboard arrows. Thumbnails lazy-load below the fold.",
+          "lastPrompt": "pa01: how many retries before we give up?",
+          "lastAssistantText": "Three retries over 24 hours is the usual pattern. Should a retry also send the customer an email?",
+          "waiting": {
+            "strong": true,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 6.1,
+          "workflows": [],
+          "startedAt": "2026-10-07T15:00:00.000Z",
+          "updatedAt": "2026-10-09T14:10:00.000Z",
+          "archived": false,
+          "chattable": false
+        },
+        {
+          "sessionId": "020f67b1-1f52-4721-8e55-44a99eea3406",
+          "title": "Typo tolerance",
+          "partId": "search",
+          "partSource": "code",
+          "workCellId": "feat/typo-search",
+          "workCellSource": "branch",
+          "parentId": null,
+          "status": "busy",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Make se01 forgive one wrong letter in names.",
+          "lastAssistantText": "Added an edit-distance pass for words longer than four letters; \"jaket\" now finds jackets.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": null,
-          "costUSD": 3.1,
+          "costUSD": 4.4,
           "workflows": [],
-          "startedAt": "2026-09-11T15:00:00.000Z",
-          "updatedAt": "2026-09-11T18:00:00.000Z",
+          "startedAt": "2026-10-06T15:00:00.000Z",
+          "updatedAt": "2026-10-09T14:58:00.000Z",
           "archived": false,
-          "chattable": true
+          "chattable": false
         },
         {
-          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
-          "title": "Password reset emails",
-          "unitId": "password-reset",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
+          "sessionId": "ed487e1e-87c6-45af-89db-011b2903f20f",
+          "title": "Back-in-stock alerts",
+          "partId": "orders",
+          "partSource": "code",
+          "workCellId": "feat/stock-alerts",
+          "workCellSource": "branch",
           "parentId": null,
           "status": "closed",
-          "entrypoint": "cli",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Reset links should expire after 30 minutes.",
-          "lastAssistantText": "Reset tokens now expire after 30 minutes and are single-use. I added a test for the expired case.",
+          "lastPrompt": "Start or02.",
+          "lastAssistantText": "The alert list is stored per product. Which email should send it, the order one or a new template?",
           "waiting": {
             "strong": false,
             "weak": false,
-            "items": []
+            "items": [
+              "Choose the email template for the alert"
+            ]
           },
           "card": null,
-          "costUSD": 2.4,
+          "costUSD": 3.2,
           "workflows": [],
-          "startedAt": "2026-09-13T15:00:00.000Z",
-          "updatedAt": "2026-09-13T18:00:00.000Z",
+          "startedAt": "2026-10-05T15:00:00.000Z",
+          "updatedAt": "2026-10-08T19:00:00.000Z",
           "archived": false,
           "chattable": true
         },
         {
-          "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
-          "title": "Shipping label export",
-          "unitId": "shipping-labels",
-          "unitSource": "ai",
+          "sessionId": "2e58e0c1-ea67-4cd2-8bd3-a55a2fc11779",
+          "title": "Autumn product photos",
+          "partId": "storefront",
+          "partSource": "code",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
           "status": "closed",
-          "entrypoint": "cli",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Export shipping labels as one PDF per day.",
-          "lastAssistantText": "Daily label export is in place: one PDF per day, sorted by carrier.",
+          "lastPrompt": "sf01: resize the new photos.",
+          "lastAssistantText": "Resized 48 photos to three widths and kept the originals. Twelve are still missing alt text.",
           "waiting": {
             "strong": false,
             "weak": false,
@@ -2859,178 +1534,79 @@
           "card": null,
           "costUSD": 2.9,
           "workflows": [],
-          "startedAt": "2026-09-15T15:00:00.000Z",
-          "updatedAt": "2026-09-15T18:00:00.000Z",
+          "startedAt": "2026-10-08T13:00:00.000Z",
+          "updatedAt": "2026-10-09T10:00:00.000Z",
           "archived": false,
           "chattable": true
         },
         {
-          "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-          "title": "Plan one-click checkout",
-          "unitId": "saved-cards",
-          "unitSource": "card",
-          "workCellId": "feat/one-click-checkout",
-          "workCellSource": "card",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Write the proposal for one-click checkout.",
-          "lastAssistantText": "The proposal is in openspec/changes/one-click-checkout with 9 tasks. Saved cards come first, then the button.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": {
-            "title": "Plan one-click checkout",
-            "front": "feat/one-click-checkout",
-            "milestone": "2",
-            "decided": [
-              "Saved cards are tokenized by the payment provider, never stored raw",
-              "One-click only for signed-in customers"
-            ],
-            "estimateUSD": 30,
-            "area": "Saved cards"
-          },
-          "costUSD": 6.4,
-          "workflows": [],
-          "startedAt": "2026-09-16T15:00:00.000Z",
-          "updatedAt": "2026-09-16T20:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
-          "title": "Search result highlighting",
-          "unitId": "highlighting",
-          "unitSource": "ai",
+          "sessionId": "fc166eb8-1361-4f31-879c-d3c83da3bfe0",
+          "title": "Route after a cancelled stop",
+          "partId": "courier",
+          "partSource": "page",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
-          "status": "closed",
+          "status": "idle",
           "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "When a stop is cancelled the route should be recalculated.",
+          "lastAssistantText": "The route is rebuilt from the courier's position. Want me to also tell the next customer their new time?",
+          "waiting": {
+            "strong": false,
+            "weak": true,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 1.8,
+          "workflows": [],
+          "startedAt": "2026-10-09T06:00:00.000Z",
+          "updatedAt": "2026-10-09T12:00:00.000Z",
+          "archived": false,
+          "chattable": false
+        },
+        {
+          "sessionId": "9446aedb-93c9-4b13-8346-b7c917ca9a1f",
+          "title": "Refund rules",
+          "partId": "payments",
+          "partSource": "files",
+          "workCellId": null,
+          "workCellSource": "cwd",
+          "parentId": "708269ae-0043-498d-8cb3-4d811f4db9a4",
+          "status": "closed",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Highlight the matched words in search results.",
-          "lastAssistantText": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes.",
+          "lastPrompt": "Read the refund code and explain partial refunds.",
+          "lastAssistantText": "Partial refunds go through the same provider call with an amount; the admin panel does not offer it yet.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": null,
-          "costUSD": 1.6,
+          "costUSD": 2.2,
           "workflows": [],
-          "startedAt": "2026-09-18T15:00:00.000Z",
-          "updatedAt": "2026-09-18T18:00:00.000Z",
+          "startedAt": "2026-10-06T15:00:00.000Z",
+          "updatedAt": "2026-10-06T17:00:00.000Z",
           "archived": false,
           "chattable": true
         },
         {
-          "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
-          "title": "Variant picker for sizes and colors",
-          "unitId": "variants",
-          "unitSource": "ai",
+          "sessionId": "338908d7-7d67-4385-88ef-234c32233b9c",
+          "title": "Checkout error alert",
+          "partId": "hosting",
+          "partSource": "code",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
           "status": "closed",
-          "entrypoint": "cli",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Out-of-stock variants should look disabled but stay readable.",
-          "lastAssistantText": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 4.8,
-          "workflows": [],
-          "startedAt": "2026-09-20T15:00:00.000Z",
-          "updatedAt": "2026-09-20T21:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
-          "title": "Saved cards with tokenization",
-          "unitId": "saved-cards",
-          "unitSource": "card",
-          "workCellId": "feat/one-click-checkout",
-          "workCellSource": "card",
-          "parentId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Implement saved cards from the plan.",
-          "lastAssistantText": "Saved cards work end to end with the provider sandbox. Tasks 1 to 4 of the proposal are checked off.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": {
-            "title": "Saved cards with tokenization",
-            "front": "feat/one-click-checkout",
-            "doing": "Done",
-            "decided": [
-              "Customers can remove a saved card from their account page"
-            ],
-            "area": "Saved cards"
-          },
-          "costUSD": 9.2,
-          "workflows": [],
-          "startedAt": "2026-09-22T15:00:00.000Z",
-          "updatedAt": "2026-09-22T23:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
-          "title": "Typo-tolerant search proposal",
-          "unitId": "typo",
-          "unitSource": "card",
-          "workCellId": "feat/typo-search",
-          "workCellSource": "card",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Plan typo-tolerant search.",
-          "lastAssistantText": "Proposal written: trigram index on product names, 6 tasks, no new service needed.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 3.3,
-          "workflows": [],
-          "startedAt": "2026-09-24T15:00:00.000Z",
-          "updatedAt": "2026-09-24T18:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
-          "title": "Upgrade the test runner",
-          "unitId": "test-tooling",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Upgrade the test runner to the latest major.",
-          "lastAssistantText": "Upgraded. Two snapshot tests needed new baselines; everything else passed unchanged.",
+          "lastPrompt": "ho02",
+          "lastAssistantText": "The alert fires when more than 1 % of checkouts fail over ten minutes.",
           "waiting": {
             "strong": false,
             "weak": false,
@@ -3039,32 +1615,32 @@
           "card": null,
           "costUSD": 1.1,
           "workflows": [],
-          "startedAt": "2026-09-26T15:00:00.000Z",
-          "updatedAt": "2026-09-26T18:00:00.000Z",
+          "startedAt": "2026-10-08T09:00:00.000Z",
+          "updatedAt": "2026-10-08T17:00:00.000Z",
           "archived": false,
           "chattable": true
         },
         {
-          "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
-          "title": "Order summary redesign",
-          "unitId": "order-summary",
-          "unitSource": "ai",
+          "sessionId": "abf72c05-c8c3-427e-89fb-658e95200455",
+          "title": "Weekly revenue chart",
+          "partId": "admin",
+          "partSource": "code",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
           "status": "closed",
-          "entrypoint": "cli",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "The order summary is too crowded on phones.",
-          "lastAssistantText": "The summary now collapses line items on small screens and keeps the total always visible.",
+          "lastPrompt": "ad01",
+          "lastAssistantText": "Added the weekly revenue chart with a table fallback for screen readers.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": null,
-          "costUSD": 3.7,
+          "costUSD": 5.2,
           "workflows": [],
           "startedAt": "2026-09-27T15:00:00.000Z",
           "updatedAt": "2026-09-27T18:00:00.000Z",
@@ -3072,73 +1648,46 @@
           "chattable": true
         },
         {
-          "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
-          "title": "Sign in with magic link",
-          "unitId": "magic-link",
-          "unitSource": "ai",
-          "workCellId": "feat/magic-link",
-          "workCellSource": "branch",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Add sign in by email link as an option.",
-          "lastAssistantText": "Magic links are live behind a setting. Links expire in 15 minutes and work once.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 4.1,
-          "workflows": [],
-          "startedAt": "2026-09-29T15:00:00.000Z",
-          "updatedAt": "2026-09-29T19:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
-          "title": "Order status timeline",
-          "unitId": "order-timeline",
-          "unitSource": "ai",
-          "workCellId": "feat/order-timeline",
-          "workCellSource": "branch",
-          "parentId": "82deffef-f504-460a-af9d-5690e87ad768",
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Show the customer where their order is.",
-          "lastAssistantText": "The order page now shows a status timeline: paid, packed, shipped, delivered.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 3.4,
-          "workflows": [],
-          "startedAt": "2026-10-02T15:00:00.000Z",
-          "updatedAt": "2026-10-02T18:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
-          "title": "Clean up old feature flags",
-          "unitId": "unsorted",
-          "unitSource": "none",
+          "sessionId": "b40981aa-b759-42c5-82f5-55f50769d878",
+          "title": "Magic link sign-in",
+          "partId": "accounts",
+          "partSource": "files",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
           "status": "closed",
-          "entrypoint": "cli",
+          "entrypoint": "",
           "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Remove feature flags that have been on for months.",
-          "lastAssistantText": "Removed 6 flags that were fully rolled out and deleted their dead branches.",
+          "lastPrompt": "Replace passwords with magic links.",
+          "lastAssistantText": "Magic links are in, valid for 15 minutes and used once.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 7.4,
+          "workflows": [],
+          "startedAt": "2026-09-19T15:00:00.000Z",
+          "updatedAt": "2026-09-21T15:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "89121dc9-9c7d-49ce-8553-a093a2ab29e0",
+          "title": "Backup restore drill",
+          "partId": "data",
+          "partSource": "ai",
+          "workCellId": null,
+          "workCellSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "How would we restore last night's backup?",
+          "lastAssistantText": "Wrote down the four steps. Rui needs to run them on a copy before we can call it tested.",
           "waiting": {
             "strong": false,
             "weak": false,
@@ -3147,231 +1696,194 @@
           "card": null,
           "costUSD": 0.9,
           "workflows": [],
-          "startedAt": "2026-10-03T15:00:00.000Z",
-          "updatedAt": "2026-10-03T18:00:00.000Z",
+          "startedAt": "2026-10-04T15:00:00.000Z",
+          "updatedAt": "2026-10-04T16:00:00.000Z",
           "archived": false,
           "chattable": true
         },
         {
-          "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
-          "title": "Back-in-stock alerts",
-          "unitId": "stock-alerts",
-          "unitSource": "card",
+          "sessionId": "f78a71af-8bbf-4cc2-86f3-13549d4da14b",
+          "title": "Tidy the readme",
+          "partId": null,
+          "partSource": "none",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
-          "status": "idle",
-          "entrypoint": "cli",
-          "live": true,
-          "bridgeUrl": "https://claude.ai/code/demo-bridge-0001",
-          "lastPrompt": "Email customers when a product they watch is back.",
-          "lastAssistantText": "Alerts are queued and sent in batches every 15 minutes. I need one decision before turning them on (see the card).",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": [
-              "Pick the sender address for alert emails"
-            ]
-          },
-          "card": {
-            "title": "Back-in-stock alerts",
-            "doing": "Waiting on the sender address",
-            "todo": [
-              "Turn alerts on in production",
-              "Add an unsubscribe link test"
-            ],
-            "waiting": [
-              "Pick the sender address for alert emails"
-            ],
-            "area": "Back-in-stock alerts"
-          },
-          "costUSD": 2.7,
-          "workflows": [],
-          "startedAt": "2026-10-04T15:00:00.000Z",
-          "updatedAt": "2026-10-07T19:00:00.000Z",
-          "archived": false,
-          "chattable": false
-        },
-        {
-          "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
-          "title": "Fuzzy matching on product names",
-          "unitId": "typo",
-          "unitSource": "ai",
-          "workCellId": "feat/typo-search",
-          "workCellSource": "card",
-          "parentId": null,
-          "status": "idle",
-          "entrypoint": "cli",
-          "live": true,
+          "status": "closed",
+          "entrypoint": "",
+          "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Make \"blu jeens\" find \"blue jeans\".",
-          "lastAssistantText": "Fuzzy matching works on product names with a similarity threshold of 0.3. Want me to also index the brand field, or keep it to names for now?",
-          "waiting": {
-            "strong": false,
-            "weak": true,
-            "items": []
-          },
-          "card": {
-            "title": "Fuzzy matching on product names",
-            "front": "feat/typo-search",
-            "doing": "Tuning the similarity threshold",
-            "todo": [
-              "Index the brand field?",
-              "Benchmark on the full catalog"
-            ],
-            "area": "Typo tolerance"
-          },
-          "costUSD": 4.95,
-          "workflows": [],
-          "startedAt": "2026-10-05T15:00:00.000Z",
-          "updatedAt": "2026-10-07T13:00:00.000Z",
-          "archived": false,
-          "chattable": false
-        },
-        {
-          "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
-          "title": "Retry failed payments",
-          "unitId": "retries",
-          "unitSource": "card",
-          "workCellId": "feat/one-click-checkout",
-          "workCellSource": "card",
-          "parentId": null,
-          "status": "idle",
-          "entrypoint": "claude-vscode",
-          "live": true,
-          "bridgeUrl": null,
-          "lastPrompt": "Handle declined cards more gracefully.",
-          "lastAssistantText": "I mapped the decline codes into three groups. Before writing the retry, I asked you one question.",
-          "waiting": {
-            "strong": true,
-            "weak": false,
-            "items": []
-          },
-          "card": {
-            "title": "Retry failed payments",
-            "front": "feat/one-click-checkout",
-            "doing": "Mapping decline codes to messages",
-            "todo": [
-              "Retry policy",
-              "Customer-facing error copy"
-            ],
-            "area": "Payment retries"
-          },
-          "costUSD": 5.6,
-          "workflows": [],
-          "startedAt": "2026-10-06T15:00:00.000Z",
-          "updatedAt": "2026-10-08T13:00:00.000Z",
-          "archived": false,
-          "chattable": false
-        },
-        {
-          "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
-          "title": "Faster category listing",
-          "unitId": "category-speed",
-          "unitSource": "card",
-          "workCellId": "feat/category-speed",
-          "workCellSource": "branch",
-          "parentId": null,
-          "status": "busy",
-          "entrypoint": "cli",
-          "live": true,
-          "bridgeUrl": null,
-          "lastPrompt": "Category pages take 2 seconds to load. Find out why.",
-          "lastAssistantText": "The listing query scans every variant. Adding cursor pagination and an index on (category_id, created_at).",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": {
-            "title": "Faster category listing",
-            "doing": "Adding cursor pagination to the category endpoint",
-            "todo": [
-              "Cache the first page",
-              "Update listing tests"
-            ],
-            "area": "Category listing speed"
-          },
-          "costUSD": 2.15,
-          "workflows": [
-            {
-              "id": "wf_demo01",
-              "name": "listing-perf",
-              "started": 4,
-              "done": 2,
-              "lastLabel": "Measuring query plans",
-              "updatedAt": "2026-10-08T14:56:00.000Z"
-            }
-          ],
-          "startedAt": "2026-10-07T13:00:00.000Z",
-          "updatedAt": "2026-10-08T14:57:00.000Z",
-          "archived": false,
-          "chattable": false
-        },
-        {
-          "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
-          "title": "Checkout button states",
-          "unitId": "pay-button",
-          "unitSource": "ai",
-          "workCellId": "feat/one-click-checkout",
-          "workCellSource": "guess",
-          "parentId": null,
-          "status": "busy",
-          "entrypoint": "cli",
-          "live": true,
-          "bridgeUrl": null,
-          "lastPrompt": "Add loading and error states to the pay button.",
-          "lastAssistantText": "Working on it: the button now disables while paying and shows the decline message inline.",
+          "lastPrompt": "Fix the setup steps in the readme.",
+          "lastAssistantText": "Updated the setup steps and the list of scripts.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": null,
-          "costUSD": 1.3,
+          "costUSD": 0.6,
           "workflows": [],
-          "startedAt": "2026-10-08T11:00:00.000Z",
-          "updatedAt": "2026-10-08T14:59:00.000Z",
+          "startedAt": "2026-10-09T08:00:00.000Z",
+          "updatedAt": "2026-10-09T09:00:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": true
         }
       ],
-      "roadmap": [
-        {
-          "id": "1",
-          "title": "Catalog basics",
-          "branch": "Launch",
-          "status": "done",
-          "workCellId": null
-        },
-        {
-          "id": "2",
-          "title": "One-click checkout",
-          "branch": "Launch",
-          "status": "open",
-          "workCellId": "feat/one-click-checkout"
-        },
-        {
-          "id": "3",
-          "title": "Typo-tolerant search",
-          "branch": "Launch",
-          "status": "open",
-          "workCellId": "feat/typo-search"
-        },
-        {
-          "id": "4",
-          "title": "Back-in-stock alerts",
-          "branch": "After launch",
-          "status": "open",
-          "workCellId": null
-        }
-      ],
+      "roadmap": null,
       "decisions": [
         {
           "kind": "clash",
-          "text": "Ana Lima and Rui Costa both change src/products/query.ts",
+          "text": "Rui Costa (feat/stock-alerts) and Rui Costa (feat/typo-search) touch the same file: apps/web/src/pages/product.tsx",
           "projectId": "acme-shop-8324f1",
-          "sessionId": null
+          "sessionId": null,
+          "workCellIds": [
+            "feat/stock-alerts",
+            "feat/typo-search"
+          ],
+          "branches": [
+            "feat/stock-alerts",
+            "feat/typo-search"
+          ],
+          "owners": [
+            "Rui Costa",
+            "Rui Costa"
+          ],
+          "files": [
+            "apps/web/src/pages/product.tsx"
+          ],
+          "sameOwner": true
+        },
+        {
+          "kind": "item",
+          "text": "Export my data button",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "accounts",
+          "code": "ac03",
+          "status": "todo",
+          "who": "Ana and Claude",
+          "weight": "important",
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Review the privacy policy wording",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "accounts",
+          "code": "ac04",
+          "status": "todo",
+          "who": "with Rui",
+          "weight": null,
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Pick who can issue refunds",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "admin",
+          "code": "ad03",
+          "status": "todo",
+          "who": "with Rui",
+          "weight": null,
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Test a full restore from last night's backup",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "data",
+          "code": "da01",
+          "status": "todo",
+          "who": "with Rui",
+          "weight": "blocks",
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Back-in-stock alerts",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "orders",
+          "code": "or02",
+          "status": "doing",
+          "who": "Rui and Claude",
+          "weight": null,
+          "milestone": "5"
+        },
+        {
+          "kind": "item",
+          "text": "One-click checkout with a saved card",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "orders",
+          "code": "or03",
+          "status": "doing",
+          "who": "Ana and Claude",
+          "weight": "blocks",
+          "milestone": "4"
+        },
+        {
+          "kind": "item",
+          "text": "Decide the free-shipping threshold",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "orders",
+          "code": "or05",
+          "status": "todo",
+          "who": "with Ana",
+          "weight": "important",
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Pick the second card provider",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "payments",
+          "code": "pa03",
+          "status": "todo",
+          "who": "with Ana",
+          "weight": null,
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Typo tolerance for product names",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "search",
+          "code": "se01",
+          "status": "doing",
+          "who": "Rui and Claude",
+          "weight": null,
+          "milestone": null
+        },
+        {
+          "kind": "item",
+          "text": "Real product photos for the autumn range",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "storefront",
+          "code": "sf01",
+          "status": "doing",
+          "who": "Ana and Claude",
+          "weight": null,
+          "milestone": "4"
+        },
+        {
+          "kind": "item",
+          "text": "Approve the cookie banner text",
+          "projectId": "acme-shop-8324f1",
+          "sessionId": null,
+          "partId": "storefront",
+          "code": "sf04",
+          "status": "todo",
+          "who": "with Ana",
+          "weight": "blocks",
+          "milestone": null
         }
       ],
       "skills": [
@@ -3384,739 +1896,62 @@
           "command": "/deploy-preview"
         },
         {
-          "name": "release-notes",
-          "description": "Drafts release notes from merged commits since the last tag.",
-          "origin": "user",
-          "plugin": null,
-          "enabled": true,
-          "command": "/release-notes"
-        },
-        {
-          "name": "map",
-          "description": "Opens the session map for this machine.",
+          "name": "architecture",
+          "description": "Keeps the architecture map of the project true: new items, items in progress, items done.",
           "origin": "plugin",
           "plugin": "session-map",
           "enabled": true,
-          "command": "/session-map:map"
+          "command": "/session-map:architecture"
         }
       ],
       "cost": {
-        "today": 9.05,
-        "d7": 21,
-        "d30": 68.8
+        "today": 9.6,
+        "d7": 41.3,
+        "d30": 52.6
       }
     },
     {
-      "id": "notes-app-88910d",
+      "id": "notes-app-1b2c3d",
       "name": "notes-app",
       "root": "/home/dev/code/notes-app",
       "mainBranch": "main",
       "fetchedAt": null,
-      "units": [
-        {
-          "id": "writing",
-          "level": "tissue",
-          "parentId": null,
-          "name": "Writing",
-          "purpose": "Typing and shaping text inside a note.",
-          "tags": [
-            "editor",
-            "markdown"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/editor/",
-            "src/sync/"
-          ],
-          "nucleus": {
-            "state": "Writing feels complete; tables are being added now.",
-            "decided": [
-              "Undo history capped at 200 steps per note",
-              "Shortcuts follow common Markdown"
-            ],
-            "todo": [
-              "Paste tables from spreadsheets",
-              "Paste a table from a spreadsheet"
-            ],
-            "recent": [
-              {
-                "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",
-                "title": "Table editing",
-                "date": "2026-10-08",
-                "line": "Adding row and column controls that appear on hover and on focus for keyboard users."
-              },
-              {
-                "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
-                "title": "Undo history across sessions",
-                "date": "2026-09-28",
-                "line": "Undo history is saved per note, capped at 200 steps."
-              },
-              {
-                "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
-                "title": "Markdown shortcuts",
-                "date": "2026-09-17",
-                "line": "Markdown shortcuts for headings, lists and quotes are in."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 3,
-            "commits": 2,
-            "decisions": 2
-          },
-          "status": "active",
-          "bornAt": "2026-09-28T19:00:00.000Z"
-        },
-        {
-          "id": "md-shortcuts",
-          "level": "cell",
-          "parentId": "writing",
-          "name": "Markdown shortcuts",
-          "purpose": "Headings, lists and quotes as you type.",
-          "tags": [
-            "editor",
-            "markdown",
-            "keyboard"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/editor/shortcuts.ts"
-          ],
-          "nucleus": {
-            "state": "Markdown shortcuts for headings, lists and quotes are in.",
-            "decided": [
-              "Shortcuts follow common Markdown"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
-                "title": "Markdown shortcuts",
-                "date": "2026-09-17",
-                "line": "Markdown shortcuts for headings, lists and quotes are in."
-              }
-            ]
-          },
-          "chatIds": [
-            "9bbd1771-b8fe-432a-a31d-b0d11e7763b5"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-17T15:00:00.000Z"
-        },
-        {
-          "id": "undo",
-          "level": "cell",
-          "parentId": "writing",
-          "name": "Undo history",
-          "purpose": "Undo that survives closing the app.",
-          "tags": [
-            "editor",
-            "history",
-            "storage"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/editor/history.ts",
-            "src/sync/store.ts"
-          ],
-          "nucleus": {
-            "state": "Undo history is saved per note, capped at 200 steps.",
-            "decided": [
-              "Undo history capped at 200 steps per note"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
-                "title": "Undo history across sessions",
-                "date": "2026-09-28",
-                "line": "Undo history is saved per note, capped at 200 steps."
-              }
-            ]
-          },
-          "chatIds": [
-            "76d24210-7faa-46a5-a0d3-499e901e5508"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-28T15:00:00.000Z"
-        },
-        {
-          "id": "tables",
-          "level": "cell",
-          "parentId": "writing",
-          "name": "Table editing",
-          "purpose": "Tables with row and column controls.",
-          "tags": [
-            "editor",
-            "tables"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [],
-          "nucleus": {
-            "state": "Row and column controls",
-            "decided": [],
-            "todo": [
-              "Paste a table from a spreadsheet"
-            ],
-            "recent": [
-              {
-                "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",
-                "title": "Table editing",
-                "date": "2026-10-08",
-                "line": "Adding row and column controls that appear on hover and on focus for keyboard users."
-              }
-            ]
-          },
-          "chatIds": [
-            "a045e45d-84e1-470e-a3e8-94fb7e2e985d"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 0,
-            "decisions": 0
-          },
-          "status": "active",
-          "bornAt": "2026-10-08T10:00:00.000Z"
-        },
-        {
-          "id": "sync",
-          "level": "tissue",
-          "parentId": null,
-          "name": "Sync",
-          "purpose": "Notes stay the same on every device.",
-          "tags": [
-            "sync",
-            "offline"
-          ],
-          "origin": "seed",
-          "pinned": false,
-          "paths": [
-            "src/sync/"
-          ],
-          "nucleus": {
-            "state": "Offline edits replay in order; conflicts keep both versions.",
-            "decided": [
-              "Merge by paragraph, never drop text",
-              "Replay edits in the order they were made"
-            ],
-            "todo": [
-              "Show who edited what"
-            ],
-            "recent": [
-              {
-                "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
-                "title": "Conflict resolution rules",
-                "date": "2026-10-06",
-                "line": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side."
-              },
-              {
-                "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
-                "title": "Offline queue for edits",
-                "date": "2026-09-21",
-                "line": "Offline edits now go to a local queue and replay in order when the connection returns."
-              }
-            ]
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 2,
-            "commits": 3,
-            "decisions": 2
-          },
-          "status": "idle",
-          "bornAt": "2026-10-06T20:00:00.000Z"
-        },
-        {
-          "id": "offline-queue",
-          "level": "cell",
-          "parentId": "sync",
-          "name": "Offline queue",
-          "purpose": "Edits made offline replay in order.",
-          "tags": [
-            "sync",
-            "offline",
-            "queue"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/sync/queue.ts"
-          ],
-          "nucleus": {
-            "state": "Offline edits now go to a local queue and replay in order when the connection returns.",
-            "decided": [
-              "Replay edits in the order they were made"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
-                "title": "Offline queue for edits",
-                "date": "2026-09-21",
-                "line": "Offline edits now go to a local queue and replay in order when the connection returns."
-              }
-            ]
-          },
-          "chatIds": [
-            "93f04f6b-fae1-4642-a92f-17434e88ccfe"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-21T15:00:00.000Z"
-        },
-        {
-          "id": "conflicts",
-          "level": "cell",
-          "parentId": "sync",
-          "name": "Conflict rules",
-          "purpose": "Two devices edit the same paragraph: keep both.",
-          "tags": [
-            "sync",
-            "merge",
-            "conflicts"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/sync/merge.ts"
-          ],
-          "nucleus": {
-            "state": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side.",
-            "decided": [
-              "Merge by paragraph, never drop text"
-            ],
-            "todo": [],
-            "recent": [
-              {
-                "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
-                "title": "Conflict resolution rules",
-                "date": "2026-10-06",
-                "line": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side."
-              }
-            ]
-          },
-          "chatIds": [
-            "cdf96840-4345-4c47-a456-760099458a24"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-10-06T15:00:00.000Z"
-        },
-        {
-          "id": "share-links",
-          "level": "cell",
-          "parentId": null,
-          "name": "Share links",
-          "purpose": "Read-only links that can be revoked.",
-          "tags": [
-            "sharing",
-            "links",
-            "privacy"
-          ],
-          "origin": "ai",
-          "pinned": false,
-          "paths": [
-            "src/share/links.ts"
-          ],
-          "nucleus": {
-            "state": "Share links are read-only by default and can be revoked from the note menu.",
-            "decided": [
-              "Links are read-only by default"
-            ],
-            "todo": [
-              "Comment-only links"
-            ],
-            "recent": [
-              {
-                "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
-                "title": "Read-only share links",
-                "date": "2026-09-30",
-                "line": "Share links are read-only by default and can be revoked from the note menu."
-              }
-            ]
-          },
-          "chatIds": [
-            "8c0f5f1c-de23-4452-abb6-8fccb981c5f7"
-          ],
-          "workCellIds": [],
-          "work": {
-            "chats": 1,
-            "commits": 1,
-            "decisions": 1
-          },
-          "status": "idle",
-          "bornAt": "2026-09-30T15:00:00.000Z"
-        },
-        {
-          "id": "unsorted",
-          "level": "cell",
-          "parentId": null,
-          "name": "Unsorted",
-          "purpose": "Conversations the AI has not read yet.",
-          "tags": [],
-          "origin": "seed",
-          "pinned": false,
-          "paths": [],
-          "nucleus": {
-            "state": "Nothing waiting to be read.",
-            "decided": [],
-            "todo": [],
-            "recent": []
-          },
-          "chatIds": [],
-          "workCellIds": [],
-          "work": {
-            "chats": 0,
-            "commits": 0,
-            "decisions": 0
-          },
-          "status": "idle",
-          "bornAt": "2026-09-17T15:00:00.000Z"
-        }
-      ],
-      "unitLinks": [
-        {
-          "a": "writing",
-          "b": "sync",
-          "weight": 2,
-          "since": "2026-09-28T15:00:00.000Z",
-          "reasons": [
-            {
-              "kind": "shared-chat",
-              "text": "Undo history is stored per note and synced with it.",
-              "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508"
-            },
-            {
-              "kind": "meaning",
-              "text": "Both protect what was written (history, merge)."
-            }
-          ]
-        }
-      ],
-      "workCells": [],
-      "ai": {
-        "enabled": true,
-        "model": "haiku",
-        "spentUSDToday": 0.01,
-        "queue": 0,
-        "bootstrap": {
-          "done": 4,
-          "total": 6,
-          "estimatedUSD": 0.02
-        }
+      "tunnelUrl": null,
+      "arch": {
+        "source": "none",
+        "dir": null,
+        "lang": "en",
+        "layers": [],
+        "parts": [],
+        "links": []
       },
+      "workCells": [],
+      "ai": null,
       "activity": [
         {
           "kind": "commit",
-          "ts": "2026-09-17T17:00:00.000Z",
-          "hash": "eebbe12886db307dfb995dceaacfa95d2b738997",
-          "subject": "Markdown shortcuts for headings, lists and quotes",
+          "ts": "2026-10-09T14:10:00.000Z",
+          "hash": "76ce1fb97ab7e8b09f45d1c2ddd1e895d05f368b",
+          "subject": "Sync by paragraph",
           "branch": "main",
           "author": {
             "name": "Ana Lima",
             "email": "ana.lima@example.com"
           },
           "coAuthor": "Claude Opus 5.5",
-          "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
           "files": [
-            "src/editor/shortcuts.ts"
+            "src/sync.ts"
           ],
-          "unitIds": [
-            "md-shortcuts"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-21T19:00:00.000Z",
-          "hash": "ce4929ae0990b829b4575b305ef5acc296766d8d",
-          "subject": "Offline edit queue with ordered replay",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
-          "files": [
-            "src/sync/queue.ts"
-          ],
-          "unitIds": [
-            "offline-queue"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-09-22T15:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "writing",
-            "sync"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-28T17:00:00.000Z",
-          "hash": "0164dbbd911dbabe16a4a33793c8aff7835b0613",
-          "subject": "Persist undo history per note",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "coAuthor": "Claude Haiku 4.5",
-          "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
-          "files": [
-            "src/editor/history.ts",
-            "src/sync/store.ts"
-          ],
-          "unitIds": [
-            "undo",
-            "sync"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-09-28T19:00:00.000Z",
-          "subject": "Grouped Markdown shortcuts and Undo history into Writing",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "writing",
-            "md-shortcuts",
-            "undo"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-09-30T17:00:00.000Z",
-          "hash": "d67a4638c9209ad73bd3c03113c3e980f8424094",
-          "subject": "Read-only share links with revoke",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
-          "files": [
-            "src/share/links.ts"
-          ],
-          "unitIds": [
-            "share-links"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-10-01T15:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Ana Lima",
-            "email": "ana.lima@example.com"
-          },
-          "unitIds": [
-            "writing",
-            "sync",
-            "share-links"
-          ]
-        },
-        {
-          "kind": "commit",
-          "ts": "2026-10-06T18:00:00.000Z",
-          "hash": "e7ccf1c1b275ca9f123f7aba55f7b6fbd91fa610",
-          "subject": "Paragraph-level merge on conflicts",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "coAuthor": "Claude Opus 5.5",
-          "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
-          "files": [
-            "src/sync/merge.ts"
-          ],
-          "unitIds": [
-            "conflicts"
-          ]
-        },
-        {
-          "kind": "grouped",
-          "ts": "2026-10-06T20:00:00.000Z",
-          "subject": "Grouped Offline queue and Conflict rules into Sync",
-          "branch": "main",
-          "author": {
-            "name": "Claude Haiku 4.5",
-            "email": ""
-          },
-          "unitIds": [
-            "sync",
-            "offline-queue",
-            "conflicts"
-          ]
-        },
-        {
-          "kind": "push",
-          "ts": "2026-10-07T10:00:00.000Z",
-          "branch": "main",
-          "author": {
-            "name": "Rui Costa",
-            "email": "rui.costa@example.com"
-          },
-          "unitIds": [
-            "sync"
-          ]
+          "partIds": [],
+          "sessionId": "deb21728-6087-44f1-899e-db53680b6d3b"
         }
       ],
       "chats": [
         {
-          "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
-          "title": "Markdown shortcuts",
-          "unitId": "md-shortcuts",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Typing ## should start a heading.",
-          "lastAssistantText": "Markdown shortcuts for headings, lists and quotes are in. Undo reverts the shortcut, not the text.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 2.2,
-          "workflows": [],
-          "startedAt": "2026-09-17T15:00:00.000Z",
-          "updatedAt": "2026-09-17T18:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
-          "title": "Offline queue for edits",
-          "unitId": "offline-queue",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Edits made offline get lost.",
-          "lastAssistantText": "Offline edits now go to a local queue and replay in order when the connection returns.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 5.4,
-          "workflows": [],
-          "startedAt": "2026-09-21T15:00:00.000Z",
-          "updatedAt": "2026-09-21T21:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
-          "title": "Undo history across sessions",
-          "unitId": "undo",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Keep undo history after reopening a note.",
-          "lastAssistantText": "Undo history is saved per note, capped at 200 steps.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 3.6,
-          "workflows": [],
-          "startedAt": "2026-09-28T15:00:00.000Z",
-          "updatedAt": "2026-09-28T18:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
-          "title": "Read-only share links",
-          "unitId": "share-links",
-          "unitSource": "ai",
-          "workCellId": null,
-          "workCellSource": "cwd",
-          "parentId": null,
-          "status": "closed",
-          "entrypoint": "cli",
-          "live": false,
-          "bridgeUrl": null,
-          "lastPrompt": "Let people share a note as read-only.",
-          "lastAssistantText": "Share links are read-only by default and can be revoked from the note menu.",
-          "waiting": {
-            "strong": false,
-            "weak": false,
-            "items": []
-          },
-          "card": null,
-          "costUSD": 2.8,
-          "workflows": [],
-          "startedAt": "2026-09-30T15:00:00.000Z",
-          "updatedAt": "2026-09-30T18:00:00.000Z",
-          "archived": false,
-          "chattable": true
-        },
-        {
-          "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
-          "title": "Conflict resolution rules",
-          "unitId": "conflicts",
-          "unitSource": "ai",
+          "sessionId": "deb21728-6087-44f1-899e-db53680b6d3b",
+          "title": "Sync notes between devices",
+          "partId": null,
+          "partSource": "none",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
@@ -4124,72 +1959,83 @@
           "entrypoint": "cli",
           "live": true,
           "bridgeUrl": null,
-          "lastPrompt": "Two devices edited the same note. What happens?",
-          "lastAssistantText": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side.",
+          "lastPrompt": "Notes written offline should sync when the phone is back online.",
+          "lastAssistantText": "Sync now merges by paragraph. Should a conflict keep both versions or ask?",
+          "waiting": {
+            "strong": true,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 2.4,
+          "workflows": [],
+          "startedAt": "2026-10-09T07:00:00.000Z",
+          "updatedAt": "2026-10-09T14:20:00.000Z",
+          "archived": false,
+          "chattable": false
+        },
+        {
+          "sessionId": "811d8a9f-e167-44d8-88d7-01fbb7666c38",
+          "title": "Tags in the sidebar",
+          "partId": null,
+          "partSource": "none",
+          "workCellId": null,
+          "workCellSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Show tags in the sidebar.",
+          "lastAssistantText": "Tags are listed by use, most used first.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
           "card": null,
-          "costUSD": 3.9,
+          "costUSD": 1.2,
           "workflows": [],
-          "startedAt": "2026-10-06T15:00:00.000Z",
-          "updatedAt": "2026-10-07T09:00:00.000Z",
+          "startedAt": "2026-10-07T15:00:00.000Z",
+          "updatedAt": "2026-10-07T16:00:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": true
         },
         {
-          "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",
-          "title": "Table editing",
-          "unitId": "tables",
-          "unitSource": "card",
+          "sessionId": "cc8f905f-33b4-4b32-8ae1-ed3c0c26b9d2",
+          "title": "Export to Markdown",
+          "partId": null,
+          "partSource": "none",
           "workCellId": null,
           "workCellSource": "cwd",
           "parentId": null,
-          "status": "busy",
-          "entrypoint": "cli",
-          "live": true,
+          "status": "closed",
+          "entrypoint": "",
+          "live": false,
           "bridgeUrl": null,
-          "lastPrompt": "Tables need add-row and add-column buttons.",
-          "lastAssistantText": "Adding row and column controls that appear on hover and on focus for keyboard users.",
+          "lastPrompt": "Export a notebook to Markdown files.",
+          "lastAssistantText": "Each note becomes one .md file in a zip.",
           "waiting": {
             "strong": false,
             "weak": false,
             "items": []
           },
-          "card": {
-            "title": "Table editing",
-            "doing": "Row and column controls",
-            "todo": [
-              "Paste a table from a spreadsheet"
-            ],
-            "area": "Table editing"
-          },
-          "costUSD": 1.75,
+          "card": null,
+          "costUSD": 0.8,
           "workflows": [],
-          "startedAt": "2026-10-08T10:00:00.000Z",
-          "updatedAt": "2026-10-08T14:58:00.000Z",
+          "startedAt": "2026-09-30T15:00:00.000Z",
+          "updatedAt": "2026-09-30T16:00:00.000Z",
           "archived": false,
-          "chattable": false
+          "chattable": true
         }
       ],
       "roadmap": null,
       "decisions": [],
-      "skills": [
-        {
-          "name": "map",
-          "description": "Opens the session map for this machine.",
-          "origin": "plugin",
-          "plugin": "session-map",
-          "enabled": true,
-          "command": "/session-map:map"
-        }
-      ],
+      "skills": [],
       "cost": {
-        "today": 1.75,
-        "d7": 5.65,
-        "d30": 19.65
+        "today": 2.4,
+        "d7": 3.6,
+        "d30": 4.4
       }
     }
   ]

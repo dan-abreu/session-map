@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { chatLog } from './views.js';
+import { chatLog, pcModeOffer } from './views.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'text', 'tool', 'permission', 'turn-end', 'error'];
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
@@ -12,8 +12,9 @@ const browserStorage = () => {
 
 // The chat that runs through the person's own claude CLI (desenho-2 § 22). One conversation at a time in the sheet.
 // ctx: root (the sheet), h, t (translator getter), toast, errorText, onSession (a new conversation got its id),
-// storage (where the open conversation is kept for a reload), relative (a date as "5 min ago").
-export function createChat({ root, h, t, toast, errorText, onSession, onClose, storage = browserStorage(), relative = () => '' }) {
+// onPcMode(mode) (the person asked to use the mode on the whole PC), storage (where the open conversation is kept for
+// a reload), relative (a date as "5 min ago").
+export function createChat({ root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), relative = () => '' }) {
   const q = (sel) => root.querySelector(sel);
   const logEl = q('#chatLog');
   const form = q('#chatForm');
@@ -23,6 +24,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, s
   const modeEl = q('#chatMode');
   const listEl = q('#chatList');
   const noteEl = q('#chatNote');
+  const pcBtn = q('#chatPcMode');
   let context = null;
   let key = null;
   let sessionId = null;
@@ -125,6 +127,9 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, s
     const tt = t();
     modeEl.replaceChildren(...MODES.map((m) => h('option', { value: m }, m === 'settings' ? tt('chat.mode.settings', { mode: modeName(settings?.mode ?? 'default') }) : modeName(m))));
     modeEl.value = choice;
+    const offer = pcModeOffer(choice, null);
+    pcBtn.disabled = !offer.mode;
+    pcBtn.title = offer.mode ? tt('pcmode.hint') : tt('pcmode.pickFirst');
     noteEl.hidden = !settings?.downgraded;
     noteEl.textContent = settings?.downgraded ? tt('chat.downgraded') : '';
   }
@@ -163,9 +168,13 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, s
     return undefined;
   }
 
-  // The conversations the page opened on this unit (or branch), and what the person's Claude settings say.
+  // The conversations the page opened on this point of the map (or branch), and what the person's Claude settings say.
   async function loadList(ctx) {
-    const scope = ctx.start?.unitId ? { unitId: ctx.start.unitId } : ctx.start?.workCellId ? { workCellId: ctx.start.workCellId } : {};
+    const node = ctx.start?.node;
+    let scope = {};
+    if (node?.kind === 'idea' || node?.kind === 'create-arch') scope = { kind: node.kind };
+    else if (node?.partId) scope = { partId: node.partId, ...(node.kind === 'item' && node.code ? { code: node.code } : {}) };
+    else if (ctx.start?.workCellId) scope = { workCellId: ctx.start.workCellId };
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
     if (context !== ctx || !res.ok) return;
     settings = res.settings ?? null;
@@ -216,10 +225,12 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, s
   // The choice is per conversation: a running one switches now, otherwise it goes with the next message.
   modeEl.addEventListener('change', async () => {
     choice = MODES.includes(modeEl.value) ? modeEl.value : 'settings';
+    renderMode();
     if (!key || log?.ended) return;
     const res = await api.chatMode(key, choice);
     if (!res.ok) toast(errorText(res.error));
   });
+  pcBtn.addEventListener('click', () => { if (!pcBtn.disabled) onPcMode?.(choice); });
   q('[data-close="chat"]').addEventListener('click', () => close());
 
   function open(ctx) {
@@ -236,6 +247,7 @@ export function createChat({ root, h, t, toast, errorText, onSession, onClose, s
     q('#chatTitle').textContent = ctx.title;
     q('#chatContext').textContent = ctx.subtitle ?? '';
     input.placeholder = t()('chat.placeholder');
+    input.value = ctx.draft ?? '';
     root.hidden = false;
     renderMode();
     render();

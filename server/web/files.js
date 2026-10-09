@@ -1,12 +1,12 @@
 import { api } from './api.js';
-import { filesByFolder } from './body.js';
+import { filesByFolder } from './tree.js';
 import { changedLines } from './views.js';
 
 const LIST_TTL_MS = 30_000;
 // ponytail: a 1 MB file can have tens of thousands of lines; the page draws them in slices. Virtual scrolling when someone needs it.
 const SLICE = 1500;
 
-// Read-only files of a unit or a branch (desenho-2 § 29): a folder tree in the panel and a viewer that marks the lines the branch changed.
+// Read-only files of a part or a branch (desenho-2 § 29): a folder tree in the panel and a viewer that marks the lines the branch changed.
 // ctx: dialog (the viewer), h, t (translator getter), toast, errorText, project (getter of the current project).
 export function createFiles({ dialog, h, t, toast, errorText, project }) {
   const lists = new Map();
@@ -24,7 +24,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
       })))));
   }
 
-  // scope: {workCell, files} (the branch's own list, already in the state) or {unit} (asked from the server, kept for a while).
+  // scope: {workCell, files} (the branch's own list, already in the state) or {part} (asked from the server, kept for a while).
   function tree(scope) {
     const el = h('div', { class: 'files-tree' });
     const draw = (files) => el.replaceChildren(files.length ? rows(files, (f) => open(f.path, f.workCell ?? scope.workCell)) : h('p', { class: 'muted' }, t()('files.empty')));
@@ -32,12 +32,12 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
       draw(scope.files);
       return el;
     }
-    const key = `${project().id}|${scope.unit}`;
+    const key = `${project().id}|${scope.part}`;
     const hit = lists.get(key);
     if (hit) draw(hit.files);
     else el.replaceChildren(h('p', { class: 'muted' }, t()('files.loading')));
     if (!hit || Date.now() - hit.at > LIST_TTL_MS) {
-      api.files(project().id, { unit: scope.unit }).then((res) => {
+      api.files(project().id, { part: scope.part }).then((res) => {
         if (!res.ok) return hit ? undefined : el.replaceChildren(h('p', { class: 'muted' }, errorText(res.error)));
         lists.set(key, { at: Date.now(), files: res.files });
         return draw(res.files);
@@ -46,13 +46,14 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
     return el;
   }
 
-  async function open(path, workCell) {
+  // line: an item's line in its part file, shown and marked like a changed one.
+  async function open(path, workCell, { line = null } = {}) {
     const res = await api.file(project().id, path, workCell);
     if (!res.ok) {
       toast(errorText(res.error));
       return;
     }
-    view(path, workCell, res);
+    view(path, workCell, line ? { ...res, changes: [{ from: line, to: line }], itemLine: line } : res);
   }
 
   function view(path, workCell, file) {
@@ -82,7 +83,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
       h('div', { class: 'file-head' },
         h('div', {},
           h('h2', { id: 'fileTitle' }, h('code', {}, path)),
-          h('p', { class: 'meta' }, `${tt('files.readOnly')} · ${tt('files.lines', { n: file.lines })} · ${file.changes.length ? tt('files.changes') : tt('files.noChanges')}`)),
+          h('p', { class: 'meta' }, `${tt('files.readOnly')} · ${tt('files.lines', { n: file.lines })} · ${file.itemLine ? tt('files.itemLine', { n: file.itemLine }) : file.changes.length ? tt('files.changes') : tt('files.noChanges')}`)),
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn primary', onclick: openInVscode, title: tt('files.fromPhone') }, tt('files.openVscode')),
           h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, tt('files.close')))),
@@ -91,5 +92,5 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
     code.querySelector('.is-changed')?.scrollIntoView({ block: 'center' });
   }
 
-  return { tree, close: () => dialog.close() };
+  return { tree, open, close: () => dialog.close() };
 }

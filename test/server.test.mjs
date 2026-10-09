@@ -62,7 +62,7 @@ test('locally the page and an empty state open without a token', async () => {
     const body = JSON.parse(state.text);
     assert.deepEqual(body.projects, []);
     assert.equal(body.waitingCount, 0);
-    assert.equal((await call('GET', '/vendor/d3-force.min.js')).status, 200);
+    assert.equal((await call('GET', '/vendor/d3-zoom.min.js')).status, 200);
     assert.equal((await call('GET', '/static/app.js')).status, 200);
     assert.equal((await call('GET', '/../package.json')).status, 404);
   });

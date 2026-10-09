@@ -1,20 +1,22 @@
 import { LANGS, pickLang, translator } from './i18n.js';
-import { createBrain, neuronKind, isUnsure } from './brain.js';
-import { unitTree, ownerHue, initial, collapseBots, BOTS_ID } from './body.js';
+import {
+  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, liveNodes, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial,
+} from './tree.js';
+import { createMindmap } from './mindmap.js';
+import { createOutline } from './outline.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
-import { structureKey, lifeEventsSince, nameAt, visibleProject, chatButtons, bootstrapOf, unitMoves, waitingEntries, waitingCounts, clashWords, safeTunnel } from './views.js';
+import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
-const PLAY_MS = 9000;
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
-const MARK_KINDS = ['born', 'fused', 'grouped', 'fused-by-meaning', 'renamed'];
-const AI_KINDS = new Set(['grouped', 'fused-by-meaning', 'renamed']);
-const VIEWS = ['brain', 'map', 'board', 'history', 'costs', 'discover'];
+const VIEWS = ['map', 'board', 'history', 'costs', 'discover'];
+const RANGES = ['all', 'today', 'd7', 'd30'];
+const SEARCH_MAX = 8;
 
 const store = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },
@@ -25,14 +27,17 @@ let lang = pickLang(store.get('sm.lang'), navigator.language);
 let t = translator(lang);
 let state = null;
 let project = null; // the project as the server sent it
-let shown = null; // the same, minus archived chats unless asked: what the brain draws
+let shown = null; // the same, minus archived chats unless asked
 let tree = null;
+let open = new Set();
 let selection = null;
-let view = 'brain';
-let tMin = 0, tMax = 0, tNow = 0;
-let playing = 0;
+let view = 'map';
 let showArchived = store.get('sm.archived') === '1';
-// While the person types in a panel form, polling must not redraw it under their fingers.
+let changedRange = RANGES.includes(store.get('sm.changed')) ? store.get('sm.changed') : 'all';
+let relationsOn = store.get('sm.relations') === '1';
+let query = '';
+let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
+// While the person types in a panel, polling must not redraw it under their fingers.
 let editing = false;
 
 function h(tag, attrs = {}, ...children) {
@@ -50,14 +55,13 @@ function h(tag, attrs = {}, ...children) {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const svgEl = (tag, attrs) => {
-  const el = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
-};
 const icon = (name, cls) => {
-  const el = svgEl('svg', { class: cls, 'aria-hidden': 'true' });
-  el.append(svgEl('use', { href: `#i-${name}` }));
+  const el = document.createElementNS(SVG_NS, 'svg');
+  el.setAttribute('class', cls);
+  el.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', `#i-${name}`);
+  el.append(use);
   return el;
 };
 
@@ -87,24 +91,21 @@ function errorText(code) {
   return key in LANGS.en ? t(key) : t('err.generic');
 }
 
-const unitName = (u) => (u.id === 'unsorted' ? t('unit.unsorted') : u.name);
-const statusWord = (s) => t(`status.${s}`);
-const unitById = (id) => tree?.byId.get(id);
-const workCellById = (id) => project.workCells.find((w) => w.id === id)
-  ?? (id === BOTS_ID ? collapseBots(project.workCells).find((w) => w.id === BOTS_ID) : undefined);
-// The brain shows every bot branch of a project as one cell; the lists and the panels keep them apart.
-const forBrain = (p) => ({ ...p, workCells: collapseBots(p.workCells) });
-const botsLabel = (w) => t.count('wc.bots', w.bots.length);
 const chatById = (id) => project.chats.find((c) => c.sessionId === id);
-const subtree = (u) => [u, ...tree.descendants(u.id)];
+const workCellById = (id) => project.workCells.find((w) => w.id === id);
+const partById = (id) => project.arch.parts.find((p) => p.id === id);
+const hasMap = () => project.arch.parts.length > 0;
+const isPerson = (who) => Boolean(who) && who.trim().toLowerCase() !== 'claude';
+const itemNodeId = (partId, code) => `i:${partId}:${code}`;
 
 function applyStaticText() {
   document.documentElement.lang = lang;
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
   for (const el of document.querySelectorAll('[data-i18n-title]')) el.setAttribute('title', t(el.dataset.i18nTitle));
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
   for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
-  setPlayIcon();
+  renderChanged();
   discover?.relabel();
   chat?.relabel();
 }
@@ -118,7 +119,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-// A real <dialog> for the two irreversible actions (Stop a conversation, Delete from history).
+// A real <dialog> for the irreversible actions (Stop a conversation, Delete from history).
 function confirmAction(text, label) {
   const dialog = $('#confirmDialog');
   return new Promise((resolve) => {
@@ -134,104 +135,203 @@ function confirmAction(text, label) {
   });
 }
 
+const joinDots = (parts) => parts.flatMap((p, i) => (i ? [h('span', { class: 'sep', 'aria-hidden': 'true' }, '·'), p] : [p]));
+const pill = (tone, text) => h('span', { class: `pill tone-${tone}` }, h('span', { class: 'pill-dot', 'aria-hidden': 'true' }), text);
+
+function section(title, ...content) {
+  const body = content.flat().filter(Boolean);
+  if (!body.length) return null;
+  return h('section', { class: 'block' }, h('h3', {}, title), ...body);
+}
+
+const list = (items) => (items && items.length ? h('ul', { class: 'plain' }, items.map((i) => h('li', {}, i))) : null);
+const button = (label, onclick, { primary = false, disabled = false, title = null, cls = '' } = {}) => h('button', {
+  type: 'button', class: `btn${primary ? ' primary' : ''}${cls ? ` ${cls}` : ''}`, disabled, title, onclick,
+}, label);
+
+function chatTone(c) {
+  if (c.waiting.strong || c.waiting.items.length || c.waiting.weak) return 'waiting';
+  return c.status === 'busy' ? 'active' : 'idle';
+}
+
+function ownerChip(person) {
+  return h('span', { class: 'owner', style: `--owner-h:${ownerHue(person.email)}` },
+    h('span', { class: 'owner-dot', 'aria-hidden': 'true' }, initial(person.name)), person.name);
+}
+
+// ---- the boxes ---------------------------------------------------------------------
+
+function countText(c) {
+  return c.total ? t('box.done', { done: c.done, total: c.total }) : t('box.empty');
+}
+
+function progress(c) {
+  const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
+  return h('span', { class: 'bx-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` }));
+}
+
+function chipsOf(c) {
+  return [
+    c.withUser ? h('span', { class: 'bx-chip is-you' }, t.count('box.withYou', c.withUser)) : null,
+    c.blocks ? h('span', { class: 'bx-chip is-blocks' }, t.count('box.blocks', c.blocks)) : null,
+  ];
+}
+
+const liveDot = () => h('span', { class: 'bx-live', title: t('box.live') }, h('span', { class: 'visually-hidden' }, t('box.live')));
+
+function partBadges(node) {
+  const part = node.part;
+  const chats = shown.chats.filter((c) => c.partId === part.id).length;
+  const branches = marks.branches.get(part.id) ?? [];
+  const clashes = marks.clashes.get(part.id) ?? [];
+  const out = [];
+  if (chats) out.push(h('span', { class: 'bx-badge', title: t.count('summary.chats', chats) }, icon('chat', 'bx-icon'), h('span', { class: 'num' }, String(chats)), h('span', { class: 'visually-hidden' }, t.count('summary.chats', chats))));
+  if (branches.length) {
+    out.push(h('span', { class: 'bx-people', title: branches.map((b) => `${b.branch} · ${b.name}`).join('\n') },
+      branches.slice(0, 4).map((b) => h('span', { class: 'bx-person', style: `--owner-h:${b.hue}`, 'aria-hidden': 'true' }, b.initial)),
+      h('span', { class: 'visually-hidden' }, t.count('box.branches', branches.length))));
+  }
+  for (const [a, b] of clashes) out.push(h('span', { class: 'bx-clash', title: t('box.clash', { a, b }) }, h('span', { class: 'bx-clash-dot', 'aria-hidden': 'true' }), t('box.clashShort'), h('span', { class: 'visually-hidden' }, t('box.clash', { a, b }))));
+  return out;
+}
+
+function itemBody(node) {
+  const i = node.item;
+  return [
+    h('span', { class: 'bx-head' }, h('span', { class: `bx-status st-${i.status}`, title: t(`item.status.${i.status}`) }, h('span', { class: 'visually-hidden' }, t(`item.status.${i.status}`))), h('span', { class: 'bx-title' }, node.label)),
+    h('span', { class: 'bx-meta' },
+      i.status === 'doing' ? h('span', { class: 'bx-chip is-doing' }, t('item.status.doing')) : null,
+      i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
+      i.weight === 'blocks' && i.status !== 'done' ? h('span', { class: 'bx-chip is-blocks' }, t('item.weight.blocks')) : null,
+      i.code ? h('code', { class: 'bx-code' }, i.code) : null),
+  ];
+}
+
+function boxContent(node) {
+  const live = marks.live.has(node.id) ? liveDot() : null;
+  if (node.kind === 'item') return [...itemBody(node), live].filter(Boolean);
+  const c = node.counts;
+  if (node.kind === 'project') {
+    const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), hasMap() ? progress(c) : null, live].filter(Boolean);
+  }
+  return [
+    h('span', { class: 'bx-title' }, node.label),
+    h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), ...(node.kind === 'part' ? partBadges(node) : [])),
+    c.total ? progress(c) : null,
+    live,
+  ].filter(Boolean);
+}
+
+function signature(node) {
+  const part = node.kind === 'part' ? node.part.id : null;
+  return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
+    part && marks.branches.get(part), part && marks.clashes.get(part), part && shown.chats.filter((c) => c.partId === part).length, node.kind === 'project' && shown.chats.length]);
+}
+
+const toggleLabel = (node, isOpen) => t(isOpen ? 'map.collapse' : 'map.expand', { name: node.label });
+
+function crumbs(node) {
+  return [...ancestorsOf(tree, node.id).map((id) => nodeById(tree, id).label)].join(' › ');
+}
+
+// ---- the map ---------------------------------------------------------------------------
+
+const openKey = () => `sm.open.${project.id}`;
+
+function loadOpen() {
+  try {
+    const saved = JSON.parse(store.get(openKey()) ?? 'null');
+    open = Array.isArray(saved) ? new Set(saved) : defaultOpen(tree);
+  } catch {
+    open = defaultOpen(tree);
+  }
+  open.add(tree.id);
+}
+
+const saveOpen = () => store.set(openKey(), JSON.stringify([...open]));
+
+function selectedNodeId() {
+  if (!selection) return null;
+  if (selection.type === 'node') return selection.id;
+  const partId = selection.type === 'chat' ? chatById(selection.id)?.partId : selection.type === 'workcell' ? workCellById(selection.id)?.partId : null;
+  return partId ? `pt:${partId}` : null;
+}
+
+function mapView() {
+  const lit = changedRange === 'all' ? null : changedNodes(shown, tree, rangeStart(changedRange, Date.parse(state.generatedAt)));
+  const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
+  return { open, selected: selectedNodeId(), live: marks.live, lit, match, relations: relationsOn && !PHONE.matches ? relationLinks(shown) : null };
+}
+
+const activeMap = () => (PHONE.matches ? outline : mindmap);
+
+function renderMap(opts) {
+  if (!project) return;
+  activeMap().render(tree, mapView(), opts);
+  $('#relations').setAttribute('aria-pressed', String(relationsOn));
+  $('#relations').hidden = !relationLinks(shown).length;
+}
+
+function toggleNode(node) {
+  if (open.has(node.id)) open.delete(node.id);
+  else open.add(node.id);
+  saveOpen();
+  renderMap({ anchor: node.id });
+}
+
 function freeArea() {
-  const stage = $('#stage').getBoundingClientRect();
-  const summary = $('#summary').getBoundingClientRect();
-  const top = summary.height ? summary.bottom - stage.top + 4 : 8;
-  let width = stage.width, height = stage.height - top - (PHONE.matches ? 64 : 56);
-  for (const sheet of [$('#panel'), $('#chat')]) {
+  const mm = $('#mindmap').getBoundingClientRect();
+  let width = mm.width;
+  for (const sheet of [$('#panel'), $('#chat'), $('#waitingList')]) {
     if (sheet.hidden) continue;
-    const p = sheet.getBoundingClientRect();
-    if (PHONE.matches) height = Math.max(160, p.top - stage.top - top - 8);
-    else width = Math.max(240, p.left - stage.left - 8);
+    const r = sheet.getBoundingClientRect();
+    width = Math.min(width, Math.max(240, r.left - mm.left - 12));
   }
-  // The open legend is an obstacle on wide screens: the map fits beside it, not under it.
-  const legend = $('#legend');
-  let left = 0;
-  if (!PHONE.matches && legend.open) {
-    left = legend.getBoundingClientRect().right - stage.left + 8;
-    width -= left;
-  }
-  return { left, top, width, height };
+  return { left: 0, top: 0, width, height: mm.height };
 }
 
-const cellsInside = (u) => tree.descendants(u.id).filter((x) => x.level === 'cell').length;
-
-function unitMeta(u, chats) {
-  if (u.level === 'cell') return `${statusWord(u.status)} · ${t.count('label.chats', chats)}`;
-  return `${statusWord(u.status)} · ${t.count('label.cells', cellsInside(u))}`;
+function revealNode(id, opts) {
+  for (const a of ancestorsOf(tree, id)) open.add(a);
+  saveOpen();
+  renderMap();
+  requestAnimationFrame(() => activeMap().reveal(id, opts));
 }
 
-function wcStatus(w) {
-  if (w.status === 'merged') return t('wc.merged', { main: project.mainBranch });
-  return w.clashWith.length ? t('wc.clashing') : t('wc.alive');
+function renderChanged() {
+  const seg = $('#changed');
+  seg.replaceChildren(...RANGES.map((r) => h('button', {
+    type: 'button', 'aria-pressed': String(r === changedRange), title: r === 'all' ? t('changed.allHint') : t('changed.hint'),
+    onclick: () => { changedRange = r; store.set('sm.changed', r); renderChanged(); renderMap(); },
+  }, t(`changed.${r}`))));
 }
 
-async function moveChat(sessionId, unitId) {
-  const res = await api.override(project.id, sessionId, unitId);
-  if (!res.ok) return toast(errorText(res.error));
-  toast(t('chat.moved', { name: unitName(unitById(unitId)) }));
-  poll();
-}
-
-async function editUnits(op, okText) {
-  const res = await api.editUnits(project.id, op);
-  if (!res.ok) {
-    toast(errorText(res.error));
-    return false;
-  }
-  if (okText) toast(okText);
-  await poll();
-  return true;
-}
-
-const brain = createBrain($('#brain'), {
-  onSelect: (sel) => select(sel, { zoom: true }),
-  labelFor: unitName,
-  labelAt: (u, time) => (u.id === 'unsorted' ? t('unit.unsorted') : nameAt(u, project.activity, time)),
-  unitMeta,
-  unitAria: (u) => t('unit.aria', { name: unitName(u), level: t(`level.${u.level}`), status: statusWord(u.status), chats: t.count('summary.chats', u.work.chats) }),
-  budAria: (w) => (w.id === BOTS_ID ? botsLabel(w) : t('wc.aria', { branch: w.branch, owner: w.owner.name, status: wcStatus(w) })),
-  budLabel: (w) => (w.id === BOTS_ID ? botsLabel(w) : w.branch),
-  linkLabel: (a, b) => t('link.aria', { a: unitName(a), b: unitName(b) }),
-  freeArea,
-  onMoveChat: (sessionId, unitId) => moveChat(sessionId, unitId),
-  onMoveUnit: (id, parentId) => editUnits({ op: 'move', id, parentId },
-    parentId ? t('unit.movedInto', { name: unitName(unitById(id)), into: unitName(unitById(parentId)) }) : t('unit.movedTop', { name: unitName(unitById(id)) })),
-});
-
-function joinDots(parts) {
-  return parts.flatMap((p, i) => (i ? [h('span', { class: 'sep', 'aria-hidden': 'true' }, '·'), p] : [p]));
-}
+// ---- summary and the waiting list ------------------------------------------------------
 
 function renderSummary() {
-  const chats = shown.chats;
-  const busy = chats.filter((c) => c.status === 'busy').length;
-  const organs = project.units.filter((u) => u.level === 'organ').length;
-  const cells = project.units.filter((u) => u.level === 'cell').length;
-  const growing = project.workCells.filter((w) => w.status !== 'merged').length;
-  const parts = [h('button', { type: 'button', class: 'summary-project', title: t('project.open'), onclick: () => select({ type: 'project', id: project.id }) }, project.name)];
-  if (organs) parts.push(h('span', {}, t.count('summary.organs', organs)));
-  parts.push(h('span', {}, t.count('summary.cells', cells)));
-  if (growing) parts.push(h('span', {}, t.count('summary.branches', growing)));
-  parts.push(h('span', {}, t.count('summary.chats', chats.length)));
+  const parts = [h('button', { type: 'button', class: 'summary-project', title: t('project.open'), onclick: () => select({ type: 'project' }) }, project.name)];
+  if (hasMap()) {
+    parts.push(h('span', {}, t.count('summary.parts', project.arch.parts.length)));
+    parts.push(h('span', { class: 'num' }, t('summary.done', { done: tree.counts.done, total: tree.counts.total })));
+  }
+  const busy = shown.chats.filter((c) => c.status === 'busy').length;
   if (busy) parts.push(h('span', { class: 'tone-active' }, t('summary.working', { n: busy })));
   parts.push(h('span', { class: 'num' }, t('summary.cost', { v: money(project.cost.d30) })));
-  // A restart shows the last saved map at once; the fresh one replaces it on a later poll.
   if (state.refreshing) parts.push(h('span', { class: 'organizing', role: 'status' }, t('state.refreshing')));
-  const boot = bootstrapOf(project);
-  if (boot) {
-    parts.push(h('span', { class: 'organizing', role: 'status' },
-      icon('spark', 'organizing-icon'), t('ai.organizing', { done: boot.done, total: boot.total })));
-  }
   $('#summary').replaceChildren(...joinDots(parts));
 }
 
 function goTo(projectId, sel) {
   closeWaiting();
-  if (view !== 'brain') showView('brain');
+  if (view !== 'map') showView('map');
   if (projectId !== project.id) setProject(projectId);
-  if (sel) requestAnimationFrame(() => select(sel, { zoom: true }));
+  if (!sel) return;
+  if (sel.type === 'node') {
+    const node = nodeById(tree, sel.id);
+    if (node) requestAnimationFrame(() => openPoint(node));
+  } else {
+    requestAnimationFrame(() => select(sel));
+  }
 }
 
 function renderWaiting() {
@@ -244,39 +344,38 @@ function renderWaiting() {
     listEl.replaceChildren(h('li', { class: 'empty' }, t('waiting.none')));
     return;
   }
-  const where = (p, unitId) => {
-    const unit = unitId && p.units.find((u) => u.id === unitId);
-    return [state.projects.length > 1 ? p.name : null, unit ? (unit.id === 'unsorted' ? t('unit.unsorted') : unit.name) : null].filter(Boolean).join(' · ');
+  const where = (p, partId) => {
+    const part = partId && p.arch.parts.find((x) => x.id === partId);
+    return [state.projects.length > 1 ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
   };
-  listEl.replaceChildren(...entries.map(({ project: p, chat: c, decision }) => {
+  listEl.replaceChildren(...entries.map((entry) => {
+    const { project: p, chat: c, decision } = entry;
+    const kind = waitingKind(entry);
     if (decision) {
-      const firstId = decision.workCellIds?.[0];
-      const clashing = decision.kind !== 'clash' ? null
-        : p.workCells.find((w) => w.id === firstId) ?? p.workCells.find((w) => w.clashWith.length && w.status !== 'merged');
+      const clashing = decision.kind === 'clash' ? p.workCells.find((w) => w.id === decision.workCellIds?.[0]) : null;
       const words = decision.kind === 'clash' ? clashWords(decision) : null;
-      return h('li', {}, h('button', {
-        type: 'button', class: `waiting-item${decision.kind === 'clash' ? ' clash' : ''}`,
-        onclick: () => goTo(p.id, clashing ? { type: 'workcell', id: clashing.id } : decision.sessionId ? { type: 'chat', id: decision.sessionId } : null),
-      },
-      h('span', { class: 'wi-reason' }, t(`waiting.${decision.kind}`)),
-      h('span', { class: 'wi-title' }, words ? t(words.key, words.vars) : decision.text),
-      words?.vars.files ? h('span', { class: 'wi-detail mono' }, words.vars.files) : null,
-      h('span', { class: 'wi-where' }, where(p, clashing?.unitId))));
+      const target = decision.kind === 'item'
+        ? { type: 'node', id: decision.code ? itemNodeId(decision.partId, decision.code) : `pt:${decision.partId}` }
+        : clashing ? { type: 'workcell', id: clashing.id } : decision.sessionId ? { type: 'chat', id: decision.sessionId } : null;
+      return h('li', {}, h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, target) },
+        h('span', { class: 'wi-reason' }, decision.kind === 'item' ? t('waiting.withYou') : t(`waiting.${decision.kind}`)),
+        h('span', { class: 'wi-title' }, words ? t(words.key, words.vars) : decision.text),
+        words?.vars.files ? h('span', { class: 'wi-detail mono' }, words.vars.files) : null,
+        decision.kind === 'item' && decision.who ? h('span', { class: 'wi-detail' }, [decision.who, decision.code].filter(Boolean).join(' · ')) : null,
+        h('span', { class: 'wi-where' }, where(p, decision.partId ?? clashing?.partId))));
     }
     const reason = c.waiting.strong ? t('waiting.question') : c.waiting.items.length ? t('waiting.item') : t('waiting.ends');
-    return h('li', {}, h('button', {
-      type: 'button', class: `waiting-item${c.waiting.strong ? ' strong' : ''}`,
-      onclick: () => goTo(p.id, { type: 'chat', id: c.sessionId }),
-    },
-    h('span', { class: 'wi-reason' }, reason),
-    h('span', { class: 'wi-title' }, c.title),
-    h('span', { class: 'wi-where' }, where(p, c.unitId)),
-    h('span', { class: 'wi-detail' }, c.waiting.items[0] || tail(c.lastAssistantText, 140))));
+    return h('li', {}, h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, { type: 'chat', id: c.sessionId }) },
+      h('span', { class: 'wi-reason' }, reason),
+      h('span', { class: 'wi-title' }, c.title),
+      h('span', { class: 'wi-where' }, where(p, c.partId)),
+      h('span', { class: 'wi-detail' }, c.waiting.items[0] || tail(c.lastAssistantText, 140))));
   }));
 }
 
 function openWaiting() {
   closePanel(false);
+  chat.close();
   $('#waitingList').hidden = false;
   $('#waitingBtn').setAttribute('aria-expanded', 'true');
   $('#waitingList').querySelector('button')?.focus();
@@ -286,224 +385,36 @@ function closeWaiting() {
   $('#waitingBtn').setAttribute('aria-expanded', 'false');
 }
 
-function pill(status, text) {
-  return h('span', { class: `pill tone-${status}` }, h('span', { class: 'pill-dot', 'aria-hidden': 'true' }), text);
-}
-
-function section(title, ...content) {
-  const body = content.flat().filter(Boolean);
-  if (!body.length) return null;
-  return h('section', { class: 'block' }, h('h3', {}, title), ...body);
-}
-
-const list = (items) => (items && items.length ? h('ul', { class: 'plain' }, items.map((i) => h('li', {}, i))) : null);
-
-const button = (label, onclick, { primary = false, disabled = false, title = null, cls = '' } = {}) => h('button', {
-  type: 'button', class: `btn${primary ? ' primary' : ''}${cls ? ` ${cls}` : ''}`, disabled, title, onclick,
-}, label);
-
-function chatTone(c) {
-  const k = neuronKind(c);
-  if (k === 'waiting' || c.waiting.weak) return 'waiting';
-  return k === 'busy' ? 'active' : 'idle';
-}
-
-function ownerChip(person) {
-  return h('span', { class: 'owner', style: `--owner-h:${ownerHue(person.email)}` },
-    h('span', { class: 'owner-dot', 'aria-hidden': 'true' }, initial(person.name)), person.name);
-}
-
-const linkTo = (label, sel, cls = 'meta-link') => h('button', { type: 'button', class: cls, onclick: () => select(sel, { zoom: true }) }, label);
-const unitLink = (u) => linkTo(unitName(u), { type: 'unit', id: u.id });
-const branchLink = (w) => linkTo(w.branch, { type: 'workcell', id: w.id }, 'meta-link branch-name');
+// ---- activity --------------------------------------------------------------------------
 
 const isWork = (item) => item.kind === 'commit' || item.kind === 'merge';
+const ACT_ICON = { commit: 'commit', merge: 'merge', push: 'push', tag: 'tag', born: 'born', fused: 'merge' };
 
 function activityTitle(item) {
   if (item.kind === 'push') return t('activity.pushed', { branch: item.branch });
   if (item.kind === 'tag') return t('activity.tagged', { tag: item.subject });
   if (item.kind === 'born') return t('activity.born', { branch: item.subject || item.branch });
   if (item.kind === 'fused') return t('activity.fused', { branch: item.subject || item.branch, main: project.mainBranch });
-  if (AI_KINDS.has(item.kind) && !item.subject) return t(`activity.${item.kind}`);
   return item.subject;
 }
 
-const ACT_ICON = { commit: 'commit', merge: 'merge', push: 'push', tag: 'tag', born: 'born', fused: 'merge', 'fused-by-meaning': 'fuse', grouped: 'group', renamed: 'rename' };
+const linkTo = (label, onclick, cls = 'meta-link') => h('button', { type: 'button', class: cls, onclick }, label);
+const chatLink = (c) => linkTo(c.title, () => select({ type: 'chat', id: c.sessionId }));
+const partLink = (part) => linkTo(part.name, () => openPartPoint(part.id));
+const branchLink = (w) => linkTo(w.branch, () => select({ type: 'workcell', id: w.id }), 'meta-link branch-name');
 
 function activityRow(item, { showChat }) {
-  const c = showChat && item.sessionId && item.kind !== 'fused-by-meaning' && chatById(item.sessionId);
+  const c = showChat && item.sessionId && chatById(item.sessionId);
   const who = [t('activity.by', { name: item.author.name }), item.coAuthor ? t('activity.with', { name: item.coAuthor }) : null].filter(Boolean).join(' · ');
-  return h('li', { class: `act act-${item.kind}${AI_KINDS.has(item.kind) ? ' act-ai' : ''}` },
+  return h('li', { class: `act act-${item.kind}` },
     icon(ACT_ICON[item.kind] || 'commit', 'act-icon'),
     h('div', { class: 'act-body' },
       h('span', { class: 'act-title' }, item.hash && isWork(item) ? h('code', { class: 'act-hash' }, item.hash.slice(0, 7)) : null, activityTitle(item)),
-      h('span', { class: 'act-meta' }, who,
-        c ? [' · ', `${t('activity.in')} `, linkTo(c.title, { type: 'chat', id: c.sessionId })] : null,
-        ' · ', h('span', { class: 'num' }, relative(item.ts)))));
+      h('span', { class: 'act-meta' }, who, c ? [' · ', `${t('activity.in')} `, chatLink(c)] : null, ' · ', h('span', { class: 'num' }, relative(item.ts)))));
 }
 
-function activityList(items, opts) {
-  return items.length ? h('ul', { class: 'activity' }, items.map((i) => activityRow(i, opts))) : null;
-}
-
+const activityList = (items, opts) => (items.length ? h('ul', { class: 'activity' }, items.map((i) => activityRow(i, opts))) : null);
 const newestFirst = (a, b) => b.ts.localeCompare(a.ts);
-
-function panelHead(title, ...meta) {
-  $('#panelHead').replaceChildren(h('h2', { id: 'panelTitle', tabindex: '-1' }, title), h('p', { class: 'meta' }, ...meta.flat().filter(Boolean)));
-}
-
-function recentRows(recent) {
-  const rows = recent.map((r) => h('li', {},
-    h('button', { type: 'button', class: 'link-row', onclick: () => chatById(r.sessionId) && select({ type: 'chat', id: r.sessionId }, { zoom: true }) },
-      h('span', { class: 'lr-title' }, r.title),
-      h('span', { class: 'lr-date num' }, shortDate(Date.parse(r.date))),
-      h('span', { class: 'lr-line' }, r.line))));
-  return rows.length ? h('ul', { class: 'plain rows' }, rows) : null;
-}
-
-// An inline form inside the panel; while it is open, polling leaves the panel alone.
-function inlineForm({ fields, submitLabel, onSubmit, onCancel }) {
-  editing = true;
-  const form = h('form', { class: 'inline-form' }, fields,
-    h('div', { class: 'actions' },
-      h('button', { type: 'submit', class: 'btn primary' }, submitLabel),
-      button(t('confirm.cancel'), () => { editing = false; onCancel(); })));
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const submit = form.querySelector('[type="submit"]');
-    submit.disabled = true;
-    const ok = await onSubmit(new FormData(form));
-    submit.disabled = false;
-    if (ok !== false) { editing = false; rerender(); }
-  });
-  requestAnimationFrame(() => form.querySelector('input, textarea, select')?.focus());
-  return form;
-}
-
-const field = (label, control) => h('label', { class: 'field' }, h('span', {}, label), control);
-const lines = (text) => String(text || '').split('\n').map((s) => s.trim()).filter(Boolean);
-
-function startChat(title, subtitle, intro, start) {
-  closePanel(false);
-  chat.open({ projectId: project.id, title, subtitle, intro, start });
-  brain.fit(true);
-}
-
-function unitTools(u, slot) {
-  const pinBtn = button(u.pinned ? t('action.unpin') : t('action.pin'),
-    () => editUnits({ op: 'pin', id: u.id, pinned: !u.pinned }, u.pinned ? t('unit.unpinnedToast') : t('unit.pinnedToast')),
-    { title: t('unit.pinHint') });
-  const show = (form) => slot.replaceChildren(form);
-  const reset = () => { slot.replaceChildren(); };
-  const rename = () => show(inlineForm({
-    fields: field(t('unit.newName'), h('input', { name: 'name', value: unitName(u), maxlength: '40', required: true, autocomplete: 'off' })),
-    submitLabel: t('action.save'), onCancel: reset,
-    onSubmit: (data) => editUnits({ op: 'rename', id: u.id, name: data.get('name') }, t('unit.renamedToast')),
-  }));
-  const editNucleus = async () => {
-    const res = await api.nucleus(project.id, u.id);
-    const n = res.ok ? res : u.nucleus;
-    show(inlineForm({
-      fields: [
-        field(t('unit.state'), h('textarea', { name: 'state', rows: '2', maxlength: '1000' }, n.state || '')),
-        field(t('unit.decidedHint'), h('textarea', { name: 'decided', rows: '4' }, (n.decided || []).join('\n'))),
-        field(t('unit.todoHint'), h('textarea', { name: 'todo', rows: '4' }, (n.todo || []).join('\n'))),
-      ],
-      submitLabel: t('action.save'), onCancel: reset,
-      onSubmit: async (data) => {
-        const out = await api.saveNucleus(project.id, u.id, { state: data.get('state').trim(), decided: lines(data.get('decided')), todo: lines(data.get('todo')) });
-        if (!out.ok) { toast(errorText(out.error)); return false; }
-        toast(t('unit.nucleusSaved'));
-        await poll();
-        return true;
-      },
-    }));
-  };
-  const moves = unitMoves(project.units, u.id);
-  const move = () => show(inlineForm({
-    fields: field(t('unit.moveInto'), h('select', { name: 'parent' }, moves.map((m) => h('option', { value: m ? m.id : '' }, m ? `${unitName(m)} · ${t(`level.${m.level}`)}` : t('unit.topLevel'))))),
-    submitLabel: t('action.move'), onCancel: reset,
-    onSubmit: (data) => {
-      const parentId = data.get('parent') || null;
-      return editUnits({ op: 'move', id: u.id, parentId }, parentId ? t('unit.movedInto', { name: unitName(u), into: unitName(unitById(parentId)) }) : t('unit.movedTop', { name: unitName(u) }));
-    },
-  }));
-  const peers = project.units.filter((x) => x.level === u.level && x.id !== u.id && x.id !== 'unsorted');
-  const merge = () => show(inlineForm({
-    fields: [field(t('unit.mergeInto'), h('select', { name: 'into' }, peers.map((x) => h('option', { value: x.id }, unitName(x))))),
-      h('p', { class: 'muted small' }, t('unit.mergeHint', { name: unitName(u) }))],
-    submitLabel: t('action.merge'), onCancel: reset,
-    onSubmit: async (data) => {
-      const into = data.get('into');
-      const ok = await editUnits({ op: 'merge', ids: [u.id], into }, t('unit.mergedToast', { name: unitName(u), into: unitName(unitById(into)) }));
-      if (ok) select({ type: 'unit', id: into });
-      return ok;
-    },
-  }));
-  const create = () => show(inlineForm({
-    fields: field(t('unit.newCellName'), h('input', { name: 'name', maxlength: '40', required: true, autocomplete: 'off' })),
-    submitLabel: t('action.create'), onCancel: reset,
-    onSubmit: (data) => editUnits({ op: 'create', name: data.get('name'), parentId: u.id }, t('unit.createdToast', { name: data.get('name') })),
-  }));
-  const editable = u.id !== 'unsorted';
-  return h('div', { class: 'tools' },
-    h('div', { class: 'actions' },
-      button(t('action.continue'), () => startChat(t('chat.newIn', { name: unitName(u) }), t(`level.${u.level}`), t('chat.introUnit', { name: unitName(u) }), { unitId: u.id }), { primary: true }),
-      editable ? pinBtn : null,
-      editable ? button(t('action.rename'), rename) : null,
-      button(t('action.editNucleus'), editNucleus)),
-    editable ? h('div', { class: 'actions secondary' },
-      moves.length ? button(t('action.move'), move) : null,
-      peers.length ? button(t('action.merge'), merge) : null,
-      u.level !== 'cell' ? button(t('action.newCell'), create) : null) : null,
-    u.level !== 'organ' && editable ? h('p', { class: 'muted small' }, t('unit.dragHint')) : null);
-}
-
-function renderUnitPanel(u) {
-  const ids = new Set(subtree(u).map((x) => x.id));
-  const parent = tree.parent(u.id);
-  panelHead([unitName(u), u.pinned ? h('span', { class: 'pinned', title: t('unit.pinned') }, icon('pin', 'pin-icon'), h('span', { class: 'visually-hidden' }, t('unit.pinned'))) : null],
-    h('span', { class: `level-badge level-${u.level}` }, t(`level.${u.level}`)),
-    pill(u.status, statusWord(u.status)),
-    h('span', {}, t.count('summary.chats', u.work.chats)),
-    parent ? h('span', {}, `${t('unit.in')} `, unitLink(parent)) : null);
-  const kids = tree.children(u.id);
-  const branches = project.workCells.filter((w) => ids.has(w.unitId))
-    .sort((a, b) => (a.status === 'merged') - (b.status === 'merged') || b.bornAt.localeCompare(a.bornAt));
-  const slot = h('div', { class: 'form-slot' });
-  $('#panelBody').replaceChildren(...[
-    h('div', { class: 'purpose' },
-      u.purpose ? h('p', { class: 'lead' }, u.purpose) : null,
-      h('p', { class: 'origin' }, icon(u.origin === 'ai' ? 'spark' : u.origin === 'user' ? 'rename' : 'seed', 'origin-icon'), t(`origin.${u.origin}`)),
-      u.tags.length ? h('ul', { class: 'tags', 'aria-label': t('unit.tags') }, u.tags.map((tag) => h('li', {}, tag))) : null),
-    unitTools(u, slot),
-    slot,
-    section(t('unit.state'), u.nucleus.state ? h('p', {}, u.nucleus.state) : h('p', { class: 'muted' }, t('unit.empty')),
-      u.nucleus.source === 'ai' ? h('p', { class: 'note ai-note' }, icon('spark', 'origin-icon'), t('unit.byAi')) : null),
-    section(t('unit.decided'), list(u.nucleus.decided)),
-    section(t('unit.todo'), list(u.nucleus.todo)),
-    section(t('unit.inside'), kids.length ? h('ul', { class: 'plain rows' }, kids.map((k) => h('li', {},
-      h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'unit', id: k.id }, { zoom: true }) },
-        h('span', { class: 'lr-title' }, h('span', { class: `level-dot status-${k.status}`, 'aria-hidden': 'true' }), unitName(k)),
-        h('span', { class: 'lr-date' }, k.level === 'cell' ? t.count('label.chats', k.work.chats) : t(`level.${k.level}`)),
-        h('span', { class: 'lr-line' }, k.purpose))))) : null),
-    filesSection({ unit: u.id }),
-    section(t('unit.branches'), branches.length ? h('ul', { class: 'plain rows' }, branches.map((w) => h('li', {},
-      h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'workcell', id: w.id }, { zoom: true }) },
-        h('span', { class: 'lr-title branch-name' }, w.branch),
-        h('span', { class: 'lr-date' }, ownerChip(w.owner)),
-        h('span', { class: `lr-line${w.clashWith.length ? ' tone-clash' : ''}` }, wcStatus(w)))))) : null),
-    section(t('activity.title'), activityList(project.activity.filter((a) => a.unitIds.some((id) => ids.has(id))).sort(newestFirst).slice(0, 10), { showChat: true })),
-    section(t('unit.recent'), recentRows(u.nucleus.recent)),
-  ].filter(Boolean));
-}
-
-function clashLines(w) {
-  return w.clashWith.map(workCellById).filter(Boolean).map((o) => {
-    const shared = w.files.map((f) => f.path).filter((p) => o.files.some((f) => f.path === p));
-    return h('p', {}, t('wc.clashText', { a: w.owner.name, b: o.owner.name, files: shared.join(', ') }), ' ', branchLink(o));
-  });
-}
 
 async function runAction(body, okText) {
   const res = await api.action(body);
@@ -516,33 +427,211 @@ async function runAction(body, okText) {
   return true;
 }
 
-// Files of a unit or a branch, with the buttons that take them out of the page: a terminal here and the phone's VS Code (desenho-2 § 29).
-function filesSection({ unit, workCell, files: list, folder = true }) {
+// Files of a part or a branch, with the buttons that take them out of the page: a terminal here and the phone's VS Code.
+function filesSection({ part, workCell, files: fileList, folder = true }) {
   const tunnel = safeTunnel(project.tunnelUrl);
   const terminal = () => runAction({ action: 'new', bare: true, projectId: project.id, ...(workCell ? { frontId: workCell } : {}) }, t('files.openTerminalDone'));
   const tools = folder || tunnel ? h('div', { class: 'actions secondary' },
     folder ? button(t('files.openTerminal'), terminal, { title: t('files.fromPhone') }) : null,
     tunnel ? h('a', { class: 'btn', href: tunnel, target: '_blank', rel: 'noopener noreferrer' }, t('files.phone')) : null) : null;
-  return section(t('files.title'), tools, files.tree({ unit, workCell, files: list }));
+  return section(t('files.title'), tools, files.tree({ part, workCell, files: fileList }));
 }
 
-function renderBotsPanel(group) {
-  panelHead(botsLabel(group), h('span', {}, t('wc.botsHint')));
-  const rows = [...group.bots].sort((a, b) => (a.status === 'merged') - (b.status === 'merged') || b.bornAt.localeCompare(a.bornAt));
-  $('#panelBody').replaceChildren(section(t('unit.branches'), h('ul', { class: 'plain rows' }, rows.map((w) => h('li', {},
+// ---- a point of the map: the chat beside it and its details ------------------------------
+
+function nodeRef(node) {
+  if (node.kind === 'layer') return { kind: 'layer', layerId: node.layerId };
+  if (node.kind === 'part') return { kind: 'part', partId: node.partId };
+  if (node.kind === 'group') return { kind: 'group', partId: node.partId, group: node.group };
+  return { kind: 'item', partId: node.partId, ...(node.item.code ? { code: node.item.code } : { line: node.item.line }) };
+}
+
+function setPointTab(tab) {
+  const details = tab === 'details';
+  $('#ptab-chat').setAttribute('aria-selected', String(!details));
+  $('#ptab-details').setAttribute('aria-selected', String(details));
+  $('#chatPane').hidden = details;
+  $('#pointDetails').hidden = !details;
+  $('#chat').dataset.tab = tab;
+}
+
+let pointNode = null;
+
+function openPoint(node, { tab = 'chat' } = {}) {
+  if (node.kind === 'project') return select({ type: 'project' });
+  closePanel(false);
+  closeWaiting();
+  selection = { type: 'node', id: node.id };
+  chat.open({
+    projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: nodeRef(node) },
+  });
+  pointNode = node.id;
+  $('#pointTabs').hidden = false;
+  setPointTab(tab);
+  renderPointDetails();
+  revealNode(node.id);
+}
+
+const openPartPoint = (partId, opts) => {
+  const node = nodeById(tree, `pt:${partId}`);
+  if (node) openPoint(node, opts);
+};
+
+function plainPoint() {
+  pointNode = null;
+  $('#pointTabs').hidden = true;
+  setPointTab('chat');
+}
+
+function openIdea() {
+  if (!hasMap()) return;
+  closePanel(false);
+  closeWaiting();
+  selection = null;
+  chat.open({ projectId: project.id, title: t('idea.title'), subtitle: project.name, intro: t('idea.intro'), start: { node: { kind: 'idea' } } });
+  plainPoint();
+  renderMap();
+}
+
+function createArch() {
+  closePanel(false);
+  closeWaiting();
+  chat.open({ projectId: project.id, title: t('arch.chatTitle'), subtitle: project.name, intro: t('arch.chatIntro'), draft: t('arch.createText'), start: { node: { kind: 'create-arch' } } });
+  plainPoint();
+}
+
+function itemRow(node) {
+  const i = node.item;
+  return h('li', {}, h('button', { type: 'button', class: `item-row st-${i.status}`, onclick: () => openPoint(node) },
+    h('span', { class: `bx-status st-${i.status}`, 'aria-hidden': 'true' }),
+    h('span', { class: 'ir-title' }, node.label),
+    h('span', { class: 'ir-meta' }, [i.status === 'doing' ? t('item.status.doing') : null, i.status === 'done' ? t('item.status.done') : null, i.who, i.weight ? t(`item.weight.${i.weight}`) : null, i.code].filter(Boolean).join(' · '))));
+}
+
+function itemList(nodes) {
+  const items = nodes.flatMap((n) => (n.kind === 'item' ? [n] : n.children));
+  const openOnes = items.filter((n) => n.item.status !== 'done');
+  const done = items.filter((n) => n.item.status === 'done');
+  return [
+    openOnes.length ? h('ul', { class: 'plain rows items' }, openOnes.map(itemRow)) : h('p', { class: 'muted' }, t('point.allDone')),
+    done.length ? h('details', { class: 'done-items' }, h('summary', {}, t.count('point.doneItems', done.length)), h('ul', { class: 'plain rows items' }, done.map(itemRow))) : null,
+  ];
+}
+
+function linkRows(partId) {
+  const rows = (project.arch.links ?? []).filter((l) => l.a === partId || l.b === partId).map((l) => {
+    const other = partById(l.a === partId ? l.b : l.a);
+    return h('li', {}, h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'link', id: `${l.a}|${l.b}` }) },
+      h('span', { class: 'lr-title' }, other?.name ?? ''),
+      h('span', { class: 'lr-date' }, t.count('link.reasons', l.reasons.length)),
+      h('span', { class: 'lr-line' }, [...new Set(l.reasons.map((r) => t(`link.kind.${r.kind}`)))].join(' · '))));
+  });
+  return rows.length ? h('ul', { class: 'plain rows' }, rows) : null;
+}
+
+function chatRows(chats) {
+  return chats.length ? h('ul', { class: 'plain rows' }, chats.map((c) => h('li', {},
+    h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'chat', id: c.sessionId }) },
+      h('span', { class: 'lr-title' }, h('span', { class: `dot-mini kind-${chatTone(c) === 'waiting' ? 'waiting' : c.status}`, 'aria-hidden': 'true' }), c.title),
+      h('span', { class: 'lr-date' }, relative(c.updatedAt)),
+      c.lastAssistantText ? h('span', { class: 'lr-line' }, tail(c.lastAssistantText, 120)) : null)))) : null;
+}
+
+function branchRows(cells) {
+  return cells.length ? h('ul', { class: 'plain rows' }, cells.map((w) => h('li', {},
     h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'workcell', id: w.id }) },
       h('span', { class: 'lr-title branch-name' }, w.branch),
       h('span', { class: 'lr-date' }, ownerChip(w.owner)),
-      h('span', { class: `lr-line${w.clashWith.length ? ' tone-clash' : ''}` }, wcStatus(w))))))));
+      h('span', { class: `lr-line${w.clashWith.length ? ' tone-clash' : ''}` }, wcStatus(w)))))) : null;
+}
+
+function mainBranchNote() {
+  return project.arch.source === 'main-branch' ? h('p', { class: 'note' }, t('point.mainBranch', { dir: project.arch.dir, main: project.mainBranch })) : null;
+}
+
+function partDetails(node) {
+  const part = node.part;
+  const c = node.counts;
+  return [
+    part.about ? h('p', { class: 'lead' }, part.about) : null,
+    h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c),
+      linkTo(part.file, () => files.open(part.file), 'meta-link path')),
+    mainBranchNote(),
+    section(t('point.missing'), itemList(node.children)),
+    section(t('point.chats'), chatRows(shown.chats.filter((x) => x.partId === part.id))),
+    section(t('point.branches'), branchRows(project.workCells.filter((w) => w.partId === part.id && w.status !== 'merged'))),
+    section(t('point.related'), linkRows(part.id)),
+    section(t('activity.title'), activityList(project.activity.filter((a) => (a.partIds ?? []).includes(part.id)).sort(newestFirst).slice(0, 10), { showChat: true })),
+    part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null,
+    filesSection({ part: part.id }),
+  ];
+}
+
+function itemDetails(node) {
+  const i = node.item;
+  const part = partById(node.partId);
+  return [
+    h('p', { class: 'meta' },
+      pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)),
+      i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
+      i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
+      i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,
+      i.code ? h('code', { class: 'bx-code' }, i.code) : null),
+    i.detail.length ? section(t('point.detail'), list(i.detail)) : null,
+    h('div', { class: 'actions secondary' },
+      button(t('point.openLine', { n: i.line }), () => files.open(part.file, null, { line: i.line })),
+      button(t('point.openPart', { name: part.name }), () => openPartPoint(part.id, { tab: 'details' }))),
+    mainBranchNote(),
+    h('p', { class: 'note' }, t('point.itemRule')),
+  ];
+}
+
+function renderPointDetails() {
+  const node = pointNode && nodeById(tree, pointNode);
+  if (!node) return;
+  let body;
+  if (node.kind === 'part') body = partDetails(node);
+  else if (node.kind === 'item') body = itemDetails(node);
+  else if (node.kind === 'group') body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)), section(t('point.missing'), itemList(node.children))];
+  else {
+    body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
+      section(t('point.parts'), h('ul', { class: 'plain rows' }, node.children.map((p) => h('li', {},
+        h('button', { type: 'button', class: 'link-row', onclick: () => openPoint(p, { tab: 'details' }) },
+          h('span', { class: 'lr-title' }, p.label), h('span', { class: 'lr-date num' }, countText(p.counts)),
+          p.part.about ? h('span', { class: 'lr-line' }, p.part.about) : null)))))];
+  }
+  $('#pointDetails').replaceChildren(...body.filter(Boolean));
+}
+
+// ---- the side panel: project, conversation, branch, relation -------------------------------
+
+function wcStatus(w) {
+  if (w.status === 'merged') return t('wc.merged', { main: project.mainBranch });
+  return w.clashWith.length ? t('wc.clashing') : t('wc.alive');
+}
+
+function panelHead(title, ...meta) {
+  $('#panelHead').replaceChildren(h('h2', { id: 'panelTitle', tabindex: '-1' }, title), h('p', { class: 'meta' }, ...meta.flat().filter(Boolean)));
+}
+
+function startChat(title, subtitle, intro, start) {
+  closePanel(false);
+  chat.open({ projectId: project.id, title, subtitle, intro, start });
+  plainPoint();
+}
+
+function clashLines(w) {
+  return w.clashWith.map(workCellById).filter(Boolean).map((o) => {
+    const shared = w.files.map((f) => f.path).filter((p) => o.files.some((f) => f.path === p));
+    return h('p', {}, t('wc.clashText', { a: w.owner.name, b: o.owner.name, files: shared.join(', ') }), ' ', branchLink(o));
+  });
 }
 
 function renderWorkCellPanel(w) {
-  if (w.id === BOTS_ID) return renderBotsPanel(w);
-  const home = unitById(w.unitId);
-  panelHead(h('span', { class: 'branch-name' }, w.branch),
-    ownerChip(w.owner),
+  const home = partById(w.partId);
+  panelHead(h('span', { class: 'branch-name' }, w.branch), ownerChip(w.owner),
     pill(w.status === 'merged' ? 'idle' : w.clashWith.length ? 'clash' : 'active', wcStatus(w)),
-    home ? h('span', {}, `${t('wc.home')} `, unitLink(home)) : null);
+    home ? h('span', {}, `${t('wc.home')} `, partLink(home)) : null);
   const chats = w.chatIds.map(chatById).filter(Boolean);
   const facts = [
     [t('wc.ahead', { main: project.mainBranch }), h('span', { class: 'num' }, t.count('wc.commitsCount', w.ahead))],
@@ -551,14 +640,14 @@ function renderWorkCellPanel(w) {
     [t('wc.born'), shortDate(Date.parse(w.bornAt))],
     w.mergedAt ? [t('wc.fusedAt'), shortDate(Date.parse(w.mergedAt))] : null,
     w.path ? [t('wc.path'), h('code', { class: 'path' }, w.path)] : null,
-    w.touches.length ? [t('wc.touches'), joinDots(w.touches.map(unitById).filter(Boolean).map(unitLink))] : null,
+    w.touches.length ? [t('wc.touches'), joinDots(w.touches.map(partById).filter(Boolean).map(partLink))] : null,
   ].filter(Boolean);
   const alive = w.status !== 'merged';
   $('#panelBody').replaceChildren(...[
     w.clashWith.length ? h('div', { class: 'callout clash' }, h('h3', {}, t('wc.clash')), clashLines(w)) : null,
     w.remote ? h('p', { class: 'note' }, t('wc.remote'), project.fetchedAt ? ` ${t('wc.fetched', { time: clock(project.fetchedAt) })}` : '') : null,
     alive && !w.remote ? h('div', { class: 'tools' }, h('div', { class: 'actions' },
-      button(t('action.continue'), () => startChat(t('chat.newOn', { branch: w.branch }), home ? unitName(home) : '', t('chat.introBranch', { branch: w.branch }), { workCellId: w.id, ...(home ? { unitId: home.id } : {}) }), { primary: true }),
+      button(t('action.continue'), () => startChat(t('chat.newOn', { branch: w.branch }), home ? home.name : '', t('chat.introBranch', { branch: w.branch }), { workCellId: w.id, ...(home ? { partId: home.id } : {}) }), { primary: true }),
       button(t('action.newTerminal'), () => runAction({ action: 'new', frontId: w.id, projectId: project.id }, t('action.newTerminalDone')), { title: t('action.fromPhone') }))) : null,
     section(t('wc.doing'), w.nucleus.doing ? h('p', { class: 'lead' }, w.nucleus.doing) : null),
     w.openspec ? section(t('wc.plan'),
@@ -567,39 +656,31 @@ function renderWorkCellPanel(w) {
       h('p', { class: 'muted small' }, `${w.openspec.change} · ${t('chat.openspec', w.openspec)}`)) : null,
     section(t('wc.todo'), list(w.nucleus.todo)),
     filesSection({ workCell: w.id, files: w.files, folder: Boolean(!w.remote || w.path) }),
-    section(t('wc.chats'), chats.length ? h('ul', { class: 'plain rows' }, chats.map((c) => h('li', {},
-      h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'chat', id: c.sessionId }, { zoom: true }) },
-        h('span', { class: 'lr-title' }, c.title), h('span', { class: 'lr-date num' }, shortDate(Date.parse(c.startedAt))))))) : h('p', { class: 'muted' }, t('wc.noChats'))),
+    section(t('wc.chats'), chatRows(chats) ?? h('p', { class: 'muted' }, t('wc.noChats'))),
     section(t('activity.title'), activityList(project.activity.filter((a) => a.workCellId === w.id).sort(newestFirst).slice(0, 10), { showChat: true })),
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
   ].filter(Boolean));
 }
 
 function renderLinkPanel(link) {
-  const a = unitById(link.a), b = unitById(link.b);
-  panelHead(`${unitName(a)} ↔ ${unitName(b)}`,
-    h('span', {}, t.count('link.reasons', link.reasons.length)),
-    h('span', {}, t('link.since', { date: shortDate(Date.parse(link.since)) })),
-    unitLink(a), unitLink(b));
+  const a = partById(link.a), b = partById(link.b);
+  panelHead(`${a.name} ↔ ${b.name}`, h('span', {}, t.count('link.reasons', link.reasons.length)),
+    link.since ? h('span', {}, t('link.since', { date: shortDate(Date.parse(link.since)) })) : null, partLink(a), partLink(b));
   const reasons = link.reasons.map((r) => {
     const c = r.sessionId && chatById(r.sessionId);
-    const parts = [
-      h('span', { class: `lr-kind${r.kind === 'meaning' ? ' by-meaning' : ''}` }, t(`link.kind.${r.kind}`)),
-      h('span', { class: 'lr-line' }, r.text),
-      c ? h('span', { class: 'lr-open' }, t('link.open', { title: c.title })) : null,
-    ];
+    const parts = [h('span', { class: 'lr-kind' }, t(`link.kind.${r.kind}`)), h('span', { class: 'lr-line' }, r.text), c ? h('span', { class: 'lr-open' }, t('link.open', { title: c.title })) : null];
     return h('li', {}, c
-      ? h('button', { type: 'button', class: 'link-row reason', onclick: () => select({ type: 'chat', id: c.sessionId }, { zoom: true }) }, parts)
+      ? h('button', { type: 'button', class: 'link-row reason', onclick: () => select({ type: 'chat', id: c.sessionId }) }, parts)
       : h('div', { class: 'link-row reason static' }, parts));
   });
   $('#panelBody').replaceChildren(section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)));
 }
 
-function chatTools(c, slot) {
+function chatTools(c) {
   const can = chatButtons(c);
-  const unit = unitById(c.unitId);
+  const part = partById(c.partId);
   const actions = [];
-  actions.push(button(t('action.continue'), () => startChat(t('chat.newFrom', { title: c.title }), unit ? unitName(unit) : '', t('chat.introChild', { title: c.title }), { parentId: c.sessionId, ...(c.workCellId ? { workCellId: c.workCellId } : {}) }), { primary: true }));
+  actions.push(button(t('action.continue'), () => startChat(t('chat.newFrom', { title: c.title }), part ? part.name : '', t('chat.introChild', { title: c.title }), { parentId: c.sessionId, ...(c.workCellId ? { workCellId: c.workCellId } : {}) }), { primary: true }));
   if (can.write === 'page') actions.push(button(t('action.writeHere'), () => startChat(c.title, t('chat.resuming'), t('chat.introResume'), { sessionId: c.sessionId })));
   if (can.phone) actions.push(h('a', { class: 'btn', href: can.phone, target: '_blank', rel: 'noopener noreferrer' }, t('action.phone')));
   actions.push(button(c.entrypoint === 'claude-vscode' ? t('action.openVscode') : t('action.open'),
@@ -612,53 +693,36 @@ function chatTools(c, slot) {
     }, { disabled: !can.close.enabled, title: can.close.reason ? t(`action.why.${can.close.reason}`) : null, cls: 'danger-quiet' }));
   }
   actions.push(button(t(`action.${can.archive}`), () => runAction({ action: can.archive, sessionId: c.sessionId }, t(`action.${can.archive}d`))));
-  const targets = project.units.filter((u) => u.id !== c.unitId);
-  const move = () => slot.replaceChildren(inlineForm({
-    fields: field(t('chat.moveTo'), h('select', { name: 'unit' }, targets.map((u) => h('option', { value: u.id }, `${unitName(u)} · ${t(`level.${u.level}`)}`)))),
-    submitLabel: t('action.move'), onCancel: () => slot.replaceChildren(),
-    onSubmit: async (data) => { await moveChat(c.sessionId, data.get('unit')); },
-  }));
   const notes = [];
   if (!can.open.enabled && can.open.reason) notes.push(t(`action.why.${can.open.reason}`));
   if (c.live && c.entrypoint === 'claude-vscode') notes.push(t('action.vscodeFolder'));
-  return h('div', { class: 'tools' },
-    h('div', { class: 'actions' }, actions),
-    h('div', { class: 'actions secondary' }, button(t('action.moveChat'), move)),
-    notes.length ? h('p', { class: 'muted small' }, notes.join(' ')) : null,
-    h('p', { class: 'muted small' }, t('chat.dragHint')));
+  return h('div', { class: 'tools' }, h('div', { class: 'actions' }, actions), notes.length ? h('p', { class: 'muted small' }, notes.join(' ')) : null);
 }
 
 function renderChatPanel(c) {
-  const unit = unitById(c.unitId);
+  const part = partById(c.partId);
   const wc = c.workCellId && workCellById(c.workCellId);
   const parent = c.parentId && chatById(c.parentId);
   const card = c.card || {};
-  panelHead(c.title, pill(chatTone(c), t(`chat.${c.status}`)), c.archived ? h('span', { class: 'level-badge' }, t('chat.archived')) : null, unit ? unitLink(unit) : null);
-
-  let waitingBlock = null;
-  if (c.waiting.strong || c.waiting.items.length || c.waiting.weak) {
-    waitingBlock = h('div', { class: 'callout' },
-      h('h3', {}, t('chat.waitingFor')),
-      c.waiting.strong ? h('p', {}, t('chat.question')) : null,
-      !c.waiting.strong && c.waiting.weak ? h('p', {}, t('chat.endsWithQuestion')) : null,
-      list(c.waiting.items));
-  }
-
+  panelHead(c.title, pill(chatTone(c), t(`chat.${c.status}`)), c.archived ? h('span', { class: 'level-badge' }, t('chat.archived')) : null, part ? partLink(part) : null);
+  const waitingBlock = c.waiting.strong || c.waiting.items.length || c.waiting.weak ? h('div', { class: 'callout' },
+    h('h3', {}, t('chat.waitingFor')),
+    c.waiting.strong ? h('p', {}, t('chat.question')) : null,
+    !c.waiting.strong && c.waiting.weak ? h('p', {}, t('chat.endsWithQuestion')) : null,
+    list(c.waiting.items)) : null;
   const facts = [
     [t('chat.cost'), h('span', { class: 'num' }, money(c.costUSD))],
     [t('chat.branch'), wc ? branchLink(wc) : h('span', { class: 'branch-name' }, project.mainBranch || '—')],
+    [t('chat.placed'), t(`chat.placedBy.${c.partSource}`)],
     [t('chat.started'), shortDate(Date.parse(c.startedAt))],
     [t('chat.updated'), relative(c.updatedAt)],
     ...c.workflows.map((w) => [t('chat.workflow'), `${w.name} · ${t('chat.workflowSteps', { done: w.done, started: w.started, label: w.lastLabel })}`]),
-    parent ? [t('chat.from'), linkTo(parent.title, { type: 'chat', id: parent.sessionId })] : null,
+    parent ? [t('chat.from'), chatLink(parent)] : null,
   ].filter(Boolean);
-
-  const slot = h('div', { class: 'form-slot' });
   $('#panelBody').replaceChildren(...[
     waitingBlock,
-    isUnsure(c) ? h('p', { class: 'note' }, c.unitSource === 'none' ? t('chat.unsortedHint') : t('chat.guess')) : null,
-    chatTools(c, slot),
-    slot,
+    !part && hasMap() ? h('p', { class: 'note' }, t('chat.offMap')) : null,
+    chatTools(c),
     section(t('chat.doing'), card.doing ? h('p', { class: 'lead' }, card.doing) : null),
     section(t('chat.todo'), list(card.todo)),
     section(t('chat.lastPrompt'), c.lastPrompt ? h('p', { class: 'quote' }, c.lastPrompt) : null),
@@ -691,26 +755,24 @@ function renderProjectPanel() {
       h('div', { class: 'skill-head' },
         h('span', { class: 'skill-name' }, s.name),
         h('span', { class: 'level-badge' }, s.plugin ? t('skills.origin.plugin', { plugin: s.plugin }) : t(`skills.origin.${s.origin}`)),
-        h('span', { class: `pill tone-${s.enabled ? 'active' : 'idle'}` }, h('span', { class: 'pill-dot', 'aria-hidden': 'true' }), s.enabled ? t('skills.on') : t('skills.off'))),
+        pill(s.enabled ? 'active' : 'idle', s.enabled ? t('skills.on') : t('skills.off'))),
       s.description ? h('p', { class: 'skill-desc' }, s.description) : null,
       h('div', { class: 'skill-cmd' }, h('code', {}, s.command),
         h('button', { type: 'button', class: 'btn small-btn', onclick: () => copy(s.command), 'aria-label': t('skills.copyAria', { command: s.command }) }, t('skills.copy'))))))
       : h('p', { class: 'muted' }, t('skills.none'));
   } else {
-    const ai = p.ai;
-    const boot = bootstrapOf(p);
+    const loose = shown.chats.filter((c) => !c.partId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     body = h('div', {},
       h('dl', { class: 'facts first' },
         h('dt', {}, t('project.root')), h('dd', {}, h('code', { class: 'path' }, p.root)),
+        hasMap() ? [h('dt', {}, t('project.map')), h('dd', {}, h('code', { class: 'path' }, p.arch.dir), p.arch.source === 'main-branch' ? ` · ${t('project.fromMain', { main: p.mainBranch })}` : '')] : null,
         h('dt', {}, t('costs.range.today')), h('dd', { class: 'num' }, money(p.cost.today)),
         h('dt', {}, t('costs.range.d7')), h('dd', { class: 'num' }, money(p.cost.d7)),
         h('dt', {}, t('costs.range.d30')), h('dd', { class: 'num' }, money(p.cost.d30)),
         p.fetchedAt ? [h('dt', {}, t('project.fetched')), h('dd', {}, clock(p.fetchedAt))] : null),
-      section(t('project.ai'), ai
-        ? [h('p', {}, t('project.aiOn', { model: ai.model, cost: money(ai.spentUSDToday) })),
-          ai.queue ? h('p', { class: 'muted small' }, t.count('costs.aiQueue', ai.queue)) : null,
-          boot ? h('div', { class: 'progress', role: 'img', 'aria-label': t('ai.organizing', boot) }, h('span', { style: `width:${Math.round((boot.done / Math.max(1, boot.total)) * 100)}%` })) : null,
-          boot ? h('p', { class: 'muted small' }, t('ai.organizingCost', { cost: money(boot.estimatedUSD) })) : null]
+      section(hasMap() ? t('project.offMap') : t('project.chats'), chatRows(loose)),
+      section(t('project.ai'), p.ai
+        ? [h('p', {}, t('project.aiOn', { model: p.ai.model, cost: money(p.ai.spentUSDToday) })), p.ai.queue ? h('p', { class: 'muted small' }, t.count('costs.aiQueue', p.ai.queue)) : null]
         : h('p', { class: 'muted' }, t('project.aiOff'))),
       h('label', { class: 'switch block-switch' },
         h('input', { type: 'checkbox', checked: showArchived, onchange: (e) => setArchived(e.target.checked) }),
@@ -726,179 +788,120 @@ function openPanel() {
   const panel = $('#panel');
   if (panel.hidden) returnFocus = document.activeElement;
   chat.close();
+  closeWaiting();
   panel.hidden = false;
   panel.querySelector('.panel-body').scrollTop = 0;
 }
 function closePanel(restore = true) {
   if ($('#panel').hidden) return;
   $('#panel').hidden = true;
-  selection = null;
+  if (selection && selection.type !== 'node') selection = null;
   editing = false;
-  brain.select(null);
+  renderMap();
   if (restore && returnFocus && document.contains(returnFocus)) returnFocus.focus();
 }
 
-function showAt(iso) {
-  if (Date.parse(iso) > tNow) setTime(tMax, { instant: true });
-}
-
-// Draws the panel for the current selection again (after a poll or an edit) without moving the map.
+// Draws the open panel or point details again (after a poll) without moving the map.
 function rerender() {
-  if (selection && !$('#panel').hidden) select(selection, { keep: true });
+  if (selection && selection.type !== 'node' && !$('#panel').hidden) select(selection, { keep: true });
+  if (pointNode && !$('#chat').hidden && !$('#pointDetails').contains(document.activeElement)) renderPointDetails();
 }
 
-function select(sel, { zoom = false, keep = false } = {}) {
-  if (!sel) {
-    closePanel();
-    return;
+function select(sel, { keep = false } = {}) {
+  if (!sel) return closePanel();
+  if (!keep) {
+    openPanel();
+    editing = false;
   }
-  closeWaiting();
-  if (!keep) editing = false;
   selection = sel;
-  if (sel.type === 'project') {
-    renderProjectPanel();
-    brain.select(null);
-    if (!keep) {
-      openPanel();
-      requestAnimationFrame(() => brain.fit(true));
-    }
-    return;
-  }
-  if (sel.type === 'unit') {
-    const u = unitById(sel.id);
-    if (!u) return closePanel();
-    if (!keep) showAt(u.bornAt);
-    renderUnitPanel(u);
-  } else if (sel.type === 'workcell') {
+  if (sel.type === 'project') renderProjectPanel();
+  else if (sel.type === 'workcell') {
     const w = workCellById(sel.id);
     if (!w) return closePanel();
-    // A fused branch only exists in the past: travel to its last hour alive.
-    if (!keep && w.mergedAt && tNow >= Date.parse(w.mergedAt)) setTime(Date.parse(w.mergedAt) - 3600e3, { instant: true });
-    else if (!keep) showAt(w.bornAt);
     renderWorkCellPanel(w);
   } else if (sel.type === 'link') {
-    const link = project.unitLinks.find((l) => `${l.a}|${l.b}` === sel.id);
+    const link = (project.arch.links ?? []).find((l) => `${l.a}|${l.b}` === sel.id);
     if (!link) return closePanel();
-    if (!keep) showAt(link.since);
     renderLinkPanel(link);
   } else {
     const c = chatById(sel.id);
     if (!c) return closePanel();
-    // Opening an archived conversation shows the archived ones; archiving the open one lets it leave the map.
     if (c.archived && !showArchived) {
       if (keep) return closePanel();
       setArchived(true);
     }
-    if (!keep) showAt(c.startedAt);
     renderChatPanel(c);
   }
-  if (!keep) openPanel();
-  brain.select(sel);
-  const focus = { unit: brain.focusUnit, workcell: brain.focusWorkCell, link: brain.focusLink, chat: brain.focusChat }[sel.type];
-  if (zoom) requestAnimationFrame(() => focus(sel.id));
+  if (keep) return undefined;
+  const target = selectedNodeId();
+  if (target) revealNode(target);
+  else renderMap();
+  return undefined;
 }
 
-// Cumulative count of conversations: the project visibly gaining body over time.
-function renderGrowth() {
-  const starts = shown.chats.map((c) => Date.parse(c.startedAt)).sort((a, b) => a - b);
-  const span = Math.max(1, tMax - tMin);
-  const total = Math.max(1, starts.length);
-  const x = (ms) => (((ms - tMin) / span) * 1000).toFixed(1);
-  const y = (n) => (100 - (n / total) * 92).toFixed(1);
-  let line = 'M0,100';
-  starts.forEach((ms, i) => { line += `H${x(ms)}V${y(i + 1)}`; });
-  line += 'H1000';
-  const area = `${line}V100Z`;
-  $('#growth').setAttribute('viewBox', '0 0 1000 100');
-  $('#growth').replaceChildren(
-    svgEl('clipPath', { id: 'growth-past' }),
-    svgEl('path', { d: area, class: 'body-future' }),
-    svgEl('path', { d: area, class: 'body-past', 'clip-path': 'url(#growth-past)' }),
-    svgEl('path', { d: line, class: 'body-edge', 'clip-path': 'url(#growth-past)' }),
-  );
-  $('#growth-past').append(svgEl('rect', { x: 0, y: 0, width: 1000, height: 100 }));
+// ---- "use this mode on the whole PC" ------------------------------------------------------
 
-  // Births, fusions, groupings and renames as marks on the track: where the body divided, came together or learned a name.
-  $('#marks').replaceChildren(...project.activity.filter((a) => MARK_KINDS.includes(a.kind)).map((a) => {
-    const wc = a.workCellId && workCellById(a.workCellId);
-    const pos = ((Date.parse(a.ts) - tMin) / span) * 100;
-    return h('span', {
-      class: `mark-event mk-${a.kind}`, 'data-pos': pos.toFixed(2), title: `${shortDate(Date.parse(a.ts))} · ${activityTitle(a)}`,
-      style: `left:${pos.toFixed(2)}%${wc ? `;--owner-h:${ownerHue(wc.owner.email)}` : ''}`,
-    });
-  }));
-}
-
-function setTime(time, { instant = false } = {}) {
-  tNow = Math.min(tMax, Math.max(tMin, time));
-  const pos = tMax > tMin ? Math.round(((tNow - tMin) / (tMax - tMin)) * 1000) : 1000;
-  $('#time').value = String(pos);
-  $('#time').style.setProperty('--pos', `${pos / 10}%`);
-  const atEnd = tNow >= tMax;
-  $('#timeLabel').textContent = atEnd ? t('timeline.now') : shortDate(tNow);
-  $('#time').setAttribute('aria-valuetext', atEnd ? t('timeline.now') : shortDate(tNow));
-  $('#growth-past rect')?.setAttribute('width', String(pos));
-  for (const m of document.querySelectorAll('.mark-event')) {
-    const past = Number(m.dataset.pos) <= pos / 10;
-    // A mark the play head just crossed lights up once: the event happening, not only its trace.
-    m.classList.toggle('is-crossed', past && !instant && !m.classList.contains('is-past'));
-    m.classList.toggle('is-past', past);
-  }
-  brain.setTime(tNow, { instant });
-}
-
-function setPlayIcon() {
-  const btn = $('#play');
-  btn.querySelector('use').setAttribute('href', playing ? '#i-pause' : '#i-play');
-  btn.setAttribute('aria-label', playing ? t('timeline.pause') : t('timeline.play'));
-  btn.setAttribute('title', playing ? t('timeline.pause') : t('timeline.play'));
-}
-
-function stopPlay() {
-  cancelAnimationFrame(playing);
-  playing = 0;
-  setPlayIcon();
-}
-
-function togglePlay() {
-  if (playing) return stopPlay();
-  closePanel(false);
-  const from = tNow >= tMax ? tMin : tNow;
-  const start = performance.now() - ((from - tMin) / Math.max(1, tMax - tMin)) * PLAY_MS;
-  const tick = (now) => {
-    const p = Math.min(1, (now - start) / PLAY_MS);
-    setTime(tMin + p * (tMax - tMin));
-    if (p < 1) playing = requestAnimationFrame(tick);
-    else stopPlay();
+async function pcMode(mode) {
+  let cur = await api.settingsMode();
+  // The demo has no settings file: the dialog still shows what would change, and saving says it is a demo.
+  if (!cur.ok && cur.error === 'demo') cur = { ok: true, mode: null, undo: false };
+  if (!cur.ok) return toast(errorText(cur.error));
+  const offer = pcModeOffer(mode, cur.mode);
+  const name = (m) => t(`chat.modeName.${m}`);
+  const dialog = $('#confirmDialog');
+  const done = async (fn) => {
+    const res = await fn();
+    dialog.close();
+    if (!res.ok) return toast(errorText(res.error));
+    return toast(res.mode ? t('pcmode.done', { mode: name(res.mode) }) : t('pcmode.undone'));
   };
-  playing = requestAnimationFrame(tick);
-  setPlayIcon();
+  dialog.replaceChildren(h('form', { method: 'dialog', class: 'confirm pc-mode' },
+    h('h2', {}, t('pcmode.title', { mode: name(mode) })),
+    h('p', {}, cur.mode ? t('pcmode.now', { mode: name(cur.mode) }) : t('pcmode.nowNone')),
+    h('p', {}, t('pcmode.explain')),
+    h('p', { class: 'muted' }, t('pcmode.safety')),
+    offer.same ? h('p', { class: 'note' }, t('pcmode.same')) : null,
+    h('div', { class: 'actions' },
+      cur.undo ? h('button', { type: 'button', class: 'btn', onclick: () => done(() => api.undoSettingsMode()) }, t('pcmode.undo')) : null,
+      h('span', { class: 'grow' }),
+      h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, t('confirm.cancel')),
+      h('button', { type: 'button', class: 'btn primary', disabled: offer.same || !offer.mode, onclick: () => done(() => api.setSettingsMode(mode)) }, t('pcmode.confirm', { mode: name(mode) })))));
+  dialog.showModal();
+  dialog.querySelector('.primary:not(:disabled), .btn')?.focus();
+  return undefined;
 }
 
-function timeBounds() {
-  tMax = Date.parse(state.generatedAt);
-  const starts = shown.chats.map((c) => Date.parse(c.startedAt));
-  tMin = starts.length ? Math.min(...starts) - 864e5 / 2 : tMax - 864e5;
+// ---- projects, polling, views ---------------------------------------------------------------
+
+function refreshMarks() {
+  marks = { live: liveNodes(shown, tree), branches: branchMarks(shown), clashes: clashMarks(shown) };
+}
+
+function renderBanner() {
+  const none = project.arch.source === 'none';
+  $('#archBanner').hidden = !none;
+  $('#newIdea').disabled = !hasMap();
+  document.body.classList.toggle('no-map', !hasMap());
+  $('#newIdea').title = hasMap() ? t('idea.hint') : t('idea.noMap');
+  if (none) $('#archBannerList').replaceChildren(...['arch.bannerFolder', 'arch.bannerReadme', 'arch.bannerParts'].map((k) => h('li', {}, t(k))));
 }
 
 function setProject(id) {
   project = state.projects.find((p) => p.id === id) || state.projects[0];
   shown = visibleProject(project, showArchived);
-  tree = unitTree(project.units);
+  tree = archTree(shown);
+  refreshMarks();
+  loadOpen();
   store.set('sm.project', project.id);
   $('#project').value = project.id;
-  stopPlay();
   closePanel(false);
   chat.showProject(project.id);
-  timeBounds();
+  if (chat.isOpen() && pointNode && !nodeById(tree, pointNode)) chat.close();
   renderSummary();
-  const empty = project.chats.length === 0;
-  $('#notice').textContent = empty ? t('state.emptyProject') : '';
-  $('#notice').hidden = !empty;
-  brain.setProject(forBrain(shown));
-  renderGrowth();
-  setTime(tMax, { instant: true });
-  brain.fit(false);
+  renderBanner();
+  $('#notice').hidden = true;
+  renderMap();
+  requestAnimationFrame(() => activeMap().fit(false));
   refreshView();
 }
 
@@ -906,10 +909,10 @@ function setArchived(on) {
   showArchived = on;
   store.set('sm.archived', on ? '1' : '0');
   shown = visibleProject(project, showArchived);
-  brain.setProject(forBrain(shown));
-  renderGrowth();
-  setTime(tNow, { instant: true });
+  tree = archTree(shown);
+  refreshMarks();
   renderSummary();
+  renderMap();
   refreshView();
   rerender();
 }
@@ -935,13 +938,12 @@ function renderAll() {
   renderProjects();
   const sel = selection;
   setProject(project?.id || store.get('sm.project'));
-  if (sel) select(sel);
+  if (sel && sel.type !== 'node') select(sel);
+  return undefined;
 }
 
-// A new state from the poll: the graph is laid out again only when its shape changed, otherwise repainted by id.
 function applyState(next) {
   const before = project;
-  const wasAtEnd = tNow >= tMax;
   state = next;
   renderWaiting();
   if (!state.projects.length) return renderNoProjects();
@@ -950,26 +952,15 @@ function applyState(next) {
   project = state.projects.find((p) => p.id === before.id) || state.projects[0];
   $('#project').value = project.id;
   if (project.id !== before.id) return setProject(project.id);
-  const old = shown;
   shown = visibleProject(project, showArchived);
-  tree = unitTree(project.units);
-  timeBounds();
+  tree = archTree(shown);
+  refreshMarks();
   renderSummary();
-  $('#notice').hidden = project.chats.length > 0;
-  if (structureKey(old) !== structureKey(shown)) {
-    brain.setProject(forBrain(shown));
-    renderGrowth();
-  } else {
-    brain.update(forBrain(shown));
-    renderGrowth();
-  }
-  setTime(wasAtEnd ? tMax : tNow, { instant: true });
-  for (const e of lifeEventsSince(before, project)) {
-    brain.pulse(e.unitIds, e.kind);
-    if (AI_KINDS.has(e.kind)) toast(t('ai.noticed', { what: activityTitle(e) }));
-  }
+  renderBanner();
+  renderMap();
   if (!editing) rerender();
   refreshView();
+  return undefined;
 }
 
 let polling = null;
@@ -989,28 +980,64 @@ function poll() {
 }
 
 function showView(name) {
-  view = VIEWS.includes(name) ? name : 'brain';
+  view = VIEWS.includes(name) ? name : 'map';
   for (const v of VIEWS) $(`#tab-${v}`).setAttribute('aria-current', v === view ? 'page' : 'false');
   document.body.dataset.view = view;
   for (const sec of document.querySelectorAll('.view')) sec.hidden = sec.id !== `view-${view}`;
   if (view === 'discover') discover.show();
   else $('#discover').hidden = true;
-  if (view !== 'brain') { closePanel(false); chat.close(); stopPlay(); closeWaiting(); }
+  if (view !== 'map') { closePanel(false); chat.close(); closeWaiting(); }
   store.set('sm.view', view);
   refreshView(true);
 }
 
 function refreshView(first = false) {
-  if (!state?.projects.length || !['map', 'board', 'history', 'costs'].includes(view)) return;
+  if (!state?.projects.length || !['board', 'history', 'costs'].includes(view)) return;
   const root = $(`#view-${view}`);
   if (first) tabs.render(view, root);
   else tabs.refresh(view, root);
 }
 
+// ---- search ---------------------------------------------------------------------------------
+
+function closeResults() {
+  $('#searchResults').hidden = true;
+  $('#search').setAttribute('aria-expanded', 'false');
+}
+
+function pickHit(id) {
+  closeResults();
+  revealNode(id, { center: true });
+  requestAnimationFrame(() => activeMap().focus(id));
+}
+
+function renderResults() {
+  const hits = searchTree(tree, query).slice(0, SEARCH_MAX);
+  const box = $('#searchResults');
+  if (!query) {
+    closeResults();
+    renderMap();
+    return;
+  }
+  box.replaceChildren(...(hits.length ? hits.map((m, i) => {
+    const node = nodeById(tree, m.id);
+    return h('li', { role: 'option', id: `hit-${i}` }, h('button', { type: 'button', class: `hit k-${node.kind}`, tabindex: '-1', onclick: () => pickHit(m.id) },
+      h('span', { class: 'hit-title' }, node.label),
+      h('span', { class: 'hit-path' }, m.path.slice(1).map((id) => nodeById(tree, id).label).join(' › ') || project.name)));
+  }) : [h('li', { class: 'hit-none' }, t('search.none'))]));
+  box.hidden = false;
+  $('#search').setAttribute('aria-expanded', 'true');
+  renderMap();
+}
+
+// ---- wiring ---------------------------------------------------------------------------------
+
 let discover = null;
 let chat = null;
 let files = null;
 let tabs = null;
+let mindmap = null;
+let outline = null;
 
 function wire() {
   $('#project').addEventListener('change', (e) => setProject(e.target.value));
@@ -1024,6 +1051,16 @@ function wire() {
       refreshView(true);
     });
   }
+  const mapCtx = {
+    content: boxContent, signature, toggleLabel,
+    onPick: (node) => openPoint(node),
+    onToggle: toggleNode,
+    onLink: (l) => select({ type: 'link', id: `${l.a}|${l.b}` }),
+    linkLabel: (l) => t('link.aria', { a: partById(l.a)?.name ?? l.a, b: partById(l.b)?.name ?? l.b }),
+    freeArea,
+  };
+  mindmap = createMindmap($('#mindmap'), mapCtx);
+  outline = createOutline($('#outline'), mapCtx);
   discover = createDiscover({
     root: $('#discover'), h, t: () => t, lang: () => lang, toast,
     project: () => (project ? { id: project.id, name: project.name } : null),
@@ -1031,7 +1068,12 @@ function wire() {
   chat = createChat({
     root: $('#chat'), h, t: () => t, toast, errorText, relative,
     onSession: () => setTimeout(poll, 1200),
-    onClose: () => brain.fit(true),
+    onPcMode: pcMode,
+    onClose: () => {
+      pointNode = null;
+      if (selection?.type === 'node') selection = null;
+      renderMap();
+    },
   });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   tabs = createTabs({
@@ -1044,56 +1086,84 @@ function wire() {
   for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"]')) {
     b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeWaiting()));
   }
-  $('#fit').addEventListener('click', () => brain.fit(true));
-  $('#play').addEventListener('click', togglePlay);
-  $('#time').addEventListener('input', (e) => {
-    stopPlay();
-    setTime(tMin + (Number(e.target.value) / 1000) * (tMax - tMin));
+  $('#ptab-chat').addEventListener('click', () => setPointTab('chat'));
+  $('#ptab-details').addEventListener('click', () => { setPointTab('details'); renderPointDetails(); });
+  $('#pointTabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const next = $('#chat').dataset.tab === 'details' ? 'chat' : 'details';
+    setPointTab(next);
+    if (next === 'details') renderPointDetails();
+    $(`#ptab-${next}`).focus();
   });
+  $('#fit').addEventListener('click', () => mindmap.fit(true));
+  $('#newIdea').addEventListener('click', openIdea);
+  $('#createArch').addEventListener('click', createArch);
+  $('#relations').addEventListener('click', () => {
+    relationsOn = !relationsOn;
+    store.set('sm.relations', relationsOn ? '1' : '0');
+    renderMap();
+  });
+  const search = $('#search');
+  search.addEventListener('input', () => { query = search.value.trim(); renderResults(); });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = searchTree(tree, query)[0];
+      if (first) pickHit(first.id);
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      search.value = '';
+      query = '';
+      renderResults();
+    }
+  });
+  search.addEventListener('blur', () => setTimeout(() => { if (!$('#searchBox').contains(document.activeElement)) closeResults(); }, 150));
+  search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open) return;
     if (!$('#waitingList').hidden) closeWaiting();
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
+  PHONE.addEventListener('change', () => { if (project) { renderMap(); activeMap().fit(false); } });
   let resizeTimer = 0;
-  let stageSize = '';
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      const rect = $('#stage').getBoundingClientRect();
-      const size = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
-      if (!project || size === stageSize) return;
-      stageSize = size;
-      const sel = selection;
-      brain.setProject(forBrain(shown));
-      brain.setTime(tNow, { instant: true });
-      brain.fit(false);
-      if (sel) brain.select(sel);
-    }, 150);
-  });
-  const legend = $('#legend');
-  legend.open = !PHONE.matches && store.get('sm.legend') !== 'closed';
-  // Only a person opening or closing it re-fits the map; setting it on load must not undo a deep link's zoom.
-  legend.querySelector('summary').addEventListener('click', () => {
-    legend.addEventListener('toggle', () => {
-      store.set('sm.legend', legend.open ? 'open' : 'closed');
-      if (project && !PHONE.matches) brain.fit(true);
-    }, { once: true });
+    resizeTimer = setTimeout(() => { if (project && !PHONE.matches) mindmap.fit(false); }, 200);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && state) poll(); });
-  setInterval(() => { if (!document.hidden && state && !playing) poll(); }, POLL_MS);
+  setInterval(() => { if (!document.hidden && state) poll(); }, POLL_MS);
 }
 
-// Deep link used for screenshots and sharing a view: ?view=<tab>&project=<id>&at=<ISO date>&select=unit:<id> (or workcell:, chat:, link:, project:).
+// Deep link for screenshots and sharing a view: ?view=<tab>&project=<id>&open=<ids|all>&select=node:<id> (or chat:, workcell:,
+// link:, project:)&tab=details&relations=1&changed=d7&q=<search>.
 function applyDeepLink() {
   const params = new URLSearchParams(location.search);
   if (params.get('project')) setProject(params.get('project'));
-  const at = Date.parse(params.get('at') || '');
-  if (!Number.isNaN(at)) setTime(at, { instant: true });
+  if (params.has('relations')) relationsOn = params.get('relations') === '1';
+  if (RANGES.includes(params.get('changed'))) changedRange = params.get('changed');
+  const openParam = params.get('open');
+  if (openParam === 'all') {
+    const walk = (n) => { if (n.children.length) open.add(n.id); n.children.forEach(walk); };
+    walk(tree);
+  } else if (openParam) for (const id of openParam.split(',')) open.add(id);
+  if (params.has('q')) {
+    query = params.get('q');
+    $('#search').value = query;
+  }
+  renderChanged();
+  renderMap();
+  requestAnimationFrame(() => activeMap().fit(false));
   const pick = params.get('select') || '';
   const cut = pick.indexOf(':');
-  if (cut > 0) select({ type: pick.slice(0, cut), id: pick.slice(cut + 1) }, { zoom: true });
+  if (cut > 0) {
+    const type = pick.slice(0, cut), id = pick.slice(cut + 1);
+    if (type === 'node') {
+      const node = nodeById(tree, id);
+      if (node) setTimeout(() => openPoint(node, { tab: params.get('tab') === 'details' ? 'details' : 'chat' }), 60);
+    } else setTimeout(() => select({ type, id }), 60);
+  }
+  if (params.get('idea') === '1') setTimeout(openIdea, 60);
+  if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);
 }
@@ -1117,13 +1187,10 @@ async function main() {
   if (state.projects.length) {
     const params = new URLSearchParams(location.search);
     const saved = store.get('sm.view');
-    if (saved && saved !== 'brain' && !params.get('view') && !params.get('select')) showView(saved);
+    if (saved && saved !== 'map' && VIEWS.includes(saved) && !params.get('view') && !params.get('select')) showView(saved);
     applyDeepLink();
     // A reload keeps the conversation that was open in the sheet.
-    if (view === 'brain' && !params.get('select')) {
-      chat.restore(project.id);
-      if (chat.isOpen()) brain.fit(true);
-    }
+    if (view === 'map' && !params.get('select')) chat.restore(project.id);
   }
 }
 

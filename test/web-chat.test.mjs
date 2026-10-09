@@ -30,7 +30,7 @@ const walk = (el, out = []) => {
 const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c === 'string')).join(' ');
 
 function sheet() {
-  const sels = ['#chatLog', '#chatForm', '#chatInput', '#chatSend', '#chatStop', '#chatTitle', '#chatContext', '#chatStatus', '#chatMode', '#chatList', '#chatNote', '[data-close="chat"]'];
+  const sels = ['#chatLog', '#chatForm', '#chatInput', '#chatSend', '#chatStop', '#chatTitle', '#chatContext', '#chatStatus', '#chatMode', '#chatList', '#chatNote', '#chatPcMode', '[data-close="chat"]'];
   const parts = new Map(sels.map((s) => [s, new El()]));
   const root = new El();
   root.hidden = true;
@@ -67,9 +67,9 @@ function memoryStorage(initial = {}) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const tt = () => (key, vars) => (vars ? `${key}(${Object.values(vars).join(',')})` : key);
 
-function makeChat({ storage = memoryStorage(), onClose = () => {} } = {}) {
+function makeChat({ storage = memoryStorage(), onClose = () => {}, onPcMode = () => {} } = {}) {
   const s = sheet();
-  const chat = createChat({ root: s.root, h, t: tt, toast() {}, errorText: (e) => e, onClose, storage, relative: () => 'just now' });
+  const chat = createChat({ root: s.root, h, t: tt, toast() {}, errorText: (e) => e, onClose, onPcMode, storage, relative: () => 'just now' });
   return { chat, ...s, storage };
 }
 
@@ -87,7 +87,7 @@ test('a chat sheet closes when the page moves to another project', () => {
   server({ 'GET /api/chat/list': () => LIST });
   let closed = 0;
   const { chat } = makeChat({ onClose: () => closed++ });
-  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
   chat.showProject('notes-app');
   assert.equal(chat.isOpen(), false);
   assert.equal(closed, 1);
@@ -96,17 +96,17 @@ test('a chat sheet closes when the page moves to another project', () => {
 test('a chat sheet stays open while its own project is shown again (language switch, poll)', () => {
   server({ 'GET /api/chat/list': () => LIST });
   const { chat } = makeChat();
-  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
   chat.showProject('acme-shop');
   assert.equal(chat.isOpen(), true);
 });
 
-test('opening a unit lists the conversations the page opened there, and picking one shows its history and continues it', async () => {
+test('opening a part lists the conversations the page opened there, and picking one shows its history and continues it', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => LIST, [`GET /api/chat/history/${S1}`]: () => HISTORY, 'POST /api/chat/start': () => ({ chatKey: KEY, mode: 'acceptEdits' }) });
   const { chat, part, storage } = makeChat();
-  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
   await settle();
-  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&unitId=checkout'));
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&partId=checkout'));
   const picks = walk(part('#chatList')).filter((e) => e.tag === 'button' && e.attrs.onclick);
   assert.equal(picks.length, 2);
   assert.ok(text(picks[0]).includes('Second question'), 'the one used last comes first');
@@ -161,9 +161,45 @@ test('a running conversation is watched again and the header selector switches i
 test('a bypassPermissions setting shows the note that the page runs it as auto', async () => {
   server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'auto', downgraded: true } }) });
   const { chat, part } = makeChat();
-  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
   await settle();
   assert.equal(part('#chatNote').hidden, false);
   assert.equal(part('#chatNote').textContent, 'chat.downgraded');
   assert.equal(part('#chatList').hidden, true, 'nothing to list');
+});
+
+test('an item lists the chats opened on it, and an idea those at the project root', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST });
+  const { chat } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'Refunds', intro: 'intro', start: { node: { kind: 'item', partId: 'pay', code: 'pa04' } } });
+  await settle();
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&partId=pay&code=pa04'));
+  chat.open({ projectId: 'acme-shop', title: 'New idea', intro: 'intro', start: { node: { kind: 'idea' } } });
+  await settle();
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&kind=idea'));
+});
+
+test('a ready request fills the box and goes with the point in the first message', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'Create the map', intro: 'intro', draft: 'Create the architecture map.', start: { node: { kind: 'create-arch' } } });
+  assert.equal(part('#chatInput').value, 'Create the architecture map.');
+  part('#chatForm').fire('submit');
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body, { projectId: 'acme-shop', node: { kind: 'create-arch' }, mode: 'settings', text: 'Create the architecture map.' });
+});
+
+test('"use this mode on the whole PC" waits for a real mode, then hands it to the page', async () => {
+  server({ 'GET /api/chat/list': () => LIST });
+  const asked = [];
+  const { chat, part } = makeChat({ onPcMode: (mode) => asked.push(mode) });
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  const btn = part('#chatPcMode');
+  assert.equal(btn.disabled, true, 'the settings choice is already what the PC uses');
+  part('#chatMode').value = 'acceptEdits';
+  part('#chatMode').fire('change');
+  assert.equal(btn.disabled, false);
+  btn.fire('click');
+  assert.deepEqual(asked, ['acceptEdits']);
 });
