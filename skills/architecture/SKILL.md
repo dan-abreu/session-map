@@ -46,6 +46,10 @@ In Portuguese the sections are `## Onde está no código` and `## O que falta`; 
 
 Change only that line; leave the rest of the file byte for byte. If the section has a line like "4 open items: ...", update its numbers. Cite the item code in your replies and in the board card: that is how the map hangs the conversation on the part.
 
+## Who an item is with
+
+By default an item has no owner, which means Claude does it: leave the owner out. Put `with <name>` (`com o <nome>`) only when the item needs the person: a decision only they can make, an account or access only they can create, a payment, or a physical action. Writing code, tests, docs and configuration is Claude's work even when the person is the one who knows the area: the owner of an item is not who owns the area or who will write the code. The map counts every item with a person as "waiting for you", so a wrong owner buries the real decisions.
+
 ## A new idea
 
 Read the README and the likely parts, say which part (or a new part, with its layer) and group it belongs to, show the exact line you would add, and write it only after the user's OK.

@@ -122,6 +122,31 @@ test('a new idea on a map read from the main branch: show the line and where it 
   assert.match(text, /where it goes/);
 });
 
+// Seen in a real test: the AI-made map of a real project marked ~170 items "with" a person, because the prompt never said
+// when an item is the person's. Work Claude can do itself has no owner on the map.
+const OWNER_RULE = {
+  default: /by default[^.]*(no owner|nobody|Claude)/i,
+  onlyWhen: /only (when|if)[^.]*(needs|requires) the person/i,
+  cases: ['decision', 'account', 'payment', 'physical'],
+  notOwnership: /(not|never)[^.]*who owns|who will write the code|who knows the area/i,
+};
+
+test('creating the map: an item names a person only when it truly needs one, and is the AI work by default', () => {
+  const text = all(contextOf(NONE, { kind: 'create-arch' }));
+  assert.match(text, OWNER_RULE.default);
+  assert.match(text, OWNER_RULE.onlyWhen);
+  for (const word of OWNER_RULE.cases) assert.match(text, new RegExp(word, 'i'), word);
+  assert.match(text, OWNER_RULE.notOwnership);
+  assert.match(text, /com o <nome>|with <name>/, 'the prefix is spelled out in both languages');
+  assert.deepEqual(codesIn(text), [], 'the rule gives no example code');
+});
+
+test('placing a new idea follows the same owner rule', () => {
+  const text = all(contextOf(PT, { kind: 'idea' }));
+  assert.match(text, OWNER_RULE.default);
+  assert.match(text, OWNER_RULE.onlyWhen);
+});
+
 // Seen on Windows: a part about the README named readme.md replaced the map's README.md (names ignore case there).
 test('creating the map: part files are named in lowercase with dashes and never README', () => {
   const text = all(contextOf(NONE, { kind: 'create-arch' }));

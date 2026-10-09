@@ -32,6 +32,8 @@ function upkeep(arch, { idea = false } = {}) {
   ].filter(Boolean).join('\n');
 }
 
+const OWNER_RULE = 'Who an item is with: by default an item has no owner, which means Claude does it, so leave the owner out. Put `**with <name>:**` (in Portuguese `**com o <nome>:**`) only when the item needs the person: a decision only they can make, an account or access only they can create, a payment, or a physical action. Writing code, tests, docs and configuration is the work of Claude even when the person is the one who knows the area: the owner of an item is not who owns the area or who will write the code.';
+
 function ideaText(arch) {
   const w = WORDS[arch.lang] ?? WORDS.en;
   const here = arch.source === 'worktree';
@@ -42,7 +44,7 @@ function ideaText(arch) {
       ? `1. Read ${arch.dir}/README.md and the files of the parts that could hold it.`
       : '1. Pick the parts that could hold it from the list below; their files are on the main branch, not in this folder.',
     '2. Say which part it belongs to (or propose a new part, with its layer) and which group, and why, in a few lines.',
-    `3. Show the exact item line you would add under "## ${w.missing}".`,
+    `3. Show the exact item line you would add under "## ${w.missing}". ${OWNER_RULE}`,
     here
       ? '4. Write it only after the person says OK. Do not start building the idea unless they ask.'
       : '4. Show the line and say where it goes; do not edit here. Do not start building the idea unless they ask.',
@@ -60,7 +62,8 @@ const CREATE_TEXT = [
   '   - README.md: what the map is, a mermaid flowchart where each layer is `subgraph id["Layer name"]` holding one node `ID[Part name]` per part, and a list linking each part to its file: `[Part name](part-file.md)`.',
   '   - One file per part, named after the part in lowercase with dashes (never README.md, in any case: on Windows it would replace the map\'s README): `# Part name`, an opening paragraph saying what it is, then "## How it works", "## Where in the code" (paths in backticks, relative to the repository root), "## Rules that must not break" and "## What\'s missing" with items `- [ ] what to do` that end with a code in backticks, the code being two or three letters of the part plus a number.',
   '   - In Portuguese the sections are "## Como funciona", "## Onde está no código", "## Regras que não podem quebrar" and "## O que falta".',
-  '5. Do not change anything outside that folder.',
+  `5. ${OWNER_RULE} Most items of a new map have no owner.`,
+  '6. Do not change anything outside that folder.',
 ].join('\n');
 
 // The Flow workshop: the AI and the person draw one shared draft; the page redraws it from each reply's last fence.

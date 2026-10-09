@@ -56,6 +56,14 @@ test('architecture skill: where the map lives, the item format, the three moves,
   }
 });
 
+test('architecture skill: an item names a person only when it truly needs one; code work has no owner by default', () => {
+  const body = read('skills/architecture/SKILL.md');
+  assert.match(body, /by default[^.]*(no owner|nobody|Claude)/i);
+  assert.match(body, /only (when|if)[^.]*(needs|requires) the person/i);
+  for (const word of ['decision', 'account', 'payment', 'physical']) assert.match(body, new RegExp(word, 'i'), word);
+  assert.match(body, /(not|never)[^.]*who owns|who will write the code|who knows the area/i);
+});
+
 test('the example part file in the architecture skill is read by the parser as the skill says', () => {
   const body = read('skills/architecture/SKILL.md');
   const example = /```markdown\r?\n([\s\S]*?)```/.exec(body);
