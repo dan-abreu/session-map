@@ -104,3 +104,20 @@ test('a map read from the main branch is not in this folder: the chat is told no
   assert.match(text, /do not edit/i);
   assert.ok(!/before you start/i.test(text), 'no instruction to write items');
 });
+
+test('a new idea gets no order to write before the OK: the upkeep rule for new requests stays out', () => {
+  const text = all(contextOf(PT, { kind: 'idea' }));
+  assert.ok(!/before you start/i.test(text), 'no "becomes an item before you start" rule against "only after the OK"');
+  assert.match(text, /em andamento/, 'starting and ticking items still apply');
+  assert.match(text, /- \[x\]/);
+  assert.match(text, /cite the item's code/);
+});
+
+test('a new idea on a map read from the main branch: show the line and where it goes, never write it here', () => {
+  const branch = project({ ...PT.arch, source: 'main-branch' });
+  const text = all(contextOf(branch, { kind: 'idea' }));
+  assert.match(text, /do not edit/i);
+  assert.ok(!/\bwrite it\b/i.test(text), 'no step asks the model to write');
+  assert.ok(!/Read docs\/arquitetura\/README\.md/.test(text), 'the folder is not in this working tree');
+  assert.match(text, /where it goes/);
+});

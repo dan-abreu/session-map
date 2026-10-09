@@ -14,7 +14,9 @@ const fail = (status, error) => ({ error, status });
 const layerOf = (arch, partId) => arch.layers.find((l) => l.partIds.includes(partId)) ?? null;
 const itemLine = (i) => `- [${i.status === 'done' ? 'x' : ' '}] ${i.title}${i.code ? ` \`${i.code}\`` : ''}`;
 
-function upkeep(arch) {
+// idea: the "Nova ideia" chat writes its item only after the person's OK, so the rule that a new request becomes an
+// item before the work starts stays out of it.
+function upkeep(arch, { idea = false } = {}) {
   const w = WORDS[arch.lang] ?? WORDS.en;
   if (arch.source !== 'worktree') {
     return [
@@ -24,21 +26,26 @@ function upkeep(arch) {
   }
   return [
     `This project keeps its plan in ${arch.dir}/ (the session-map:architecture convention): one file per part, the open work under "## ${w.missing}".`,
-    `- Something new the person asks for becomes an item in that section of the right part before you start: \`- [ ] what to do\` ending with its code in backticks, under a \`###\` group if one fits. The code is the prefix the part's items use plus the next number in the folder.`,
+    !idea && `- Something new the person asks for becomes an item in that section of the right part before you start: \`- [ ] what to do\` ending with its code in backticks, under a \`###\` group if one fits. The code is the prefix the part's items use plus the next number in the folder.`,
     `- When you start an item, put \`**${w.doing}:**\` in front of its text, or add \`${w.doing}\` as the first token of the bold prefix it already has (tokens are separated by \` · \`). When it is done, tick it: \`- [x]\`.`,
     '- Keep the rest of the file as it is, and cite the item\'s code in your replies.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function ideaText(arch) {
   const w = WORDS[arch.lang] ?? WORDS.en;
+  const here = arch.source === 'worktree';
   const parts = arch.parts.slice(0, LIST_MAX).map((p) => `- ${p.name}: ${p.file}`);
   return [
     'The person has a new idea for this project. Place it in the architecture map before anything else:',
-    `1. Read ${arch.dir}/README.md and the files of the parts that could hold it.`,
+    here
+      ? `1. Read ${arch.dir}/README.md and the files of the parts that could hold it.`
+      : '1. Pick the parts that could hold it from the list below; their files are on the main branch, not in this folder.',
     '2. Say which part it belongs to (or propose a new part, with its layer) and which group, and why, in a few lines.',
     `3. Show the exact item line you would add under "## ${w.missing}".`,
-    '4. Write it only after the person says OK. Do not start building the idea unless they ask.',
+    here
+      ? '4. Write it only after the person says OK. Do not start building the idea unless they ask.'
+      : '4. Show the line and say where it goes; do not edit here. Do not start building the idea unless they ask.',
     '',
     `Parts:\n${parts.join('\n')}`,
   ].join('\n');
@@ -82,7 +89,7 @@ export function contextOf(project, node) {
   const hasArch = arch && arch.source !== 'none';
   if (node.kind === 'create-arch') return hasArch ? fail(409, 'arch-exists') : { sections: [CREATE_TEXT], part: null };
   if (!hasArch) return fail(409, 'no-arch');
-  if (node.kind === 'idea') return { sections: [`Project: ${project.name}`, ideaText(arch), upkeep(arch)], part: null };
+  if (node.kind === 'idea') return { sections: [`Project: ${project.name}`, ideaText(arch), upkeep(arch, { idea: true })], part: null };
   if (node.kind === 'layer') {
     const layer = arch.layers.find((l) => l.id === node.layerId);
     if (!layer) return fail(404, 'unknown-layer');
