@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampWidth, dragWidth, keyWidth, widthBounds } from '../server/web/resize.js';
+import { clampWidth, createResizer, dragWidth, keyWidth, widthBounds } from '../server/web/resize.js';
 
 test('the side sheet stays between 320 px and 70% of the window, and a narrow window wins over the minimum', () => {
   assert.deepEqual(widthBounds(1440), { min: 320, max: 1008 });
@@ -25,4 +25,28 @@ test('keyboard: arrows move 24 px (left widens), Home and End go to the minimum 
   assert.equal(keyWidth('Home', 460, 1440), 320);
   assert.equal(keyWidth('End', 460, 1440), 1008);
   assert.equal(keyWidth('Enter', 460, 1440), null);
+});
+
+test('keyboard: each press steps from the width last set, even while the page still shows the old one', () => {
+  const listeners = {};
+  const attrs = {};
+  const props = {};
+  const handle = { addEventListener: (type, fn) => { listeners[type] = fn; }, setAttribute: (k, v) => { attrs[k] = v; } };
+  const sheet = { getBoundingClientRect: () => ({ width: 460 }) };
+  const target = { style: { setProperty: (k, v) => { props[k] = v; } } };
+  const saved = globalThis.window;
+  globalThis.window = { innerWidth: 1440, matchMedia: () => ({ matches: false }), addEventListener: () => {} };
+  try {
+    createResizer({ sheet, handle, target, cssVar: '--w', storageKey: 'test.w', defaultWidth: () => 460 });
+    const press = (key) => listeners.keydown({ key, preventDefault: () => {} });
+    press('ArrowLeft');
+    press('ArrowLeft');
+    press('ArrowLeft');
+    assert.equal(props['--w'], '532px');
+    assert.equal(attrs['aria-valuenow'], '532');
+    press('ArrowRight');
+    assert.equal(props['--w'], '508px');
+  } finally {
+    globalThis.window = saved;
+  }
 });

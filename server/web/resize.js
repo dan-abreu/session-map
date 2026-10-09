@@ -44,6 +44,8 @@ export function createResizer({ sheet, handle, target, cssVar, storageKey, defau
     } catch { /* storage blocked: the width is just not remembered */ }
   };
   let chosen = read();
+  // The width last written: the page can take a few frames to show it, and a held arrow key must not step from a stale size.
+  let shown;
 
   function apply(width, { persist = false } = {}) {
     const viewport = window.innerWidth;
@@ -53,6 +55,7 @@ export function createResizer({ sheet, handle, target, cssVar, storageKey, defau
     handle.setAttribute('aria-valuemin', String(min));
     handle.setAttribute('aria-valuemax', String(max));
     handle.setAttribute('aria-valuenow', String(w));
+    shown = w;
     if (persist) { chosen = w; save(w); }
     onChange(w);
     return w;
@@ -90,7 +93,7 @@ export function createResizer({ sheet, handle, target, cssVar, storageKey, defau
     apply(defaultWidth());
   });
   handle.addEventListener('keydown', (e) => {
-    const w = keyWidth(e.key, sheet.getBoundingClientRect().width || current(), window.innerWidth);
+    const w = keyWidth(e.key, shown, window.innerWidth);
     if (w === null) return;
     e.preventDefault();
     apply(w, { persist: true });
