@@ -1,7 +1,16 @@
 import { api } from './api.js';
-import { chatLog, pcModeOffer } from './views.js';
+import { foldReply } from './chatfold.js';
+import { modelName } from './live.js';
+import { chatLog, pcModeOffer, runWords } from './views.js';
 
-const SSE_TYPES = ['user', 'session', 'mode', 'text', 'tool', 'permission', 'turn-end', 'error', 'draft'];
+const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'tool', 'permission', 'turn-end', 'error', 'draft'];
+// How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
+const DEFAULT_RUN = { kind: 'auto', selfReinforce: false };
+const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
+const MODELS = ['haiku', 'sonnet', 'opus'];
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const RUN_KINDS = new Set(['auto', ...WAYS]);
+const usd = (v) => `US$ ${v.toFixed(2)}`;
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
 const MODES = ['settings', 'default', 'acceptEdits', 'auto'];
 const SAVED = 'sm.chat';
@@ -13,12 +22,12 @@ const browserStorage = () => {
 // The chat that runs through the person's own claude CLI (desenho-2 § 22). One conversation at a time in the sheet.
 // ctx: root (the sheet), h, t (translator getter), toast, errorText, onSession (a new conversation got its id),
 // onPcMode(mode) (the person asked to use the mode on the whole PC), storage (where the open conversation is kept for
-// a reload; savedKey null keeps nothing), relative (a date as "5 min ago"). The flow workshop adds onDraft(text) (the AI
+// a reload; savedKey null keeps nothing), relative (a date as "5 min ago"), money (a cost in the person's currency). The flow workshop adds onDraft(text) (the AI
 // redrew the shared draft), beforeSend() (awaited before a message leaves) and showText(text) (what a reply shows).
 // The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own.
 export function createChat({
   root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), savedKey = SAVED, relative = () => '',
-  onDraft, beforeSend, showText = (text) => text,
+  money = usd, onDraft, beforeSend, showText = (text) => text,
 }) {
   const q = (role) => root.querySelector(`[data-chat="${role}"]`);
   const logEl = q('log');
@@ -31,6 +40,10 @@ export function createChat({
   const noteEl = q('note');
   const pcBtn = q('pcmode');
   const whereEl = q('where');
+  const runEl = q('run');
+  const panelEl = q('runpanel');
+  // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
+  const uid = root.id || 'chat';
   let context = null;
   let key = null;
   let sessionId = null;
@@ -40,6 +53,12 @@ export function createChat({
   let returnFocus = null;
   let settings = null;
   let choice = 'settings';
+  let run = DEFAULT_RUN;
+  let lastManual = { kind: 'maestro' };
+  let lastFixed = { model: 'sonnet', effort: 'medium' };
+  let confirmUltra = false;
+  let mine = null;
+  let reinforce = null;
 
   // Blocked storage (private window, a preview) only means a reload does not bring the conversation back.
   function remember(entry) {
@@ -62,6 +81,7 @@ export function createChat({
   function apply(evt) {
     if (evt.type === 'draft') return onDraft?.(evt.data.text);
     log = chatLog(log, evt);
+    if (['run', 'turn-end', 'session'].includes(evt.type)) renderRun();
     if (evt.type === 'session' && evt.data.state === 'started') {
       const isNew = sessionId !== evt.data.sessionId;
       sessionId = evt.data.sessionId;
@@ -102,9 +122,16 @@ export function createChat({
 
   function itemView(item) {
     const tt = t();
+    if (item.type === 'user' && item.auto) return h('li', { class: 'msg msg-auto' }, h('p', {}, tt('run.autoAnswered')));
     if (item.type === 'user') return h('li', { class: 'msg msg-user' }, h('span', { class: 'visually-hidden' }, `${tt('chat.you')}: `), h('p', {}, item.text));
     if (item.type === 'assistant') {
-      return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '), h('p', {}, showText(item.text)));
+      const folded = foldReply(item.text);
+      const asks = folded.run?.level === 'ask-reinforce' && item === log.items.at(-1) && !log.running;
+      return h('li', { class: `msg msg-claude${item.streaming ? ' is-streaming' : ''}` }, h('span', { class: 'visually-hidden' }, 'Claude: '),
+        folded.plan ? chip('plan', tt('fold.plan'), h('p', {}, folded.plan)) : null,
+        folded.text || item.streaming ? h('p', {}, showText(folded.text)) : null,
+        folded.card ? chip('card', folded.card.title ? tt('fold.card', { title: folded.card.title }) : tt('fold.cardUntitled'), cardBody(folded.card)) : null,
+        asks ? askCard(folded.run) : null);
     }
     if (item.type === 'tool') {
       return h('li', { class: `msg msg-tool${item.isError ? ' is-error' : ''}` },
@@ -127,6 +154,169 @@ export function createChat({
           : h('p', { class: 'perm-state' }, tt(`chat.perm.${item.state}`)));
     }
     return h('li', { class: 'msg msg-error', role: 'alert' }, errorText(item.error));
+  }
+
+  // A block folded out of a reply: one line that opens to show what it said.
+  function chip(kind, label, body) {
+    return h('details', { class: `fold-chip fold-${kind}` }, h('summary', {}, label), h('div', { class: 'fold-body' }, body));
+  }
+
+  function cardBody(card) {
+    const tt = t();
+    const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+    const rows = [
+      typeof card.doing === 'string' ? [tt('chat.doing'), [card.doing]] : null,
+      list(card.todo).length ? [tt('chat.todo'), list(card.todo)] : null,
+      list(card.waiting).length ? [tt('chat.waitingFor'), list(card.waiting)] : null,
+      list(card.decided).length ? [tt('fold.decided'), list(card.decided)] : null,
+    ].filter(Boolean);
+    if (!rows.length) return h('p', {}, tt('fold.cardEmpty'));
+    return h('dl', { class: 'fold-card' }, rows.map(([name, values]) => [h('dt', {}, name), values.map((v) => h('dd', {}, v))]));
+  }
+
+  // Automatic asks before the reinforced way of working: the reason, the estimate and the two answers.
+  function askCard(block) {
+    const tt = t();
+    const answer = (key) => () => { if (!sendBtn.disabled) send(tt(key)); };
+    return h('div', { class: 'run-ask', role: 'group', 'aria-label': tt('run.ask.title') },
+      h('p', { class: 'run-ask-title' }, tt('run.ask.title')),
+      h('p', {}, Number.isFinite(block.estimateUSD)
+        ? tt('run.ask.body', { why: block.why ?? tt('run.level.noReason'), cost: money(block.estimateUSD) })
+        : tt('run.ask.bodyNoCost', { why: block.why ?? tt('run.level.noReason') })),
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn primary', 'data-run': 'ask-yes', onclick: answer('run.ask.yesText') }, tt('run.ask.yes')),
+        h('button', { type: 'button', class: 'btn', 'data-run': 'ask-no', onclick: answer('run.ask.noText') }, tt('run.ask.no'))));
+  }
+
+  // ---- how the conversation runs: the header line and the Automatic / Manual panel ----
+
+  function renderRun() {
+    if (!runEl) return;
+    const tt = t();
+    const words = runWords(tt, { choice: run, info: log?.run ?? null, mine });
+    const cost = log?.costUSD ?? null;
+    const open = Boolean(panelEl && !panelEl.hidden);
+    runEl.replaceChildren(
+      h('button', {
+        type: 'button', class: `run-toggle tone-${words.tone}`, 'data-run': 'toggle', 'aria-expanded': String(open),
+        'aria-controls': panelEl?.id || null, title: tt('run.change'), onclick: togglePanel,
+      },
+      h('span', { class: 'run-way' }, words.way),
+      h('span', { class: 'run-model' }, [words.model, words.effort].filter(Boolean).join(' · ')),
+      cost !== null ? h('span', { class: 'run-cost num', title: tt('run.costTitle') }, money(cost)) : null,
+      h('span', { class: 'run-caret', 'aria-hidden': 'true' })),
+      h('p', { class: 'run-why' }, words.why));
+  }
+
+  function togglePanel() {
+    if (!panelEl) return;
+    panelEl.hidden = !panelEl.hidden;
+    confirmUltra = false;
+    renderRun();
+    renderPanel();
+  }
+
+  async function pick(next) {
+    run = next;
+    confirmUltra = false;
+    if (next.kind !== 'auto') lastManual = next;
+    if (next.kind === 'fixed') lastFixed = { model: next.model, effort: next.effort };
+    renderRun();
+    renderPanel();
+    // Not started yet, or paused: the choice goes with the next message.
+    if (!key || !log || log.ended) return;
+    const res = await api.chatRun(key, next);
+    if (!res.ok && res.error !== 'ended') toast(errorText(res.error));
+  }
+
+  function chooseWay(way) {
+    if (way === 'ultracode') {
+      confirmUltra = true;
+      return renderPanel();
+    }
+    return pick(way === 'fixed' ? { kind: 'fixed', ...lastFixed } : { kind: way });
+  }
+
+  async function saveLimit(input) {
+    const value = Number(String(input.value).replace(',', '.'));
+    const res = await api.setReinforcedLimit(value);
+    if (!res.ok) return toast(errorText(res.error));
+    reinforce = { ...reinforce, limitUSD: res.limitUSD };
+    renderPanel();
+    return toast(t()('run.limitSaved', { limit: money(res.limitUSD) }));
+  }
+
+  function option({ name, value, checked, onchange, title, hint, tag }) {
+    return h('label', { class: 'run-option' },
+      h('input', { type: 'radio', name, value, checked, 'data-run': tag, onchange }),
+      h('span', { class: 'run-option-text' }, h('span', { class: 'run-option-name' }, title), h('span', { class: 'run-hint' }, hint)));
+  }
+
+  function autoPart(tt) {
+    const limitId = `${uid}-run-limit`;
+    const limit = reinforce?.limitUSD ?? null;
+    const field = h('input', { id: limitId, type: 'number', min: '0', step: '1', inputmode: 'decimal', class: 'num', value: limit === null ? '' : String(limit), 'data-run': 'limit' });
+    return [
+      h('p', { class: 'run-lede' }, tt('run.hint.auto')),
+      h('label', { class: 'run-check' },
+        h('input', { type: 'checkbox', checked: run.selfReinforce, 'data-run': 'self', onchange: () => pick({ kind: 'auto', selfReinforce: !run.selfReinforce }) }),
+        h('span', { class: 'run-option-text' }, h('span', { class: 'run-option-name' }, tt('run.self')), h('span', { class: 'run-hint' }, tt('run.selfHint')))),
+      h('div', { class: 'run-limit' },
+        h('label', { for: limitId }, tt('run.limitLabel')),
+        h('div', { class: 'run-limit-row' },
+          field,
+          h('button', { type: 'button', class: 'btn small-btn', 'data-run': 'limit-save', onclick: () => saveLimit(field) }, tt('run.limitSave'))),
+        h('p', { class: 'run-hint' }, limit === null ? tt('run.limitNone') : tt('run.limitUsed', { used: money(reinforce?.spentUSD ?? 0), limit: money(limit) }))),
+    ];
+  }
+
+  // What a way needs right under it: the cost warning of Ultracode, the model and level of a fixed run.
+  function ultraWarning(tt) {
+    return h('div', { class: 'run-warn', role: 'alert' },
+      h('p', { class: 'run-warn-title' }, tt('run.ultra.title')),
+      h('p', {}, tt('run.ultra.warn')),
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn primary', 'data-run': 'ultra-yes', onclick: () => pick({ kind: 'ultracode' }) }, tt('run.ultra.yes')),
+        h('button', { type: 'button', class: 'btn', 'data-run': 'ultra-no', onclick: () => { confirmUltra = false; renderPanel(); } }, tt('run.ultra.no'))));
+  }
+
+  function fixedChoices(tt) {
+    return h('div', { class: 'run-fixed' },
+      h('fieldset', { class: 'run-models' }, h('legend', {}, tt('run.modelLabel')),
+        MODELS.map((m) => option({
+          name: `${uid}-run-model`, value: m, checked: run.model === m, tag: `model-${m}`, onchange: () => pick({ ...run, model: m }),
+          title: modelName(m), hint: tt(`run.modelHint.${m}`),
+        }))),
+      h('div', { class: 'run-effort' },
+        h('p', { class: 'run-effort-label', id: `${uid}-run-effort` }, tt('run.effortLabel')),
+        h('div', { class: 'seg', role: 'group', 'aria-labelledby': `${uid}-run-effort` },
+          EFFORTS.map((e) => h('button', { type: 'button', 'data-run': `effort-${e}`, 'aria-pressed': String(run.effort === e), onclick: () => pick({ ...run, effort: e }) }, tt(`run.effort.${e}`)))),
+        h('p', { class: 'run-hint' }, tt(`run.effortHint.${run.effort}`))));
+  }
+
+  function manualPart(tt) {
+    const name = `${uid}-run-way`;
+    const mineVars = { model: mine?.model ? modelName(mine.model) : tt('run.modelDefault'), effort: mine?.effort ? tt(`run.effort.${mine.effort}`) : tt('run.effortDefault') };
+    return [h('fieldset', { class: 'run-ways' }, h('legend', {}, tt('run.wayLabel')),
+      WAYS.map((way) => [
+        option({
+          name, value: way, checked: run.kind === way, tag: `way-${way}`, onchange: () => chooseWay(way),
+          title: tt(`run.way.${way}`), hint: tt(`run.hint.${way}`, way === 'settings' ? mineVars : undefined),
+        }),
+        way === 'ultracode' && confirmUltra ? ultraWarning(tt) : null,
+        way === 'fixed' && run.kind === 'fixed' ? fixedChoices(tt) : null,
+      ]))];
+  }
+
+  function renderPanel() {
+    if (!panelEl || panelEl.hidden) return;
+    const tt = t();
+    const manual = run.kind !== 'auto';
+    panelEl.replaceChildren(
+      h('div', { class: 'seg run-path', role: 'group', 'aria-label': tt('run.pathLabel') },
+        h('button', { type: 'button', 'data-run': 'path-auto', 'aria-pressed': String(!manual), onclick: () => { if (manual) pick({ kind: 'auto', selfReinforce: false }); } }, tt('run.path.auto')),
+        h('button', { type: 'button', 'data-run': 'path-manual', 'aria-pressed': String(manual), onclick: () => { if (!manual) pick(lastManual); } }, tt('run.path.manual'))),
+      ...(manual ? manualPart(tt) : autoPart(tt)));
   }
 
   const modeName = (mode) => t()(`chat.modeName.${mode}`);
@@ -185,7 +375,7 @@ export function createChat({
     await beforeSend?.();
     const live = key && !log.ended;
     const start = sessionId ? { sessionId } : context.start;
-    const res = live ? await api.chatSend(key, text) : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, text });
+    const res = live ? await api.chatSend(key, text) : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text });
     if (!res.ok && !(res.error === 'busy' && res.chatKey)) {
       log = chatLog(log, { type: 'error', data: { error: res.error } });
       return render();
@@ -204,7 +394,11 @@ export function createChat({
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
     if (context !== ctx || !res.ok) return;
     settings = res.settings ?? null;
+    mine = res.mine ?? null;
+    reinforce = res.reinforce ?? null;
     renderMode();
+    renderRun();
+    renderPanel();
     const chats = res.chats ?? [];
     if (!chats.length || key || log?.items.length) return;
     const tt = t();
@@ -223,11 +417,18 @@ export function createChat({
     if (context !== ctx || !res.ok) return;
     settings = res.settings ?? settings;
     choice = MODES.includes(res.mode) ? res.mode : 'settings';
+    // What the conversation ran with before; one from elsewhere (or older than these choices) keeps its own Claude.
+    run = RUN_KINDS.has(res.run?.kind) ? res.run : { kind: 'settings' };
+    if (run.kind !== 'auto') lastManual = run;
+    mine = res.mine ?? mine;
+    reinforce = res.reinforce ?? reinforce;
     sessionId = ctx.start.sessionId;
     rememberOpen();
-    log = chatLog(log, { type: 'history', data: { messages: res.messages ?? [] } });
+    log = chatLog(log, { type: 'history', data: { messages: res.messages ?? [], costUSD: res.costUSD } });
     if (res.chatKey) watch(res.chatKey);
     renderMode();
+    renderRun();
+    renderPanel();
     render();
   }
 
@@ -268,6 +469,10 @@ export function createChat({
     log = undefined;
     lastEventId = 0;
     choice = 'settings';
+    run = DEFAULT_RUN;
+    lastManual = { kind: 'maestro' };
+    confirmUltra = false;
+    if (panelEl) panelEl.hidden = true;
     listEl.hidden = true;
     listEl.replaceChildren();
     q('title').textContent = ctx.title;
@@ -276,6 +481,7 @@ export function createChat({
     input.value = ctx.draft ?? '';
     root.hidden = false;
     renderMode();
+    renderRun();
     render();
     input.focus();
     if (ctx.start?.sessionId) loadHistory(ctx);
@@ -309,6 +515,6 @@ export function createChat({
     },
     // Left open over another project, the sheet would start its conversation in the old project's folder.
     showProject(projectId) { if (context && context.projectId !== projectId) close(); },
-    relabel() { if (!root.hidden) { input.placeholder = t()('chat.placeholder'); renderMode(); render(); } },
+    relabel() { if (!root.hidden) { input.placeholder = t()('chat.placeholder'); renderMode(); renderRun(); renderPanel(); render(); } },
   };
 }

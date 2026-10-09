@@ -890,6 +890,88 @@ body.is-resizing .sheet { animation: none; }
 .chat-bar { display: flex; align-items: center; gap: 8px; }
 .chat-safety { margin-right: auto; font-size: 0.6875rem; color: var(--ink-2); line-height: 1.35; }
 
+/* how the conversation runs: the header line, the Automatic / Manual panel, the ask to reinforce */
+.chat-run { display: grid; gap: 1px; padding: 8px 20px 8px; border-bottom: 1px solid var(--line); --tone: var(--idle); }
+.run-toggle {
+  display: flex; align-items: center; gap: 8px; width: calc(100% + 16px); min-height: 34px; margin: 0 -8px; padding: 4px 8px;
+  border: 0; border-radius: 9px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.run-toggle:hover, .run-toggle[aria-expanded="true"] { background: var(--bg-3); }
+.run-toggle::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
+.run-toggle.tone-auto, .run-toggle.tone-maestro { --tone: var(--active); }
+.run-toggle.tone-reinforced, .run-toggle.tone-ultracode { --tone: var(--doing); }
+.run-toggle.tone-ask { --tone: var(--waiting); }
+.run-way { flex: none; font-weight: 650; }
+.run-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8125rem; color: var(--ink-2); }
+.run-cost { margin-left: auto; padding-left: 8px; font-size: 0.8125rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.run-caret {
+  flex: none; width: 7px; height: 7px; margin: 0 2px 3px auto;
+  border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: rotate(45deg); transition: transform 180ms var(--ease-out);
+}
+.run-cost ~ .run-caret { margin-left: 6px; }
+.run-toggle[aria-expanded="true"] .run-caret { transform: translateY(3px) rotate(225deg); }
+.run-why { margin: 0; padding-left: 16px; font-size: 0.75rem; line-height: 1.4; color: var(--ink-2); overflow-wrap: anywhere; }
+.run-toggle.tone-ask + .run-why { color: var(--waiting-ink); font-weight: 600; }
+
+.run-panel {
+  display: grid; gap: 14px; flex: none; max-height: 44%; overflow: hidden auto; overscroll-behavior: contain;
+  padding: 14px 20px 16px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.run-panel[hidden] { display: none; }
+.run-path { justify-self: start; }
+.run-lede { margin: 0; max-width: 62ch; font-size: 0.8125rem; line-height: 1.5; }
+.run-ways, .run-models { display: grid; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.run-ways legend, .run-models legend, .run-effort-label, .run-limit label { padding: 0 0 6px; font-size: 0.75rem; font-weight: 650; color: var(--ink-2); }
+.run-option, .run-check {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; align-items: start;
+  margin: 0 -10px; padding: 8px 10px; border-radius: 9px; cursor: pointer;
+}
+.run-option:hover, .run-check:hover { background: var(--bg-3); }
+.run-option:has(input:checked) { background: var(--active-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--active) 30%, transparent); }
+.run-option input, .run-check input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--active); }
+.run-option-text { display: grid; gap: 1px; }
+.run-option-name { font-weight: 600; }
+.run-hint { margin: 0; font-size: 0.75rem; line-height: 1.45; color: var(--ink-2); }
+.run-fixed { display: grid; gap: 14px; margin-left: 16px; padding-left: 12px; border-left: 1px solid var(--line); }
+.run-effort .seg { flex-wrap: wrap; max-width: 100%; }
+.run-effort .seg button { padding: 0 10px; }
+.run-effort-label { margin: 0; }
+.run-effort .run-hint { margin-top: 6px; }
+.run-limit { display: grid; gap: 0; }
+.run-limit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.run-limit input {
+  width: 112px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg-2); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums;
+}
+.run-limit input:focus-visible { outline-offset: 0; border-color: var(--focus); }
+.run-warn, .run-ask { padding: 12px 14px; border-radius: 12px; background: var(--waiting-fill); }
+.run-warn p, .run-ask p { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+.run-warn p + p, .run-ask p + p { margin-top: 4px; }
+.run-warn-title, .run-ask-title { font-weight: 650; color: var(--waiting-ink); }
+.run-warn .actions, .run-ask .actions { margin-top: 10px; }
+.run-ask { margin-top: 10px; }
+
+/* the session-map answer given for the person, and the blocks folded out of a reply */
+.msg-auto { justify-self: end; max-width: 88%; padding: 6px 11px; border: 1px dashed var(--line); border-radius: 10px; font-size: 0.75rem; color: var(--ink-2); }
+.fold-chip { margin: 6px 0; font-size: 0.75rem; }
+.fold-chip:first-of-type { margin-top: 0; }
+.fold-chip summary {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 3px 11px 3px 9px;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); font-weight: 600; cursor: pointer; list-style: none;
+}
+.fold-chip summary::-webkit-details-marker { display: none; }
+.fold-chip summary::before {
+  content: ""; flex: none; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform 160ms var(--ease-out);
+}
+.fold-chip[open] summary::before { transform: rotate(45deg); }
+.fold-chip summary:hover { color: var(--ink); border-color: var(--ink-2); }
+.fold-body { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--bg-3); font-size: 0.8125rem; color: var(--ink); }
+.fold-card { display: grid; gap: 1px; margin: 0; }
+.fold-card dt { margin-top: 6px; font-size: 0.75rem; font-weight: 650; color: var(--ink-2); }
+.fold-card dt:first-child { margin-top: 0; }
+.fold-card dd { margin: 0; overflow-wrap: anywhere; }
+
 /* ---------- project panel ---------- */
 
 .facts.first { margin-top: 16px; padding-top: 0; border-top: 0; }
@@ -919,6 +1001,7 @@ body.is-resizing .sheet { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .msg-claude.is-streaming p::after, .bx-live::after { animation: none; }
   .hist-read { animation: none; }
+  .run-caret, .fold-chip summary::before { transition: none; }
 }
 
 /* ---------- the Flow tab: diagram, workshop and import ---------- */

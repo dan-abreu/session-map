@@ -1186,7 +1186,7 @@ function wire() {
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
   chat = createChat({
-    root: $('#chat'), h, t: () => t, toast, errorText, relative,
+    root: $('#chat'), h, t: () => t, toast, errorText, relative, money,
     onSession: () => { convs.render(); setTimeout(poll, 1200); },
     onPcMode: pcMode,
     onClose: () => {
@@ -1209,7 +1209,7 @@ function wire() {
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
-    h, t: () => t, toast, errorText, relative, phone: PHONE, onPcMode: pcMode,
+    h, t: () => t, toast, errorText, relative, money, phone: PHONE, onPcMode: pcMode,
     project: () => project, tree: () => tree, live: () => marks.live,
     onOpenPart: (partId) => openPartPoint(partId),
     onApplied: () => setTimeout(poll, 600),

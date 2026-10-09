@@ -207,7 +207,7 @@ export function createFlowView(ctx) {
   const archKey = (p) => JSON.stringify([p.id, p.arch.source, p.arch.mermaid, p.arch.layers, p.arch.parts.map((x) => [x.id, x.name]), p.arch.links?.map((l) => [l.a, l.b])]);
 
   const chat = createChat({
-    root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, savedKey: null, onPcMode: ctx.onPcMode,
+    root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, money: ctx.money, savedKey: null, onPcMode: ctx.onPcMode,
     onDraft: (text) => {
       if (!hist || text === hist.now) return;
       hist = historyPush(hist, text);

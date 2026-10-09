@@ -182,6 +182,8 @@
         <button type="button" role="tab" id="ptab-details" aria-selected="false" aria-controls="pointDetails" data-i18n="point.details"></button>
       </div>
       <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
+        <div class="chat-run" id="chatRun" data-chat="run"></div>
+        <div class="run-panel" id="chatRunPanel" data-chat="runpanel" hidden></div>
         <div class="chat-mode">
           <label for="chatMode" data-i18n="chat.modeLabel"></label>
           <select id="chatMode" data-chat="mode"></select>
@@ -271,6 +273,8 @@
           <button type="button" class="icon-btn" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
         <div class="chat-pane">
+          <div class="chat-run" data-chat="run"></div>
+          <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel" hidden></div>
           <div class="chat-mode">
             <label for="flowChatMode" data-i18n="chat.modeLabel"></label>
             <select id="flowChatMode" data-chat="mode"></select>

@@ -33,6 +33,7 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close', '#chatWhere': 'where',
+  '#chatRun': 'run', '#chatRunPanel': 'runpanel',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
@@ -128,7 +129,7 @@ test('opening a part lists the conversations the page opened there, and picking 
   part('#chatForm').fire('submit');
   await settle();
   const start = calls.find((c) => c.path === '/api/chat/start');
-  assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', text: 'And the retry' });
+  assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', run: { kind: 'settings' }, text: 'And the retry' });
 });
 
 test('a reload reopens the saved conversation of this project; closing the sheet forgets it', async () => {
@@ -191,7 +192,7 @@ test('a ready request fills the box and goes with the point in the first message
   assert.equal(part('#chatInput').value, 'Create the architecture map.');
   part('#chatForm').fire('submit');
   await settle();
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body, { projectId: 'acme-shop', node: { kind: 'create-arch' }, mode: 'settings', text: 'Create the architecture map.' });
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body, { projectId: 'acme-shop', node: { kind: 'create-arch' }, mode: 'settings', run: { kind: 'auto', selfReinforce: false }, text: 'Create the architecture map.' });
 });
 
 test('"use this mode on the whole PC" waits for a real mode, then hands it to the page', async () => {
@@ -274,4 +275,133 @@ test('a conversation that lives in VS Code reads here with its note and buttons;
   assert.equal(part('#chatForm').hidden, false);
   chat.close();
   assert.equal(chat.current(), null);
+});
+
+// ---- how the conversation runs: header, Automatic / Manual, folded blocks (plano-v02 item 12) ----
+
+const byRun = (el, name) => walk(el).find((e) => e.attrs?.['data-run'] === name);
+const MINE = { model: 'opus[1m]', effort: 'xhigh', ultracode: false };
+const LIST_RUN = { chats: [], settings: { mode: 'default', downgraded: false }, mine: MINE, reinforce: { limitUSD: 20, spentUSD: 3 } };
+const openPart = (chat) => chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+const send = async (part, words) => {
+  part('#chatInput').value = words;
+  part('#chatForm').fire('submit');
+  await settle();
+};
+
+test('a new conversation shows Automatic in its header, says what runs and why, and the first message carries that choice', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  const head = text(part('#chatRun'));
+  for (const words of ['run.way.auto', 'Opus', 'run.effort.high', 'run.why.auto']) assert.ok(head.includes(words), words);
+  await send(part, 'Fix the button');
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'auto', selfReinforce: false });
+});
+
+test('Manual: each way says when to use it; a fixed model and effort go with the first message and show in the header', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  assert.equal(part('#chatRunPanel').hidden, false);
+  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
+  const panel = text(part('#chatRunPanel'));
+  for (const hint of ['run.hint.maestro', 'run.hint.ultracode', 'run.hint.fixed', 'run.hint.settings(Opus 1M,run.effort.xhigh)']) assert.ok(panel.includes(hint), hint);
+  byRun(part('#chatRunPanel'), 'way-fixed').attrs.onchange();
+  byRun(part('#chatRunPanel'), 'model-haiku').attrs.onchange();
+  byRun(part('#chatRunPanel'), 'effort-low').attrs.onclick();
+  assert.ok(text(part('#chatRunPanel')).includes('run.effortHint.low'));
+  const head = text(part('#chatRun'));
+  assert.ok(head.includes('Haiku') && head.includes('run.effort.low') && head.includes('run.way.fixed'));
+  await send(part, 'Rename it');
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'fixed', model: 'haiku', effort: 'low' });
+});
+
+test('Ultracode waits for a confirmation that warns about the cost; cancelling keeps the way it was', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
+  byRun(part('#chatRunPanel'), 'way-ultracode').attrs.onchange();
+  assert.ok(text(part('#chatRunPanel')).includes('run.ultra.warn'));
+  assert.ok(text(part('#chatRun')).includes('run.way.maestro'), 'not applied before the OK');
+  byRun(part('#chatRunPanel'), 'ultra-no').attrs.onclick();
+  assert.ok(!text(part('#chatRunPanel')).includes('run.ultra.warn'));
+  byRun(part('#chatRunPanel'), 'way-ultracode').attrs.onchange();
+  byRun(part('#chatRunPanel'), 'ultra-yes').attrs.onclick();
+  assert.ok(text(part('#chatRun')).includes('run.way.ultracode'));
+  await send(part, 'Rebuild the sign in');
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'ultracode' });
+});
+
+test('on a running conversation a new choice goes to the server at once, and the header follows the run events with the cost', async () => {
+  const live = { ...HISTORY, chatKey: KEY, run: { kind: 'auto', selfReinforce: false }, mine: MINE, reinforce: { limitUSD: null, spentUSD: 0 }, costUSD: 0.2 };
+  const { calls, streams } = server({ [`GET /api/chat/history/${S1}`]: () => live, [`POST /api/chat/${KEY}/run`]: (body) => ({ run: body.run }) });
+  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
+  const { chat, part } = makeChat({ storage, money: (usd) => `$${usd.toFixed(2)}` });
+  chat.restore('acme-shop');
+  await settle();
+  assert.ok(text(part('#chatRun')).includes('$0.20'), 'the cost so far, before any event');
+  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 1);
+  const head = text(part('#chatRun'));
+  assert.ok(head.includes('Opus 5.5') && head.includes('run.level.reinforced(mexe no login)') && head.includes('$1.50'));
+  byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  byRun(part('#chatRunPanel'), 'self').attrs.onchange();
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/run`).body, { run: { kind: 'auto', selfReinforce: true } });
+});
+
+test('Automatic\'s "may reinforce on its own" shows the monthly limit and what was used, and saves a new limit', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/settings/reinforced-limit': (body) => ({ limitUSD: body.usd }) });
+  const toasts = [];
+  const { chat, part } = makeChat({ money: (usd) => `$${usd}`, toast: (m) => toasts.push(m) });
+  openPart(chat);
+  await settle();
+  byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  const panel = part('#chatRunPanel');
+  assert.ok(text(panel).includes('run.limitUsed($3,$20)'));
+  byRun(panel, 'limit').value = '35';
+  byRun(panel, 'limit-save').attrs.onclick();
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === '/api/settings/reinforced-limit').body, { usd: 35 });
+  assert.ok(toasts.some((m) => m.startsWith('run.limitSaved')));
+});
+
+test('a reply folds its status line and session-map card into chips; an ask to reinforce gets buttons that answer for the person', async () => {
+  const { calls, streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }), [`POST /api/chat/${KEY}/send`]: () => ({}) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  await send(part, 'Change the sign in');
+  const stream = streams.at(-1);
+  const reply = '**Skills:** none · **Agentes:** none\n\nThis touches the sign in.\n\n```session-map\n{"title":"Sign in","doing":"Waiting for the OK"}\n```\n\n```session-map-run\n{"level":"ask-reinforce","why":"sign in","estimateUSD":4}\n```';
+  sse(stream, 'text', { text: reply, partial: false }, 1);
+  sse(stream, 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'ask-reinforce', why: 'sign in', estimateUSD: 4, costUSD: 0.1 }, 2);
+  sse(stream, 'turn-end', { costUSD: 0.1 }, 3);
+  const log = part('#chatLog');
+  const shown = text(log);
+  assert.ok(shown.includes('This touches the sign in.'));
+  assert.ok(!shown.includes('**Skills:**') && !shown.includes('"doing"') && !shown.includes('session-map-run'), 'no raw blocks');
+  assert.ok(walk(log).some((e) => e.tag === 'details' && e.attrs.class?.includes('fold-chip')), 'folded into chips');
+  assert.ok(shown.includes('Waiting for the OK'), 'the card reads as words inside its chip');
+  byRun(log, 'ask-yes').attrs.onclick();
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/send`).body, { text: 'run.ask.yesText' });
+});
+
+test('the answer session-map gave for the person shows as its own note, not as the person\'s bubble', async () => {
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  await send(part, 'Change the sign in');
+  sse(streams.at(-1), 'user', { text: 'OK, you may reinforce.', auto: 'reinforce' }, 1);
+  const shown = text(part('#chatLog'));
+  assert.ok(shown.includes('run.autoAnswered'));
+  assert.ok(!shown.includes('OK, you may reinforce.'));
 });

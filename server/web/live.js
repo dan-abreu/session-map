@@ -78,7 +78,16 @@ export function captionsAt(isOpen, entries) {
   return out;
 }
 
-export const modelName = (model) => (typeof model === 'string' && /^[a-z]+$/.test(model) ? model[0].toUpperCase() + model.slice(1) : model ?? null);
+// 'sonnet' → 'Sonnet', 'claude-opus-5-5' → 'Opus 5.5', 'opus[1m]' → 'Opus 1M'; a name it does not know stays as written.
+const MODEL_ID = /^(?:claude-)?([a-z]+)(?:-(\d+)(?:-(\d{1,2}))?)?(?:-\d{8})?(\[1m\])?$/i;
+export function modelName(model) {
+  if (typeof model !== 'string') return null;
+  const m = MODEL_ID.exec(model);
+  if (!m || (!m[2] && model.startsWith('claude-'))) return model;
+  const name = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+  const version = m[2] ? ` ${m[2]}${m[3] ? `.${m[3]}` : ''}` : '';
+  return `${name}${version}${m[4] ? ' 1M' : ''}`;
+}
 
 // ---- the panel ----------------------------------------------------------------------------------
 

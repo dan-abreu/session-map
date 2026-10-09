@@ -1,4 +1,5 @@
 // Pure view logic for the page: no DOM, no fetch, so node:test can load it.
+import { modelName } from './live.js';
 
 const DAY = 864e5;
 const RANGE_DAYS = { d7: 7, d30: 30 };
@@ -106,7 +107,7 @@ export function chatButtons(chat) {
   return { open, close, archive: chat.archived ? 'unarchive' : 'archive', write, phone };
 }
 
-const EMPTY_LOG = { sessionId: null, running: false, ended: false, mode: null, items: [] };
+const EMPTY_LOG = { sessionId: null, running: false, ended: false, mode: null, run: null, costUSD: null, items: [] };
 
 function closeStreaming(items) {
   const last = items.at(-1);
@@ -121,17 +122,23 @@ export function chatLog(log = EMPTY_LOG, evt) {
   const last = items.at(-1);
   switch (type) {
     case 'history':
-      return { ...log, items: data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false })) };
+      return {
+        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD,
+        items: data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false })),
+      };
     case 'local-send':
       return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true }] };
     case 'user': {
       // The server echoes every message it takes: the page's own send is already shown, one from elsewhere is not.
       const mine = items.findIndex((i) => i.type === 'user' && i.local && i.text === data.text);
       if (mine >= 0) return { ...log, running: true, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text } : i)) };
-      return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text }] };
+      // auto: an answer session-map gave for the person ("may reinforce on its own").
+      return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text, ...(data.auto ? { auto: data.auto } : {}) }] };
     }
     case 'mode':
       return { ...log, mode: data.mode };
+    case 'run':
+      return { ...log, run: data, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD };
     case 'session':
       return data.state === 'ended'
         ? { ...log, running: false, ended: true, items: closeStreaming(items) }
@@ -153,12 +160,37 @@ export function chatLog(log = EMPTY_LOG, evt) {
       if (data.state === 'asked') return { ...log, items: [...closeStreaming(items), { type: 'permission', requestId: data.requestId, toolName: data.toolName, input: data.input, state: 'asked' }] };
       return { ...log, items: items.map((i) => (i.type === 'permission' && i.requestId === data.requestId ? { ...i, state: data.state } : i)) };
     case 'turn-end':
-      return { ...log, running: false, items: closeStreaming(items) };
+      return { ...log, running: false, costUSD: Number.isFinite(data?.costUSD) ? data.costUSD : log.costUSD, items: closeStreaming(items) };
     case 'error':
       return { ...log, running: false, items: [...closeStreaming(items), { type: 'error', error: data.error }] };
     default:
       return log;
   }
+}
+
+// What the chat header says about how the conversation runs. choice: the run picked (run.mjs shapes); info: the last
+// 'run' event of the server (null before the first); mine: what the person's own Claude settings run.
+const EXPECTED = { auto: ['opus', 'high'], maestro: ['opus', 'high'], ultracode: ['opus', 'xhigh'] };
+const LEVEL_TONE = { reinforced: 'reinforced', 'ask-reinforce': 'ask' };
+// The same claude process flags: only 'may reinforce on its own' may differ.
+const sameRun = (a, b) => a.kind === b.kind && a.model === b.model && a.effort === b.effort;
+export function runWords(t, { choice, info: last, mine }) {
+  // A run event of the way it ran before (the process ends on a change) speaks only for its cost.
+  const info = last && (!last.run || sameRun(last.run, choice)) ? last : null;
+  const [model, effort] = choice.kind === 'fixed' ? [choice.model, choice.effort] : choice.kind === 'settings' ? [mine?.model, mine?.effort] : EXPECTED[choice.kind];
+  const shownModel = info?.model ?? model;
+  const shownEffort = info?.effort ?? effort;
+  const level = choice.kind === 'auto' || choice.kind === 'maestro' ? info?.level : null;
+  let why = t(`run.why.${choice.kind}`);
+  if (level) why = t(`run.level.${level}`, { why: info.why ?? t('run.level.noReason') });
+  return {
+    way: t(`run.way.${choice.kind}`),
+    model: shownModel ? modelName(shownModel) : t('run.modelDefault'),
+    effort: shownEffort ? t(`run.effort.${shownEffort}`) : null,
+    why,
+    tone: LEVEL_TONE[level] ?? (choice.kind === 'ultracode' ? 'ultracode' : choice.kind),
+    cost: Number.isFinite(last?.costUSD) ? last.costUSD : null,
+  };
 }
 
 const PC_MODES = new Set(['default', 'acceptEdits', 'auto']);

@@ -131,8 +131,8 @@ test('captionsAt: the caption sits on the deepest box the map shows on the way, 
   assert.ok(opened.has('i:orders:or01'));
 });
 
-test('modelName: a bare alias gets a capital, a full id stays as written, none stays none', () => {
+test('modelName: a bare alias gets a capital, a full id reads as a person says it, none stays none', () => {
   assert.equal(modelName('sonnet'), 'Sonnet');
-  assert.equal(modelName('claude-opus-5-5'), 'claude-opus-5-5');
+  assert.equal(modelName('claude-opus-5-5'), 'Opus 5.5');
   assert.equal(modelName(null), null);
 });
