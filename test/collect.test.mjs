@@ -281,3 +281,52 @@ test('with ai.enabled false collect stays on the rules and never calls claude', 
     rmSync(join(root, '..'), { recursive: true, force: true });
   }
 });
+
+async function twoProjects(setupBroken) {
+  const dir = tmp();
+  const smDir = tmp();
+  const base = tmp();
+  const good = repo(join(base, 'good-app'));
+  const bad = repo(join(base, 'bad-app'));
+  try {
+    writeChat(dir, { id: A, cwd: good, title: 'Good chat' });
+    writeChat(dir, { id: B, cwd: bad, title: 'Bad chat' });
+    setupBroken({ smDir, bad });
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    return { state, names: state.projects.map((p) => p.name).sort() };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+test('an OpenSpec tasks.md that is a directory does not break collect', async () => {
+  const { names } = await twoProjects(({ bad }) => {
+    mkdirSync(join(bad, 'openspec', 'changes', 'add-x', 'tasks.md'), { recursive: true });
+  });
+  assert.deepEqual(names, ['bad-app', 'good-app']);
+});
+
+test('a config roadmap that is not a string, or decisions without heading, are ignored', async () => {
+  const { state } = await twoProjects(({ bad }) => {
+    mkdirSync(join(bad, '.claude'), { recursive: true });
+    writeFileSync(join(bad, '.claude', 'session-map.json'), JSON.stringify({ roadmap: 42 }));
+  });
+  assert.equal(state.projects.find((p) => p.name === 'bad-app').roadmap, null);
+  const { state: s2 } = await twoProjects(({ bad }) => {
+    mkdirSync(join(bad, '.claude'), { recursive: true });
+    writeFileSync(join(bad, 'ROADMAP.md'), '## Plan\n- [ ] 1. Ship it\n## Decisions\n| x | pending |\n');
+    writeFileSync(join(bad, '.claude', 'session-map.json'), JSON.stringify({ roadmap: 'ROADMAP.md', decisions: { pendingWhen: 'pending' } }));
+  });
+  const p = s2.projects.find((x) => x.name === 'bad-app');
+  assert.equal(p.roadmap.length, 1);
+  assert.deepEqual(p.decisions, []);
+});
+
+test('one project that throws while being built is skipped; the others still come back', async () => {
+  const { names } = await twoProjects(({ smDir, bad }) => {
+    seedUnitsFile(smDir, bad, [{ id: 'x', name: 'X', paths: 5 }]);
+  });
+  assert.deepEqual(names, ['good-app']);
+});

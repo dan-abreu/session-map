@@ -324,32 +324,30 @@ function fullScan(path, st) {
   return value;
 }
 
+// A file can vanish (cleanupPeriodDays) or outgrow one string between stat and scan: that chat is skipped.
 export function readTranscript(path, { tailBytes = 2_000_000 } = {}) {
-  let st;
-  let text;
   try {
-    st = statSync(path);
+    const st = statSync(path);
     const truncated = st.size > tailBytes;
-    text = truncated ? readSlice(path, st.size - tailBytes, tailBytes) : readFileSync(path, 'utf8');
+    let text = truncated ? readSlice(path, st.size - tailBytes, tailBytes) : readFileSync(path, 'utf8');
     // The slice starts mid-line: drop that first fragment.
     if (truncated) text = text.slice(text.indexOf('\n') + 1);
+    const summary = summarize(parseLines(text), basename(path, '.jsonl'));
+    if (truncated) {
+      const full = fullScan(path, st);
+      const head = summarize(parseLines(readSlice(path, 0, HEAD_BYTES).replace(/\n[^\n]*$/, '')), summary.sessionId);
+      summary.usage = full.usage;
+      summary.lastCardText ??= full.lastCardText;
+      summary.startedAt = head.startedAt ?? summary.startedAt;
+      summary.aiTitle ??= full.aiTitle;
+      summary.title = summary.aiTitle ?? head.title ?? summary.title;
+    }
+    delete summary.aiTitle;
+    return summary;
   } catch (err) {
-    if (err.code !== 'ENOENT') log('warn', 'read-failed', { path, code: err.code });
+    if (err.code !== 'ENOENT') log('warn', 'read-failed', { path, code: err.code, error: err.message });
     return null;
   }
-
-  const summary = summarize(parseLines(text), basename(path, '.jsonl'));
-  if (st.size > tailBytes) {
-    const full = fullScan(path, st);
-    const head = summarize(parseLines(readSlice(path, 0, HEAD_BYTES).replace(/\n[^\n]*$/, '')), summary.sessionId);
-    summary.usage = full.usage;
-    summary.lastCardText ??= full.lastCardText;
-    summary.startedAt = head.startedAt ?? summary.startedAt;
-    summary.aiTitle ??= full.aiTitle;
-    summary.title = summary.aiTitle ?? head.title ?? summary.title;
-  }
-  delete summary.aiTitle;
-  return summary;
 }
 
 // ---- helpers (subagents) and workflows --------------------------------------
@@ -385,6 +383,8 @@ export function readWorkflows(sessionDir) {
     const journalPath = join(sessionDir, 'subagents', 'workflows', wf.name, 'journal.jsonl');
     const text = readText(journalPath);
     if (text === null) continue;
+    let mtimeMs;
+    try { mtimeMs = statSync(journalPath).mtimeMs; } catch { continue; }
     const events = parseLines(text);
     const started = events.filter((e) => e.type === 'started');
     let name = wf.name;
@@ -398,7 +398,7 @@ export function readWorkflows(sessionDir) {
       started: new Set(started.map((e) => e.agentId)).size,
       done: new Set(events.filter((e) => e.type === 'result').map((e) => e.agentId)).size,
       lastLabel: started.at(-1)?.label ?? null,
-      updatedAt: new Date(statSync(journalPath).mtimeMs).toISOString(),
+      updatedAt: new Date(mtimeMs).toISOString(),
     });
   }
   return workflows;

@@ -30,5 +30,9 @@ export function loadConfig(root, smDir) {
   const perProject = user.projects?.[normalizePath(root)] ?? {};
   const config = { ...project, ...perProject };
   for (const key of GLOBAL_KEYS) if (user[key] !== undefined) config[key] = user[key];
+  // Hand-written files: a wrong type here would otherwise throw on every poll.
+  if (typeof config.roadmap !== 'string') delete config.roadmap;
+  const d = config.decisions;
+  if (d !== undefined && (typeof d?.heading !== 'string' || typeof d?.pendingWhen !== 'string')) delete config.decisions;
   return config;
 }

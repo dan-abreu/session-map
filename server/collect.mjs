@@ -55,18 +55,22 @@ function git(cwd, args) {
 function readItems(dir, smDir, nowMs) {
   const items = [];
   for (const ref of listTranscripts(dir, { sinceMs: nowMs - WINDOW_MS })) {
-    const key = `${ref.mtimeMs}:${ref.size}`;
-    let hit = summaries.get(ref.path);
-    if (hit?.key !== key) {
-      const summary = readTranscript(ref.path);
-      if (!summary) continue;
-      const sessionDir = join(dirname(ref.path), ref.sessionId);
-      hit = { key, summary, helperUsage: readHelperUsage(sessionDir), workflows: readWorkflows(sessionDir) };
-      summaries.set(ref.path, hit);
+    try {
+      const key = `${ref.mtimeMs}:${ref.size}`;
+      let hit = summaries.get(ref.path);
+      if (hit?.key !== key) {
+        const summary = readTranscript(ref.path);
+        if (!summary) continue;
+        const sessionDir = join(dirname(ref.path), ref.sessionId);
+        hit = { key, summary, helperUsage: readHelperUsage(sessionDir), workflows: readWorkflows(sessionDir) };
+        summaries.set(ref.path, hit);
+      }
+      if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
+      const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
+      items.push({ ref, ...hit, card });
+    } catch (err) {
+      log('warn', 'transcript-failed', { sessionId: ref.sessionId, error: err.message });
     }
-    if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
-    const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
-    items.push({ ref, ...hit, card });
   }
   return items;
 }
@@ -386,7 +390,11 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     internals: new Map(),
   };
   const groups = await groupByRoot(readItems(dir, smDir, now.getTime()));
-  const built = await Promise.all(groups.map((g) => buildProject(ctx, g)));
+  // One broken project must not blank the page for the others.
+  const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {
+    log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });
+    return null;
+  })))).filter(Boolean);
   const projects = built.map((b) => b.project);
 
   const sum = (key) => round6(projects.reduce((s, p) => s + p.cost[key], 0));
