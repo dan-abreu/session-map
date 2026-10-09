@@ -1,6 +1,6 @@
 // The list of conversations (plano-v02, v0.2.2 item 0): a column on the left of the map, a drawer on a phone.
 // The pure part on top is what node:test loads; createConvList below touches the DOM only when called.
-import { archTree } from './tree.js';
+import { archTree, ownerHue } from './tree.js';
 
 const RECENT_PAGE = 50;
 const SPECIAL = new Set(['idea', 'create-arch', 'flow']);
@@ -9,6 +9,7 @@ const newest = (a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.ro
 
 function originOfChat(c) {
   if (c.entrypoint === 'claude-vscode') return 'vscode';
+  if (c.entrypoint === 'claude-desktop') return 'desktop';
   return String(c.entrypoint ?? '').startsWith('sdk') ? 'sdk' : 'terminal';
 }
 
@@ -64,13 +65,59 @@ export function placeOf(tree, row) {
 
 const visible = (row, showArchived) => showArchived || !row.archived;
 
+const DAY_MS = 86_400_000;
+export const DATE_GROUPS = ['today', 'yesterday', 'week', 'older'];
+// The groups of a project's section, top to bottom (mm04).
+export const SECTION_GROUPS = ['pinned', 'working', 'waiting', ...DATE_GROUPS];
+
+// By calendar day on this device, like Claude and ChatGPT: late last night is yesterday though less than a day ago.
+export function dateGroup(iso, nowMs) {
+  const at = Date.parse(iso ?? '');
+  if (!Number.isFinite(at)) return 'older';
+  const midnight = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  // Rounded: a day with a clock change is 23 or 25 hours long.
+  const days = Math.round((midnight(nowMs) - midnight(at)) / DAY_MS);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days < 7 ? 'week' : 'older';
+}
+
+// Each project's own color, the same everywhere a project shows (list, picker, Now strip).
+export const projectHue = (project) => ownerHue(project.id);
+
+const isPinned = (row) => row.node?.kind === 'orchestration';
+
+function sectionOf(project, entries, nowMs) {
+  const sec = { project, hue: projectHue(project), pinned: [], working: [], waiting: [], today: [], yesterday: [], week: [], older: [] };
+  for (const e of [...entries].sort(newest)) {
+    if (isPinned(e.row)) sec.pinned.push(e);
+    else if (e.row.status === 'busy') sec.working.push(e);
+    else if (e.row.waiting) sec.waiting.push(e);
+    else sec[dateGroup(e.row.updatedAt, nowMs)].push(e);
+  }
+  sec.counts = {
+    working: entries.filter((e) => e.row.status === 'busy').length,
+    waiting: entries.filter((e) => e.row.status !== 'busy' && e.row.waiting).length,
+    total: entries.length,
+  };
+  sec.newest = entries.reduce((m, e) => (String(e.row.updatedAt ?? '') > m ? String(e.row.updatedAt) : m), '');
+  return sec;
+}
+
+// Projects with something working, then waiting for the person, then the most recently active.
+const bySection = (a, b) => (b.counts.working > 0) - (a.counts.working > 0) || (b.counts.waiting > 0) - (a.counts.waiting > 0) || b.newest.localeCompare(a.newest);
+
 // opts: projectId, scope ('project' | 'all'), query, nodeId (only that box and below, in the open project), showArchived.
-// Each entry: {row, project, nodeId, place}. Working now, then waiting for the person, then the rest, newest first in each.
+// Each entry: {row, project, nodeId, place}. Working now, then waiting for the person, then the rest, newest first in each;
+// sections: the same entries per project, in SECTION_GROUPS (mm04).
 export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false } = {}) {
   const q = plain(query);
   const projects = scope === 'all' ? state.projects : state.projects.filter((p) => p.id === projectId);
   const entries = [];
+  const sections = [];
+  const nowMs = Date.parse(state.generatedAt) || Date.now();
   for (const project of projects) {
+    const mine = [];
     const index = indexOf(archTree(project));
     for (const row of conversationsOf(project)) {
       if (!visible(row, showArchived)) continue;
@@ -78,13 +125,15 @@ export function listConversations(state, { projectId, scope = 'project', query =
       if (nodeId && project.id === projectId && at !== nodeId && !index.get(at).path.includes(nodeId)) continue;
       const place = placeIn(index, row, at);
       if (q && !plain([row.title, ...place.path, scope === 'all' ? project.name : ''].join(' ')).includes(q)) continue;
-      entries.push({ row, project, nodeId: at, place });
+      mine.push({ row, project, nodeId: at, place });
     }
+    entries.push(...mine);
+    if (mine.length) sections.push(sectionOf(project, mine, nowMs));
   }
   const working = entries.filter((e) => e.row.status === 'busy').sort(newest);
   const waiting = entries.filter((e) => e.row.status !== 'busy' && e.row.waiting).sort(newest);
   const recent = entries.filter((e) => e.row.status !== 'busy' && !e.row.waiting).sort(newest);
-  return { working, waiting, recent, total: entries.length };
+  return { working, waiting, recent, total: entries.length, sections: sections.sort(bySection) };
 }
 
 // How many conversations each box holds, itself and below: the number on the box, which filters the list to it.
@@ -101,15 +150,17 @@ export function conversationCounts(project, tree, { showArchived = false } = {})
 
 // ---- the column ---------------------------------------------------------------------------------
 
-const ORIGIN_ICON = { map: 'map', vscode: 'code', terminal: 'terminal', sdk: 'auto' };
+// Every origin has its own drawn icon and word, so a row never leaves "where does this run?" open.
+const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto' };
+export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
 const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'skill', 'plan', 'ask', 'think', 'tool']);
-const GROUPS = ['working', 'waiting', 'recent'];
+const DATED = new Set(DATE_GROUPS);
 
 const toneOf = (row) => (row.status === 'busy' ? 'busy' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
 
 // ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), phone (media query), state(),
-// project(), showArchived(), current() (the conversation the chat sheet shows), nodeLabel(id), onOpen(entry), onFilter()
-// (the box filter changed: the map redraws its pressed numbers), store {get, set}.
+// project(), showArchived(), current() (the conversation the chat sheet shows), nodeLabel(id), onOpen(entry), onMove(entry)
+// (move or rename it), onFilter() (the box filter changed: the map redraws its pressed numbers), store {get, set}.
 export function createConvList(ctx) {
   const { root, h, icon, store } = ctx;
   const byId = (id) => document.getElementById(id);
@@ -122,15 +173,27 @@ export function createConvList(ctx) {
   let collapsed = store.get('sm.convs.collapsed') === '1';
   let query = '';
   let filter = null;
-  let showAll = false;
+  // "<projectId>:<group>" of the date groups showing every row, past the first page.
+  let showAll = new Set();
+  // projectId → true (open) | false (closed), as the person left each project folder in "All projects".
+  let folders = {};
+  try { folders = JSON.parse(store.get('sm.convs.folders') ?? '{}') ?? {}; } catch { folders = {}; }
 
   const placeWords = (e, full) => {
     const tt = ctx.t();
     if (e.place.special) return tt(`convs.place.${e.place.special}`);
     return (full ? e.place.path : e.place.path.slice(-2)).join(' › ');
   };
-  const placeText = (e) => (scope === 'all' ? `${e.project.name} › ${placeWords(e)}` : placeWords(e));
   const stepText = (step) => (STEP_KINDS.has(step.kind) ? ctx.t()(`live.step.${step.kind}`, { target: step.target }) : '');
+
+  const projectBadge = (project) => h('span', { class: 'cv-proj', style: `--p-h:${projectHue(project)}` },
+    h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), project.name);
+
+  function originBadge(origin) {
+    const tt = ctx.t();
+    const word = tt(`convs.origin.${origin}`);
+    return h('span', { class: `cv-origin-badge o-${origin}`, title: tt('convs.origin.title', { origin: word }) }, icon(originIcon(origin), 'cv-origin'), word);
+  }
 
   function rowView(e) {
     const tt = ctx.t();
@@ -139,29 +202,66 @@ export function createConvList(ctx) {
     const current = ctx.current() === row.sessionId;
     const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
     const title = row.title || tt('chat.untitled');
-    return h('li', {}, h('button', {
-      type: 'button', class: `cv-row tone-${tone}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
-      title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
-    },
-    h('span', { class: 'cv-dot', title: tt(`convs.dot.${tone}`) }, h('span', { class: 'visually-hidden' }, `${tt(`convs.dot.${tone}`)}: `)),
-    h('span', { class: 'cv-title' }, title),
-    h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
-    step ? h('span', { class: 'cv-step' }, step) : null,
-    h('span', { class: `cv-where${e.place.special ? ` is-${e.place.special}` : ''}` }, placeText(e)),
-    h('span', { class: 'cv-meta' },
-      icon(ORIGIN_ICON[row.origin] ?? 'terminal', 'cv-origin'), tt(`convs.origin.${row.origin}`),
-      row.costUSD != null ? [h('span', { class: 'sep', 'aria-hidden': 'true' }, '·'), h('span', { class: 'num' }, ctx.money(row.costUSD))] : null)));
+    const where = placeWords(e);
+    return h('li', { class: 'cv-item' },
+      h('button', {
+        type: 'button', class: `cv-row tone-${tone}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
+        title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
+      },
+      h('span', { class: 'cv-dot', title: tt(`convs.dot.${tone}`) }, h('span', { class: 'visually-hidden' }, `${tt(`convs.dot.${tone}`)}: `)),
+      h('span', { class: 'cv-title' }, title),
+      h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
+      step ? h('span', { class: 'cv-step' }, step) : null,
+      h('span', { class: `cv-where${e.place.special ? ` is-${e.place.special}` : ''}` }, projectBadge(e.project), where ? h('span', { class: 'cv-path' }, where) : null),
+      h('span', { class: 'cv-meta' },
+        originBadge(row.origin),
+        row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null)),
+      h('button', {
+        type: 'button', class: 'cv-move', 'aria-label': tt('convs.moveAria', { title }), title: tt('convs.move'), 'aria-haspopup': 'dialog',
+        onclick: () => ctx.onMove(e),
+      }, icon('more', 'cv-move-icon')));
   }
 
-  function groupView(name, entries) {
+  function groupView(sec, name, heading) {
+    const entries = sec[name];
     if (!entries.length) return null;
     const tt = ctx.t();
-    const shown = name === 'recent' && !showAll ? entries.slice(0, RECENT_PAGE) : entries;
+    const key = `${sec.project.id}:${name}`;
+    const shown = DATED.has(name) && !showAll.has(key) ? entries.slice(0, RECENT_PAGE) : entries;
     const rest = entries.length - shown.length;
-    return h('section', { class: `cv-group g-${name}`, 'aria-labelledby': `cv-g-${name}` },
-      h('h3', { id: `cv-g-${name}` }, h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }), tt(`convs.group.${name}`), h('span', { class: 'cv-group-n num' }, String(entries.length))),
+    const id = `cv-g-${sec.project.id}-${name}`;
+    return h('section', { class: `cv-group g-${name}`, 'aria-labelledby': id },
+      h(heading, { id, class: 'cv-group-head' },
+        name === 'pinned' ? icon('compass', 'cv-group-icon') : h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }),
+        tt(`convs.group.${name}`), h('span', { class: 'cv-group-n num' }, String(entries.length))),
       h('ul', { class: 'cv-rows' }, shown.map(rowView)),
-      rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll = true; render(); } }, tt('convs.more', { n: rest })) : null);
+      rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll.add(key); render(); } }, tt('convs.more', { n: rest })) : null);
+  }
+
+  const groupsOf = (sec, heading) => SECTION_GROUPS.map((g) => groupView(sec, g, heading)).filter(Boolean);
+
+  // Open unless the person closed it; a project with work going on, the open one and a search show open by default.
+  const isFolderOpen = (sec, openId) => (query.trim() ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.waiting > 0));
+
+  function folderView(sec, openId) {
+    const tt = ctx.t();
+    const opened = isFolderOpen(sec, openId);
+    const bodyId = `cv-p-${sec.project.id}`;
+    const counters = [
+      sec.counts.working ? h('span', { class: 'cv-pc is-working num', title: tt('convs.projectWorking', { n: sec.counts.working }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.working), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWorking', { n: sec.counts.working })}`)) : null,
+      sec.counts.waiting ? h('span', { class: 'cv-pc is-waiting num', title: tt('convs.projectWaiting', { n: sec.counts.waiting }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.waiting), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWaiting', { n: sec.counts.waiting })}`)) : null,
+    ];
+    return h('section', { class: `cv-folder${opened ? ' is-open' : ''}`, style: `--p-h:${sec.hue}`, 'data-project': sec.project.id },
+      h('h3', { class: 'cv-folder-head' }, h('button', {
+        type: 'button', class: 'cv-folder-btn', 'aria-expanded': String(opened), 'aria-controls': bodyId, title: tt('convs.projectToggle', { name: sec.project.name }),
+        onclick: () => {
+          folders[sec.project.id] = !opened;
+          store.set('sm.convs.folders', JSON.stringify(folders));
+          render();
+        },
+      }, icon('chevron', 'cv-folder-chevron'), h('span', { class: 'cv-proj-dot cv-folder-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-folder-name' }, sec.project.name),
+      h('span', { class: 'cv-folder-counts' }, counters, h('span', { class: 'cv-folder-n num' }, String(sec.counts.total))))),
+      h('div', { class: 'cv-folder-body', id: bodyId, hidden: !opened }, opened ? groupsOf(sec, 'h4') : null));
   }
 
   function renderFilter() {
@@ -188,9 +288,11 @@ export function createConvList(ctx) {
     byId('convsRailCount').textContent = String(mine.length);
     byId('convsBtnCount').textContent = String(mine.length);
     byId('convsRailLive').hidden = !mine.some((r) => r.status === 'busy');
-    const focused = list.contains(document.activeElement) ? document.activeElement.dataset?.session : null;
+    root.classList.toggle('is-all', scope === 'all');
+    const focused = list.contains(document.activeElement) ? document.activeElement : null;
+    const keep = focused ? { session: focused.closest('[data-session]')?.dataset.session ?? focused.closest('.cv-item')?.querySelector('[data-session]')?.dataset.session, move: focused.classList.contains('cv-move'), project: focused.closest('.cv-folder-btn') ? focused.closest('[data-project]')?.dataset.project : null } : null;
     const top = list.scrollTop;
-    let body = GROUPS.map((g) => groupView(g, out[g])).filter(Boolean);
+    let body = scope === 'all' ? out.sections.map((sec) => folderView(sec, p.id)) : out.sections.flatMap((sec) => groupsOf(sec, 'h3'));
     if (!body.length) {
       let empty = scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty');
       if (filter) empty = tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) });
@@ -199,7 +301,11 @@ export function createConvList(ctx) {
     }
     list.replaceChildren(...body);
     list.scrollTop = top;
-    if (focused) list.querySelector(`[data-session="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+    if (keep?.project) list.querySelector(`[data-project="${CSS.escape(keep.project)}"] .cv-folder-btn`)?.focus({ preventScroll: true });
+    else if (keep?.session) {
+      const row = list.querySelector(`[data-session="${CSS.escape(keep.session)}"]`);
+      (keep.move ? row?.closest('.cv-item')?.querySelector('.cv-move') : row)?.focus({ preventScroll: true });
+    }
   }
 
   function syncCollapsed() {
@@ -226,7 +332,7 @@ export function createConvList(ctx) {
 
   function filterTo(nodeId) {
     filter = nodeId;
-    showAll = false;
+    showAll = new Set();
     if (nodeId) {
       scope = 'project';
       if (ctx.phone.matches) setDrawer(true);
@@ -236,7 +342,7 @@ export function createConvList(ctx) {
     ctx.onFilter();
   }
 
-  search.addEventListener('input', () => { query = search.value; showAll = false; render(); });
+  search.addEventListener('input', () => { query = search.value; showAll = new Set(); render(); });
   search.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !search.value) return;
     e.stopPropagation();
@@ -249,7 +355,7 @@ export function createConvList(ctx) {
       scope = b.dataset.scope === 'all' ? 'all' : 'project';
       store.set('sm.convs.scope', scope);
       if (scope === 'all' && filter) { filter = null; ctx.onFilter(); }
-      showAll = false;
+      showAll = new Set();
       render();
     });
   }
@@ -267,6 +373,6 @@ export function createConvList(ctx) {
     openDrawer: () => setDrawer(true),
     closeDrawer: () => { if (isDrawerOpen()) setDrawer(false); },
     // Box ids repeat across projects ("pt:orders"): a filter never follows the page to another project.
-    projectChanged() { filter = null; showAll = false; },
+    projectChanged() { filter = null; showAll = new Set(); },
   };
 }

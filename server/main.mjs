@@ -23,6 +23,7 @@ import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
+import { setPlacement } from './placements.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -43,6 +44,7 @@ const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
 const FLOW_TEXT_MAX = 60_000;
 const SKIP_MAX = 500;
+const PLACE_TITLE_MAX = 200;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -189,6 +191,35 @@ export function createApp({
     const body = await readBody(req);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
     return send(res, result.status, result.body);
+  }
+
+  // The owner moves a conversation to another project or part, or renames it (mm21). Writes need the token (authorize).
+  async function placeRoute(req, res, sessionId) {
+    if (!UUID_RE.test(sessionId)) throw new HttpError(400, 'bad-session');
+    if (demo) throw new HttpError(403, 'demo');
+    const body = await readBody(req);
+    const ok = body && typeof body === 'object' && !Array.isArray(body)
+      && (!('title' in body) || (typeof body.title === 'string' && body.title.length <= PLACE_TITLE_MAX))
+      && (!('projectId' in body) || typeof body.projectId === 'string')
+      && (!('partId' in body) || body.partId === null || typeof body.partId === 'string');
+    if (!ok) throw new HttpError(400, 'bad-place');
+    const { projects } = await state();
+    const home = projects.find((p) => (p.conversations ?? []).some((r) => r.sessionId === sessionId));
+    if (!home) throw new HttpError(404, 'unknown-session');
+    const target = 'projectId' in body ? projects.find((p) => p.id === body.projectId) : home;
+    if (!target) throw new HttpError(404, 'unknown-project');
+    if (body.partId && !target.arch.parts.some((p) => p.id === body.partId)) throw new HttpError(400, 'unknown-part');
+    const patch = {};
+    if ('title' in body) patch.title = body.title;
+    if ('projectId' in body) patch.root = target.root;
+    // '' hands the part back to the rules; null is the owner saying "no part".
+    if ('partId' in body) patch.partId = body.partId === '' ? undefined : body.partId;
+    // A part of the old project means nothing in the new one: the rules place it there until the owner picks one.
+    else if (target !== home) patch.partId = undefined;
+    const placement = setPlacement(smDir, sessionId, patch);
+    logAction(smDir, { action: 'place', sessionId, projectId: target.id }, 200);
+    fresh();
+    return send(res, 200, { ok: true, placement });
   }
 
   // The permission mode in the user's own settings.json, which every Claude on this PC reads (desenho-3 § 3).
@@ -346,6 +377,7 @@ export function createApp({
       const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir));
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20 }) });
     }
+    if (req.method === 'POST' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'place' && parts.length === 5) return placeRoute(req, res, parts[3]);
     if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
       if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');

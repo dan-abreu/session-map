@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
@@ -20,6 +20,7 @@ import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
 import { listLiveSessions, listTranscripts, readHelperCommits, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
+import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills } from './sources/skills.mjs';
@@ -34,6 +35,8 @@ const ACTIVITY_MAX = 300;
 const ACTIVITY_FILES_MAX = 50;
 const PUSH_MATCH_MS = 5 * 60_000;
 const NOBODY = { name: '', email: '' };
+// The owner's moves shown to the AI as examples of how they place work.
+const EXAMPLES_MAX = 20;
 // ponytail: the list gets the newest 300 of a project; page through the server if a month ever holds more.
 const CONVERSATIONS_MAX = 300;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,6 +49,7 @@ const roots = new Map();
 const gitMemo = new Map();
 
 const cut = (s) => String(s ?? '').slice(0, TEXT_MAX);
+const modelOf = (usage) => [...(usage ?? [])].reverse().find((u) => u.model && u.model !== 'unknown')?.model ?? null;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const hashOf = (v) => createHash('sha1').update(JSON.stringify(v)).digest('hex');
 const plain = (s) => norm(String(s));
@@ -94,10 +98,14 @@ async function rootOf(cwd) {
   return roots.get(key);
 }
 
-async function groupByRoot(items) {
+const isDir = (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false;
+
+// placements: the owner's moves (server/placements.mjs); a project folder that is gone no longer pulls its conversations.
+async function groupByRoot(items, placements) {
   const groups = new Map();
   for (const item of items) {
-    const root = await rootOf(item.summary.cwd);
+    const moved = placements[item.summary.sessionId]?.root;
+    const root = moved && isDir(moved) ? moved : await rootOf(item.summary.cwd);
     const key = normalizePath(root);
     if (!groups.has(key)) groups.set(key, { root, items: [] });
     groups.get(key).items.push(item);
@@ -138,11 +146,14 @@ async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
 
 // ---- placing chats -----------------------------------------------------------
 
-// An item code the conversation cites, then the part the page opened it on, then the files it edited, then what the AI
-// answered earlier (desenho-3 § 2).
-function placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts) {
+// The owner's own move first (mm21), then an item code the conversation cites, then the part the page opened it on, then
+// the files it edited, then what the AI answered earlier (desenho-3 § 2).
+function placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts, placement) {
   const s = item.summary;
   if (!arch.parts.length) return { partId: null, partSource: 'none' };
+  if (placement && 'partId' in placement && (placement.partId === null || arch.parts.some((p) => p.id === placement.partId))) {
+    return { partId: placement.partId, partSource: 'owner' };
+  }
   const byCode = partByCodes(s.mentionedCodes, arch);
   if (byCode) return { partId: byCode, partSource: 'code' };
   const byPage = pageParts.get(s.sessionId);
@@ -230,6 +241,8 @@ function activityItems(raw, events, touched, workCells, items) {
 function originOf(sessionId, entrypoint, pageChats) {
   if (pageChats[sessionId]) return 'map';
   if (entrypoint === 'claude-vscode') return 'vscode';
+  if (entrypoint === 'claude-desktop') return 'desktop';
+  if (/^(remote|mobile)/.test(entrypoint)) return 'remote';
   // The Agent SDK: page chats are known above, so these are scripts and workflow agents.
   if (entrypoint.startsWith('sdk')) return 'sdk';
   return 'terminal';
@@ -237,7 +250,7 @@ function originOf(sessionId, entrypoint, pageChats) {
 
 // The list of conversations (plano-v02 § v0.2.2 item 0): every conversation of the window, shown on the map or not, plus the
 // page's own older than the window, which stay resumable. Light rows: the map's chats carry the full detail.
-function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived }) {
+function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf }) {
   const onMap = new Map(chats.map((c) => [c.sessionId, c]));
   const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
   const nodeOf = (page) => (page?.node && typeof page.node.kind === 'string' ? page.node : null);
@@ -248,9 +261,10 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
     const page = pageChats[s.sessionId];
     return {
       sessionId: s.sessionId,
-      title: cut(s.title || page?.title),
+      title: cut(titleOf(s) || page?.title),
       origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats),
       partId: x.partId,
+      partSource: x.partSource,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId) ?? nodeOf(page)?.code ?? null,
       node: nodeOf(page),
       status: live ? live.status : 'closed',
@@ -273,6 +287,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       title: cut(c.title),
       origin: 'map',
       partId: knownPart(c.partId),
+      partSource: knownPart(c.partId) ? 'page' : 'none',
       itemCode: nodeOf(c)?.code ?? null,
       node: nodeOf(c),
       status: 'closed',
@@ -310,6 +325,8 @@ async function buildProject(ctx, { root, items }) {
   const aiOn = life.queue.enabled && config.ai?.enabled !== false;
   const aiAnswers = aiPlacements(life, smDir, projectId);
   const pageChats = readJsonFile(join(smDir, 'page-chats.json'), {}) ?? {};
+  const { placements } = ctx;
+  const titleOf = (s) => placements[s.sessionId]?.title || s.title;
   const pageParts = new Map(Object.entries(pageChats).filter(([, c]) => c?.projectId === projectId && typeof c.partId === 'string').map(([id, c]) => [id, c.partId]));
 
   const openBranches = new Set(memo.workCells.filter((w) => w.status !== 'merged').map((w) => w.branch));
@@ -318,7 +335,7 @@ async function buildProject(ctx, { root, items }) {
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
       item, updatedAt,
-      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts),
+      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts, placements[s.sessionId]),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
       shown: liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch),
@@ -332,7 +349,7 @@ async function buildProject(ctx, { root, items }) {
     const waiting = waitingFor(s, live, x.item.card);
     return {
       sessionId: s.sessionId,
-      title: cut(s.title),
+      title: cut(titleOf(s)),
       partId: x.partId,
       partSource: x.partSource,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId),
@@ -341,6 +358,8 @@ async function buildProject(ctx, { root, items }) {
       parentId: parentOf(s.sessionId, lineage, forLineage(x.partId)),
       status: live ? live.status : 'closed',
       entrypoint: live?.entrypoint ?? '',
+      model: modelOf(s.usage),
+      turnStartedAt: s.turnStartedAt ?? null,
       live: Boolean(live),
       bridgeUrl: live?.bridgeSessionId ? `https://claude.ai/code/${live.bridgeSessionId}` : null,
       lastPrompt: cut(s.lastPrompt),
@@ -361,7 +380,7 @@ async function buildProject(ctx, { root, items }) {
     const { sessionId, cwd } = x.item.summary;
     ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null });
   }
-  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived });
+  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf });
 
   const workCells = memo.workCells.map((w) => {
     const mine = placed.filter((x) => x.shown && x.workCellId === w.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
@@ -385,7 +404,11 @@ async function buildProject(ctx, { root, items }) {
     const jobs = placed
       .filter((x) => x.shown && !archived.has(x.item.summary.sessionId) && (x.partSource === 'none' || x.partSource === 'ai'))
       .map((x) => ({ sessionId: x.item.summary.sessionId, digest: digestOf(x.item.summary, cellOf(x)) }));
-    placeChanged(life, { smDir, projectId, arch }, jobs);
+    const examples = placed
+      .filter((x) => x.partSource === 'owner' && x.partId)
+      .slice(0, EXAMPLES_MAX)
+      .map((x) => ({ title: cut(titleOf(x.item.summary)), partId: x.partId }));
+    placeChanged(life, { smDir, projectId, arch, examples }, jobs);
   }
 
   const chatFiles = new Map(placed.filter((x) => x.shown).map((x) => [x.item.summary.sessionId, repoFiles(x.item.summary.editedFiles ?? [], root, x.item.summary.cwd)]));
@@ -432,8 +455,9 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     userConfig,
     life: lifeOf(smDir, userConfig, ai),
     internals: new Map(),
+    placements: readPlacements(smDir),
   };
-  const groups = await groupByRoot(readItems(dir, smDir, now.getTime(), ctx.liveById));
+  const groups = await groupByRoot(readItems(dir, smDir, now.getTime(), ctx.liveById), ctx.placements);
   // One broken project must not blank the page for the others.
   const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });

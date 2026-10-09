@@ -533,3 +533,78 @@ test('collect reads the workflows of a live conversation again on every pass, th
     assert.deepEqual([second.done, second.running], [1, []], 'the agent that answered leaves the running list');
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
+
+test('the origin tells VS Code, the Claude app, a terminal, the phone, the map and an automation apart, and a chat names its model', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  const E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const F = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'From the terminal', entrypoint: 'cli' });
+    writeChat(dir, { id: B, cwd: root, title: 'From VS Code', entrypoint: 'claude-vscode' });
+    writeChat(dir, { id: C, cwd: root, title: 'From the Claude app', entrypoint: 'claude-desktop' });
+    writeChat(dir, { id: D, cwd: root, title: 'From the phone', entrypoint: 'remote' });
+    writeChat(dir, { id: E, cwd: root, title: 'From the map', entrypoint: 'sdk-cli' });
+    writeChat(dir, { id: F, cwd: root, title: 'A script', entrypoint: 'sdk-ts' });
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [E]: { projectId: projectIdOf(root), title: 'From the map' } }));
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const origin = Object.fromEntries(p.conversations.map((r) => [r.title, r.origin]));
+    assert.deepEqual(origin, {
+      'From the terminal': 'terminal', 'From VS Code': 'vscode', 'From the Claude app': 'desktop', 'From the phone': 'remote', 'From the map': 'map', 'A script': 'sdk',
+    });
+    assert.equal(p.chats.find((c) => c.sessionId === A).model, 'claude-fake-1', 'the model of its last reply');
+    assert.equal(p.chats.find((c) => c.sessionId === A).turnStartedAt, iso(HOUR), 'the turn started at the last thing the person wrote');
+    assert.equal(p.conversations.find((r) => r.sessionId === A).partSource, 'none', 'the list knows how a row was placed');
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('the owner moves a conversation to another project and part and renames it: that choice wins over every rule', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const shop = repo(join(tmp(), 'acme-shop'), { arch: true });
+  const garden = repo(join(tmp(), 'garden'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: shop, title: 'Long chat about the garden', prompts: ['see `sh02`'] });
+    writeChat(dir, { id: B, cwd: shop, title: 'Stays here', prompts: ['see `sh02`'] });
+    writeChat(dir, { id: C, cwd: garden, title: 'Renamed only', prompts: ['see `sh02`'] });
+    writeFileSync(join(smDir, 'placements.json'), JSON.stringify({
+      [A]: { root: garden, partId: 'billing', title: 'Garden invoices' },
+      [C]: { title: 'Seed list' },
+    }));
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const byName = Object.fromEntries(state.projects.map((p) => [p.name, p]));
+    assert.deepEqual(byName['acme-shop'].conversations.map((r) => r.sessionId), [B]);
+    const moved = byName.garden.chats.find((c) => c.sessionId === A);
+    assert.deepEqual([moved.partId, moved.partSource, moved.title], ['billing', 'owner', 'Garden invoices']);
+    const row = byName.garden.conversations.find((r) => r.sessionId === A);
+    assert.deepEqual([row.partId, row.title], ['billing', 'Garden invoices']);
+    assert.deepEqual(byName.garden.arch.parts.find((x) => x.id === 'billing').chatIds, [A]);
+    const renamed = byName.garden.chats.find((c) => c.sessionId === C);
+    assert.deepEqual([renamed.title, renamed.partId, renamed.partSource], ['Seed list', 'shop', 'code'], 'a rename alone keeps the place the rules found');
+    assert.equal(state[INTERNALS].chats.get(A).cwd, shop, 'it still resumes in the folder it ran in');
+  } finally { cleanup(dir, smDir, join(shop, '..'), join(garden, '..')); }
+});
+
+test('the owner\'s moves teach the AI: its prompt lists them as examples', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'garden'), { arch: true });
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'] });
+    writeChat(dir, { id: B, cwd: root, title: 'VAT question', prompts: ['what about VAT'] });
+    writeFileSync(join(smDir, 'placements.json'), JSON.stringify({ [B]: { root, partId: 'billing', title: 'VAT for invoices' } }));
+    const prompts = [];
+    const run = async (prompt) => { prompts.push(prompt); return { ok: true, value: { partId: 'billing' }, costUSD: 0.002 }; };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai: { bin: 'fake-claude', run } });
+    await settleAi(smDir);
+    assert.equal(prompts.length, 1, 'the moved conversation is never asked about');
+    assert.match(prompts[0], /Tax rounding/);
+    assert.match(prompts[0], /VAT for invoices/);
+    assert.match(prompts[0], /owner/i);
+  } finally {
+    forgetLife(smDir);
+    cleanup(dir, smDir, join(root, '..'));
+  }
+});

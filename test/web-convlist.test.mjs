@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree } from '../server/web/tree.js';
-import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts } from '../server/web/convlist.js';
+import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue } from '../server/web/convlist.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -125,4 +125,46 @@ test('conversationsOf falls back to the map\'s chats for a state from an older s
   const busyRow = rows.find((r) => r.sessionId === busy.sessionId);
   assert.deepEqual([busyRow.status, busyRow.partId, busyRow.costUSD, busyRow.onMap], ['busy', busy.partId, busy.costUSD, true]);
   assert.equal(conversationsOf({ ...project, conversations: [row('x')] }).length, 1);
+});
+
+test('dateGroup splits by calendar day like Claude and ChatGPT: today, yesterday, the last 7 days, older', () => {
+  const now = new Date(2026, 9, 9, 15, 0).getTime();
+  const at = (d, h = 10) => new Date(2026, 9, d, h, 0).toISOString();
+  assert.equal(dateGroup(at(9, 0), now), 'today', 'just after midnight is still today');
+  assert.equal(dateGroup(at(8, 23), now), 'yesterday', 'late last night is yesterday, though less than a day ago');
+  assert.equal(dateGroup(at(3), now), 'week');
+  assert.equal(dateGroup(at(2), now), 'older');
+  assert.equal(dateGroup(null, now), 'older');
+});
+
+test('listConversations gives one section per project: pinned orchestration, working, waiting, then by date', () => {
+  const now = Date.parse(NOW);
+  const state = shop([
+    row('orch', { node: { kind: 'orchestration' }, status: 'busy', updatedAt: ago(1) }),
+    row('busy', { status: 'busy', updatedAt: ago(2) }),
+    row('asks', { waiting: true, updatedAt: ago(3) }),
+    row('today', { updatedAt: ago(4) }),
+    row('old', { updatedAt: ago(60 * 24 * 20) }),
+  ]);
+  const [sec] = listConversations(state, { projectId: state.projects[0].id }).sections;
+  assert.equal(sec.project.name, 'acme-shop');
+  assert.equal(sec.hue, projectHue(state.projects[0]));
+  const ids = (k) => sec[k].map((e) => e.row.sessionId);
+  assert.deepEqual(ids('pinned'), ['orch'], 'the orchestration chat sits on top whatever it is doing');
+  assert.deepEqual(ids('working'), ['busy']);
+  assert.deepEqual(ids('waiting'), ['asks']);
+  assert.deepEqual(ids(dateGroup(ago(4), now)), ['today']);
+  assert.deepEqual(ids('older'), ['old']);
+  assert.deepEqual(sec.counts, { working: 2, waiting: 1, total: 5 });
+});
+
+test('in "All projects" every row carries its project, and the projects with work going on come first', () => {
+  const state = shop([row('a', { updatedAt: ago(500) }), row('b', { updatedAt: ago(600) })]);
+  state.projects[1].conversations = [row('n1', { title: 'Sync notes offline', updatedAt: ago(900), waiting: true })];
+  const out = listConversations(state, { projectId: state.projects[0].id, scope: 'all' });
+  assert.deepEqual(out.sections.map((s) => s.project.name), ['notes-app', 'acme-shop'], 'waiting for you pulls a project up');
+  const rows = out.sections.flatMap((s) => ['pinned', 'working', 'waiting', 'today', 'yesterday', 'week', 'older'].flatMap((k) => s[k]));
+  assert.equal(rows.length, out.total);
+  for (const e of rows) assert.ok(e.project.name, `${e.row.sessionId} has no project name`);
+  assert.notEqual(projectHue(state.projects[0]), projectHue(state.projects[1]), 'each project has its own color');
 });

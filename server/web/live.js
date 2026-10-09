@@ -16,6 +16,12 @@ function runningOf(w, nowMs) {
   return moving.length ? moving : null;
 }
 
+// A conversation's workflows that still have agents running, each with those agents.
+export const runningWorkflows = (chat, nowMs) => (chat.workflows ?? []).flatMap((w) => {
+  const running = runningOf(w, nowMs);
+  return running ? [{ ...w, running }] : [];
+});
+
 // The conversations working now in one project, newest first: {project, chat, nodeId, pathIds (project → tip), place,
 // steps (newest first), lastStep, workflows (only the ones still running, with their running agents)}. nowMs: the state's time.
 export function workingIn(project, tree, nowMs = Date.now()) {
@@ -32,10 +38,7 @@ export function workingIn(project, tree, nowMs = Date.now()) {
         place: placeOf(tree, row),
         steps,
         lastStep: steps[0] ?? null,
-        workflows: (chat.workflows ?? []).flatMap((w) => {
-          const running = runningOf(w, nowMs);
-          return running ? [{ ...w, running }] : [];
-        }),
+        workflows: runningWorkflows(chat, nowMs),
       };
     })
     .sort(newest);

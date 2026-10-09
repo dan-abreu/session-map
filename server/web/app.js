@@ -11,7 +11,9 @@ import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
-import { createConvList, conversationCounts, listConversations } from './convlist.js';
+import { createConvList, conversationCounts, listConversations, projectHue } from './convlist.js';
+import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
+import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
 import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
@@ -46,6 +48,13 @@ let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
 let convCounts = new Map();
 let liveEntries = []; // the conversations working now in the open project (live.js workingIn)
+// Conversations that finished since the person last looked at them (mm10): kept across reloads until opened.
+const UNSEEN_KEY = 'sm.unseen';
+const UNSEEN_MAX = 200;
+let unseen = new Set();
+try { unseen = new Set((JSON.parse(store.get(UNSEEN_KEY) ?? '[]') ?? []).filter((id) => typeof id === 'string')); } catch { unseen = new Set(); }
+let lastStatuses = null;
+let jobs = null; // now.js nowJobs: every job on the PC, for the Now strip, the picker's marks and the tab title
 // While the person types in a panel, polling must not redraw it under their fingers.
 let editing = false;
 
@@ -119,6 +128,7 @@ function applyStaticText() {
   chat?.relabel();
   flow?.relabel();
   alerts?.relabel();
+  picker?.relabel();
 }
 
 let toastTimer = 0;
@@ -350,6 +360,35 @@ function renderSummary() {
   $('#summary').replaceChildren(...joinDots(parts));
 }
 
+// ---- Now: every job on the PC, the picker's marks, the tab title ---------------------------------
+
+const saveUnseen = () => store.set(UNSEEN_KEY, JSON.stringify([...unseen].slice(-UNSEEN_MAX)));
+
+// A poll: what stopped working since the last one is "finished and not seen"; the first look marks nothing new.
+function trackUnseen() {
+  const next = nextUnseen(lastStatuses ?? new Map(), state, unseen);
+  if (lastStatuses) unseen = next.unseen;
+  lastStatuses = next.statuses;
+  // The conversation open in the chat sheet is being seen right now.
+  const open = chat?.isOpen() ? chat.current() : null;
+  if (open) unseen.delete(open);
+  saveUnseen();
+}
+
+function markSeen(sessionId) {
+  if (!unseen.delete(sessionId)) return;
+  saveUnseen();
+  renderNow();
+}
+
+function renderNow() {
+  if (!state) return;
+  jobs = nowJobs(state, { unseen });
+  now.render(jobs);
+  if (project) picker.update(state.projects.map((p) => ({ id: p.id, name: p.name, hue: projectHue(p) })), project.id, jobBadges(jobs));
+  alerts.refreshTitle();
+}
+
 function goTo(projectId, sel) {
   closeLists();
   if (view !== 'map') showView('map');
@@ -445,6 +484,7 @@ function showOnMap(entry) {
   requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(entry.nodeId)));
 }
 
+// From the Live panel or a card of the Now strip (same shape: project and chat).
 function openFromLive(entry) {
   const out = listConversations(state, { projectId: entry.project.id, showArchived: true });
   const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === entry.chat.sessionId);
@@ -583,6 +623,7 @@ function whereOf(row) {
 // A row of the list: the map opens the way to its box, centres it and makes it glow, and the chat opens beside with the
 // conversation (a page one resumes; one from VS Code or a terminal reads here, with where it lives).
 function openConversation({ row, project: p, nodeId, place }) {
+  markSeen(row.sessionId);
   convs.closeDrawer();
   closeLists();
   if (view !== 'map') showView('map');
@@ -605,6 +646,74 @@ function openConversation({ row, project: p, nodeId, place }) {
   revealNode(node.id, { center: true });
   requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(node.id)));
   convs.render();
+}
+
+// ---- move or rename a conversation (mm21) ----------------------------------------------------------
+
+const AUTO_PART = '';
+const NO_PART = ' none';
+
+function partOptions(target, selected) {
+  const opts = [h('option', { value: AUTO_PART }, t('place.partAuto')), h('option', { value: NO_PART }, t('place.partNone'))];
+  const named = new Set();
+  for (const layer of target.arch.layers ?? []) {
+    const parts = layer.partIds.map((id) => target.arch.parts.find((p) => p.id === id)).filter(Boolean);
+    parts.forEach((p) => named.add(p.id));
+    if (parts.length) opts.push(h('optgroup', { label: layer.name }, parts.map((p) => h('option', { value: p.id }, p.name))));
+  }
+  const rest = target.arch.parts.filter((p) => !named.has(p.id));
+  opts.push(...rest.map((p) => h('option', { value: p.id }, p.name)));
+  for (const o of opts.flatMap((x) => (x.tagName === 'OPTGROUP' ? [...x.children] : [x]))) o.selected = o.value === selected;
+  return opts;
+}
+
+function openPlace({ row, project: home }) {
+  const dialog = $('#placeDialog');
+  const owned = row.partSource === 'owner';
+  const startPart = owned ? (row.partId ?? NO_PART) : AUTO_PART;
+  const nameInput = h('input', { type: 'text', id: 'placeName', value: row.title ?? '', maxlength: '120', autocomplete: 'off', 'aria-describedby': 'placeNameHint' });
+  const projectSelect = h('select', { id: 'placeProject' }, state.projects.map((p) => h('option', { value: p.id, selected: p.id === home.id }, p.name)));
+  const partSelect = h('select', { id: 'placePart' });
+  const noMap = h('p', { class: 'pl-hint', id: 'placeNoMap' }, t('place.noMap'));
+  const fillParts = () => {
+    const target = state.projects.find((p) => p.id === projectSelect.value) ?? home;
+    partSelect.replaceChildren(...partOptions(target, target.id === home.id ? startPart : AUTO_PART));
+    const mapless = !target.arch.parts.length;
+    partSelect.disabled = mapless;
+    noMap.hidden = !mapless;
+  };
+  projectSelect.addEventListener('change', fillParts);
+  fillParts();
+  const save = async (e) => {
+    e.preventDefault();
+    const body = {};
+    const name = nameInput.value.trim();
+    if (name !== (row.title ?? '')) body.title = name;
+    if (projectSelect.value !== home.id) body.projectId = projectSelect.value;
+    const part = partSelect.disabled ? AUTO_PART : partSelect.value;
+    const partStart = body.projectId ? AUTO_PART : startPart;
+    if (part !== partStart) body.partId = part === NO_PART ? null : part;
+    if (!Object.keys(body).length) return dialog.close();
+    const res = await api.placeConversation(row.sessionId, body);
+    if (!res.ok) return toast(errorText(res.error));
+    dialog.close();
+    toast(t('place.done'));
+    return poll();
+  };
+  dialog.replaceChildren(h('form', { class: 'confirm pl-form', onsubmit: save },
+    h('h2', { id: 'placeTitle' }, t('place.title')),
+    h('p', { class: 'pl-lede' }, t('place.lede')),
+    h('div', { class: 'pl-field' }, h('label', { for: 'placeName' }, t('place.name')), nameInput, h('p', { class: 'pl-hint', id: 'placeNameHint' }, t('place.nameHint'))),
+    h('div', { class: 'pl-row' },
+      h('div', { class: 'pl-field' }, h('label', { for: 'placeProject' }, t('place.project')), h('span', { class: 'pl-select' }, projectSelect, icon('chevron', 'select-chevron'))),
+      h('div', { class: 'pl-field' }, h('label', { for: 'placePart' }, t('place.part')), h('span', { class: 'pl-select' }, partSelect, icon('chevron', 'select-chevron')), noMap)),
+    h('p', { class: 'note pl-learns' }, t('place.learns')),
+    h('div', { class: 'actions' },
+      h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, t('confirm.cancel')),
+      h('button', { type: 'submit', class: 'btn primary' }, t('place.save')))));
+  dialog.showModal();
+  nameInput.focus();
+  nameInput.select();
 }
 
 function boxCount(node) {
@@ -1009,7 +1118,6 @@ function setProject(id) {
   refreshMarks();
   loadOpen();
   store.set('sm.project', project.id);
-  $('#project').value = project.id;
   closePanel(false);
   chat.showProject(project.id);
   if (chat.isOpen() && pointNode && !nodeById(tree, pointNode)) chat.close();
@@ -1020,6 +1128,7 @@ function setProject(id) {
   renderMap();
   convs.render();
   live.render();
+  renderNow();
   requestAnimationFrame(() => activeMap().fit(false));
   refreshView();
 }
@@ -1037,13 +1146,9 @@ function setArchived(on) {
   rerender();
 }
 
-function renderProjects() {
-  $('#project').replaceChildren(...state.projects.map((p) => h('option', { value: p.id }, p.name)));
-}
-
 function renderNoProjects() {
   $('#summary').replaceChildren();
-  $('#project').replaceChildren();
+  renderNow();
   $('#notice').replaceChildren(h('strong', {}, t('state.noProjectsTitle')), h('span', {}, t('state.noProjects')));
   $('#notice').hidden = false;
   document.body.classList.add('is-empty');
@@ -1055,7 +1160,6 @@ function renderAll() {
   renderWaiting();
   if (!state.projects.length) return renderNoProjects();
   document.body.classList.remove('is-empty');
-  renderProjects();
   const sel = selection;
   setProject(project?.id || store.get('sm.project'));
   if (sel && sel.type !== 'node') select(sel);
@@ -1065,12 +1169,11 @@ function renderAll() {
 function applyState(next) {
   const before = project;
   state = next;
+  trackUnseen();
   renderWaiting();
   if (!state.projects.length) return renderNoProjects();
   if (!before || document.body.classList.contains('is-empty')) return renderAll();
-  renderProjects();
   project = state.projects.find((p) => p.id === before.id) || state.projects[0];
-  $('#project').value = project.id;
   if (project.id !== before.id) return setProject(project.id);
   shown = visibleProject(project, showArchived);
   tree = archTree(shown);
@@ -1080,6 +1183,7 @@ function applyState(next) {
   renderMap();
   convs.render();
   live.render();
+  renderNow();
   if (!editing) rerender();
   refreshView();
   return undefined;
@@ -1171,6 +1275,8 @@ let flow = null;
 let convs = null;
 let live = null;
 let alerts = null;
+let now = null;
+let picker = null;
 
 // A click on an alert: its project, then its conversation (one alert) or the waiting list (a clash).
 function openFromAlert(group) {
@@ -1187,7 +1293,6 @@ function openFromAlert(group) {
 }
 
 function wire() {
-  $('#project').addEventListener('change', (e) => setProject(e.target.value));
   for (const b of document.querySelectorAll('.lang button')) {
     b.addEventListener('click', () => {
       if (!LANGS[b.dataset.lang] || b.dataset.lang === lang) return;
@@ -1230,7 +1335,16 @@ function wire() {
     state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(),
     nodeLabel: (id) => (tree ? nodeById(tree, id)?.label ?? null : null),
     onOpen: openConversation,
+    onMove: openPlace,
     onFilter: () => renderMap(),
+  });
+  now = createNowStrip({
+    root: $('#now'), line: $('#nowLine'), counts: $('#nowCounts'), cards: $('#nowCards'), h, t: () => t, icon, relative, phone: PHONE, store,
+    onOpen: openFromLive,
+  });
+  picker = createProjectPicker({
+    root: $('#projectPicker'), button: $('#project'), list: $('#projectList'), name: $('#projectName'), marks: $('#projectMarks'), h, t: () => t, icon,
+    onPick: (id) => setProject(id),
   });
   live = createLivePanel({
     root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,
@@ -1240,7 +1354,13 @@ function wire() {
     stack: $('#alertStack'), bell: $('#alertsBtn'), dialog: $('#alertsDialog'), h, t: () => t, lang: () => lang, icon, api, store, toast, errorText,
     projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name })),
     onOpen: openFromAlert,
-    onAlerts: () => setTimeout(poll, 400),
+    onAlerts: (fresh) => {
+      // A job that finished while the page was closed or on another project is still "finished and not seen".
+      for (const a of fresh) if (a.kind === 'finished' && a.sessionId && a.sessionId !== (chat.isOpen() ? chat.current() : null)) unseen.add(a.sessionId);
+      saveUnseen();
+      setTimeout(poll, 400);
+    },
+    pending: () => (jobs ? pendingCount(jobs) : 0),
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
@@ -1301,8 +1421,10 @@ function wire() {
   search.addEventListener('blur', () => setTimeout(() => { if (!$('#searchBox').contains(document.activeElement)) closeResults(); }, 150));
   search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open) return;
-    if (convs.isDrawerOpen()) convs.closeDrawer();
+    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open || $('#placeDialog').open) return;
+    if (picker.isOpen()) picker.close();
+    else if (now.isOpen()) now.close();
+    else if (convs.isDrawerOpen()) convs.closeDrawer();
     else if (!$('#waitingList').hidden || live.isOpen()) closeLists();
     else if (chat.isOpen()) chat.close();
     else closePanel();
@@ -1357,6 +1479,15 @@ function applyDeepLink() {
   if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
   if (params.get('live') === '1') setTimeout(openLive, 60);
   if (params.get('alerts') === '1') setTimeout(() => alerts.openSettings(), 200);
+  // &place=<sessionId> opens "Move or rename"; &picker=1 opens the project list; &nowopen=1 opens the Now list on a phone.
+  const placeId = params.get('place');
+  if (placeId) {
+    const out = listConversations(state, { projectId: project.id, scope: 'all', showArchived: true });
+    const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === placeId);
+    if (hit) setTimeout(() => openPlace(hit), 120);
+  }
+  if (params.get('picker') === '1') setTimeout(() => $('#project').click(), 120);
+  if (params.get('nowopen') === '1') setTimeout(() => $('#nowLine').click(), 120);
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);
@@ -1385,6 +1516,7 @@ async function main() {
   }
   const { ok, status, error, ...first } = res;
   state = first;
+  trackUnseen();
   alerts.start();
   notice.hidden = true;
   renderAll();

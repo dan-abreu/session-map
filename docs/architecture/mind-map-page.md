@@ -25,7 +25,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Polish package (first, after v0.2.2)
 
-- [ ] **important:** Conversation list grouped by project, with the project on every row `mm04`
+- [x] **Claude:** Conversation list grouped by project, with the project on every row `mm04`
   - In "All projects": one collapsible header per project (name, color, working and waiting counters), like project folders in Claude or ChatGPT and channels in Slack. Every row shows a project badge, also in "This project".
   - Inside a project: the orchestration chat pinned on top, then Working now and Waiting for you, then by date (Today, Yesterday, Last 7 days, Older). The Now strip and the alerts use the same order and badges.
   - Test: in "All projects" no row lacks the project name.
@@ -34,7 +34,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Search inside a conversation, jump to a day or time, and a live mirror for a conversation still running. Secrets in steps shown masked.
   - Applies to every origin (VS Code, terminal, map) and to archived conversations, including ones Claude Code already deleted.
   - The whole chat experience matches Claude Code in VS Code, not only reading: composer with files and pasted images, `@` file mentions and `/` commands; "thinking", the task list and the current step; edits shown as before/after diffs with accept or reject; the same permission cards; stop; plan mode; model and mode picker; the same keyboard shortcuts, scrolling and copying. One chat screen for every conversation in every project.
-- [ ] **important:** Move and rename a conversation with one click `mm21`
+- [x] **Claude:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
 - [ ] **important:** Relations you can zoom, select and read `mm05`
@@ -51,11 +51,11 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - One visual system: type scale, spacing grid, semantic palette (light and dark, AA contrast), one icon set, identical components with every state, short purposeful motion that respects reduced motion.
   - Empty screens with a simple illustration and a sentence, skeletons while loading, nothing cut off or overlapping on desktop and phone.
   - Screen-by-screen polish with a review of screenshots; the owner approves the screenshots before anything is published. The tokens and components go in `DESIGN.md` for later versions to follow.
-- [ ] **important:** Global fixed "Now" strip across all projects `mm09`
+- [x] **Claude:** Global fixed "Now" strip across all projects `mm09`
   - Always visible on every tab, never filtered by the chosen project: switching project, tab or scrolling does not change it. Test: its content is the same whichever project is selected.
   - One card per running job in any repository: where (project › part › item), live last step, how long, model and helpers (n/total). Waiting for you comes first, in amber.
   - A click switches project and opens the point on the map and its chat. It scrolls sideways, collapses to a line ("3 working · 2 waiting · 1 finished") and is a one-line button opening the list on phones.
-- [ ] **important:** Badges per project in the project picker `mm10`
+- [x] **Claude:** Badges per project in the project picker `mm10`
   - A pulsing green dot if something works there, an amber number of items waiting, a check for "finished and not yet seen". That last mark stays until the chat is opened.
   - The tab title shows the count, like "(2) session-map".
 

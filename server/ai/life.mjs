@@ -64,7 +64,7 @@ export function placeChanged(life, p, jobs) {
     track(life, (async () => {
       try {
         const ask = (req) => life.queue.ask({ ...req, projectId: p.projectId });
-        const partId = await placeByAi(digest, p.arch, ask);
+        const partId = await placeByAi(digest, p.arch, ask, p.examples ?? []);
         if (partId === undefined) return;
         seen[sessionId] = { hash, partId };
         writeAtomic(placedFile(p.smDir, p.projectId), JSON.stringify(seen));

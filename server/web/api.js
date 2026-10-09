@@ -24,6 +24,7 @@ export const api = {
   history: (q, project) => call('GET', `/api/history?${new URLSearchParams({ q, ...(project ? { project } : {}) })}`),
   conversation: (id) => call('GET', `/api/conversation/${seg(id)}`),
   deleteConversation: (id) => call('DELETE', `/api/conversation/${seg(id)}`),
+  placeConversation: (id, body) => call('POST', `/api/conversation/${seg(id)}/place`, body),
   files: (projectId, scope) => call('GET', `/api/files/${seg(projectId)}?${new URLSearchParams(scope)}`),
   file: (projectId, path, workCell) => call('GET', `/api/file/${seg(projectId)}?${new URLSearchParams({ path, ...(workCell ? { workCell } : {}) })}`),
   action: (body) => call('POST', '/api/action', body),

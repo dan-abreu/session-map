@@ -62,7 +62,8 @@ const DEFAULTS = { browser: true, desktop: true, sound: false, ntfy: { enabled: 
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 
 // ctx: stack (the cards' list), bell (toolbar button), dialog, h, t (translator getter), lang(), icon(name, cls), api,
-// store, toast, errorText, projects() → [{id, name}], onOpen(group), onAlerts() (something changed: refresh the state).
+// store, toast, errorText, projects() → [{id, name}], onOpen(group), onAlerts(alerts) (something changed: refresh the state),
+// pending() (what still needs the person: waiting for them plus finished and not seen, mm10).
 export function createAlerts(ctx) {
   const { stack, dialog, h, api, store } = ctx;
   const baseTitle = document.title;
@@ -78,7 +79,8 @@ export function createAlerts(ctx) {
   const readSeen = () => { try { return JSON.parse(store.get(SEEN_KEY) ?? 'null'); } catch { return null; } };
   const current = () => prefs ?? DEFAULTS;
 
-  function renderTitle() { document.title = tabTitle(baseTitle, unseen); }
+  // Never fewer than what still needs the person, even with the page in front of them: "(2) session-map".
+  function renderTitle() { document.title = tabTitle(baseTitle, Math.max(unseen, ctx.pending?.() ?? 0)); }
 
   function beep() {
     if (!current().sound) return;
@@ -157,7 +159,7 @@ export function createAlerts(ctx) {
     }
     notify(groups);
     beep();
-    ctx.onAlerts?.();
+    ctx.onAlerts?.(alerts);
   }
 
   let polling = false;
@@ -310,5 +312,6 @@ export function createAlerts(ctx) {
     relabel() { if (dialog.open) renderDialog(); if (canEdit) save({ lang: ctx.lang() }, { quiet: true }); },
     isOpen: () => dialog.open,
     openSettings,
+    refreshTitle: renderTitle,
   };
 }

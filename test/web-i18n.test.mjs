@@ -63,6 +63,10 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['low', 'medium', 'high', 'xhigh', 'max'].flatMap((e) => [`run.effort.${e}`, `run.effortHint.${e}`]),
     ...['haiku', 'sonnet', 'opus'].map((m) => `run.modelHint.${m}`),
     ...['bad-run', 'restarting', 'bad-limit', 'config-unreadable'].map((c) => `err.${c}`),
+    ...['desktop', 'remote', 'claudeai'].map((o) => `convs.origin.${o}`),
+    ...['pinned', 'today', 'yesterday', 'week', 'older'].map((g) => `convs.group.${g}`),
+    'chat.placedBy.owner', 'err.bad-place',
+    ...['working', 'waiting', 'finished'].flatMap((k) => [`now.${k}`, `now.kind.${k}`]),
   ];
   assert.deepEqual(dynamic.filter((k) => !(k in LANGS.en)), []);
 });

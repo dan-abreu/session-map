@@ -288,6 +288,7 @@ function summarize(entries, sessionId) {
   let lastCardText = null;
   let startedAt = null;
   let endedAt = null;
+  let turnStartedAt = null;
   const userPrompts = [];
   const usageById = new Map();
   const toolUses = [];
@@ -316,6 +317,7 @@ function summarize(entries, sessionId) {
     const prompt = humanPromptOf(entry);
     // A chat the page started opens with a context block: the person's own words are what names it.
     if (prompt) {
+      turnStartedAt = entry.timestamp ?? turnStartedAt;
       userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
       noteCodes(prompt);
     }
@@ -372,6 +374,7 @@ function summarize(entries, sessionId) {
     lastPrompt: lastPromptLine ?? userPrompts.at(-1) ?? '',
     userPrompts,
     lastAssistantText,
+    turnStartedAt,
     pendingQuestion: lastTool?.name === 'AskUserQuestion' && !results.has(lastTool.id),
     liveSteps: liveStepsOf(entries, cwd),
     editedFiles,
