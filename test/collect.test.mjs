@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collect, settleAi } from '../server/collect.mjs';
+import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
 import { projectIdOf } from '../server/paths.mjs';
@@ -427,6 +428,41 @@ test('chats perceived together start one consolidation pass at a time, so a grou
     const units = JSON.parse(readFileSync(join(smDir, 'brain', projectIdOf(root), 'units.json'), 'utf8'));
     assert.equal(units.filter((u) => u.name === 'Care').length, 1);
     assert.ok(passes <= 2, `${passes} passes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});
+
+test('a restart remembers what the AI already perceived: unchanged chats cost no call, even with the answer cache gone', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'meadow'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    writeChat(dir, { id: A, cwd: root, title: 'Hay bales', prompts: ['count the hay'] });
+    writeChat(dir, { id: B, cwd: root, title: 'Fence repair', prompts: ['fix the fence'], endedAgo: 2 * HOUR });
+    let calls = 0;
+    const run = async (prompt) => {
+      calls++;
+      if (prompt.startsWith('You keep the map')) return { ok: true, value: { changes: [] }, costUSD: 0.001 };
+      return { ok: true, value: { unitId: null, name: 'Farm work', purpose: '', tags: [] }, costUSD: 0.001 };
+    };
+    const ai = { bin: 'fake-claude', run };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    assert.ok(calls >= 2);
+    const perceived = JSON.parse(readFileSync(join(smDir, 'brain', projectIdOf(root), 'perceived.json'), 'utf8'));
+    assert.equal(perceived[A].unitId, 'farm-work');
+
+    forgetLife(smDir);
+    rmSync(join(smDir, 'ai-cache.json'), { force: true });
+    calls = 0;
+    const again = await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    assert.equal(calls, 0, 'nothing changed, so nothing is asked again');
+    assert.equal(again.projects[0].chats.find((c) => c.sessionId === A).unitId, 'farm-work');
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(smDir, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { brainDir, readJsonFile, writeUnits } from '../brain/cells.mjs';
+import { brainDir, readJsonFile, writeAtomic, writeUnits } from '../brain/cells.mjs';
 import { appendEvents, readEvents } from '../brain/events.mjs';
 import { log } from '../log.mjs';
 import { applyChanges, consolidate, shouldConsolidate } from './consolidate.mjs';
@@ -38,6 +38,9 @@ function track(life, job) {
   p.finally(() => life.pending.delete(p));
 }
 
+// A restart, for tests: the next lifeOf starts from what is on disk.
+export const forgetLife = (smDir) => lives.delete(smDir);
+
 // Tests and shutdown wait for the background AI work to finish.
 export async function settleAi(smDir) {
   const life = lives.get(smDir);
@@ -49,6 +52,25 @@ const unitsNow = (smDir, projectId) => {
   const stored = readJsonFile(unitsFile(smDir, projectId), []);
   return (Array.isArray(stored) ? stored : []).map(normalizeUnit);
 };
+
+// What the AI already read, per chat: the digest hash and the unit it chose. On disk, so a restart asks nothing new.
+const perceivedFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'perceived.json');
+
+function perceivedOf(life, smDir, projectId) {
+  if (!life.perceived.has(projectId)) {
+    const stored = readJsonFile(perceivedFile(smDir, projectId), {});
+    life.perceived.set(projectId, stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {});
+  }
+  return life.perceived.get(projectId);
+}
+
+function remember(life, p, sessionId, hash, unitId) {
+  const seen = perceivedOf(life, p.smDir, p.projectId);
+  seen[sessionId] = { hash, unitId };
+  writeAtomic(perceivedFile(p.smDir, p.projectId), JSON.stringify(seen));
+}
+
+const alreadyPerceived = (life, p, sessionId, hash) => perceivedOf(life, p.smDir, p.projectId)[sessionId]?.hash === hash;
 
 function saveUnits(smDir, projectId, before, after) {
   if (JSON.stringify(before) !== JSON.stringify(after)) writeUnits(smDir, projectId, after);
@@ -62,10 +84,14 @@ async function perceiveChat(life, p, item, workCell, uncapped) {
   const ask = async (req) => (answer = await life.queue.ask({ ...req, uncapped, projectId: p.projectId }));
   const perception = await perceive(digest, unitsNow(p.smDir, p.projectId), ask);
   if (answer?.error === 'rate-limited') return null;
-  life.perceived.set(sessionId, hashOf(digest));
-  if (!perception) return null;
+  if (!perception) {
+    remember(life, p, sessionId, hashOf(digest), null);
+    return null;
+  }
   const before = unitsNow(p.smDir, p.projectId);
-  saveUnits(p.smDir, p.projectId, before, applyPerception(before, { sessionId, files: digest.files }, perception, new Date().toISOString()));
+  const after = applyPerception(before, { sessionId, files: digest.files }, perception, new Date().toISOString());
+  saveUnits(p.smDir, p.projectId, before, after);
+  remember(life, p, sessionId, hashOf(digest), after.find((u) => u.chatIds.includes(sessionId))?.id ?? null);
   return answer?.costUSD ?? 0;
 }
 
@@ -113,7 +139,7 @@ export function perceiveChanged(life, p, items) {
     const { sessionId } = item.summary;
     if (life.inFlight.has(sessionId)) continue;
     const workCell = p.workCellOf(item);
-    if (life.perceived.get(sessionId) === hashOf(digestOf(item.summary, workCell))) continue;
+    if (alreadyPerceived(life, p, sessionId, hashOf(digestOf(item.summary, workCell)))) continue;
     life.inFlight.add(sessionId);
     track(life, (async () => {
       try {
