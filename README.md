@@ -56,6 +56,20 @@ The **Flow** tab draws the folder README's mermaid diagram with a pinned copy of
 - **Import:** paste a drawing or pick a file, see what it changes (new parts and the file each gets, layers, moves, parts left out, arrows), then confirm. Only the README's mermaid block and a skeleton file per new part are written; nothing is deleted, and each apply goes to `actions.log`. A map read from the main branch can be previewed but not applied.
 - **Workshop:** a shared draft per project. A side chat redraws it with every reply, and the tools add boxes, arrows and layers, rename, move and remove, with a text editor and undo/redo. Nothing reaches the project until you apply it through the import preview.
 
+## Conversation list
+
+The column on the left of the map lists every conversation of the open project from the last 31 days, wherever it ran: started on the map, in VS Code, in a terminal, or by an automation. It folds to a narrow rail; on a phone, the **Conversations** button at the top opens it as a drawer.
+
+- Groups: **Working now** (with the latest step), **Waiting for you**, then **Recent** (50 at a time, **Show more** for the rest).
+- Each row: the title, where it sits on the map (layer › part › item, or **New idea**, **Creating the architecture map**, **Flow workshop**, **Not placed on the map**), how long ago, its cost and where it ran.
+- Search by title or place, and switch between **This project** and **All projects**.
+- A click opens the branches down to its box, centers it with a short pulse, and opens the conversation beside the map. A map conversation picks up where it stopped (`claude --resume`); one from VS Code or a terminal shows its history, with **Open in VS Code** or **Open in a terminal**, and can go on from the page once it is closed there.
+- Every box of the map shows how many conversations it and its children hold; a click on that number narrows the list to that box.
+
+## Live
+
+The **Live** button on the map counts the conversations working now, in every project, and opens **Working now**: one card per conversation, grouped by project, with its way down the map, its latest steps (the newest first), its workflows with done/total and the helper agents still running with their model, and **Show on map** / **Open conversation**. It updates every 5 seconds. On the map itself the way from the project to the box being worked on lights up in green, and a caption under that box names the latest step. A workflow agent that has not moved for 30 minutes is left out, so an interrupted run does not stay "working" for ever.
+
 ## Commands
 
 | Command | What it does |
@@ -82,6 +96,13 @@ Open a part, an item or a branch and its **Files** section lists the files, new 
 For chats that run on this PC, turn on **Enable Remote Control for all sessions** in `/config`: the page then offers a button that continues that conversation from claude.ai or the Claude app. The page can also start and drive its own chats with your `claude` CLI.
 
 **Conversations stay.** A conversation started on a box of the map is listed in that box's chat (the one used last first), and the map shows it on that part. Closing the sheet does not stop it; tapping it again shows its history and continues it (`claude --resume`), even after the server restarts. Reloading the page reopens the conversation that was open.
+
+**How it runs.** The line at the top of the chat shows the way the conversation runs, the model and effort Claude reported, what it has cost so far and why it works that way; a click opens the choices.
+
+- **Automatic** (the default for a new conversation): Opus at high effort sizes each request, following the sizing rule of your CLAUDE.md when it has one. A small request it answers directly; a medium one it hands to helper agents, each with an explicit model and effort; a large or sensitive one (a new system, sign-in, personal data, money, production, deleting things, a push) needs the reinforced way, a planned workflow with cross-checks that costs several times more. Before reinforcing it explains why in plain words, gives an estimate and waits for **Yes, reinforce** or **No, do it the normal way**; until you answer, the conversation is listed under **Waiting for you**. **May reinforce on its own** lets it go ahead while the month's reinforced spend plus the estimate fits the limit you set (`budget.reinforcedMonthlyUSD`); past it, it asks again.
+- **Manual:** **Maestro** (Opus at high hands the parts to helpers without asking), **Ultracode** (`--effort ultracode`, with a cost warning to confirm), **Fixed model** (Haiku, Sonnet or Opus at low, medium, high, extra high or max) and **Same as my Claude** (no flags: the model and effort your own settings give, read as Claude Code reads them).
+
+Changing the way, the model or the effort restarts the conversation's `claude` process; the next message resumes it with the new flags. Conversations started in VS Code or a terminal stay on **Same as my Claude** until you pick something else.
 
 **Permissions.** A page chat runs in the permission mode of your own Claude Code: `permissions.defaultMode` from `~/.claude/settings.json`, then the project's `.claude/settings.json`, then `.claude/settings.local.json` (the more specific file wins, as in Claude Code). With nothing set, that is `default`, which asks before every tool that is not already allowed. The selector in the chat header changes it for that conversation only: **Same as Claude**, **Ask every time** (`default`), **Edits on their own** (`acceptEdits`) or **Automatic** (`auto`); the choice is kept per conversation and switches a running one from its next step. Whatever the mode still asks about appears in the sheet with **Allow** / **Deny** (no answer in 25 s denies it), and **Always in this conversation** is remembered for that conversation, also after a resume. `bypassPermissions` is never used: if your settings say so, the page runs the chat in `auto` and tells you.
 
@@ -131,6 +152,7 @@ Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is 
 
 - `ai`: the AI organisation (see Privacy). `"ai": { "enabled": false }` turns it off.
 - `budget.monthlyUSD`: shows how much of a monthly budget the estimated cost has used.
+- `budget.reinforcedMonthlyUSD`: the monthly limit for **May reinforce on its own** in Automatic chats; it can also be set from the chat.
 - `currency`: shows costs in another currency, at the rate you give (1 USD = `rate`).
 - `tunnelUrl`: the link of your [VS Code Remote Tunnel](https://code.visualstudio.com/docs/remote/tunnels) (https only); it adds a **VS Code on your phone** button next to the files.
 - `projects`: per-project settings, keyed by the project folder in lower case with `/`. The same keys can sit in `<project>/.claude/session-map.json`; the entry here wins.

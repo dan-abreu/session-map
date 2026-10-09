@@ -56,6 +56,20 @@ A aba **Fluxo** desenha o diagrama mermaid do README da pasta com uma cópia fix
 - **Importar:** cole um desenho ou escolha um arquivo, veja o que muda (partes novas e o arquivo de cada uma, camadas, mudanças de camada, partes fora do desenho, setas) e confirme. Só o bloco mermaid do README e um arquivo-esqueleto por parte nova são gravados; nada é apagado, e cada aplicação vai para o `actions.log`. Um mapa lido do ramo principal mostra a prévia, mas não aplica.
 - **Ateliê:** um rascunho compartilhado por projeto. Um chat ao lado redesenha a cada resposta, e as ferramentas criam caixas, setas e camadas, renomeiam, movem e tiram, com editor de texto e desfazer/refazer. Nada chega ao projeto até você aplicar pela prévia da importação.
 
+## Lista de conversas
+
+A coluna à esquerda do mapa lista toda conversa do projeto aberto dos últimos 31 dias, onde quer que ela tenha rodado: iniciada no mapa, no VS Code, num terminal ou por uma automação. Ela recolhe para um trilho estreito; no celular, o botão **Conversas** no topo abre a lista como gaveta.
+
+- Grupos: **Trabalhando agora** (com o último passo), **Esperando você** e depois **Recentes** (50 por vez, **Mostrar mais** para o resto).
+- Cada linha: o título, onde ela fica no mapa (camada › parte › item, ou **Nova ideia**, **Criando o mapa de arquitetura**, **Ateliê do fluxo**, **Fora do mapa**), há quanto tempo, o custo e onde ela rodou.
+- Busca por título ou lugar, e troca entre **Este projeto** e **Todos os projetos**.
+- Um clique abre os galhos até a caixa dela, centraliza a caixa com um pulso curto e abre a conversa ao lado do mapa. Uma conversa do mapa continua de onde parou (`claude --resume`); uma do VS Code ou do terminal mostra o histórico, com **Abrir no VS Code** ou **Abrir num terminal**, e pode continuar pela página depois de fechada lá.
+- Cada caixa do mapa mostra quantas conversas ela e as de baixo têm; um clique nesse número filtra a lista para aquela caixa.
+
+## Ao vivo
+
+O botão **Ao vivo** do mapa conta as conversas trabalhando agora, em todos os projetos, e abre **Trabalhando agora**: um cartão por conversa, agrupado por projeto, com o caminho dela no mapa, os últimos passos (o mais novo primeiro), os workflows com feitos/total e os agentes ajudantes ainda trabalhando com o modelo de cada um, e **Mostrar no mapa** / **Abrir conversa**. Ele se atualiza a cada 5 segundos. No próprio mapa, o caminho do projeto até a caixa em que se trabalha acende em verde, e uma legenda embaixo dessa caixa diz o último passo. Um agente de workflow parado há 30 minutos sai da lista, para um trabalho interrompido não ficar "trabalhando" para sempre.
+
 ## Comandos
 
 | Comando | O que faz |
@@ -82,6 +96,13 @@ Abra uma parte, um item ou um ramo e a seção **Arquivos** lista os arquivos, c
 Para conversas que rodam neste PC, ligue **Enable Remote Control for all sessions** no `/config`: a página passa a oferecer um botão que continua aquela conversa pelo claude.ai ou pelo app do Claude. A página também inicia e conduz conversas próprias com o seu `claude` CLI.
 
 **As conversas ficam.** Uma conversa iniciada numa caixa do mapa aparece na conversa daquela caixa (a usada por último primeiro), e o mapa a mostra naquela parte. Fechar a folha não a interrompe; tocar nela de novo mostra o histórico e continua a conversa (`claude --resume`), mesmo depois de o servidor reiniciar. Recarregar a página reabre a conversa que estava aberta.
+
+**Como ela roda.** A linha no topo da conversa mostra o jeito em que ela roda, o modelo e o nível que o Claude informou, quanto ela já custou e por que trabalha assim; um clique abre as escolhas.
+
+- **Automático** (o padrão de uma conversa nova): o Opus no nível alto mede cada pedido, seguindo a regra de tamanho do seu CLAUDE.md quando ele tem uma. Um pedido pequeno ele responde direto; um médio ele passa para agentes ajudantes, cada um com modelo e nível explícitos; um grande ou sensível (um sistema novo, login, dado pessoal, dinheiro, produção, apagar coisas, um push) pede o modo reforçado, um workflow planejado com conferência cruzada que custa várias vezes mais. Antes de reforçar, ele explica o porquê em palavras simples, dá uma estimativa e espera **Sim, pode reforçar** ou **Não, siga do jeito normal**; até você responder, a conversa fica em **Esperando você**. **Pode reforçar sozinho** deixa ele seguir enquanto o gasto reforçado do mês mais a estimativa couber no limite que você definir (`budget.reinforcedMonthlyUSD`); passou dele, volta a perguntar.
+- **Manual:** **Maestro** (o Opus no nível alto divide o trabalho com ajudantes sem perguntar), **Ultracode** (`--effort ultracode`, com um aviso de custo para confirmar), **Modelo fixo** (Haiku, Sonnet ou Opus em baixo, médio, alto, extra alto ou máximo) e **Igual ao meu Claude** (sem flags: o modelo e o nível que as suas configurações dão, lidos como o Claude Code lê).
+
+Trocar o jeito, o modelo ou o nível reinicia o processo `claude` da conversa; a próxima mensagem retoma com as flags novas. Conversas iniciadas no VS Code ou num terminal ficam em **Igual ao meu Claude** até você escolher outra coisa.
 
 **Permissões.** Uma conversa da página roda no modo de permissão do seu próprio Claude Code: `permissions.defaultMode` de `~/.claude/settings.json`, depois o `.claude/settings.json` do projeto, depois o `.claude/settings.local.json` (o arquivo mais específico vence, como no Claude Code). Sem nada definido, é o `default`, que pergunta antes de toda ferramenta que ainda não esteja liberada. O seletor no cabeçalho da conversa muda isso só para aquela conversa: **Igual ao Claude**, **Perguntar sempre** (`default`), **Só edições automáticas** (`acceptEdits`) ou **Automático** (`auto`); a escolha fica guardada por conversa e vale para uma conversa em andamento a partir do próximo passo. O que o modo ainda perguntar aparece na folha com **Permitir** / **Negar** (sem resposta em 25 s, nega), e **Sempre nesta conversa** fica lembrado para aquela conversa, também depois de retomá-la. O `bypassPermissions` nunca é usado: se as suas configurações disserem isso, a página roda a conversa em `auto` e avisa.
 
@@ -131,6 +152,7 @@ As configurações da máquina ficam em `~/.claude/session-map/config.json`. Tod
 
 - `ai`: a organização por IA (veja Privacidade). `"ai": { "enabled": false }` desliga.
 - `budget.monthlyUSD`: mostra quanto do orçamento mensal o custo estimado já usou.
+- `budget.reinforcedMonthlyUSD`: o limite mensal do **Pode reforçar sozinho** nas conversas em Automático; também dá para definir pela conversa.
 - `currency`: mostra os custos em outra moeda, na cotação que você informar (1 USD = `rate`).
 - `tunnelUrl`: o link do seu [VS Code Remote Tunnel](https://code.visualstudio.com/docs/remote/tunnels) (só https); ele cria o botão **VS Code no celular** ao lado dos arquivos.
 - `projects`: configurações por projeto, com a pasta do projeto em minúsculas e com `/` como chave. As mesmas chaves podem ficar em `<projeto>/.claude/session-map.json`; a entrada daqui vence.
