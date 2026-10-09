@@ -1,6 +1,6 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
-  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
+  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, clashChip, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -260,7 +260,8 @@ function partBadges(node) {
       branches.slice(0, 4).map((b) => h('span', { class: 'bx-person', style: `--owner-h:${b.hue}`, 'aria-hidden': 'true' }, b.initial)),
       h('span', { class: 'visually-hidden' }, t.count('box.branches', branches.length))));
   }
-  for (const [a, b] of clashes) out.push(h('span', { class: 'bx-clash', title: t('box.clash', { a, b }) }, h('span', { class: 'bx-clash-dot', 'aria-hidden': 'true' }), t('box.clashShort'), h('span', { class: 'visually-hidden' }, t('box.clash', { a, b }))));
+  const clash = clashChip(clashes, t);
+  if (clash) out.push(h('span', { class: 'bx-clash', title: clash.title }, h('span', { class: 'bx-clash-dot', 'aria-hidden': 'true' }), h('span', { 'aria-hidden': 'true' }, clash.label), h('span', { class: 'visually-hidden' }, clash.title)));
   return out;
 }
 

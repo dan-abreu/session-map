@@ -214,3 +214,31 @@ test('the column draws the "nothing matches" screen for a search with no result,
     globalThis.document = realDocument;
   }
 });
+
+test('the project badge on a row is never cut: it keeps its size and only a very long name ends in "…"', async () => {
+  const { createConvList } = await import('../server/web/convlist.js');
+  const els = new Map();
+  const realDocument = globalThis.document;
+  globalThis.document = { activeElement: null, getElementById: (id) => els.get(id) ?? els.set(id, new El('div', id)).get(id) };
+  try {
+    const state = shop([row('a')]);
+    createConvList({
+      root: new El('aside'), h: fakeH, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
+      t: () => (key) => key, relative: () => '1h', money: (v) => `$${v}`, phone: { matches: false },
+      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null,
+      onOpen() {}, onMove() {}, onFilter() {},
+    }).render();
+    const found = [];
+    const walk = (el) => { if (/\bcv-proj\b/.test(el.attrs?.class ?? '')) found.push(el); el.children?.forEach(walk); };
+    walk(els.get('convsList'));
+    assert.ok(found.length, 'the row shows its project');
+    const name = found[0].children.find((c) => c.attrs?.class === 'cv-proj-name');
+    assert.equal(name?.text, state.projects[0].name, 'the name sits in its own element, so it can end in "…"');
+  } finally {
+    globalThis.document = realDocument;
+  }
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\.')} \{([^}]*)\}`))?.[1] ?? '';
+  assert.match(rule('.cv-proj'), /flex: none/, 'the badge does not shrink when the place beside it is long');
+  assert.match(rule('.cv-proj-name'), /text-overflow: ellipsis/);
+});

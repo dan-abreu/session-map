@@ -188,7 +188,7 @@ export function createConvList(ctx) {
   const stepText = (step) => (STEP_KINDS.has(step.kind) ? ctx.t()(`live.step.${step.kind}`, { target: step.target }) : '');
 
   const projectBadge = (project) => h('span', { class: 'cv-proj', style: `--p-h:${projectHue(project)}` },
-    h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), project.name);
+    h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, project.name));
 
   function originBadge(origin) {
     const tt = ctx.t();

@@ -69,6 +69,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - The groups (Working now, Waiting for you, Today, Yesterday…) as clearly titled sections with icon, colour and count, extra space between them, and titles that stay on top while their rows scroll (today only the project folder's title does).
   - Each project as a card with its colour band and name, in "This project" too; the project badge never cut off, or left out inside the project's own card, where it only repeats.
   - How to confirm it is done: screenshots at 1440 px and on a phone, in both themes: every row shows its state in a word, no text is cut off, a group title stays on top while its rows scroll, a finished conversation not yet opened stands out; a test fails if a row has no state word.
+  - Done so far (2026-10-09 real-data check): the project badge keeps its size on every row and Now card (only a very long name ends in "…"), and a chat the page started reads "Map" even when the page's own record of it is gone (it said "Automation"). The rest above is still open.
 - [x] **Claude:** Global fixed "Now" strip across all projects `mm09`
   - Always visible on every tab, never filtered by the chosen project: switching project, tab or scrolling does not change it. Test: its content is the same whichever project is selected.
   - One card per running job in any repository: where (project › part › item), live last step, how long, model and helpers (n/total). Waiting for you comes first, in amber.

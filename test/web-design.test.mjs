@@ -143,3 +143,10 @@ test('two font stacks only, always through their tokens', () => {
   const bad = plain.filter((d) => /^font(-family)?$/.test(d.prop) && /monospace|sans-serif|serif\b/.test(d.value));
   assert.deepEqual(bad.map((d) => `${d.where} { ${d.prop}: ${d.value.slice(0, 60)} }`), []);
 });
+
+test('on a phone the project picker shrinks inside the top bar instead of covering the Conversations button', () => {
+  const phone = (sel, prop) => plain.find((d) => d.where === `@media (max-width: 719px) > ${sel}` && d.prop === prop)?.value;
+  assert.equal(phone('.pp-btn', 'min-width'), '0', 'the button may be narrower than its content');
+  assert.equal(phone('.pp-btn', 'max-width'), '100%', 'and never wider than the room the bar gives it');
+  assert.equal(phone('.pp-btn', 'overflow'), 'hidden');
+});

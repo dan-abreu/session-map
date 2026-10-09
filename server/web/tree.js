@@ -201,6 +201,15 @@ export function clashMarks(project, ignored = new Set()) {
   return out;
 }
 
+// One chip per part, whatever the number of clashing pairs: "clash" or "3 clashes", with every pair in the hint.
+export function clashChip(pairs, t) {
+  if (!pairs.length) return null;
+  return {
+    label: pairs.length === 1 ? t('box.clashShort') : t.count('box.clashes', pairs.length),
+    title: pairs.map(([a, b]) => t('box.clash', { a, b })).join('\n'),
+  };
+}
+
 // The board's three columns, in map order; blockers and items waiting on a person rise to the top of each.
 export function boardItems(project) {
   const cols = { todo: [], doing: [], done: [] };

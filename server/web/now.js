@@ -108,7 +108,7 @@ export function createNowStrip(ctx) {
   function where(card) {
     const tt = ctx.t();
     const tail = card.place.special ? tt(`convs.place.${card.place.special}`) : card.place.path.slice(-2).join(' › ');
-    return [h('span', { class: 'cv-proj' }, h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), card.project.name), tail ? h('span', { class: 'now-path' }, tail) : null];
+    return [h('span', { class: 'cv-proj' }, h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, card.project.name)), tail ? h('span', { class: 'now-path' }, tail) : null];
   }
 
   function detail(card) {

@@ -431,3 +431,20 @@ test('a conversation a restart cut off says so, and Continue picks it up with on
   await settle();
   assert.equal(part('#chatStatus').textContent, 'chat.state.finished(Here it is.)');
 });
+
+test('a conversation from elsewhere leaves room for its messages on a 900 px screen', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  const where = css.match(/\n\.chat-where \{([^}]*)\}/)?.[1] ?? '';
+  assert.match(where, /display: flex/, 'the note and its button share one row');
+  const short = css.match(/@media \(min-width: 720px\) and \(max-height: 960px\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(short, /\.run-why \{ display: none; \}/, 'on a short screen the way it runs folds into its one-line button');
+});
+
+test('on a phone a conversation opens tall, below the tabs, not squeezed under the map tools', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  const phoneChat = [...css.matchAll(/@media \(max-width: 719px\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n').match(/\n {2}\.chat \{([^}]*)\}/g)?.join(' ') ?? '';
+  assert.match(phoneChat, /position: fixed/);
+  assert.match(phoneChat, /top: 96px/, 'the same top as a conversation read in History');
+});

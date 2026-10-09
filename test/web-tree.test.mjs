@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, branchMarks, clashMarks, changedNodes,
-  boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder, countLabel, listsDone,
+  boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder, countLabel, listsDone, clashChip,
 } from '../server/web/tree.js';
+import { translator } from '../server/web/i18n.js';
 
 const item = (code, title, extra = {}) => ({ code, title, detail: [], status: 'todo', who: null, weight: null, milestone: null, line: 10, ...extra });
 const part = (id, name, groups, extra = {}) => ({
@@ -166,4 +167,14 @@ test('countLabel reads "N open" everywhere when the map lists no done items, and
 test('clashMarks leaves out the pairs the person chose to ignore', () => {
   assert.equal(clashMarks(project(), new Set(['feat/a|feat/b'])).size, 0);
   assert.equal(clashMarks(project(), new Set(['feat/a|other'])).size, 2);
+});
+
+test('a part with several clashes shows one chip with the count, and every pair in its hint', () => {
+  const t = translator('pt-BR');
+  assert.equal(clashChip([], t), null);
+  assert.deepEqual(clashChip([['a', 'b']], t), { label: 'choque', title: 'As linhas de trabalho a e b mexem no mesmo arquivo' });
+  const three = clashChip([['a', 'b'], ['a', 'c'], ['b', 'c']], t);
+  assert.equal(three.label, '3 choques');
+  assert.equal(three.title.split(String.fromCharCode(10)).length, 3);
+  assert.equal(clashChip([['a', 'b'], ['a', 'c']], translator('en')).label, '2 clashes');
 });

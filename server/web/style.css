@@ -1365,7 +1365,6 @@ body.is-resizing .sheet { animation: none; }
 @media (max-width: 719px) {
   .bar { grid-template-columns: 1fr auto; gap: 8px 12px; padding: 8px 16px 0; }
   .brand { display: none; }
-  .pp-btn { max-width: 52vw; }
   .tabs {
     grid-column: 1 / -1; grid-row: 2;
     overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 6px; min-height: 40px;
@@ -1537,17 +1536,23 @@ body.is-empty .convs { display: none; }
   100% { box-shadow: 0 0 0 18px color-mix(in srgb, var(--focus) 0%, transparent), var(--shadow-md); }
 }
 
-.chat-where { display: grid; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--bg-3); font-size: var(--fs-sm); }
+.chat-where { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 20px; border-bottom: 1px solid var(--line); background: var(--bg-3); font-size: var(--fs-sm); }
 .chat-where[hidden] { display: none; }
-.chat-where p { margin: 0; line-height: 1.45; }
+.chat-where p { flex: 1 1 220px; margin: 0; line-height: 1.4; }
 .chat-where .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+/* A 900 px screen: the way the chat runs folds into its one-line button, so the messages keep the room. */
+@media (min-width: 720px) and (max-height: 960px) {
+  .run-why { display: none; }
+}
 .chat-form[hidden], .chat-mode[hidden] { display: none; }
 
 @media (max-width: 719px) {
   body { grid-template-columns: minmax(0, 1fr); }
   .stage { grid-column: 1; }
   .bar-start { gap: 8px; }
-  .pp-btn { max-width: 44vw; }
+  .bar-end { gap: 6px; }
+  .bar-start > .mark { display: none; }
+  .pp-btn { min-width: 0; max-width: 100%; overflow: hidden; gap: 6px; padding-right: 26px; }
   .convs-btn {
     display: inline-flex; align-items: center; gap: 6px; flex: none;
     height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-md);
@@ -1885,11 +1890,12 @@ body.is-empty .now { display: none; }
 .cv-where { display: flex; align-items: center; gap: 6px; }
 .cv-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-proj {
-  display: inline-flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; max-width: 60%;
+  display: inline-flex; align-items: center; gap: 4px; flex: none; max-width: 60%;
   height: 18px; padding: 0 6px 0 4px; border-radius: var(--r-xs);
   background: oklch(var(--owner-l) 0.13 var(--p-h, 160) / 0.14); color: oklch(var(--badge-l) 0.1 var(--p-h, 160));
-  font-size: var(--fs-2xs); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-2xs); font-weight: 650; white-space: nowrap;
 }
+.cv-proj-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-proj .cv-proj-dot { width: 7px; height: 7px; border-radius: var(--r-2xs); }
 .cv-meta { gap: 6px; }
 .cv-origin-badge {
@@ -2149,7 +2155,8 @@ body.is-empty .now { display: none; }
 .chat-status[data-state="mirror"] { color: var(--active-ink); }
 
 @media (max-width: 719px) {
-  .chat { max-height: 94%; }
+  /* Tall, below the tabs, like a conversation read in History: under the map tools only a line of it showed. */
+  .chat { position: fixed; top: 96px; max-height: none; z-index: 20; }
   .chat .run-why { display: none; }
   .chat-keys { display: none; }
   .chat-find { flex-wrap: wrap; padding: 6px 16px; }
