@@ -181,6 +181,31 @@ test('chatLog marks a running turn, an error and the end of the process', () => 
   assert.equal(log.ended, true);
 });
 
+test('chatLog: a reopened conversation starts from its history and takes the server\'s user events without doubling the page\'s own', () => {
+  let log = chatLog(undefined, { type: 'history', data: { messages: [{ role: 'user', text: 'Add the error message' }, { role: 'assistant', text: 'Done.' }] } });
+  assert.deepEqual(log.items.map((i) => [i.type, i.text]), [['user', 'Add the error message'], ['assistant', 'Done.']]);
+  assert.equal(log.running, false);
+  log = chatLog(log, { type: 'user', data: { text: 'from another tab' } });
+  assert.equal(log.items.at(-1).text, 'from another tab');
+  assert.equal(log.running, true, 'a message the server took means a turn is on');
+  log = chatLog(log, { type: 'turn-end', data: {} });
+  log = chatLog(log, { type: 'local-send', data: { text: 'and the retry' } });
+  log = chatLog(log, { type: 'user', data: { text: 'and the retry' } });
+  assert.equal(log.items.filter((i) => i.type === 'user' && i.text === 'and the retry').length, 1);
+});
+
+test('chatLog keeps the mode claude reports, and a resumed process is no longer ended', () => {
+  let log = chatLog(undefined, { type: 'session', data: { sessionId: 's', state: 'started', mode: 'auto' } });
+  assert.equal(log.mode, 'auto');
+  log = chatLog(log, { type: 'mode', data: { mode: 'acceptEdits' } });
+  assert.equal(log.mode, 'acceptEdits');
+  log = chatLog(log, { type: 'session', data: { sessionId: 's', state: 'ended' } });
+  assert.equal(log.ended, true);
+  log = chatLog(log, { type: 'session', data: { sessionId: 's', state: 'started', mode: 'default' } });
+  assert.equal(log.ended, false);
+  assert.equal(log.mode, 'default');
+});
+
 test('visibleProject drops archived chats from the map unless asked', () => {
   const p = shop();
   const gone = p.chats[0];

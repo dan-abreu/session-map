@@ -1,20 +1,25 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { cleanEnv, findClaude } from '../ai/runner.mjs';
 import { sameToken } from '../auth.mjs';
+import { readJsonFile, setOverride, writeAtomic } from '../brain/cells.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { readNucleus } from '../brain/nucleus.mjs';
 import { log } from '../log.mjs';
+import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
+import { firstPrompt, personsWords } from './prompt.mjs';
+import { pickMode, settingsMode } from './mode.mjs';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
 const KEY_RE = /^[0-9a-f]{32}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEXT_MAX = 20_000;
+const TITLE_MAX = 200;
 const EVENTS_MAX = 2000;
 const CHATS_MAX = 6;
 const RELAY_BODY_MAX = 4 * 1024 * 1024;
@@ -28,48 +33,33 @@ const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
-const list = (items) => items.map((i) => `- ${i}`).join('\n');
-
-// Without the plugin there is no /session-map:board: the chat is told the card format itself.
-const CARD_HINT = [
-  'When you finish a step, end your reply with a short block like this, so session-map can show where the work stands:',
-  '```session-map',
-  '{"title": "what this conversation is about", "doing": "the step you are on", "todo": ["what is left"], "decided": ["what was settled"], "waiting": ["questions for the person"]}',
-  '```',
-  'Use only the fields that apply; keep each line short.',
-].join('\n');
-
-// What a new chat reads instead of the whole history (desenho-2 § 21, "Continuar aqui").
-// board: the session-map plugin is installed and on, so its /session-map:board command exists.
-export function firstPrompt({ unit, nucleus, mother, workCell, text, board = false }) {
-  const parts = [];
-  if (unit) {
-    const lines = [`Area: ${unit.name}${unit.purpose ? ` (${unit.purpose})` : ''}`];
-    if (nucleus?.state) lines.push(`State: ${nucleus.state}`);
-    if (nucleus?.decided?.length) lines.push(`Decided:\n${list(nucleus.decided)}`);
-    if (nucleus?.todo?.length) lines.push(`To do:\n${list(nucleus.todo)}`);
-    parts.push(lines.join('\n'));
-  }
-  if (workCell) parts.push(`Branch: ${workCell.branch}`);
-  const card = mother?.card;
-  if (card) {
-    const lines = [`Previous conversation: ${card.title || mother.title}`];
-    if (card.doing) lines.push(`Doing: ${card.doing}`);
-    if (card.todo?.length) lines.push(`To do:\n${list(card.todo)}`);
-    if (card.waiting?.length) lines.push(`Waiting:\n${list(card.waiting)}`);
-    if (card.decided?.length) lines.push(`Decided:\n${list(card.decided)}`);
-    parts.push(lines.join('\n'));
-  }
-  if (!parts.length) return text;
-  const hint = board ? 'When you finish a step, run /session-map:board.' : CARD_HINT;
-  return `Context from session-map (this is all you need from earlier work):\n\n${parts.join('\n\n')}\n\n${hint}\n\n${text}`;
-}
+const now = () => new Date().toISOString();
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
-export function createChatHub({ smDir, bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner } = {}) {
+export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner } = {}) {
   const chats = new Map();
   const bySession = new Map();
   let relay = null;
+
+  // The conversations the page started or wrote into, by sessionId: where they belong, the person's own words as title,
+  // the folder to resume in, the permission mode picked in the header and the tools allowed for the whole conversation.
+  // On disk, so closing the sheet, reloading the page or restarting the server loses none of it.
+  const pageChatsPath = join(smDir, 'page-chats.json');
+  const readPageChats = () => {
+    const stored = readJsonFile(pageChatsPath, {});
+    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  };
+  const savePageChat = (sessionId, patch) => {
+    try {
+      const all = readPageChats();
+      all[sessionId] = { ...all[sessionId], ...patch };
+      writeAtomic(pageChatsPath, `${JSON.stringify(all, null, 2)}\n`);
+    } catch (err) { log('warn', 'page-chat-save-failed', { error: err.message }); }
+  };
+  const drivenNow = (sessionId) => {
+    const chat = bySession.get(sessionId);
+    return chat && !chat.ended ? chat : null;
+  };
 
   const emit = (chat, type, data) => {
     const evt = { id: ++chat.lastId, type, data };
@@ -137,21 +127,38 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
 
   function onDriverEvent(chat, evt) {
     if (evt.type === 'session') {
-      // The CLI repeats init every turn: only the first one is news.
-      if (chat.announced) return;
+      // The CLI repeats init every turn: only the first one is news, or a mode the header changed since.
+      if (chat.announced) {
+        if (evt.data.mode && evt.data.mode !== chat.reported) {
+          chat.reported = evt.data.mode;
+          emit(chat, 'mode', { mode: chat.reported });
+        }
+        return undefined;
+      }
       chat.announced = true;
+      chat.reported = evt.data.mode ?? null;
       chat.sessionId = evt.data.sessionId;
       bySession.set(chat.sessionId, chat);
       if (chat.parentId && chat.parentId !== chat.sessionId) {
         try { recordLineage(smDir, chat.sessionId, chat.parentId); } catch (err) { log('warn', 'lineage-failed', { error: err.message }); }
       }
-      return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started' });
+      const known = readPageChats()[chat.sessionId];
+      savePageChat(chat.sessionId, {
+        projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, updatedAt: now(),
+        ...(known ? {} : { unitId: chat.unitId, workCellId: chat.workCellId, title: chat.title, startedAt: chat.startedAt }),
+      });
+      // Opened on a unit, it shows in that unit at once: the page does not wait for the AI to read and place it.
+      if (!known && chat.unitId) {
+        try { setOverride(smDir, chat.projectId, chat.sessionId, chat.unitId); } catch (err) { log('warn', 'page-chat-place-failed', { error: err.message }); }
+      }
+      return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
     }
     if (evt.type === 'turn-end') {
       chat.running = false;
       clearTimeout(chat.idleTimer);
       chat.idleTimer = setTimeout(() => { chat.closing = true; chat.driver.end(); }, idleMs);
       chat.idleTimer.unref?.();
+      if (chat.sessionId) savePageChat(chat.sessionId, { updatedAt: now() });
       return emit(chat, 'turn-end', evt.data);
     }
     if (evt.type === 'exit') return onExit(chat, evt.data);
@@ -188,10 +195,12 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     return items.find((x) => (kind === 'chat' ? x.sessionId : x.id) === id) ?? null;
   }
 
-  function sendTo(chat, text) {
+  // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
+  function sendTo(chat, shown, prompt = shown) {
     clearTimeout(chat.idleTimer);
     chat.running = true;
-    chat.driver.send(text);
+    emit(chat, 'user', { text: shown });
+    chat.driver.send(prompt);
   }
 
   // body: {projectId, cellId|unitId?, frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
@@ -203,24 +212,33 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     const unitId = body.cellId ?? body.unitId;
     const workCellId = body.frontId ?? body.workCellId;
     for (const id of [body.sessionId, body.parentId]) if (id !== undefined && !(typeof id === 'string' && UUID_RE.test(id))) return reply(400, { error: 'bad-session' });
+    if (body.mode !== undefined && pickMode(body.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
+    const fromSettings = settingsMode(project.root, dir);
 
     let cwd;
     let prompt = body.text;
     let resume = null;
+    let saved = null;
+    let place = { unitId: null, workCellId: null, title: body.text.trim().slice(0, TITLE_MAX) };
     if (body.sessionId) {
       const chat = find(project, 'chat', body.sessionId);
-      if (!chat) return reply(404, { error: 'unknown-session' });
-      const driven = bySession.get(chat.sessionId);
-      if (driven && !driven.ended) {
+      const page = readPageChats()[body.sessionId];
+      saved = page?.projectId === project.id ? page : null;
+      // A page conversation older than the map's window is still resumable: the page remembers its folder.
+      if (!chat && !saved) return reply(404, { error: 'unknown-session' });
+      const driven = drivenNow(body.sessionId);
+      if (driven) {
         if (driven.running) return reply(409, { error: 'busy', chatKey: driven.key });
+        if (body.mode !== undefined) changeMode(driven, body.mode);
         sendTo(driven, body.text);
-        return reply(200, { chatKey: driven.key });
+        return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: driven.choice === 'settings' && fromSettings.downgraded });
       }
       // A conversation open in VS Code or a terminal is someone else's: writing into it would interleave two drivers.
-      if (!chat.chattable) return reply(409, { error: 'live-chat' });
-      cwd = state[INTERNALS]?.chats.get(chat.sessionId)?.cwd;
+      if (chat && !chat.chattable) return reply(409, { error: 'live-chat' });
+      cwd = state[INTERNALS]?.chats.get(body.sessionId)?.cwd ?? saved?.cwd;
       if (!cwd) return reply(409, { error: 'no-folder' });
-      resume = chat.sessionId;
+      resume = body.sessionId;
+      if (chat) place = { ...place, title: chat.title };
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
       if (body.parentId && !mother) return reply(404, { error: 'unknown-session' });
@@ -232,7 +250,10 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
       prompt = firstPrompt({ unit, nucleus, mother, workCell, text: body.text, board });
       cwd = workCell?.path ?? project.root;
+      place = { ...place, unitId: unit?.id ?? null, workCellId: workCell?.id ?? null };
     }
+    const choice = body.mode ?? saved?.mode ?? 'settings';
+    const mode = pickMode(choice, fromSettings);
 
     if ([...chats.values()].filter((c) => !c.ended).length >= CHATS_MAX) return reply(429, { error: 'too-many-chats' });
     const claude = bin !== undefined ? bin : findClaude();
@@ -241,7 +262,8 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     const key = randomBytes(16).toString('hex');
     const chat = {
       key, sessionId: resume, parentId: body.sessionId ? null : body.parentId ?? null, secret: randomBytes(32).toString('hex'),
-      events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(),
+      projectId: project.id, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
+      events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`),
     };
@@ -253,11 +275,60 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     chats.set(key, chat);
     if (resume) bySession.set(resume, chat);
     chat.driver = startDriver({
-      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume }), cwd, env: cleanEnv(env),
+      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode }), cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
-    sendTo(chat, prompt);
-    return reply(200, { chatKey: key });
+    sendTo(chat, body.text, prompt);
+    return reply(200, { chatKey: key, mode, downgraded: choice === 'settings' && fromSettings.downgraded });
+  }
+
+  function changeMode(chat, choice) {
+    chat.choice = choice;
+    chat.mode = pickMode(choice, settingsMode(chat.root, dir));
+    chat.driver.setMode(chat.mode);
+    if (chat.sessionId) savePageChat(chat.sessionId, { mode: choice });
+  }
+
+  // The page conversations of a unit (or of a branch), the one used last first, with the key of those still running.
+  function listChats(query, state) {
+    const project = state.projects.find((p) => p.id === query?.projectId);
+    if (!project) return reply(404, { error: 'unknown-project' });
+    const { unitId, workCellId } = query;
+    const belongs = (c) => c.projectId === project.id && (unitId ? c.unitId === unitId : Boolean(workCellId) && c.workCellId === workCellId);
+    const chats = Object.entries(readPageChats()).filter(([, c]) => belongs(c)).map(([sessionId, c]) => {
+      const driven = drivenNow(sessionId);
+      return {
+        sessionId, title: c.title ?? '', startedAt: c.startedAt ?? null, updatedAt: c.updatedAt ?? c.startedAt ?? null,
+        mode: c.mode ?? 'settings', chatKey: driven?.key ?? null, running: Boolean(driven?.running),
+      };
+    }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
+    return reply(200, { chats, settings: settingsMode(project.root, dir) });
+  }
+
+  // claude keeps each conversation as projects/<folder>/<sessionId>.jsonl; the id is a checked UUID.
+  function transcriptOf(sessionId) {
+    let folders = [];
+    try { folders = readdirSync(join(dir, 'projects')); } catch { return null; }
+    for (const folder of folders) {
+      const file = join(dir, 'projects', folder, `${sessionId}.jsonl`);
+      if (existsSync(file)) return file;
+    }
+    return null;
+  }
+
+  // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
+  // holds as events (those arrive by subscribing), with the first prompt as the person wrote it.
+  function history(sessionId) {
+    if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
+    const page = readPageChats()[sessionId];
+    if (!page) return reply(404, { error: 'unknown-session' });
+    const driven = drivenNow(sessionId);
+    const file = transcriptOf(sessionId);
+    const messages = (file ? readFullTranscript(file) : []).filter((m) => !driven || !m.ts || m.ts < driven.startedAt);
+    const first = messages.find((m) => m.role === 'user');
+    if (first) first.text = personsWords(first.text);
+    const settings = settingsMode(page.root ?? page.cwd, dir);
+    return reply(200, { sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings, messages, chatKey: driven?.key ?? null });
   }
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);
@@ -278,10 +349,23 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     const pending = typeof body?.requestId === 'string' ? chat.pending.get(body.requestId) : null;
     if (!pending) return reply(404, { error: 'unknown-request' });
     if (typeof body.allow !== 'boolean') return reply(400, { error: 'bad-permission' });
-    if (body.allow && body.always === true) chat.always.add(pending.toolName);
+    if (body.allow && body.always === true) {
+      chat.always.add(pending.toolName);
+      // By sessionId, so a conversation resumed tomorrow still does not ask for it.
+      if (chat.sessionId) savePageChat(chat.sessionId, { always: [...chat.always] });
+    }
     if (body.allow) pending.finish('allowed', { behavior: 'allow', updatedInput: pending.input });
     else pending.finish('denied', { behavior: 'deny', message: DENIED });
     return reply(200);
+  }
+
+  function mode(key, body) {
+    const chat = chatOf(key);
+    if (!chat) return reply(404, { error: 'unknown-chat' });
+    if (chat.ended) return reply(409, { error: 'ended' });
+    if (pickMode(body?.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
+    changeMode(chat, body.mode ?? 'settings');
+    return reply(200, { mode: chat.mode });
   }
 
   function stop(key) {
@@ -320,5 +404,5 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
     }
   }
 
-  return { start, send, permission, stop, subscribe, close };
+  return { start, send, permission, mode, stop, subscribe, list: listChats, history, close };
 }

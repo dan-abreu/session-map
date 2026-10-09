@@ -35,5 +35,8 @@ export const api = {
   chatSend: (key, text) => call('POST', `/api/chat/${seg(key)}/send`, { text }),
   chatPermission: (key, requestId, allow, always) => call('POST', `/api/chat/${seg(key)}/permission`, { requestId, allow, always }),
   chatStop: (key) => call('POST', `/api/chat/${seg(key)}/stop`, {}),
+  chatMode: (key, mode) => call('POST', `/api/chat/${seg(key)}/mode`, { mode }),
+  chatList: (query) => call('GET', `/api/chat/list?${new URLSearchParams(query)}`),
+  chatHistory: (sessionId) => call('GET', `/api/chat/history/${seg(sessionId)}`),
   chatEvents: (key) => new EventSource(`/api/chat/${seg(key)}/events`),
 };

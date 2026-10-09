@@ -113,6 +113,12 @@
         </div>
         <button type="button" class="icon-btn" data-close="chat" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
       </div>
+      <div class="chat-mode">
+        <label for="chatMode" data-i18n="chat.modeLabel"></label>
+        <select id="chatMode"></select>
+      </div>
+      <p class="chat-note" id="chatNote" role="status" hidden></p>
+      <ul id="chatList" class="plain rows chat-list" hidden></ul>
       <ol id="chatLog" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
       <form id="chatForm" class="chat-form">
         <p class="chat-status" id="chatStatus" role="status"></p>

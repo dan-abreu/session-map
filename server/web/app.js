@@ -1029,7 +1029,7 @@ function wire() {
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
   chat = createChat({
-    root: $('#chat'), h, t: () => t, toast, errorText,
+    root: $('#chat'), h, t: () => t, toast, errorText, relative,
     onSession: () => setTimeout(poll, 1200),
     onClose: () => brain.fit(true),
   });
@@ -1119,6 +1119,11 @@ async function main() {
     const saved = store.get('sm.view');
     if (saved && saved !== 'brain' && !params.get('view') && !params.get('select')) showView(saved);
     applyDeepLink();
+    // A reload keeps the conversation that was open in the sheet.
+    if (view === 'brain' && !params.get('select')) {
+      chat.restore(project.id);
+      if (chat.isOpen()) brain.fit(true);
+    }
   }
 }
 

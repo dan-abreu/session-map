@@ -187,25 +187,36 @@ export function chatButtons(chat) {
   return { open, close, archive: chat.archived ? 'unarchive' : 'archive', write, phone };
 }
 
-const EMPTY_LOG = { sessionId: null, running: false, ended: false, items: [] };
+const EMPTY_LOG = { sessionId: null, running: false, ended: false, mode: null, items: [] };
 
 function closeStreaming(items) {
   const last = items.at(-1);
   return last?.type === 'assistant' && last.streaming ? [...items.slice(0, -1), { ...last, streaming: false }] : items;
 }
 
-// The page's chat, folded from SSE events plus the person's own sends ({type: 'local-send'}).
+// The page's chat, folded from SSE events plus the person's own sends ({type: 'local-send'}) and the history of a
+// reopened conversation ({type: 'history', data: {messages}}).
 export function chatLog(log = EMPTY_LOG, evt) {
   const { type, data } = evt;
   const items = log.items;
   const last = items.at(-1);
   switch (type) {
+    case 'history':
+      return { ...log, items: data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false })) };
     case 'local-send':
+      return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true }] };
+    case 'user': {
+      // The server echoes every message it takes: the page's own send is already shown, one from elsewhere is not.
+      const mine = items.findIndex((i) => i.type === 'user' && i.local && i.text === data.text);
+      if (mine >= 0) return { ...log, running: true, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text } : i)) };
       return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text }] };
+    }
+    case 'mode':
+      return { ...log, mode: data.mode };
     case 'session':
       return data.state === 'ended'
         ? { ...log, running: false, ended: true, items: closeStreaming(items) }
-        : { ...log, sessionId: data.sessionId };
+        : { ...log, sessionId: data.sessionId, ended: false, mode: data.mode ?? log.mode };
     case 'text': {
       const streaming = last?.type === 'assistant' && last.streaming;
       if (data.partial) {

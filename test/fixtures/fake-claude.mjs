@@ -1,10 +1,12 @@
 // Stand-in for the `claude` CLI. One-shot mode (ai runner): logs how it was called to FAKE_LOG and prints FAKE_REPLY
 // (or sleeps FAKE_SLEEP_MS). Chat mode (--input-format stream-json): speaks the lines recorded in .dev/prova/RESULTADO.md.
 //   "PERM:<Tool>" (repeatable) asks our permission MCP once per occurrence; "SLOW" streams until interrupted;
-//   anything else is echoed back as "echo: <text>".
+//   anything else is echoed back as "echo: <text>". set_permission_mode changes the mode the next init reports.
+//   FAKE_TRANSCRIPTS: a folder where each conversation is written as <sessionId>.jsonl, as claude does under ~/.claude/projects.
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const argv = process.argv.slice(2);
@@ -35,6 +37,13 @@ function chat() {
   const sessionId = flag('--resume') ?? randomUUID();
   const out = (msg) => process.stdout.write(`${JSON.stringify({ ...msg, session_id: sessionId })}\n`);
   let interrupted = false;
+  let mode = flag('--permission-mode');
+  const transcript = (entry) => {
+    if (!process.env.FAKE_TRANSCRIPTS) return;
+    mkdirSync(process.env.FAKE_TRANSCRIPTS, { recursive: true });
+    appendFileSync(join(process.env.FAKE_TRANSCRIPTS, `${sessionId}.jsonl`), `${JSON.stringify({ ...entry, sessionId, cwd: process.cwd(), timestamp: new Date().toISOString() })}
+`);
+  };
   let turn = Promise.resolve();
   let mcp = null;
 
@@ -70,8 +79,9 @@ function chat() {
   }
 
   async function run(text) {
-    out({ type: 'system', subtype: 'init', cwd: process.cwd(), permissionMode: flag('--permission-mode'), mcp_servers: [{ name: 'sessionmap', status: 'connected' }] });
+    out({ type: 'system', subtype: 'init', cwd: process.cwd(), permissionMode: mode, mcp_servers: [{ name: 'sessionmap', status: 'connected' }] });
     out({ type: 'system', subtype: 'hook_started', hook_name: 'SessionStart' });
+    transcript({ type: 'user', message: { role: 'user', content: text } });
     const perms = [...text.matchAll(/PERM:(\w+)/g)].map((m) => m[1]);
     if (perms.length) {
       mcp ??= startMcp();
@@ -104,6 +114,7 @@ function chat() {
     delta(reply.slice(0, 3));
     delta(reply.slice(3));
     out({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: reply }] } });
+    transcript({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: reply }] } });
     return result({ result: reply });
   }
 
@@ -112,6 +123,9 @@ function chat() {
     if (msg.type === 'control_request' && msg.request?.subtype === 'interrupt') {
       interrupted = true;
       out({ type: 'control_response', response: { subtype: 'success', request_id: msg.request_id, response: { still_queued: [] } } });
+    } else if (msg.type === 'control_request' && msg.request?.subtype === 'set_permission_mode') {
+      mode = msg.request.mode;
+      out({ type: 'control_response', response: { subtype: 'success', request_id: msg.request_id, response: { mode } } });
     } else if (msg.type === 'user') {
       turn = turn.then(() => run(msg.message.content));
     }

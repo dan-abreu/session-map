@@ -4,47 +4,166 @@ import { createChat } from '../server/web/chat.js';
 
 // Just enough DOM for chat.js: the sheet's fixed parts, found by selector, with listeners and children.
 class El {
-  constructor() {
-    this.children = [];
+  constructor(tag = 'div', attrs = {}, children = []) {
+    this.tag = tag;
+    this.attrs = attrs ?? {};
+    this.children = children;
     this.listeners = {};
     this.hidden = false;
+    this.disabled = false;
     this.textContent = '';
+    this.value = '';
     this.scrollHeight = 0;
     this.scrollTop = 0;
     this.clientHeight = 0;
   }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
+  fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, ...evt }); }
   replaceChildren(...cs) { this.children = cs; }
   focus() {}
 }
+const h = (tag, attrs, ...kids) => new El(tag, attrs, kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
+const walk = (el, out = []) => {
+  if (el instanceof El) { out.push(el); for (const c of el.children) walk(c, out); }
+  return out;
+};
+const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c === 'string')).join(' ');
 
 function sheet() {
-  const parts = new Map(['#chatLog', '#chatForm', '#chatInput', '#chatSend', '#chatStop', '#chatTitle', '#chatContext', '#chatStatus', '[data-close="chat"]'].map((s) => [s, new El()]));
+  const sels = ['#chatLog', '#chatForm', '#chatInput', '#chatSend', '#chatStop', '#chatTitle', '#chatContext', '#chatStatus', '#chatMode', '#chatList', '#chatNote', '[data-close="chat"]'];
+  const parts = new Map(sels.map((s) => [s, new El()]));
   const root = new El();
   root.hidden = true;
   root.querySelector = (sel) => parts.get(sel);
-  return root;
+  return { root, part: (sel) => parts.get(sel) };
 }
 
 globalThis.document ??= { activeElement: null, contains: () => false };
 
-function openChat(onClose = () => {}) {
-  const root = sheet();
-  const chat = createChat({ root, h: () => new El(), t: () => (key) => key, toast() {}, errorText: (e) => e, onClose });
-  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
-  return chat;
+const S1 = '11111111-1111-4111-8111-111111111111';
+const S2 = '22222222-2222-4222-8222-222222222222';
+const KEY = 'a'.repeat(32);
+
+// The server as chat.js sees it through fetch, answering from `routes` and keeping every call.
+function server(routes) {
+  const calls = [];
+  globalThis.fetch = async (path, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    calls.push({ method: init.method ?? 'GET', path, body });
+    const hit = Object.entries(routes).find(([prefix]) => `${init.method ?? 'GET'} ${path}`.startsWith(prefix));
+    const data = hit ? hit[1](body) : { error: 'not-found' };
+    return { ok: !data.error, status: data.error ? 404 : 200, json: async () => data };
+  };
+  const streams = [];
+  globalThis.EventSource = class { constructor(url) { this.url = url; this.listeners = {}; streams.push(this); } addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); } close() { this.closed = true; } };
+  return { calls, streams };
 }
 
+function memoryStorage(initial = {}) {
+  const items = new Map(Object.entries(initial));
+  return { getItem: (k) => items.get(k) ?? null, setItem: (k, v) => items.set(k, String(v)), removeItem: (k) => items.delete(k), items };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const tt = () => (key, vars) => (vars ? `${key}(${Object.values(vars).join(',')})` : key);
+
+function makeChat({ storage = memoryStorage(), onClose = () => {} } = {}) {
+  const s = sheet();
+  const chat = createChat({ root: s.root, h, t: tt, toast() {}, errorText: (e) => e, onClose, storage, relative: () => 'just now' });
+  return { chat, ...s, storage };
+}
+
+const LIST = {
+  chats: [
+    { sessionId: S1, title: 'Second question', updatedAt: '2026-10-09T12:00:00Z', mode: 'acceptEdits', chatKey: null, running: false },
+    { sessionId: S2, title: 'First question', updatedAt: '2026-10-09T11:00:00Z', mode: 'settings', chatKey: null, running: false },
+  ],
+  settings: { mode: 'auto', downgraded: false },
+};
+const HISTORY = { sessionId: S1, title: 'Second question', mode: 'acceptEdits', chatKey: null, settings: { mode: 'auto', downgraded: false },
+  messages: [{ role: 'user', text: 'Second question' }, { role: 'assistant', text: 'Here it is.' }] };
+
 test('a chat sheet closes when the page moves to another project', () => {
+  server({ 'GET /api/chat/list': () => LIST });
   let closed = 0;
-  const chat = openChat(() => closed++);
+  const { chat } = makeChat({ onClose: () => closed++ });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
   chat.showProject('notes-app');
   assert.equal(chat.isOpen(), false);
   assert.equal(closed, 1);
 });
 
 test('a chat sheet stays open while its own project is shown again (language switch, poll)', () => {
-  const chat = openChat();
+  server({ 'GET /api/chat/list': () => LIST });
+  const { chat } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
   chat.showProject('acme-shop');
   assert.equal(chat.isOpen(), true);
+});
+
+test('opening a unit lists the conversations the page opened there, and picking one shows its history and continues it', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => LIST, [`GET /api/chat/history/${S1}`]: () => HISTORY, 'POST /api/chat/start': () => ({ chatKey: KEY, mode: 'acceptEdits' }) });
+  const { chat, part, storage } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  await settle();
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&unitId=checkout'));
+  const picks = walk(part('#chatList')).filter((e) => e.tag === 'button' && e.attrs.onclick);
+  assert.equal(picks.length, 2);
+  assert.ok(text(picks[0]).includes('Second question'), 'the one used last comes first');
+  assert.ok(text(picks[1]).includes('First question'));
+
+  picks[0].attrs.onclick();
+  await settle();
+  assert.equal(part('#chatList').hidden, true);
+  assert.ok(text(part('#chatLog')).includes('Here it is.'));
+  assert.equal(part('#chatMode').value, 'acceptEdits', 'the choice made for this conversation');
+  assert.equal(JSON.parse(storage.items.get('sm.chat')).sessionId, S1, 'a reload brings it back');
+
+  part('#chatInput').value = 'And the retry';
+  part('#chatForm').fire('submit');
+  await settle();
+  const start = calls.find((c) => c.path === '/api/chat/start');
+  assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', text: 'And the retry' });
+});
+
+test('a reload reopens the saved conversation of this project; closing the sheet forgets it', async () => {
+  const { calls } = server({ [`GET /api/chat/history/${S1}`]: () => HISTORY });
+  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question', subtitle: 'Checkout' }) });
+  const { chat, part } = makeChat({ storage });
+  chat.restore('notes-app');
+  assert.equal(chat.isOpen(), false, 'another project keeps its own page');
+  chat.restore('acme-shop');
+  await settle();
+  assert.equal(chat.isOpen(), true);
+  assert.ok(calls.some((c) => c.path === `/api/chat/history/${S1}`));
+  assert.ok(text(part('#chatLog')).includes('Here it is.'));
+  chat.close();
+  assert.equal(storage.items.has('sm.chat'), false);
+});
+
+test('a running conversation is watched again and the header selector switches its mode', async () => {
+  const live = { ...HISTORY, chatKey: KEY, mode: 'settings' };
+  const { calls, streams } = server({ [`GET /api/chat/history/${S1}`]: () => live, [`POST /api/chat/${KEY}/mode`]: () => ({ mode: 'default' }) });
+  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
+  const { chat, part } = makeChat({ storage });
+  chat.restore('acme-shop');
+  await settle();
+  assert.equal(streams.at(-1).url, `/api/chat/${KEY}/events`);
+  const mode = part('#chatMode');
+  assert.equal(mode.value, 'settings');
+  assert.ok(text(mode).includes('chat.mode.settings(chat.modeName.auto)'), 'the label says what the settings hold');
+  mode.value = 'default';
+  mode.fire('change');
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/mode`).body, { mode: 'default' });
+});
+
+test('a bypassPermissions setting shows the note that the page runs it as auto', async () => {
+  server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'auto', downgraded: true } }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { unitId: 'checkout' } });
+  await settle();
+  assert.equal(part('#chatNote').hidden, false);
+  assert.equal(part('#chatNote').textContent, 'chat.downgraded');
+  assert.equal(part('#chatList').hidden, true, 'nothing to list');
 });

@@ -40,6 +40,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
       'unknown-chat', 'bad-edit', 'bad-nucleus', 'token-required', 'network', 'demo', 'generic', 'bad-path', 'sensitive', 'not-found', 'too-large', 'binary', 'bad-line', 'bad-project', 'bad-request'].map((c) => `err.${c}`),
     'action.why.already-open', 'action.why.busy', 'action.archive', 'action.unarchive', 'action.archived', 'action.unarchived',
     ...['allowed', 'denied', 'timeout'].map((s) => `chat.perm.${s}`),
+    ...['default', 'acceptEdits', 'plan', 'auto', 'dontAsk'].map((m) => `chat.modeName.${m}`), 'err.bad-mode',
     ...['todo', 'doing', 'waiting', 'done'].flatMap((k) => [`board.${k}`, `board.${k}.empty`]),
     'stage.done', 'stage.open',
     ...['today', 'd7', 'd30'].flatMap((r) => [`costs.range.${r}`, `costs.total.${r}`]),

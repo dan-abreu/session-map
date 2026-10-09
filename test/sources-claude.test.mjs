@@ -8,6 +8,7 @@ import {
   claudeDir, listLiveSessions, listTranscripts, readTranscript,
   readHelperUsage, readWorkflows, readFullTranscript, forEachLine,
 } from '../server/sources/claude.mjs';
+import { firstPrompt } from '../server/chat/prompt.mjs';
 
 const FIX = fileURLToPath(new URL('./fixtures/claude', import.meta.url));
 const PROJ = join(FIX, 'projects', '-work-acme-shop');
@@ -140,6 +141,19 @@ test('usage without the cache_creation breakdown counts cache_creation_input_tok
     writeFileSync(p, JSON.stringify({ type: 'assistant', sessionId: A, timestamp: '2025-10-09T10:00:00.000Z', message: { id: 'm1', model: 'claude-fake-1', content: [{ type: 'text', text: 'x' }], usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4 } } }) + '\n');
     const [row] = readTranscript(p).usage;
     assert.deepEqual({ input: row.input, output: row.output, cacheRead: row.cacheRead, cacheWrite5m: row.cacheWrite5m, cacheWrite1h: row.cacheWrite1h }, { input: 1, output: 2, cacheRead: 3, cacheWrite5m: 4, cacheWrite1h: 0 });
+  });
+});
+
+test('a chat started from the page is titled with the person\'s words, not the context block session-map put before them', () => {
+  withTempDir((dir) => {
+    const nucleus = { state: 'Login works. '.repeat(120), decided: ['Sessions live 30 days'], todo: ['Rate limit the form'] };
+    const prompt = firstPrompt({ unit: { name: 'Auth', purpose: 'Sign in' }, nucleus, text: 'Add the error message' });
+    assert.ok(prompt.length > 1000, 'longer than a stored prompt');
+    const p = join(dir, `${A}.jsonl`);
+    writeFileSync(p, `${JSON.stringify({ type: 'user', sessionId: A, cwd: '/work/acme', timestamp: '2026-10-09T10:00:00.000Z', message: { role: 'user', content: prompt } })}\n`);
+    const s = readTranscript(p);
+    assert.equal(s.title, 'Add the error message');
+    assert.deepEqual(s.userPrompts, ['Add the error message']);
   });
 });
 

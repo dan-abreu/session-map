@@ -143,7 +143,7 @@ async function serveFile(res, path) {
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
-  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir }),
+  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir, dir }),
   catalog = {}, stateTtlMs = STATE_TTL_MS,
 } = {}) {
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
@@ -193,12 +193,21 @@ export function createApp({
   };
 
   // Runs code on this PC by design: even a local read of a chat needs the token (desenho-2 § 22).
-  async function chatRoute(req, res, parts) {
+  async function chatRoute(req, res, parts, url) {
     if (!chat) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
     const [, , , key, verb] = parts;
     if (req.method === 'POST' && key === 'start' && parts.length === 4) {
       const result = await chat.start(await readBody(req), await state());
+      return send(res, result.status, result.body);
+    }
+    if (req.method === 'GET' && key === 'list' && parts.length === 4) {
+      const query = Object.fromEntries(['projectId', 'unitId', 'workCellId'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
+      const result = chat.list(query, await state());
+      return send(res, result.status, result.body);
+    }
+    if (req.method === 'GET' && key === 'history' && parts.length === 5) {
+      const result = chat.history(verb);
       return send(res, result.status, result.body);
     }
     if (parts.length !== 5) throw new HttpError(404, 'not-found');
@@ -217,7 +226,7 @@ export function createApp({
       req.on('close', unsubscribe);
       return undefined;
     }
-    if (req.method !== 'POST' || !['send', 'permission', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
+    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
     return send(res, result.status, result.body);
@@ -335,7 +344,7 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
-    if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts);
+    if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { CHAT_MODES } from './mode.mjs';
 
 const PREVIEW_MAX = 280;
 export const PERMISSION_TOOL = 'mcp__sessionmap__approve';
@@ -11,11 +12,12 @@ export const preview = (value) => {
 
 const resultText = (content) => (Array.isArray(content) ? content.map((c) => c?.text ?? '').join('') : content);
 
-// Formats from .dev/prova/RESULTADO.md. The permission mode is spelled out so a user setting cannot turn it into a bypass.
-export function buildArgs({ mcpConfigPath, resume }) {
+// Formats from .dev/prova/RESULTADO.md. The permission mode is always spelled out, and only from CHAT_MODES:
+// a user setting or a crafted request cannot turn it into a bypass.
+export function buildArgs({ mcpConfigPath, resume, mode = 'default' }) {
   return [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--permission-mode', 'default',
+    '--permission-mode', CHAT_MODES.includes(mode) ? mode : 'default',
     '--mcp-config', mcpConfigPath, '--strict-mcp-config', '--permission-prompt-tool', PERMISSION_TOOL,
     ...(resume ? ['--resume', resume] : []),
   ];
@@ -25,7 +27,7 @@ export function buildArgs({ mcpConfigPath, resume }) {
 export function translate(msg) {
   switch (msg?.type) {
     case 'system':
-      return msg.subtype === 'init' && msg.session_id ? [{ type: 'session', data: { sessionId: msg.session_id } }] : [];
+      return msg.subtype === 'init' && msg.session_id ? [{ type: 'session', data: { sessionId: msg.session_id, mode: msg.permissionMode } }] : [];
     case 'stream_event': {
       const delta = msg.event?.type === 'content_block_delta' ? msg.event.delta : null;
       return delta?.type === 'text_delta' ? [{ type: 'text', data: { text: delta.text, partial: true } }] : [];
@@ -70,6 +72,8 @@ export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn }) {
     send: (text) => write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' }),
     // SIGINT kills outright on Windows; this ends the turn and keeps the process for the next message.
     interrupt: () => write({ type: 'control_request', request_id: `req-${++requests}`, request: { subtype: 'interrupt' } }),
+    // Takes effect from the next turn on; claude confirms it in the init line of that turn.
+    setMode: (mode) => write({ type: 'control_request', request_id: `req-${++requests}`, request: { subtype: 'set_permission_mode', mode } }),
     end: () => child.stdin.end(),
     kill: () => child.kill(),
   };

@@ -3,6 +3,7 @@ import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } fr
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { personsWords } from '../chat/prompt.mjs';
 import { log } from '../log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -227,7 +228,8 @@ function summarize(entries, sessionId) {
     if (entry.type === 'last-prompt' && typeof entry.lastPrompt === 'string') lastPromptLine = entry.lastPrompt;
 
     const prompt = humanPromptOf(entry);
-    if (prompt) userPrompts.push(prompt.slice(0, PROMPT_MAX));
+    // A chat the page started opens with a context block: the person's own words are what names it.
+    if (prompt) userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
 
     if (entry.type === 'assistant') {
       const row = usageRowOf(entry, `line-${i}`);

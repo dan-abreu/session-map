@@ -1,17 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../server/actions.mjs';
 import { buildArgs, translate } from '../server/chat/driver.mjs';
-import { createChatHub, firstPrompt } from '../server/chat/hub.mjs';
+import { createChatHub } from '../server/chat/hub.mjs';
+import { firstPrompt } from '../server/chat/prompt.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
 import { readLineage } from '../server/brain/lineage.mjs';
+import { readOverrides } from '../server/brain/cells.mjs';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-claude.mjs', import.meta.url));
 const CLOSED = '11111111-1111-4111-8111-111111111111';
@@ -64,7 +66,7 @@ function recorder() {
 async function withHub(opts, fn) {
   const root = mkdtempSync(join(tmpdir(), 'sm-chat-root-'));
   const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
-  const hub = createChatHub({ smDir, bin: FAKE, ...opts });
+  const hub = createChatHub({ smDir, dir: root, bin: FAKE, ...opts });
   try {
     await fn({ hub, state: makeState(root), smDir, root });
   } finally {
@@ -79,7 +81,7 @@ const turnEnds = (r) => r.count((e) => e.type === 'turn-end');
 const nthTurnEnd = (r, n) => r.until(() => turnEnds(r) >= n).then(() => r.events.filter((e) => e.type === 'turn-end')[n - 1]);
 
 test('translate maps the stream-json lines of the spike to page events and ignores the rest', () => {
-  assert.deepEqual(translate({ type: 'system', subtype: 'init', session_id: CLOSED, permissionMode: 'default' }), [{ type: 'session', data: { sessionId: CLOSED } }]);
+  assert.deepEqual(translate({ type: 'system', subtype: 'init', session_id: CLOSED, permissionMode: 'auto' }), [{ type: 'session', data: { sessionId: CLOSED, mode: 'auto' } }]);
   assert.deepEqual(translate({ type: 'system', subtype: 'hook_started', session_id: CLOSED }), []);
   assert.deepEqual(translate({ type: 'rate_limit_event' }), []);
   assert.deepEqual(translate({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'O' } } }), [{ type: 'text', data: { text: 'O', partial: true } }]);
@@ -106,6 +108,14 @@ test('buildArgs: stream-json both ways, partial messages, our MCP only, default 
   assert.ok(!args.includes('--resume'));
   const resumed = buildArgs({ mcpConfigPath: '/tmp/x.json', resume: CLOSED });
   assert.equal(resumed[resumed.indexOf('--resume') + 1], CLOSED);
+});
+
+test('buildArgs passes the chosen permission mode and turns a bypass (or junk) into default', () => {
+  const at = (args) => args[args.indexOf('--permission-mode') + 1];
+  assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: 'auto' })), 'auto');
+  assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: 'acceptEdits' })), 'acceptEdits');
+  assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: 'bypassPermissions' })), 'default');
+  assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: '--dangerously-skip-permissions' })), 'default');
 });
 
 test('firstPrompt: the unit nucleus, the mother card, the board hint, then what the person wrote', () => {
@@ -139,11 +149,12 @@ test('start a new chat: session, text and turn-end arrive in order; the mother i
     const end = await nthTurnEnd(r, 1);
     assert.equal(end.data.isError, false);
     const types = r.events.map((e) => e.type);
-    assert.deepEqual([...new Set(types)], ['session', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(types)], ['user', 'session', 'text', 'turn-end']);
+    assert.equal(r.events[0].data.text, 'Hello there', 'the page sees what the person wrote, not the context block');
     assert.ok(r.events.every((e, i) => i === 0 || e.id > r.events[i - 1].id));
     const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
     assert.ok(final.includes('Wiring the submit button') && final.includes('```session-map') && final.includes('Hello there'));
-    const sessionId = r.events[0].data.sessionId;
+    const sessionId = r.events.find((e) => e.type === 'session').data.sessionId;
     assert.equal(readLineage(smDir)[sessionId], MOTHER);
   });
 });
@@ -154,7 +165,7 @@ test('a second message goes to the same process; a message during a turn is refu
     const r = recorder();
     hub.subscribe(body.chatKey, r.sink);
     await nthTurnEnd(r, 1);
-    assert.equal(r.events[0].data.sessionId, CLOSED, 'resumed the same conversation');
+    assert.equal(r.events.find((e) => e.type === 'session').data.sessionId, CLOSED, 'resumed the same conversation');
     const busy = hub.send(body.chatKey, { text: 'SLOW' });
     assert.equal(busy.status, 200);
     assert.equal(hub.send(body.chatKey, { text: 'meanwhile' }).status, 409);
@@ -280,6 +291,168 @@ test('the child gets a clean env, the MCP config by file (secret out of argv), a
   });
 });
 
+// A Claude folder of its own (settings.json, projects/) and a fake claude that writes its transcripts there.
+async function withClaudeDir(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'sm-chat-dir-'));
+  const env = { ...process.env, FAKE_TRANSCRIPTS: join(dir, 'projects', 'demo') };
+  try {
+    await fn({ dir, env });
+  } finally {
+    await rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  }
+}
+const settingsIn = (folder, mode) => {
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'settings.json'), JSON.stringify({ permissions: { defaultMode: mode } }));
+};
+
+test('the chat runs in the permission mode of the user\'s Claude settings, and says which one', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    settingsIn(dir, 'auto');
+    await withHub({ dir, env }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi' }, state);
+      assert.equal(res.body.mode, 'auto');
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const started = await r.until((e) => e.type === 'session' && e.data.state === 'started');
+      assert.equal(started.data.mode, 'auto', 'claude itself reported the mode');
+    });
+  });
+});
+
+test('a bypassPermissions setting runs the chat in auto and the reply says it was lowered', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    settingsIn(dir, 'bypassPermissions');
+    await withHub({ dir, env }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi' }, state);
+      assert.equal(res.body.mode, 'auto');
+      assert.equal(res.body.downgraded, true);
+      const listed = hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state);
+      assert.deepEqual(listed.body.settings, { mode: 'auto', downgraded: true });
+      assert.equal((await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi', mode: 'bypassPermissions' }, state)).status, 400);
+    });
+  });
+});
+
+test('the header choice beats the settings, and changing it mid-conversation reaches the running claude', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    settingsIn(dir, 'auto');
+    await withHub({ dir, env }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi', mode: 'default' }, state);
+      assert.equal(res.body.mode, 'default');
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      await nthTurnEnd(r, 1);
+      assert.equal(hub.mode(res.body.chatKey, { mode: 'acceptEdits' }).status, 200);
+      assert.equal(hub.mode(res.body.chatKey, { mode: 'bypassPermissions' }).status, 400);
+      hub.send(res.body.chatKey, { text: 'again' });
+      await nthTurnEnd(r, 2);
+      assert.equal(r.events.filter((e) => e.type === 'mode').at(-1).data.mode, 'acceptEdits');
+      assert.equal(hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats[0].mode, 'acceptEdits', 'the choice is kept per conversation');
+    });
+  });
+});
+
+test('a conversation opened on a unit is listed there after the panel closes, and after a restart, newest first', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await withHub({ dir, env }, async ({ hub, state, smDir }) => {
+      const ids = [];
+      for (const text of ['First question', 'Second question']) {
+        const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text }, state);
+        const r = recorder();
+        hub.subscribe(res.body.chatKey, r.sink);
+        ids.push((await r.until((e) => e.type === 'session')).data.sessionId);
+        await nthTurnEnd(r, 1);
+      }
+      const live = hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats;
+      assert.deepEqual(live.map((c) => c.sessionId), [ids[1], ids[0]]);
+      assert.deepEqual(live.map((c) => c.title), ['Second question', 'First question'], 'the person\'s words, not the context block');
+      assert.ok(live.every((c) => /^[0-9a-f]{32}$/.test(c.chatKey)), 'still driven: the page can watch it again');
+      assert.deepEqual(hub.list({ projectId: 'demo-abc123', unitId: 'other' }, state).body.chats, []);
+      assert.equal(readOverrides(smDir, 'demo-abc123')[ids[0]], 'auth', 'the brain shows it in the unit it was opened on');
+
+      const later = createChatHub({ smDir, dir, bin: FAKE, env });
+      try {
+        const listed = later.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats;
+        assert.deepEqual(listed.map((c) => [c.sessionId, c.chatKey]), [[ids[1], null], [ids[0], null]]);
+      } finally { await later.close(); }
+    });
+  });
+});
+
+test('reopening an ended conversation shows its history without the context block and continues it with --resume', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
+    const root = mkdtempSync(join(tmpdir(), 'sm-chat-root-'));
+    const state = makeState(root);
+    let sessionId;
+    const first = createChatHub({ smDir, dir, bin: FAKE, env });
+    try {
+      const res = await first.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      first.subscribe(res.body.chatKey, r.sink);
+      sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+    } finally { await first.close(); }
+
+    const later = createChatHub({ smDir, dir, bin: FAKE, env });
+    try {
+      const shown = later.history(sessionId);
+      assert.equal(shown.status, 200);
+      assert.equal(shown.body.chatKey, null);
+      assert.deepEqual(shown.body.messages.map((m) => m.role), ['user', 'assistant']);
+      assert.equal(shown.body.messages[0].text, 'Add the error message');
+      assert.match(shown.body.messages[1].text, /^echo: Context from session-map/);
+      assert.equal(later.history('44444444-4444-4444-8444-444444444444').status, 404, 'only conversations born in the page');
+
+      const res = await later.start({ projectId: 'demo-abc123', sessionId, text: 'And the retry' }, state);
+      assert.equal(res.status, 200, 'resumable although the state no longer lists it');
+      const r = recorder();
+      later.subscribe(res.body.chatKey, r.sink);
+      await nthTurnEnd(r, 1);
+      assert.equal(r.events.find((e) => e.type === 'session').data.sessionId, sessionId);
+      assert.deepEqual(r.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['And the retry']);
+      assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: And the retry'));
+      assert.equal(later.history(sessionId).body.messages.length, 2, 'a live chat\'s own turns come from its events, not twice');
+      assert.equal((await later.start({ projectId: 'other', sessionId, text: 'x' }, state)).status, 404);
+    } finally {
+      await later.close();
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+      await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    }
+  });
+});
+
+test('"always in this conversation" survives the process: a resumed chat does not ask again', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
+    const state = makeState(mkdtempSync(join(tmpdir(), 'sm-chat-root-')));
+    let sessionId;
+    const first = createChatHub({ smDir, dir, bin: FAKE, env });
+    try {
+      const res = await first.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'PERM:Write' }, state);
+      const r = recorder();
+      first.subscribe(res.body.chatKey, r.sink);
+      sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      const asked = await r.until((e) => e.type === 'permission' && e.data.state === 'asked');
+      first.permission(res.body.chatKey, { requestId: asked.data.requestId, allow: true, always: true });
+      await nthTurnEnd(r, 1);
+    } finally { await first.close(); }
+    const later = createChatHub({ smDir, dir, bin: FAKE, env });
+    try {
+      const res = await later.start({ projectId: 'demo-abc123', sessionId, text: 'PERM:Write' }, state);
+      const r = recorder();
+      later.subscribe(res.body.chatKey, r.sink);
+      const end = await nthTurnEnd(r, 1);
+      assert.equal(end.data.denials, 0);
+      assert.equal(r.count((e) => e.type === 'permission'), 0);
+    } finally {
+      await later.close();
+      await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    }
+  });
+});
+
 test('no claude found → 503 without spawning', async () => {
   await withHub({ bin: null }, async ({ hub, state }) => {
     assert.equal((await hub.start({ projectId: 'demo-abc123', text: 'hi' }, state)).status, 503);
@@ -290,7 +463,7 @@ test('http: chat routes need the token, and SSE delivers events in order with re
   const root = mkdtempSync(join(tmpdir(), 'sm-chat-http-'));
   const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-http-sm-'));
   const state = makeState(root);
-  const chat = createChatHub({ smDir, bin: FAKE });
+  const chat = createChatHub({ smDir, dir: root, bin: FAKE });
   const app = createApp({ dir: root, smDir, chat, collectFn: () => state });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
@@ -336,7 +509,7 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     const { chatKey } = JSON.parse(started.text);
     assert.equal((await readEvents(chatKey)).status, 401, 'local GET of a chat still needs the token');
     const all = await readEvents(chatKey, { cookie: `sm_token=${token}` });
-    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['session', 'text', 'turn-end']);
+    assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'text', 'turn-end']);
     assert.ok(all.events.every((e, i) => i === 0 || e.id > all.events[i - 1].id));
     const tail = await readEvents(chatKey, { cookie: `sm_token=${token}`, 'last-event-id': String(all.events[0].id) });
     assert.deepEqual(tail.events.map((e) => e.id), all.events.slice(1).map((e) => e.id));
@@ -345,6 +518,20 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     assert.equal((await call('POST', `/api/chat/${chatKey}/permission`, { headers: writeHeaders, body: { requestId: 'abc', allow: true } })).status, 404);
     assert.equal((await call('POST', '/api/chat/nothex/send', { headers: writeHeaders, body: { text: 'x' } })).status, 404);
     assert.equal((await call('POST', '/api/chat/start', { headers: writeHeaders, body: { projectId: 'demo-abc123', sessionId: LIVE, text: 'hi' } })).status, 409);
+
+    const fresh = JSON.parse((await call('POST', '/api/chat/start', { headers: writeHeaders, body: { projectId: 'demo-abc123', cellId: 'auth', text: 'On the unit' } })).text);
+    await readEvents(fresh.chatKey, { cookie: `sm_token=${token}` });
+    const listPath = '/api/chat/list?projectId=demo-abc123&unitId=auth';
+    assert.equal((await call('GET', listPath)).status, 401, 'the list of conversations needs the token too');
+    const listed = JSON.parse((await call('GET', listPath, { headers: { cookie: `sm_token=${token}` } })).text);
+    assert.deepEqual(listed.chats.map((c) => [c.title, c.chatKey]), [['On the unit', fresh.chatKey]]);
+    assert.equal(listed.settings.mode, 'default');
+    const sessionId = listed.chats[0].sessionId;
+    assert.equal((await call('GET', `/api/chat/history/${sessionId}`)).status, 401);
+    assert.equal((await call('GET', `/api/chat/history/${sessionId}`, { headers: { cookie: `sm_token=${token}` } })).status, 200);
+    assert.equal((await call('GET', '/api/chat/history/nope', { headers: { cookie: `sm_token=${token}` } })).status, 400);
+    assert.equal((await call('POST', `/api/chat/${fresh.chatKey}/mode`, { headers: writeHeaders, body: { mode: 'acceptEdits' } })).status, 200);
+    assert.equal((await call('POST', `/api/chat/${fresh.chatKey}/mode`, { headers: writeHeaders, body: { mode: 'bypassPermissions' } })).status, 400);
   } finally {
     await new Promise((resolve) => app.close(resolve));
     await chat.close();
