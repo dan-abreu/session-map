@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { readJsonFile } from '../brain/cells.mjs';
+import { readJsonFile } from '../store.mjs';
 
 // bypassPermissions is left out on purpose: a page reachable from the phone never runs tools unchecked.
 export const CHAT_MODES = ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk'];

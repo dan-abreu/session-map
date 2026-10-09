@@ -1,4 +1,4 @@
-import { relativeFiles } from '../brain/cells.mjs';
+import { relativeFiles } from '../paths.mjs';
 
 const PROMPT_MAX = 160;
 const FIRST_PROMPTS = 3;

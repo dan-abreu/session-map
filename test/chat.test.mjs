@@ -13,7 +13,6 @@ import { firstPrompt } from '../server/chat/prompt.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
 import { readLineage } from '../server/brain/lineage.mjs';
-import { readOverrides } from '../server/brain/cells.mjs';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-claude.mjs', import.meta.url));
 const CLOSED = '11111111-1111-4111-8111-111111111111';
@@ -21,12 +20,11 @@ const LIVE = '22222222-2222-4222-8222-222222222222';
 const MOTHER = '33333333-3333-4333-8333-333333333333';
 
 function makeState(root) {
-  const nucleus = { state: 'Login works with email.', decided: ['Sessions live 30 days'], todo: ['Rate limit the form'], recent: [] };
-  const chat = (sessionId, extra) => ({ sessionId, title: `chat ${sessionId.slice(0, 4)}`, unitId: 'auth', chattable: true, live: false, card: null, ...extra });
+  const chat = (sessionId, extra) => ({ sessionId, title: `chat ${sessionId.slice(0, 4)}`, partId: 'auth', chattable: true, live: false, card: null, ...extra });
   const state = {
     projects: [{
       id: 'demo-abc123', name: 'demo', root,
-      units: [{ id: 'auth', name: 'Auth', purpose: 'Sign in and sessions', nucleus }],
+      arch: { source: 'worktree', dir: 'docs/architecture', lang: 'en', layers: [], parts: [{ id: 'auth', name: 'Auth', file: 'docs/architecture/auth.md', about: 'Sign in and sessions.', codePaths: [], groups: [] }] },
       workCells: [{ id: 'feature/login', branch: 'feature/login', path: null }],
       chats: [
         chat(CLOSED),
@@ -118,11 +116,11 @@ test('buildArgs passes the chosen permission mode and turns a bypass (or junk) i
   assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: '--dangerously-skip-permissions' })), 'default');
 });
 
-test('firstPrompt: the unit nucleus, the mother card, the board hint, then what the person wrote', () => {
+test('firstPrompt: the part, the mother card, the board hint, then what the person wrote', () => {
   const state = makeState('/x');
   const [project] = state.projects;
-  const text = firstPrompt({ unit: project.units[0], nucleus: project.units[0].nucleus, mother: project.chats[2], text: 'Add the error message', board: true });
-  for (const piece of ['Auth', 'Login works with email.', 'Sessions live 30 days', 'Rate limit the form', 'Login form', 'Wiring the submit button', 'Use fetch', '/session-map:board', 'Add the error message']) {
+  const text = firstPrompt({ part: project.arch.parts[0], mother: project.chats[2], text: 'Add the error message', board: true });
+  for (const piece of ['Auth', 'Sign in and sessions.', 'Login form', 'Wiring the submit button', 'Use fetch', '/session-map:board', 'Add the error message']) {
     assert.ok(text.includes(piece), piece);
   }
   assert.ok(text.indexOf('/session-map:board') < text.indexOf('Add the error message'));
@@ -132,7 +130,7 @@ test('firstPrompt: the unit nucleus, the mother card, the board hint, then what 
 test('firstPrompt without the plugin explains the session-map block inline instead of naming /session-map:board', () => {
   const state = makeState('/x');
   const [project] = state.projects;
-  const text = firstPrompt({ unit: project.units[0], nucleus: project.units[0].nucleus, text: 'Add the error message', board: false });
+  const text = firstPrompt({ part: project.arch.parts[0], text: 'Add the error message', board: false });
   assert.ok(!text.includes('/session-map:board'));
   assert.match(text, /```session-map/);
   assert.match(text, /"doing"/);
@@ -141,7 +139,7 @@ test('firstPrompt without the plugin explains the session-map block inline inste
 
 test('start a new chat: session, text and turn-end arrive in order; the mother is recorded in lineage.json', async () => {
   await withHub({}, async ({ hub, state, smDir }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', parentId: MOTHER, text: 'Hello there' }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', parentId: MOTHER, text: 'Hello there' }, state);
     assert.equal(res.status, 200);
     assert.match(res.body.chatKey, /^[0-9a-f]{32}$/);
     const r = recorder();
@@ -251,12 +249,12 @@ test('stop interrupts the turn through stdin and the process takes the next mess
   });
 });
 
-test('refusals: live chat 409, unknown project/chat/unit 404, empty text 400; one process per session', async () => {
+test('refusals: live chat 409, unknown project/chat/part 404, empty text 400; one process per session', async () => {
   await withHub({}, async ({ hub, state }) => {
     assert.equal((await hub.start({ projectId: 'demo-abc123', sessionId: LIVE, text: 'hi' }, state)).status, 409);
     assert.equal((await hub.start({ projectId: 'nope', text: 'hi' }, state)).status, 404);
     assert.equal((await hub.start({ projectId: 'demo-abc123', sessionId: '44444444-4444-4444-8444-444444444444', text: 'hi' }, state)).status, 404);
-    assert.equal((await hub.start({ projectId: 'demo-abc123', cellId: 'ghost', text: 'hi' }, state)).status, 404);
+    assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'ghost', text: 'hi' }, state)).status, 404);
     assert.equal((await hub.start({ projectId: 'demo-abc123', frontId: 'ghost', text: 'hi' }, state)).status, 404);
     assert.equal((await hub.start({ projectId: 'demo-abc123', sessionId: 'not-a-uuid', text: 'hi' }, state)).status, 400);
     assert.equal((await hub.start({ projectId: 'demo-abc123', text: '' }, state)).status, 400);
@@ -310,7 +308,7 @@ test('the chat runs in the permission mode of the user\'s Claude settings, and s
   await withClaudeDir(async ({ dir, env }) => {
     settingsIn(dir, 'auto');
     await withHub({ dir, env }, async ({ hub, state }) => {
-      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi' }, state);
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi' }, state);
       assert.equal(res.body.mode, 'auto');
       const r = recorder();
       hub.subscribe(res.body.chatKey, r.sink);
@@ -324,12 +322,12 @@ test('a bypassPermissions setting runs the chat in auto and the reply says it wa
   await withClaudeDir(async ({ dir, env }) => {
     settingsIn(dir, 'bypassPermissions');
     await withHub({ dir, env }, async ({ hub, state }) => {
-      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi' }, state);
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi' }, state);
       assert.equal(res.body.mode, 'auto');
       assert.equal(res.body.downgraded, true);
-      const listed = hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state);
+      const listed = hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state);
       assert.deepEqual(listed.body.settings, { mode: 'auto', downgraded: true });
-      assert.equal((await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi', mode: 'bypassPermissions' }, state)).status, 400);
+      assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', mode: 'bypassPermissions' }, state)).status, 400);
     });
   });
 });
@@ -338,7 +336,7 @@ test('the header choice beats the settings, and changing it mid-conversation rea
   await withClaudeDir(async ({ dir, env }) => {
     settingsIn(dir, 'auto');
     await withHub({ dir, env }, async ({ hub, state }) => {
-      const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'hi', mode: 'default' }, state);
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', mode: 'default' }, state);
       assert.equal(res.body.mode, 'default');
       const r = recorder();
       hub.subscribe(res.body.chatKey, r.sink);
@@ -348,32 +346,31 @@ test('the header choice beats the settings, and changing it mid-conversation rea
       hub.send(res.body.chatKey, { text: 'again' });
       await nthTurnEnd(r, 2);
       assert.equal(r.events.filter((e) => e.type === 'mode').at(-1).data.mode, 'acceptEdits');
-      assert.equal(hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats[0].mode, 'acceptEdits', 'the choice is kept per conversation');
+      assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats[0].mode, 'acceptEdits', 'the choice is kept per conversation');
     });
   });
 });
 
-test('a conversation opened on a unit is listed there after the panel closes, and after a restart, newest first', async () => {
+test('a conversation opened on a part is listed there after the panel closes, and after a restart, newest first', async () => {
   await withClaudeDir(async ({ dir, env }) => {
     await withHub({ dir, env }, async ({ hub, state, smDir }) => {
       const ids = [];
       for (const text of ['First question', 'Second question']) {
-        const res = await hub.start({ projectId: 'demo-abc123', cellId: 'auth', text }, state);
+        const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text }, state);
         const r = recorder();
         hub.subscribe(res.body.chatKey, r.sink);
         ids.push((await r.until((e) => e.type === 'session')).data.sessionId);
         await nthTurnEnd(r, 1);
       }
-      const live = hub.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats;
+      const live = hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats;
       assert.deepEqual(live.map((c) => c.sessionId), [ids[1], ids[0]]);
       assert.deepEqual(live.map((c) => c.title), ['Second question', 'First question'], 'the person\'s words, not the context block');
       assert.ok(live.every((c) => /^[0-9a-f]{32}$/.test(c.chatKey)), 'still driven: the page can watch it again');
-      assert.deepEqual(hub.list({ projectId: 'demo-abc123', unitId: 'other' }, state).body.chats, []);
-      assert.equal(readOverrides(smDir, 'demo-abc123')[ids[0]], 'auth', 'the brain shows it in the unit it was opened on');
+      assert.deepEqual(hub.list({ projectId: 'demo-abc123', partId: 'other' }, state).body.chats, []);
 
       const later = createChatHub({ smDir, dir, bin: FAKE, env });
       try {
-        const listed = later.list({ projectId: 'demo-abc123', unitId: 'auth' }, state).body.chats;
+        const listed = later.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats;
         assert.deepEqual(listed.map((c) => [c.sessionId, c.chatKey]), [[ids[1], null], [ids[0], null]]);
       } finally { await later.close(); }
     });
@@ -388,7 +385,7 @@ test('reopening an ended conversation shows its history without the context bloc
     let sessionId;
     const first = createChatHub({ smDir, dir, bin: FAKE, env });
     try {
-      const res = await first.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'Add the error message' }, state);
+      const res = await first.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
       const r = recorder();
       first.subscribe(res.body.chatKey, r.sink);
       sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
@@ -430,7 +427,7 @@ test('"always in this conversation" survives the process: a resumed chat does no
     let sessionId;
     const first = createChatHub({ smDir, dir, bin: FAKE, env });
     try {
-      const res = await first.start({ projectId: 'demo-abc123', cellId: 'auth', text: 'PERM:Write' }, state);
+      const res = await first.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Write' }, state);
       const r = recorder();
       first.subscribe(res.body.chatKey, r.sink);
       sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
@@ -519,12 +516,12 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     assert.equal((await call('POST', '/api/chat/nothex/send', { headers: writeHeaders, body: { text: 'x' } })).status, 404);
     assert.equal((await call('POST', '/api/chat/start', { headers: writeHeaders, body: { projectId: 'demo-abc123', sessionId: LIVE, text: 'hi' } })).status, 409);
 
-    const fresh = JSON.parse((await call('POST', '/api/chat/start', { headers: writeHeaders, body: { projectId: 'demo-abc123', cellId: 'auth', text: 'On the unit' } })).text);
+    const fresh = JSON.parse((await call('POST', '/api/chat/start', { headers: writeHeaders, body: { projectId: 'demo-abc123', partId: 'auth', text: 'On the part' } })).text);
     await readEvents(fresh.chatKey, { cookie: `sm_token=${token}` });
-    const listPath = '/api/chat/list?projectId=demo-abc123&unitId=auth';
+    const listPath = '/api/chat/list?projectId=demo-abc123&partId=auth';
     assert.equal((await call('GET', listPath)).status, 401, 'the list of conversations needs the token too');
     const listed = JSON.parse((await call('GET', listPath, { headers: { cookie: `sm_token=${token}` } })).text);
-    assert.deepEqual(listed.chats.map((c) => [c.title, c.chatKey]), [['On the unit', fresh.chatKey]]);
+    assert.deepEqual(listed.chats.map((c) => [c.title, c.chatKey]), [['On the part', fresh.chatKey]]);
     assert.equal(listed.settings.mode, 'default');
     const sessionId = listed.chats[0].sessionId;
     assert.equal((await call('GET', `/api/chat/history/${sessionId}`)).status, 401);

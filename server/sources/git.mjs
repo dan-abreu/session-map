@@ -69,7 +69,6 @@ async function commitsOf(root, since) {
       subject,
       branch: source.replace(/^refs\/(heads|remotes)\//, ''),
       author: authorOf(name, email),
-      unitIds: [],
       files: lines(filesText),
     };
     if (coAuthor) item.coAuthor = coAuthor;
@@ -90,7 +89,6 @@ async function tagsOf(root) {
       subject: tag,
       branch: '',
       author: authorOf(m?.[1] ?? '', m?.[2] ?? ''),
-      unitIds: [],
     };
   });
 }
@@ -111,7 +109,6 @@ async function pushesOf(root) {
         hash,
         branch: ref.replace(/^refs\/remotes\/[^/]+\//, ''),
         author: authorOf(name, email),
-        unitIds: [],
       });
     }
   }

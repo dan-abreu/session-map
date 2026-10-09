@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { findClaude } from '../ai/runner.mjs';
-import { writeAtomic } from '../brain/cells.mjs';
+import { writeAtomic } from '../store.mjs';
 import { CATEGORIES, TYPES, classifyRepo } from '../catalog-classify.mjs';
 import { log } from '../log.mjs';
 

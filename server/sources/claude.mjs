@@ -18,6 +18,9 @@ const HEAD_BYTES = 64 * 1024;
 const PROMPT_MAX = 1000;
 const TITLE_MAX = 80;
 const MENTIONED_LINES = 200;
+// The shape of an item code of the architecture convention (wa04, pa-x12); only codes the map knows count later.
+const ITEM_CODE_RE = /(?<![\w-])([a-z]{1,4}(?:-[a-z]{1,4})?\d{1,4})(?![\w-])/gi;
+const CODES_MAX = 100;
 
 export function claudeDir() {
   return process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
@@ -216,6 +219,15 @@ function summarize(entries, sessionId) {
   const usageById = new Map();
   const toolUses = [];
   const results = new Map();
+  const codes = new Map();
+  const noteCodes = (text) => {
+    for (const m of text.matchAll(ITEM_CODE_RE)) {
+      const code = m[1].toLowerCase();
+      const n = (codes.get(code) ?? 0) + 1;
+      codes.delete(code);
+      codes.set(code, n);
+    }
+  };
 
   entries.forEach((entry, i) => {
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
@@ -229,13 +241,19 @@ function summarize(entries, sessionId) {
 
     const prompt = humanPromptOf(entry);
     // A chat the page started opens with a context block: the person's own words are what names it.
-    if (prompt) userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
+    if (prompt) {
+      userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
+      noteCodes(prompt);
+    }
 
     if (entry.type === 'assistant') {
       const row = usageRowOf(entry, `line-${i}`);
       if (row) addUsage(usageById, row);
       const text = textOf(blocksOf(entry).filter((b) => b.type === 'text'));
-      if (text) lastAssistantText = text;
+      if (text) {
+        lastAssistantText = text;
+        noteCodes(text);
+      }
       for (const card of cardsIn(entry)) lastCardText = card;
       for (const b of blocksOf(entry)) {
         if (b.type === 'tool_use') toolUses.push({ id: b.id, name: b.name, input: b.input ?? {}, ts: entry.timestamp ?? null, gitBranch });
@@ -284,6 +302,7 @@ function summarize(entries, sessionId) {
     commits,
     pushes,
     mentionedPaths: pathsMentioned(entries.slice(-MENTIONED_LINES)),
+    mentionedCodes: [...codes].slice(-CODES_MAX).map(([code, n]) => ({ code, n })),
     startedAt,
     endedAt,
     usage: [...usageById.values()],

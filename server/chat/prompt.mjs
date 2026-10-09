@@ -14,15 +14,9 @@ const CARD_HINT = [
 
 // What a new chat reads instead of the whole history (desenho-2 § 21, "Continuar aqui").
 // board: the session-map plugin is installed and on, so its /session-map:board command exists.
-export function firstPrompt({ unit, nucleus, mother, workCell, text, board = false }) {
+export function firstPrompt({ part, mother, workCell, text, board = false }) {
   const parts = [];
-  if (unit) {
-    const lines = [`Area: ${unit.name}${unit.purpose ? ` (${unit.purpose})` : ''}`];
-    if (nucleus?.state) lines.push(`State: ${nucleus.state}`);
-    if (nucleus?.decided?.length) lines.push(`Decided:\n${list(nucleus.decided)}`);
-    if (nucleus?.todo?.length) lines.push(`To do:\n${list(nucleus.todo)}`);
-    parts.push(lines.join('\n'));
-  }
+  if (part) parts.push(`Part of the architecture: ${part.name}${part.about ? ` (${part.about})` : ''}`);
   if (workCell) parts.push(`Branch: ${workCell.branch}`);
   const card = mother?.card;
   if (card) {

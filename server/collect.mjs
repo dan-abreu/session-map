@@ -1,30 +1,29 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
-import { aiNucleusFile, aiStatus, lifeOf, perceiveChanged, readRelated, refreshNuclei, relateOnce, startBootstrap, unitsFile } from './ai/life.mjs';
-import { nucleusInputOf } from './ai/nucleus.mjs';
-import { normalizeUnit, tidyUnits } from './ai/perceive.mjs';
+import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { UNSORTED, brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy, writeUnits } from './brain/cells.mjs';
-import { cleanUnitName } from './brain/names.mjs';
+import { attachToParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
+import { readArch } from './arch/detect.mjs';
+import { norm } from './arch/parse.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
-import { linkUnits, parentOf, readLineage, repoFiles, specRefsOf } from './brain/lineage.mjs';
-import { emptyNucleus, mergeNucleus, readNucleus, seedNucleus, withAiNucleus, writeNucleus } from './brain/nucleus.mjs';
+import { parentOf, readLineage } from './brain/lineage.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, loadPrices, windowed } from './cost.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
-import { normalizePath, projectIdOf } from './paths.mjs';
+import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
 import { listLiveSessions, listTranscripts, readHelperCommits, readHelperUsage, readTranscript, readWorkflows } from './sources/claude.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, gitRoot, mainBranch } from './sources/git.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills } from './sources/skills.mjs';
+import { readJsonFile } from './store.mjs';
 
 const DAY = 86_400_000;
 const RECENT_MS = DAY;
@@ -46,6 +45,7 @@ const gitMemo = new Map();
 const cut = (s) => String(s ?? '').slice(0, TEXT_MAX);
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const hashOf = (v) => createHash('sha1').update(JSON.stringify(v)).digest('hex');
+const plain = (s) => norm(String(s));
 
 function git(cwd, args) {
   return new Promise((resolve) => {
@@ -98,19 +98,28 @@ async function groupByRoot(items) {
   return [...groups.values()];
 }
 
-// git work is the slow part: redone only when a ref moves or the units change.
-async function gitSide(smDir, root, projectId, main, units, nowIso) {
+// The repo's top-level folders tell a code path written from the root ("apps/site") from one written inside an app.
+function topLevelOf(root) {
+  try {
+    return new Set(readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name.toLowerCase()));
+  } catch {
+    return undefined;
+  }
+}
+
+// git work is the slow part: redone only when a ref moves or the parts' code paths change.
+async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
   const key = `${smDir}|${projectId}`;
   const memo = gitMemo.get(key) ?? { signature: null, workCells: [], activity: [], backfilled: false, fetchedAt: null };
   gitMemo.set(key, memo);
   if (!main) return memo;
   const refs = await git(root, ['for-each-ref', '--format=%(refname) %(objectname)']);
-  const signature = hashOf([refs, units.map((u) => [u.id, u.paths])]);
+  const signature = hashOf([refs, arch.parts.map((p) => [p.id, p.file, p.codePaths])]);
   if (signature === memo.signature) return memo;
   const since = new Date(Date.parse(nowIso) - WINDOW_MS).toISOString();
   // events.jsonl outlives restarts: once it holds the project, the history was already backfilled.
   const backfill = !memo.backfilled && readEvents(smDir, projectId).length === 0;
-  const workCells = await workCellsOf(root, units, { main, previous: memo.workCells });
+  const workCells = await workCellsOf(root, (files) => placeFiles(files.map((f) => f.path)), { main, previous: memo.workCells });
   appendEvents(smDir, projectId, detectTransitions(memo.workCells, workCells, nowIso));
   if (backfill) appendEvents(smDir, projectId, await backfillMerges(root, main, { since }));
   memo.backfilled = true;
@@ -122,11 +131,17 @@ async function gitSide(smDir, root, projectId, main, units, nowIso) {
 
 // ---- placing chats -----------------------------------------------------------
 
-function placeInUnit(item, units, overrides, root) {
-  const r = classify(item.summary, item.card, units, overrides, { root });
-  if (r.unitSource === 'override' || r.unitSource === 'card') return r;
-  const perceived = units.find((u) => u.chatIds.includes(item.summary.sessionId));
-  return perceived ? { unitId: perceived.id, unitSource: 'ai' } : r;
+// An item code the conversation cites, then the files it edited, then what the AI answered earlier (desenho-3 § 2).
+function placeInPart(item, arch, placeFiles, root, aiAnswers) {
+  const s = item.summary;
+  if (!arch.parts.length) return { partId: null, partSource: 'none' };
+  const byCode = partByCodes(s.mentionedCodes, arch);
+  if (byCode) return { partId: byCode, partSource: 'code' };
+  const byFiles = placeFiles(repoFiles(s.editedFiles ?? [], root, s.cwd)).partId;
+  if (byFiles) return { partId: byFiles, partSource: 'files' };
+  const byAi = aiAnswers[s.sessionId]?.partId;
+  if (byAi && arch.parts.some((p) => p.id === byAi)) return { partId: byAi, partSource: 'ai' };
+  return { partId: null, partSource: 'none' };
 }
 
 const under = (path, base) => {
@@ -155,43 +170,6 @@ function placeInWorkCell(summary, card, workCells) {
   return { workCellId: null, workCellSource: 'cwd' };
 }
 
-// ---- nucleus -------------------------------------------------------------------
-
-// Cards newer than the nucleus file are merged in once; edits made on the page after that stay.
-// Without a card or a page edit, the AI's nucleus (written in the background) stands in.
-function nucleusOf(smDir, projectId, unit, cardItems, hints, ai) {
-  try {
-    const file = join(brainDir(smDir, projectId), `${unit.id}.md`);
-    let stored = readNucleus(smDir, projectId, unit.id);
-    const since = stored && existsSync(file) ? statSync(file).mtimeMs : -Infinity;
-    const fresh = cardItems.filter((c) => Date.parse(c.updatedAt) > since).sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt));
-    const seed = seedNucleus(unit, hints);
-    for (const c of fresh) stored = mergeNucleus(stored ?? seed, c.card, c);
-    if (fresh.length) writeNucleus(smDir, projectId, unit.id, stored);
-    return withAiNucleus(stored, seed, ai);
-  } catch (err) {
-    log('warn', 'nucleus-failed', { projectId, unitId: unit.id, error: err.message });
-    return emptyNucleus();
-  }
-}
-
-// Size counts the unit's own work plus everything grouped under it.
-function rollUp(units, own) {
-  const children = new Map();
-  for (const u of units) if (u.parentId) children.set(u.parentId, [...(children.get(u.parentId) ?? []), u.id]);
-  const total = (id, seen = new Set()) => {
-    if (seen.has(id)) return { chats: 0, commits: 0, decisions: 0 };
-    seen.add(id);
-    const sum = { ...own.get(id) };
-    for (const child of children.get(id) ?? []) {
-      const t = total(child, seen);
-      for (const k of Object.keys(sum)) sum[k] += t[k];
-    }
-    return sum;
-  };
-  return new Map(units.map((u) => [u.id, total(u.id)]));
-}
-
 // ---- one project -----------------------------------------------------------------
 
 // The page words each clash itself from the fields; text is for the terminal view.
@@ -214,7 +192,8 @@ export function clashItems(workCells, projectId) {
   return items;
 }
 
-function activityItems(raw, events, units, workCells, items) {
+// Events of the old cell tree (renamed, grouped...) stay on disk from older versions; only branch births and fusions count.
+function activityItems(raw, events, touched, workCells, items) {
   const commitsOf = (i) => [...i.summary.commits, ...i.helperCommits].map((c) => ({ ...c, sessionId: i.summary.sessionId }));
   const byHash = items.flatMap(commitsOf).filter((c) => c.hash);
   // `git commit -q` prints no hash: the subject is the only trace left in the transcript.
@@ -222,7 +201,7 @@ function activityItems(raw, events, units, workCells, items) {
   const pushSessions = items.flatMap((i) => i.summary.pushes.map((p) => ({ ...p, sessionId: i.summary.sessionId })));
   const cellById = new Map(workCells.map((w) => [w.id, w]));
   const fromGit = raw.map((a) => {
-    const item = { ...a, unitIds: a.files ? unitsTouchedBy(a.files, units) : [] };
+    const item = { ...a, partIds: a.files ? touched(a.files) : [] };
     if (a.files) item.files = a.files.slice(0, ACTIVITY_FILES_MAX);
     const sessionId = a.kind === 'push'
       ? pushSessions.find((p) => p.branch === a.branch && Math.abs(Date.parse(p.ts) - Date.parse(a.ts)) <= PUSH_MATCH_MS)?.sessionId
@@ -231,14 +210,9 @@ function activityItems(raw, events, units, workCells, items) {
     if (cellById.has(a.branch)) item.workCellId = a.branch;
     return item;
   });
-  const fromEvents = events.map((e) => {
-    if (e.workCellId) {
-      const cell = cellById.get(e.workCellId);
-      return { kind: e.kind, ts: e.ts, branch: cell?.branch ?? e.workCellId, author: cell?.owner ?? NOBODY, unitIds: cell ? [cell.unitId] : [], workCellId: e.workCellId };
-    }
-    // Names the AI gave before they were cleaned still sit in old rename events.
-    const subject = e.kind === 'renamed' && typeof e.subject === 'string' ? e.subject.split(' → ').map((n) => cleanUnitName(n) || n).join(' → ') : e.subject;
-    return { kind: e.kind, ts: e.ts, branch: e.branch ?? '', author: e.author ?? NOBODY, unitIds: e.unitIds ?? [], subject };
+  const fromEvents = events.filter((e) => e.workCellId && (e.kind === 'born' || e.kind === 'fused')).map((e) => {
+    const cell = cellById.get(e.workCellId);
+    return { kind: e.kind, ts: e.ts, branch: cell?.branch ?? e.workCellId, author: cell?.owner ?? NOBODY, partIds: cell?.partId ? [cell.partId] : [], workCellId: e.workCellId };
   });
   return [...fromGit, ...fromEvents].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, ACTIVITY_MAX);
 }
@@ -251,18 +225,16 @@ async function buildProject(ctx, { root, items }) {
   const projectId = projectIdOf(root);
   const config = loadConfig(root, smDir);
   const main = await mainBranch(root);
-  const isNew = !existsSync(unitsFile(smDir, projectId));
-  const gitLog = isNew && main ? (await git(root, ['log', '--name-only', '--format=', '-n', '500'])).split(/\r?\n/).filter(Boolean) : [];
-  const loaded = loadUnits(smDir, root, { gitLog }).map(normalizeUnit);
-  // Older trees may hold twins and bare folder names; read, tidied and saved with no await in between.
-  const units = tidyUnits(loaded);
-  if (JSON.stringify(units) !== JSON.stringify(loaded)) writeUnits(smDir, projectId, units);
-  const memo = await gitSide(smDir, root, projectId, main, units, nowIso);
+  const arch = await readArch(root, config, { mainBranch: main });
+  const topLevel = topLevelOf(root);
+  const placeFiles = (files) => partOfFiles(files, arch, { topLevel });
+  const memo = await gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso);
   autoFetch(root, config.autoFetchMinutes).then((at) => { memo.fetchedAt = at; });
-  const overrides = readOverrides(smDir, projectId);
   const lineage = readLineage(smDir);
   const openspec = readOpenSpec(root);
   const roadmap = config.roadmap ? readRoadmap(join(root, config.roadmap), { decisions: config.decisions }) : null;
+  const aiOn = life.queue.enabled && config.ai?.enabled !== false;
+  const aiAnswers = aiPlacements(life, smDir, projectId);
 
   const openBranches = new Set(memo.workCells.filter((w) => w.status !== 'merged').map((w) => w.branch));
   const placed = items.map((item) => {
@@ -270,13 +242,13 @@ async function buildProject(ctx, { root, items }) {
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
       item, updatedAt,
-      ...placeInUnit(item, units, overrides, root),
+      ...placeInPart(item, arch, placeFiles, root, aiAnswers),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
       shown: liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch),
     };
   });
-  const forLineage = (unitId) => placed.filter((x) => x.unitId === unitId).map((x) => ({ sessionId: x.item.summary.sessionId, startedAt: x.item.summary.startedAt, editedFiles: x.item.summary.editedFiles }));
+  const forLineage = (partId) => placed.filter((x) => x.partId === partId).map((x) => ({ sessionId: x.item.summary.sessionId, startedAt: x.item.summary.startedAt, editedFiles: x.item.summary.editedFiles }));
 
   const chats = placed.filter((x) => x.shown).map((x) => {
     const s = x.item.summary;
@@ -285,11 +257,11 @@ async function buildProject(ctx, { root, items }) {
     return {
       sessionId: s.sessionId,
       title: cut(s.title),
-      unitId: x.unitId,
-      unitSource: x.unitSource,
+      partId: x.partId,
+      partSource: x.partSource,
       workCellId: x.workCellId,
       workCellSource: x.workCellSource,
-      parentId: parentOf(s.sessionId, lineage, forLineage(x.unitId)),
+      parentId: parentOf(s.sessionId, lineage, forLineage(x.partId)),
       status: live ? live.status : 'closed',
       entrypoint: live?.entrypoint ?? '',
       live: Boolean(live),
@@ -323,79 +295,14 @@ async function buildProject(ctx, { root, items }) {
   });
 
   const events = readEvents(smDir, projectId).filter((e) => now.getTime() - Date.parse(e.ts) <= WINDOW_MS);
-  const activity = activityItems(memo.activity, events, units, workCells, items);
-  const hints = { openspec, milestones: roadmap?.milestones ?? [] };
-  const own = new Map();
-  const nuclei = new Map();
-  const aiNuclei = readJsonFile(aiNucleusFile(smDir, projectId), {}) ?? {};
-  for (const u of units) {
-    const cardItems = placed.filter((x) => x.unitId === u.id && x.item.card).map((x) => ({
-      card: x.item.card, sessionId: x.item.summary.sessionId, updatedAt: x.updatedAt, title: x.item.summary.title,
-      lastAssistantText: x.item.summary.lastAssistantText, lastPrompt: x.item.summary.lastPrompt,
-    }));
-    const nucleus = nucleusOf(smDir, projectId, u, cardItems, hints, aiNuclei[u.id] ?? null);
-    nuclei.set(u.id, nucleus);
-    own.set(u.id, {
-      chats: placed.filter((x) => x.unitId === u.id).length,
-      commits: activity.filter((a) => (a.kind === 'commit' || a.kind === 'merge') && a.unitIds.includes(u.id)).length,
-      decisions: nucleus.decided.length,
-    });
-  }
-  const work = rollUp(units, own);
+  const activity = activityItems(memo.activity, events, (files) => partsTouched(files, arch, { topLevel }), workCells, items);
 
-  const isWaiting = (c) => !c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length > 0);
-  const outUnits = units.map((u) => {
-    const mine = chats.filter((c) => c.unitId === u.id);
-    const cells = workCells.filter((w) => w.unitId === u.id && w.status !== 'merged');
-    const firstChat = placed.filter((x) => x.unitId === u.id).map((x) => x.item.summary.startedAt).filter(Boolean).sort()[0];
-    return {
-      id: u.id, level: u.level, parentId: u.parentId, name: u.name, purpose: u.purpose, tags: u.tags,
-      origin: u.origin, pinned: u.pinned, paths: u.paths,
-      nucleus: nuclei.get(u.id),
-      chatIds: mine.map((c) => c.sessionId),
-      workCellIds: cells.map((w) => w.id),
-      work: work.get(u.id),
-      status: mine.some(isWaiting) ? 'waiting' : mine.some((c) => c.status === 'busy') || cells.some((w) => w.status === 'active') ? 'active' : 'idle',
-      bornAt: u.bornAt ?? firstChat ?? nowIso,
-    };
-  });
-
-  const aiOn = life.queue.enabled && config.ai?.enabled !== false;
-  // Continuing work begun in another unit is what links two units, so a chat's parent is looked for in the whole
-  // project, by the repo files both edited (memory notes and scratch files every chat touches say nothing).
-  const projectChats = placed.map(({ item: { summary: s } }) => ({ sessionId: s.sessionId, startedAt: s.startedAt, editedFiles: repoFiles(s.editedFiles ?? [], root, s.cwd) }));
-  const linkChats = placed.map(({ item: { summary: s }, unitId, workCellId }) => ({
-    sessionId: s.sessionId, title: s.title, unitId, workCellId, startedAt: s.startedAt, editedFiles: s.editedFiles, cwd: s.cwd, parentId: parentOf(s.sessionId, lineage, projectChats),
-  }));
-  const unitLinks = linkUnits(linkChats, outUnits, workCells, specRefsOf(root, units), { root, related: aiOn ? readRelated(smDir, projectId) : [] });
-
-  if (aiOn) {
-    const workCellOf = (item) => workCells.find((w) => w.id === placed.find((x) => x.item === item)?.workCellId) ?? null;
-    // Placed again from units.json as it is when asked: the bootstrap changes it after this collect started.
-    const nucleusInputs = () => {
-      const current = readJsonFile(unitsFile(smDir, projectId), []).map(normalizeUnit);
-      const hasFile = (u) => existsSync(join(brainDir(smDir, projectId), `${u.id}.md`));
-      const where = new Map(items.map((item) => [item, placeInUnit(item, current, overrides, root).unitId]));
-      return current.filter((u) => u.id !== UNSORTED && !hasFile(u)).flatMap((u) => {
-        const chats = items.filter((item) => where.get(item) === u.id).map((item) => ({
-          updatedAt: item.summary.endedAt ?? new Date(item.ref.mtimeMs).toISOString(),
-          digest: digestOf(item.summary, workCellOf(item)),
-          last: item.summary.lastAssistantText,
-        }));
-        const branches = workCells.filter((w) => w.unitId === u.id && w.status !== 'merged');
-        return chats.length || branches.length ? [nucleusInputOf(u, chats, branches)] : [];
-      });
-    };
-    const p = { smDir, projectId, workCellOf, nucleusInputs };
-    if (isNew) startBootstrap(life, p, items);
-    const boot = life.boot.get(projectId);
-    if (!boot || boot.done >= boot.total) {
-      perceiveChanged(life, p, placed.filter((x) => x.shown && !archived.has(x.item.summary.sessionId) && x.unitSource !== 'override' && x.unitSource !== 'card').map((x) => x.item));
-      if (!isNew) {
-        refreshNuclei(life, p);
-        relateOnce(life, p);
-      }
-    }
+  if (aiOn && arch.parts.length) {
+    const cellOf = (x) => workCells.find((w) => w.id === x.workCellId) ?? null;
+    const jobs = placed
+      .filter((x) => x.shown && !archived.has(x.item.summary.sessionId) && (x.partSource === 'none' || x.partSource === 'ai'))
+      .map((x) => ({ sessionId: x.item.summary.sessionId, digest: digestOf(x.item.summary, cellOf(x)) }));
+    placeChanged(life, { smDir, projectId, arch }, jobs);
   }
 
   const milestones = roadmap?.milestones.map((m) => ({ ...m, workCellId: placed.find((x) => x.workCellId && x.item.card?.milestone === m.id)?.workCellId ?? null })) ?? null;
@@ -405,10 +312,14 @@ async function buildProject(ctx, { root, items }) {
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
-      units: outUnits, unitLinks, workCells,
+      arch: attachToParts(arch, chats, workCells), workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, roadmap: milestones,
-      decisions: [...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })), ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId)],
+      decisions: [
+        ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),
+        ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId),
+        ...waitingItems(arch, projectId),
+      ],
       skills: listSkills(root, dir),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
     },

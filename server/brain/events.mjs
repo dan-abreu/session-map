@@ -1,12 +1,12 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { log } from '../log.mjs';
-import { brainDir } from './cells.mjs';
+import { brainDir } from '../store.mjs';
 
 export const eventsPath = (smDir, projectId) => join(brainDir(smDir, projectId), 'events.jsonl');
 
-// Same branch (or units), kind and time = same event: restarts and backfills can offer it again without duplicating it.
-const keyOf = (e) => `${e.kind}|${e.workCellId}|${(e.unitIds ?? []).join(',')}|${Date.parse(e.ts)}`;
+// Same branch, kind and time = same event: restarts and backfills can offer it again without duplicating it.
+const keyOf = (e) => `${e.kind}|${e.workCellId}|${Date.parse(e.ts)}`;
 
 function readText(path) {
   try {

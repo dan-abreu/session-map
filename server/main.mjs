@@ -6,18 +6,16 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { runAction } from './actions.mjs';
-import { cleanTags, newUnit, normalizeUnit } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
-import { UNSORTED, brainDir, readJsonFile, setOverride, writeAtomic, writeUnits } from './brain/cells.mjs';
-import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { collect } from './collect.mjs';
 import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
+import { readJsonFile, writeAtomic } from './store.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
@@ -28,10 +26,6 @@ const STATE_SAVE_MS = 60_000;
 const COLLECT_AFTER_COPY_MS = 300;
 const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
-const NAME_MAX = 40;
-const LEVEL_RANK = { cell: 0, tissue: 1, organ: 2 };
-const NUCLEUS_ITEMS_MAX = 50;
-const NUCLEUS_TEXT_MAX = 1000;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
@@ -46,61 +40,6 @@ class HttpError extends Error {
   constructor(status, code) {
     super(code);
     this.status = status;
-  }
-}
-
-const isText = (v, max) => typeof v === 'string' && v.length <= max;
-const isTextList = (v) => Array.isArray(v) && v.length <= NUCLEUS_ITEMS_MAX && v.every((s) => isText(s, NUCLEUS_TEXT_MAX));
-const cleanName = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, NAME_MAX) : '');
-
-// The page's own edits: whatever the person names, merges or creates is pinned, so the AI leaves it alone.
-// Returns the new list, or null when the request does not fit the tree.
-export function editUnits(units, op, now) {
-  const next = units.map(normalizeUnit);
-  const byId = new Map(next.map((u) => [u.id, u]));
-  const editable = (id) => typeof id === 'string' && id !== UNSORTED && byId.has(id);
-  switch (op?.op) {
-    case 'rename': {
-      const name = cleanName(op.name);
-      if (!editable(op.id) || !name) return null;
-      Object.assign(byId.get(op.id), { name, pinned: true });
-      return next;
-    }
-    case 'pin':
-      if (!editable(op.id) || typeof op.pinned !== 'boolean') return null;
-      byId.get(op.id).pinned = op.pinned;
-      return next;
-    case 'merge': {
-      const ids = Array.isArray(op.ids) ? [...new Set(op.ids)] : [];
-      if (!editable(op.into) || !ids.length || ids.includes(op.into) || !ids.every(editable)) return null;
-      const into = byId.get(op.into);
-      for (const id of ids) {
-        const gone = byId.get(id);
-        into.chatIds = [...new Set([...into.chatIds, ...gone.chatIds])];
-        into.paths = [...new Set([...into.paths, ...gone.paths])];
-        into.tags = cleanTags([...into.tags, ...gone.tags]);
-        for (const u of next) if (u.parentId === id) u.parentId = into.id;
-      }
-      into.pinned = true;
-      return next.filter((u) => !ids.includes(u.id));
-    }
-    case 'move': {
-      const { parentId } = op;
-      if (!editable(op.id) || parentId === undefined || (parentId !== null && !editable(parentId))) return null;
-      const unit = byId.get(op.id);
-      // Levels stay strict: a unit only sits inside a higher level, which also rules out cycles.
-      if (parentId !== null && LEVEL_RANK[byId.get(parentId).level] <= LEVEL_RANK[unit.level]) return null;
-      Object.assign(unit, { parentId, pinned: true });
-      return next;
-    }
-    case 'create': {
-      const name = cleanName(op.name);
-      const parentId = op.parentId ?? null;
-      if (!name || (parentId !== null && !editable(parentId))) return null;
-      return [...next, { ...newUnit(next, { name, purpose: '', tags: [], parentId }, now), origin: 'user', pinned: true }];
-    }
-    default:
-      return null;
   }
 }
 
@@ -186,11 +125,6 @@ export function createApp({
     if (!project) throw new HttpError(404, 'unknown-project');
     return project;
   };
-  const unitOf = (project, unitId) => {
-    const unit = project.units.find((u) => u.id === unitId);
-    if (!unit) throw new HttpError(404, 'unknown-unit');
-    return unit;
-  };
 
   // Runs code on this PC by design: even a local read of a chat needs the token (desenho-2 § 22).
   async function chatRoute(req, res, parts, url) {
@@ -202,7 +136,7 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
-      const query = Object.fromEntries(['projectId', 'unitId', 'workCellId'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
+      const query = Object.fromEntries(['projectId', 'partId', 'workCellId'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
       const result = chat.list(query, await state());
       return send(res, result.status, result.body);
     }
@@ -240,13 +174,11 @@ export function createApp({
     const cell = param('workCell') === null ? null : project.workCells.find((w) => w.id === param('workCell'));
     if (cell === undefined) throw new HttpError(404, 'unknown-front');
     if (parts[2] === 'files') {
-      if (param('unit') !== null) {
-        const unit = unitOf(project, param('unit'));
-        const ids = new Set([unit.id]);
-        for (const u of project.units) if (ids.has(u.parentId)) ids.add(u.id);
-        const marks = new Map(project.workCells.filter((w) => ids.has(w.unitId)).flatMap((w) => w.files.map((f) => [f.path, { status: f.status, workCell: w.id }])));
-        const hints = project.units.filter((u) => ids.has(u.id)).flatMap((u) => u.paths ?? []);
-        const paths = [...new Set([...await listFiles(project.root, hints), ...marks.keys()])].sort();
+      if (param('part') !== null) {
+        const part = project.arch.parts.find((p) => p.id === param('part'));
+        if (!part) throw new HttpError(404, 'unknown-part');
+        const marks = new Map(project.workCells.filter((w) => w.partId === part.id).flatMap((w) => w.files.map((f) => [f.path, { status: f.status, workCell: w.id }])));
+        const paths = [...new Set([...await listFiles(project.root, [...part.codePaths, part.file]), ...marks.keys()])].sort();
         return send(res, 200, { ok: true, files: paths.map((path) => ({ path, status: null, ...marks.get(path) })) });
       }
       if (!cell) throw new HttpError(400, 'bad-request');
@@ -297,38 +229,6 @@ export function createApp({
       if (!messages.length) throw new HttpError(404, 'unknown-session');
       return send(res, 200, { sessionId: id, title: entry.title, messages });
     }
-    if (parts[1] === 'api' && parts[2] === 'nucleus' && parts.length === 5 && (req.method === 'GET' || req.method === 'PUT')) {
-      const project = await projectOf(parts[3]);
-      const unit = unitOf(project, parts[4]);
-      if (req.method === 'GET') return send(res, 200, readNucleus(smDir, project.id, unit.id) ?? unit.nucleus ?? emptyNucleus());
-      const body = await readBody(req);
-      if (!body || !isText(body.state, NUCLEUS_TEXT_MAX) || !isTextList(body.decided) || !isTextList(body.todo)) throw new HttpError(400, 'bad-nucleus');
-      const current = readNucleus(smDir, project.id, unit.id) ?? unit.nucleus ?? emptyNucleus();
-      writeNucleus(smDir, project.id, unit.id, { state: body.state, decided: body.decided, todo: body.todo, recent: current.recent ?? [] });
-      fresh();
-      return send(res, 200, { ok: true });
-    }
-    if (req.method === 'PUT' && parts[1] === 'api' && (parts[2] === 'units' || parts[2] === 'cells') && parts.length === 4) {
-      const project = await projectOf(parts[3]);
-      const body = await readBody(req);
-      const file = join(brainDir(smDir, project.id), 'units.json');
-      const stored = readJsonFile(file, null);
-      const units = Array.isArray(stored) && stored.length ? stored : project.units.map(({ nucleus, workCellIds, work, status, ...u }) => u);
-      const next = editUnits(units, body, new Date().toISOString());
-      if (!next) throw new HttpError(400, 'bad-edit');
-      writeUnits(smDir, project.id, next);
-      fresh();
-      return send(res, 200, { ok: true });
-    }
-    if (req.method === 'POST' && path === '/api/override') {
-      const body = await readBody(req);
-      const project = await projectOf(body?.projectId);
-      if (typeof body.sessionId !== 'string' || !project.chats.some((c) => c.sessionId === body.sessionId)) throw new HttpError(404, 'unknown-session');
-      if (body.unitId !== null) unitOf(project, body.unitId);
-      setOverride(smDir, project.id, body.sessionId, body.unitId);
-      fresh();
-      return send(res, 200, { ok: true });
-    }
     if (req.method === 'GET' && path === '/api/catalog') {
       if (demo) throw new HttpError(403, 'demo');
       // A refetch spends the user's GitHub quota: only a page that holds the token may ask for one.
@@ -367,7 +267,7 @@ export function createApp({
       await route(req, res, url);
     } catch (err) {
       if (err instanceof HttpError) return send(res, err.status, { ok: false, error: err.message });
-      if (err instanceof URIError || /^invalid (project|unit) id/.test(err.message)) return send(res, 400, { ok: false, error: 'bad-path' });
+      if (err instanceof URIError || /^invalid project id/.test(err.message)) return send(res, 400, { ok: false, error: 'bad-path' });
       log('error', 'request-failed', { path: url.pathname, error: err.message });
       if (!res.headersSent) send(res, 500, { ok: false, error: 'internal' });
     }

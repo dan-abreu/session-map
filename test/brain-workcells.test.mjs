@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { backfillMerges, detectTransitions, placeWorkCell, workCellsOf } from '../server/brain/workcells.mjs';
+import { backfillMerges, detectTransitions, workCellsOf } from '../server/brain/workcells.mjs';
+import { partOfFiles } from '../server/arch/attach.mjs';
 import { appendEvents, eventsPath, readEvents } from '../server/brain/events.mjs';
 import { autoFetch } from '../server/sources/fetch.mjs';
 import { normalizePath } from '../server/paths.mjs';
@@ -40,11 +41,9 @@ function commit(cwd, files, subject, who = 'ana') {
   return git(cwd, ['rev-parse', 'HEAD']).trim();
 }
 
-const UNITS = [
-  { id: 'web', name: 'Web', paths: ['apps/web'] },
-  { id: 'api', name: 'API', paths: ['apps/api'] },
-  { id: 'unsorted', name: 'Unsorted', paths: [] },
-];
+const part = (id, codePaths) => ({ id, name: id, file: `docs/architecture/${id}.md`, about: '', codePaths, groups: [] });
+const ARCH = { parts: [part('web', ['apps/web']), part('api', ['apps/api'])], layers: [] };
+const PLACE = (files) => partOfFiles(files.map((f) => f.path), ARCH);
 
 function makeRepo() {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-wc-')));
@@ -74,7 +73,7 @@ test('workCellsOf: two branches by different authors become work cells', async (
     twoBranches(root);
     const wt = join(base, 'wt-rui');
     git(root, ['worktree', 'add', '-q', wt, 'feature/rui']);
-    const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const cells = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     assert.deepEqual(cells.map((c) => c.id).sort(), ['feature/ana', 'feature/rui'], 'branches with nothing ahead are not cells');
 
     const ana = cells.find((c) => c.id === 'feature/ana');
@@ -94,7 +93,7 @@ test('workCellsOf: two branches by different authors become work cells', async (
         { path: 'apps/web/page.js', status: 'M' },
       ],
     );
-    assert.equal(ana.unitId, 'web');
+    assert.equal(ana.partId, 'web');
     assert.deepEqual(ana.touches, ['api']);
     assert.equal(ana.lastCommit.subject, 'polish from rui');
     assert.match(ana.lastCommit.hash, /^[0-9a-f]{40}$/);
@@ -105,7 +104,7 @@ test('workCellsOf: two branches by different authors become work cells', async (
 
     const rui = cells.find((c) => c.id === 'feature/rui');
     assert.deepEqual(rui.owner, { name: 'Rui', email: 'rui@example.com' });
-    assert.equal(rui.unitId, 'api');
+    assert.equal(rui.partId, 'api');
     assert.deepEqual(rui.touches, []);
     assert.equal(normalizePath(rui.path), normalizePath(wt));
   } finally { rmSync(base, { recursive: true, force: true }); }
@@ -115,21 +114,21 @@ test('workCellsOf: cells sharing a file clash with each other', async () => {
   const { base, root } = makeRepo();
   try {
     twoBranches(root);
-    const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const cells = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     assert.deepEqual(cells.find((c) => c.id === 'feature/ana').clashWith, ['feature/rui']);
     assert.deepEqual(cells.find((c) => c.id === 'feature/rui').clashWith, ['feature/ana']);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
-test('workCellsOf: a cell without commits for a week is idle and one outside every unit is unsorted', async () => {
+test('workCellsOf: a cell without commits for a week is idle and one outside every part hangs on none', async () => {
   const { base, root } = makeRepo();
   try {
     git(root, ['checkout', '-q', '-b', 'docs']);
     commit(root, { 'README.md': 'y' }, 'docs');
     git(root, ['checkout', '-q', 'main']);
-    const [cell] = await workCellsOf(root, UNITS, { main: 'main', now: clock + 8 * 86_400_000 });
+    const [cell] = await workCellsOf(root, PLACE, { main: 'main', now: clock + 8 * 86_400_000 });
     assert.equal(cell.status, 'idle');
-    assert.equal(cell.unitId, 'unsorted');
+    assert.equal(cell.partId, null);
     assert.deepEqual(cell.touches, []);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
@@ -153,15 +152,15 @@ test('workCellsOf: remote branches of other people are cells; a remote copy of a
     git(other, ['push', '-q', 'origin', 'feature/zoe'], 'zoe');
     git(root, ['fetch', '-q', 'origin']);
 
-    const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const cells = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     assert.deepEqual(cells.map((c) => c.id).sort(), ['feature/ana', 'origin/feature/zoe']);
     const zoe = cells.find((c) => c.id === 'origin/feature/zoe');
     assert.equal(zoe.remote, true);
     assert.equal(zoe.branch, 'feature/zoe');
     assert.deepEqual(zoe.owner, { name: 'Zoe', email: 'zoe@example.com' });
-    assert.equal(zoe.unitId, 'api');
+    assert.equal(zoe.partId, 'api');
 
-    const localOnly = await workCellsOf(root, UNITS, { main: 'main', includeRemote: false, now: clock });
+    const localOnly = await workCellsOf(root, PLACE, { main: 'main', includeRemote: false, now: clock });
     assert.deepEqual(localOnly.map((c) => c.id), ['feature/ana']);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
@@ -183,10 +182,10 @@ test('fusion by merge commit: the previous cell comes back as merged at the merg
   const { base, root } = makeRepo();
   try {
     twoBranches(root);
-    const before = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const before = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     git(root, ['merge', '-q', '--no-ff', '-m', "Merge branch 'feature/rui'", 'feature/rui'], 'rui');
     const mergeTs = git(root, ['log', '-1', '--format=%cI']).trim();
-    const after = await workCellsOf(root, UNITS, { main: 'main', previous: before, now: clock });
+    const after = await workCellsOf(root, PLACE, { main: 'main', previous: before, now: clock });
     const rui = after.find((c) => c.id === 'feature/rui');
     assert.equal(rui.status, 'merged');
     assert.equal(Date.parse(rui.mergedAt), Date.parse(mergeTs));
@@ -201,15 +200,15 @@ test('fusion by rebase and fast-forward is detected, even after the branch is de
   try {
     twoBranches(root);
     commit(root, { 'apps/web/other.js': 'o' }, 'main moves on');
-    const before = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const before = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     git(root, ['checkout', '-q', 'feature/rui']);
     git(root, ['rebase', '-q', 'main'], 'rui');
-    const rebased = await workCellsOf(root, UNITS, { main: 'main', previous: before, now: clock });
+    const rebased = await workCellsOf(root, PLACE, { main: 'main', previous: before, now: clock });
     assert.equal(rebased.find((c) => c.id === 'feature/rui').status, 'active', 'rebased but not merged yet');
     git(root, ['checkout', '-q', 'main']);
     git(root, ['merge', '-q', '--ff-only', 'feature/rui']);
     git(root, ['branch', '-q', '-d', 'feature/rui']);
-    const after = await workCellsOf(root, UNITS, { main: 'main', previous: rebased, now: clock });
+    const after = await workCellsOf(root, PLACE, { main: 'main', previous: rebased, now: clock });
     const rui = after.find((c) => c.id === 'feature/rui');
     assert.equal(rui.status, 'merged');
     assert.ok(rui.mergedAt);
@@ -325,46 +324,10 @@ test('workCellsOf: a branch idle for a week clashes with nobody, only two active
     git(root, ['checkout', '-q', '-b', 'feature/zoe']);
     commit(root, { 'apps/api/route.js': 'r-zoe' }, 'route v3', 'zoe');
     git(root, ['checkout', '-q', 'main']);
-    const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
+    const cells = await workCellsOf(root, PLACE, { main: 'main', now: clock });
     const of = (id) => cells.find((c) => c.id === id).clashWith.sort();
     assert.deepEqual(of('feature/ana'), []);
     assert.deepEqual(of('feature/rui'), []);
     assert.deepEqual(of('feature/zoe'), []);
   } finally { rmSync(base, { recursive: true, force: true }); }
-});
-
-const files = (...paths) => paths.map((path) => ({ path, status: 'M' }));
-const DEEP_UNITS = [
-  { id: 'comms', paths: ['apps/backend-api', 'packages/core/src/whatsapp'] },
-  { id: 'providers', paths: ['apps/backend-api/src/routes/admin'] },
-  { id: 'billing', paths: ['apps/backend-api/src/billing'] },
-  { id: 'unsorted', paths: [] },
-];
-
-test('placeWorkCell: the deepest specific path wins over a broad app folder, however many files the broad one covers', () => {
-  const many = Array.from({ length: 30 }, (_, i) => `apps/backend-api/src/services/s${i}.ts`);
-  const place = placeWorkCell(files(...many, 'apps/backend-api/src/routes/admin/a.ts', 'apps/backend-api/src/routes/admin/b.ts'), DEEP_UNITS);
-  assert.equal(place.unitId, 'providers');
-  assert.deepEqual(place.touches, ['comms']);
-});
-
-test('placeWorkCell: a tie between specific paths goes to unsorted and touches both', () => {
-  const place = placeWorkCell(files('apps/backend-api/src/routes/admin/a.ts', 'apps/backend-api/src/billing/b.ts'), DEEP_UNITS);
-  assert.equal(place.unitId, 'unsorted');
-  assert.deepEqual(place.touches.sort(), ['billing', 'providers']);
-});
-
-test('placeWorkCell: only broad matches still place the branch, and nothing matching leaves it unsorted', () => {
-  assert.equal(placeWorkCell(files('apps/backend-api/package.json', 'apps/backend-api/src/x.ts'), DEEP_UNITS).unitId, 'comms');
-  assert.deepEqual(placeWorkCell(files('README.md'), DEEP_UNITS), { unitId: 'unsorted', touches: [] });
-});
-
-test('placeWorkCell: an app\'s own src folder is as broad as the app itself', () => {
-  const units = [
-    { id: 'comms', paths: ['apps/backend-api/src'] },
-    { id: 'providers', paths: ['apps/backend-api/src/routes/admin'] },
-    { id: 'unsorted', paths: [] },
-  ];
-  const many = Array.from({ length: 20 }, (_, i) => `apps/backend-api/src/services/s${i}.ts`);
-  assert.equal(placeWorkCell(files(...many, 'apps/backend-api/src/routes/admin/a.ts'), units).unitId, 'providers');
 });

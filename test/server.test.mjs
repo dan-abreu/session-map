@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { cpSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, editUnits } from '../server/main.mjs';
+import { createApp } from '../server/main.mjs';
 import { loadToken, sameToken } from '../server/auth.mjs';
 import { archiveTranscript } from '../server/archive.mjs';
 import { listTranscripts } from '../server/sources/claude.mjs';
@@ -156,56 +156,21 @@ test('history search and archived conversation routes validate their input', asy
   });
 });
 
-test('editUnits: rename and create pin the unit, merge joins chats, bad input is refused', () => {
-  const units = [
-    { id: 'a', name: 'A', chatIds: ['1'], paths: ['x'], tags: ['t'], pinned: false, parentId: null, level: 'cell' },
-    { id: 'b', name: 'B', chatIds: ['2'], paths: ['y'], tags: ['u'], pinned: false, parentId: null, level: 'cell' },
-    { id: 'c', name: 'C', chatIds: [], paths: [], tags: [], pinned: false, parentId: 'b', level: 'cell' },
-    { id: 'unsorted', name: 'Unsorted', chatIds: [], paths: [], tags: [], pinned: false, parentId: null, level: 'cell' },
-  ];
-  const renamed = editUnits(units, { op: 'rename', id: 'a', name: 'Checkout' }, 'T');
-  assert.deepEqual([renamed.find((u) => u.id === 'a').name, renamed.find((u) => u.id === 'a').pinned], ['Checkout', true]);
-  const merged = editUnits(units, { op: 'merge', ids: ['b'], into: 'a' }, 'T');
-  const a = merged.find((u) => u.id === 'a');
-  assert.deepEqual([a.chatIds, a.paths, a.pinned], [['1', '2'], ['x', 'y'], true]);
-  assert.equal(merged.find((u) => u.id === 'c').parentId, 'a');
-  assert.equal(merged.some((u) => u.id === 'b'), false);
-  const created = editUnits(units, { op: 'create', name: 'New area' }, 'T').at(-1);
-  assert.deepEqual([created.id, created.origin, created.pinned, created.bornAt], ['new-area', 'user', true, 'T']);
-  assert.equal(editUnits(units, { op: 'rename', id: 'unsorted', name: 'X' }, 'T'), null);
-  assert.equal(editUnits(units, { op: 'merge', ids: ['a'], into: 'a' }, 'T'), null);
-  assert.equal(editUnits(units, { op: 'create', name: '' }, 'T'), null);
-  assert.equal(editUnits(units, { op: 'drop' }, 'T'), null);
-});
-
-test('nucleus edit, override and unit edits write only for a project and unit in the state', async () => {
+test('the routes of the old cell tree are gone: nucleus, override and unit edits answer 404 and write nothing', async () => {
   const UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const fakeState = (smDir) => ({
+  const fakeState = () => ({
     generatedAt: '', waitingCount: 0, projects: [{
-      id: 'shop-abc123', root: '/work/shop', workCells: [],
-      units: [{ id: 'cart', name: 'Cart', nucleus: { state: '', decided: [], todo: [], recent: [] } }],
-      chats: [{ sessionId: UUID, unitId: 'cart' }],
+      id: 'shop-abc123', root: '/work/shop', workCells: [], arch: { source: 'none', dir: null, lang: 'en', layers: [], parts: [] },
+      chats: [{ sessionId: UUID, partId: null }],
     }],
   });
-  let smDirSeen;
-  await withServer({ collectFn: ({ smDir }) => { smDirSeen = smDir; return fakeState(smDir); } }, async ({ call, token, port, smDir }) => {
+  await withServer({ collectFn: fakeState }, async ({ call, token, port, smDir }) => {
     const headers = { cookie: `sm_token=${token}`, 'x-session-map': '1', origin: `http://127.0.0.1:${port}` };
-    const nucleus = { state: 'paying', decided: ['no coupons'], todo: ['tests'] };
-    assert.equal((await call('PUT', '/api/nucleus/shop-abc123/cart', { headers, body: nucleus })).status, 200);
-    assert.match(readFileSync(join(smDir, 'brain', 'shop-abc123', 'cart.md'), 'utf8'), /## State\npaying/);
-    assert.equal((await call('PUT', '/api/nucleus/shop-abc123/ghost', { headers, body: nucleus })).status, 404);
-    assert.equal((await call('PUT', '/api/nucleus/shop-abc123/cart', { headers, body: { state: 3 } })).status, 400);
-    const got = JSON.parse((await call('GET', '/api/nucleus/shop-abc123/cart')).text);
-    assert.equal(got.state, 'paying');
-
-    assert.equal((await call('POST', '/api/override', { headers, body: { projectId: 'shop-abc123', sessionId: UUID, unitId: 'cart' } })).status, 200);
-    assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'brain', 'shop-abc123', 'overrides.json'), 'utf8')), { [UUID]: 'cart' });
-    assert.equal((await call('POST', '/api/override', { headers, body: { projectId: 'shop-abc123', sessionId: UUID, unitId: 'ghost' } })).status, 404);
-
-    assert.equal((await call('PUT', '/api/units/shop-abc123', { headers, body: { op: 'create', name: 'Coupons' } })).status, 200);
-    const stored = JSON.parse(readFileSync(join(smDir, 'brain', 'shop-abc123', 'units.json'), 'utf8'));
-    assert.ok(stored.some((u) => u.id === 'coupons' && u.pinned));
-    assert.equal(smDirSeen, smDir);
+    assert.equal((await call('PUT', '/api/nucleus/shop-abc123/cart', { headers, body: { state: 'x', decided: [], todo: [] } })).status, 404);
+    assert.equal((await call('GET', '/api/nucleus/shop-abc123/cart')).status, 404);
+    assert.equal((await call('POST', '/api/override', { headers, body: { projectId: 'shop-abc123', sessionId: UUID, unitId: 'cart' } })).status, 404);
+    assert.equal((await call('PUT', '/api/units/shop-abc123', { headers, body: { op: 'create', name: 'Coupons' } })).status, 404);
+    assert.equal(existsSync(join(smDir, 'brain')), false);
   });
 });
 

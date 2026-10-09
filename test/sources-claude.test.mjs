@@ -146,8 +146,7 @@ test('usage without the cache_creation breakdown counts cache_creation_input_tok
 
 test('a chat started from the page is titled with the person\'s words, not the context block session-map put before them', () => {
   withTempDir((dir) => {
-    const nucleus = { state: 'Login works. '.repeat(120), decided: ['Sessions live 30 days'], todo: ['Rate limit the form'] };
-    const prompt = firstPrompt({ unit: { name: 'Auth', purpose: 'Sign in' }, nucleus, text: 'Add the error message' });
+    const prompt = firstPrompt({ part: { name: 'Auth', about: 'Login works. '.repeat(120) }, text: 'Add the error message' });
     assert.ok(prompt.length > 1000, 'longer than a stored prompt');
     const p = join(dir, `${A}.jsonl`);
     writeFileSync(p, `${JSON.stringify({ type: 'user', sessionId: A, cwd: '/work/acme', timestamp: '2026-10-09T10:00:00.000Z', message: { role: 'user', content: prompt } })}\n`);
@@ -225,5 +224,18 @@ test('forEachLine reads a file in chunks, keeping lines and multibyte text whole
     forEachLine(path, (line, i) => seen.push([i, line]), { chunkBytes: 7 });
     assert.deepEqual(seen.map(([, l]) => l), lines);
     assert.deepEqual(seen.map(([i]) => i), lines.map((_, i) => i));
+  });
+});
+
+test('readTranscript lists the item codes the conversation cites, counted, in the order of their last mention', () => {
+  withTempDir((dir) => {
+    const p = join(dir, `${A}.jsonl`);
+    const line = (type, content) => JSON.stringify({ type, sessionId: A, cwd: '/work/acme', timestamp: '2026-10-09T10:00:00.000Z', message: { role: type, content } });
+    writeFileSync(p, [
+      line('user', 'Item: Real stall photos `sf01`\n\nStart sf01 and `or02`, not xsf01x'),
+      line('assistant', [{ type: 'text', text: 'Done with SF01. Moving on.' }]),
+    ].join('\n') + '\n');
+    assert.deepEqual(readTranscript(p).mentionedCodes, [{ code: 'or02', n: 1 }, { code: 'sf01', n: 3 }]);
+    assert.deepEqual(readTranscript(transcript(C)).mentionedCodes.filter((m) => m.code === 'sf01'), []);
   });
 });

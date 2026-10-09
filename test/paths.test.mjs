@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePath, projectIdOf } from '../server/paths.mjs';
+import { normalizePath, projectIdOf, relativeFiles, repoFiles } from '../server/paths.mjs';
 import { join } from 'node:path';
 import { folderWithShortName } from './short-name.mjs';
 
@@ -32,4 +32,25 @@ test('normalizePath: a windows 8.3 short name and the long name are the same fol
   assert.equal(normalizePath(short), normalizePath(long));
   assert.equal(projectIdOf(short), projectIdOf(long));
   assert.equal(normalizePath(join(short, 'not-created-yet')), normalizePath(join(long, 'not-created-yet')));
+});
+
+test('relativeFiles keeps relative paths, makes absolute ones relative to the first base that holds them and drops the rest', () => {
+  const base = join('/', 'work', 'shop');
+  const other = join('/', 'work', 'shop-hotfix');
+  const files = ['./src/a.ts', join(base, 'src', 'b.ts'), join(other, 'docs', 'c.md'), join('/', 'elsewhere', 'd.ts')];
+  assert.deepEqual(relativeFiles(files, [base, other, null]), ['src/a.ts', 'src/b.ts', 'docs/c.md']);
+});
+
+test('relativeFiles: an edited file under a root keeps its relative path when the root is spelled with 8.3 short names', { skip: process.platform !== 'win32' }, (t) => {
+  const folder = folderWithShortName(t);
+  if (!folder) return t.skip('8.3 short names are off on this volume');
+  const { long, short } = folder;
+  assert.deepEqual(relativeFiles([join(short, 'src', 'Shop', 'cart.ts')], [long]), ['src/Shop/cart.ts']);
+  assert.deepEqual(relativeFiles([join(long, 'src', 'shop', 'cart.ts')], [short]), ['src/shop/cart.ts']);
+});
+
+test('repoFiles also reads files edited in a sibling checkout of the repo (a worktree named <repo>-<something>)', () => {
+  const root = join('/', 'work', 'shop');
+  const files = [join('/', 'work', 'shop-hotfix', 'src', 'tax.ts'), join(root, 'src', 'cart.ts'), join('/', 'work', 'shopping', 'x.ts'), join('/', 'home', 'notes.md')];
+  assert.deepEqual(repoFiles(files, root, root), ['src/tax.ts', 'src/cart.ts']);
 });

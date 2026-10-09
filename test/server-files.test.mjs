@@ -31,11 +31,11 @@ function makeRepo() {
 const fakeState = (root) => ({
   generatedAt: '', waitingCount: 0, projects: [{
     id: 'shop-abc123', root, mainBranch: 'main',
-    units: [
-      { id: 'src', parentId: null, paths: ['src/'], workCellIds: ['feature/x'], nucleus: {} },
-      { id: 'empty', parentId: null, paths: [], workCellIds: [], nucleus: {} },
-    ],
-    workCells: [{ id: 'feature/x', branch: 'feature/x', remote: false, path: null, unitId: 'src', files: [{ path: 'src/a.js', status: 'M' }, { path: 'src/new.js', status: 'A' }, { path: 'src/gone.js', status: 'D' }] }],
+    arch: { source: 'worktree', dir: 'docs/architecture', lang: 'en', layers: [], parts: [
+      { id: 'src', name: 'Src', file: 'docs/architecture/src.md', about: '', codePaths: ['src/'], groups: [], workCellIds: ['feature/x'], chatIds: [] },
+      { id: 'empty', name: 'Empty', file: 'docs/architecture/empty.md', about: '', codePaths: [], groups: [], workCellIds: [], chatIds: [] },
+    ] },
+    workCells: [{ id: 'feature/x', branch: 'feature/x', remote: false, path: null, partId: 'src', files: [{ path: 'src/a.js', status: 'M' }, { path: 'src/new.js', status: 'A' }, { path: 'src/gone.js', status: 'D' }] }],
     chats: [],
   }],
 });
@@ -68,20 +68,20 @@ async function withServer(fn) {
 
 const enc = encodeURIComponent;
 
-test('the file list of a branch is its diff, of a unit the tracked files under its hints', async () => {
+test('the file list of a branch is its diff, of a part the tracked files under its code paths', async () => {
   await withServer(async ({ call }) => {
     const cell = await call('/api/files/shop-abc123?workCell=feature%2Fx');
     assert.equal(cell.status, 200);
     assert.deepEqual(cell.body.files.map((f) => `${f.status} ${f.path}`), ['M src/a.js', 'A src/new.js', 'D src/gone.js']);
-    const unit = await call('/api/files/shop-abc123?unit=src');
-    assert.deepEqual(unit.body.files, [
+    const part = await call('/api/files/shop-abc123?part=src');
+    assert.deepEqual(part.body.files, [
       { path: 'src/a.js', status: 'M', workCell: 'feature/x' }, { path: 'src/gone.js', status: 'D', workCell: 'feature/x' }, { path: 'src/new.js', status: 'A', workCell: 'feature/x' },
     ], 'the branch files show up even where the folder on disk does not have them yet');
-    assert.deepEqual((await call('/api/files/shop-abc123?unit=empty')).body.files, []);
-    assert.equal((await call('/api/files/shop-abc123?unit=ghost')).status, 404);
+    assert.deepEqual((await call('/api/files/shop-abc123?part=empty')).body.files, []);
+    assert.equal((await call('/api/files/shop-abc123?part=ghost')).status, 404);
     assert.equal((await call('/api/files/shop-abc123?workCell=ghost')).status, 404);
     assert.equal((await call('/api/files/shop-abc123')).status, 400);
-    assert.equal((await call('/api/files/ghost?unit=src')).status, 404);
+    assert.equal((await call('/api/files/ghost?part=src')).status, 404);
   });
 });
 
@@ -107,6 +107,6 @@ test('file routes refuse escapes, secrets, missing files and callers without the
     assert.equal((await get('src')).status, 404);
     assert.equal((await call('/api/file/shop-abc123')).status, 400);
     assert.equal((await call('/api/file/shop-abc123?path=src%2Fa.js', { cookie: false })).status, 401);
-    assert.equal((await call('/api/files/shop-abc123?unit=src', { cookie: false })).status, 401);
+    assert.equal((await call('/api/files/shop-abc123?part=src', { cookie: false })).status, 401);
   });
 });

@@ -68,7 +68,7 @@ export async function mergeBaseOf(root, base, ref) {
   return sha && SHA_RE.test(sha) ? sha : null;
 }
 
-// Tracked files under the folder or file hints a unit carries; anything that is not a plain relative path is skipped.
+// Tracked files under the folder or file hints of a part; anything that is not a plain relative path is skipped.
 export async function listFiles(root, hints) {
   const paths = [...new Set((hints ?? []).filter((h) => typeof h === 'string' && !GLOB_RE.test(h)).map((h) => lexical(h)?.join('/')).filter(Boolean))];
   if (!paths.length) return [];

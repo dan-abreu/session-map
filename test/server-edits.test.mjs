@@ -4,34 +4,10 @@ import { request } from 'node:http';
 import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, editUnits } from '../server/main.mjs';
+import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
 import { archiveTranscript, readIndex } from '../server/archive.mjs';
 import { listTranscripts } from '../server/sources/claude.mjs';
-
-const UNITS = [
-  { id: 'body', name: 'Body', level: 'organ', parentId: null, chatIds: [], paths: [], tags: [], pinned: false },
-  { id: 'pay', name: 'Pay', level: 'tissue', parentId: 'body', chatIds: [], paths: [], tags: [], pinned: false },
-  { id: 'cards', name: 'Cards', level: 'cell', parentId: 'pay', chatIds: ['1'], paths: [], tags: [], pinned: false },
-  { id: 'free', name: 'Free', level: 'cell', parentId: null, chatIds: [], paths: [], tags: [], pinned: false },
-  { id: 'unsorted', name: 'Unsorted', level: 'cell', parentId: null, chatIds: [], paths: [], tags: [], pinned: false },
-];
-
-test('editUnits move: a person dragging a unit into a higher level pins it', () => {
-  const moved = editUnits(UNITS, { op: 'move', id: 'free', parentId: 'pay' }, 'T');
-  const free = moved.find((u) => u.id === 'free');
-  assert.deepEqual([free.parentId, free.pinned], ['pay', true]);
-  const out = editUnits(UNITS, { op: 'move', id: 'cards', parentId: null }, 'T').find((u) => u.id === 'cards');
-  assert.deepEqual([out.parentId, out.pinned], [null, true], 'null takes it out to the top level');
-});
-
-test('editUnits move refuses a same or lower level parent, unknown ids and the unsorted cell', () => {
-  assert.equal(editUnits(UNITS, { op: 'move', id: 'pay', parentId: 'cards' }, 'T'), null);
-  assert.equal(editUnits(UNITS, { op: 'move', id: 'free', parentId: 'cards' }, 'T'), null);
-  assert.equal(editUnits(UNITS, { op: 'move', id: 'free', parentId: 'ghost' }, 'T'), null);
-  assert.equal(editUnits(UNITS, { op: 'move', id: 'unsorted', parentId: 'pay' }, 'T'), null);
-  assert.equal(editUnits(UNITS, { op: 'move', id: 'free' }, 'T'), null, 'parentId must be given, even as null');
-});
 
 test('DELETE /api/conversation/:id removes an archived conversation, only with the token', async () => {
   const root = mkdtempSync(join(tmpdir(), 'sm-del-'));

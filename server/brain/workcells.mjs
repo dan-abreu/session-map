@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { log } from '../log.mjs';
 import { listWorktrees } from '../sources/git.mjs';
-import { UNSORTED, covers, isBroadPath, slash } from './cells.mjs';
 
 const TIMEOUT_MS = 10_000;
 const IDLE_AFTER_MS = 7 * 86_400_000;
@@ -72,35 +71,7 @@ function ownerOf(commits) {
   return { owner, authors: authors.map((a) => a.author) };
 }
 
-// Each file votes for the unit whose path covers it most deeply. Votes through a broad path
-// (apps/backend-api) count only when no file reached a specific one; a tie at the top leaves the branch unsorted.
-export function placeWorkCell(files, units) {
-  const specific = new Map();
-  const broad = new Map();
-  const add = (votes, id, w) => votes.set(id, (votes.get(id) ?? 0) + w);
-  for (const { path } of files) {
-    let best = null;
-    for (const u of units) {
-      for (const p of u.paths ?? []) {
-        const prefix = slash(p).replace(/\/+$/, '');
-        if (!prefix || !covers(path, prefix)) continue;
-        const depth = prefix.split('/').length;
-        if (!best || depth > best.depth) best = { depth, prefix, ids: new Set([u.id]) };
-        else if (depth === best.depth) best.ids.add(u.id);
-      }
-    }
-    if (!best) continue;
-    for (const id of best.ids) add(isBroadPath(best.prefix) ? broad : specific, id, 1);
-  }
-  const votes = specific.size ? specific : broad;
-  const top = Math.max(0, ...votes.values());
-  const leaders = [...votes].filter(([, v]) => v === top).map(([id]) => id);
-  const unitId = leaders.length === 1 ? leaders[0] : UNSORTED;
-  const touched = new Set([...specific.keys(), ...broad.keys()]);
-  return { unitId, touches: units.map((u) => u.id).filter((id) => id !== unitId && touched.has(id)) };
-}
-
-async function cellOf(root, base, branch, units, worktrees, now) {
+async function cellOf(root, base, branch, place, worktrees, now) {
   const format = ['%H', '%an', '%ae', '%aI', '%s'].join(FLD);
   const commits = lines(await git(root, ['log', `--format=${format}`, branch.ref, '--not', base])).map((line) => {
     const [hash, name, email, ts, subject] = line.split(FLD);
@@ -116,7 +87,7 @@ async function cellOf(root, base, branch, units, worktrees, now) {
     remote: branch.remote,
     path: branch.remote ? null : worktrees.get(branch.branch) ?? null,
     ...ownerOf(commits),
-    ...placeWorkCell(files, units),
+    ...place(files),
     ahead: commits.length,
     commits: commits.length,
     files,
@@ -146,8 +117,9 @@ async function mergedAtOf(root, commit, base) {
   return toIso((await git(root, ['log', '-1', '--format=%cI', hash])).trim());
 }
 
+// place(files) -> {partId, touches} hangs a branch on the architecture by the files of its diff.
 // previous: the cells of the last call; one that stopped being ahead comes back once as 'merged' if its head reached the body.
-export async function workCellsOf(root, units, { main, includeRemote = true, previous = [], now = Date.now() } = {}) {
+export async function workCellsOf(root, place, { main, includeRemote = true, previous = [], now = Date.now() } = {}) {
   const base = main ? await baseOf(root, main) : null;
   if (!base) return [];
   const worktrees = new Map((await listWorktrees(root)).filter((t) => t.branch).map((t) => [t.branch, t.path]));
@@ -155,7 +127,7 @@ export async function workCellsOf(root, units, { main, includeRemote = true, pre
   // One branch at a time: three git processes per branch, and a repo can have hundreds of branches.
   const alive = [];
   for (const branch of branches) {
-    const cell = await cellOf(root, base, branch, units, worktrees, now);
+    const cell = await cellOf(root, base, branch, place, worktrees, now);
     if (cell) alive.push(cell);
   }
 

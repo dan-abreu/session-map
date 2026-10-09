@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { readJsonFile, writeAtomic } from '../brain/cells.mjs';
+import { readJsonFile, writeAtomic } from '../store.mjs';
 import { log } from '../log.mjs';
 import { normalizePath } from '../paths.mjs';
 

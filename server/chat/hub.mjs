@@ -6,14 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { cleanEnv, findClaude } from '../ai/runner.mjs';
 import { sameToken } from '../auth.mjs';
-import { readJsonFile, setOverride, writeAtomic } from '../brain/cells.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
-import { readNucleus } from '../brain/nucleus.mjs';
 import { log } from '../log.mjs';
 import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
+import { readJsonFile, writeAtomic } from '../store.mjs';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
 const KEY_RE = /^[0-9a-f]{32}$/;
@@ -145,12 +144,8 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       const known = readPageChats()[chat.sessionId];
       savePageChat(chat.sessionId, {
         projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, updatedAt: now(),
-        ...(known ? {} : { unitId: chat.unitId, workCellId: chat.workCellId, title: chat.title, startedAt: chat.startedAt }),
+        ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, title: chat.title, startedAt: chat.startedAt }),
       });
-      // Opened on a unit, it shows in that unit at once: the page does not wait for the AI to read and place it.
-      if (!known && chat.unitId) {
-        try { setOverride(smDir, chat.projectId, chat.sessionId, chat.unitId); } catch (err) { log('warn', 'page-chat-place-failed', { error: err.message }); }
-      }
       return emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
     }
     if (evt.type === 'turn-end') {
@@ -191,7 +186,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
   }
 
   function find(project, kind, id) {
-    const items = { unit: project.units, workCell: project.workCells, chat: project.chats }[kind] ?? [];
+    const items = { part: project.arch?.parts, workCell: project.workCells, chat: project.chats }[kind] ?? [];
     return items.find((x) => (kind === 'chat' ? x.sessionId : x.id) === id) ?? null;
   }
 
@@ -203,13 +198,13 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     chat.driver.send(prompt);
   }
 
-  // body: {projectId, cellId|unitId?, frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
+  // body: {projectId, partId?, frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
   async function start(body, state) {
     if (!body || typeof body !== 'object') return reply(400, { error: 'bad-request' });
     if (!isText(body.text)) return reply(400, { error: 'bad-text' });
     const project = state.projects.find((p) => p.id === body.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });
-    const unitId = body.cellId ?? body.unitId;
+    const { partId } = body;
     const workCellId = body.frontId ?? body.workCellId;
     for (const id of [body.sessionId, body.parentId]) if (id !== undefined && !(typeof id === 'string' && UUID_RE.test(id))) return reply(400, { error: 'bad-session' });
     if (body.mode !== undefined && pickMode(body.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
@@ -219,7 +214,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     let prompt = body.text;
     let resume = null;
     let saved = null;
-    let place = { unitId: null, workCellId: null, title: body.text.trim().slice(0, TITLE_MAX) };
+    let place = { partId: null, workCellId: null, title: body.text.trim().slice(0, TITLE_MAX) };
     if (body.sessionId) {
       const chat = find(project, 'chat', body.sessionId);
       const page = readPageChats()[body.sessionId];
@@ -242,15 +237,14 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
       if (body.parentId && !mother) return reply(404, { error: 'unknown-session' });
-      const unit = unitId !== undefined ? find(project, 'unit', unitId) : mother && find(project, 'unit', mother.unitId);
-      if (unitId !== undefined && !unit) return reply(404, { error: 'unknown-unit' });
+      const part = partId !== undefined ? find(project, 'part', partId) : mother && find(project, 'part', mother.partId);
+      if (partId !== undefined && !part) return reply(404, { error: 'unknown-part' });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
-      const nucleus = unit ? readNucleus(smDir, project.id, unit.id) ?? unit.nucleus : null;
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
-      prompt = firstPrompt({ unit, nucleus, mother, workCell, text: body.text, board });
+      prompt = firstPrompt({ part, mother, workCell, text: body.text, board });
       cwd = workCell?.path ?? project.root;
-      place = { ...place, unitId: unit?.id ?? null, workCellId: workCell?.id ?? null };
+      place = { ...place, partId: part?.id ?? null, workCellId: workCell?.id ?? null };
     }
     const choice = body.mode ?? saved?.mode ?? 'settings';
     const mode = pickMode(choice, fromSettings);
@@ -289,12 +283,12 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     if (chat.sessionId) savePageChat(chat.sessionId, { mode: choice });
   }
 
-  // The page conversations of a unit (or of a branch), the one used last first, with the key of those still running.
+  // The page conversations of a part (or of a branch), the one used last first, with the key of those still running.
   function listChats(query, state) {
     const project = state.projects.find((p) => p.id === query?.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });
-    const { unitId, workCellId } = query;
-    const belongs = (c) => c.projectId === project.id && (unitId ? c.unitId === unitId : Boolean(workCellId) && c.workCellId === workCellId);
+    const { partId, workCellId } = query;
+    const belongs = (c) => c.projectId === project.id && (partId ? c.partId === partId : Boolean(workCellId) && c.workCellId === workCellId);
     const chats = Object.entries(readPageChats()).filter(([, c]) => belongs(c)).map(([sessionId, c]) => {
       const driven = drivenNow(sessionId);
       return {

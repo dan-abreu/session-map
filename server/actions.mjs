@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
-import { readJsonFile, writeAtomic } from './brain/cells.mjs';
+import { readJsonFile, writeAtomic } from './store.mjs';
 import { safeResolve, vscodeUrl } from './files.mjs';
 import { installFromCatalog } from './sources/catalog.mjs';
 import { killProcess, newTerminal, openUrl, processName as processNameDefault, processStart as processStartDefault } from './launch.mjs';
