@@ -358,3 +358,13 @@ test('placeWorkCell: only broad matches still place the branch, and nothing matc
   assert.equal(placeWorkCell(files('apps/backend-api/package.json', 'apps/backend-api/src/x.ts'), DEEP_UNITS).unitId, 'comms');
   assert.deepEqual(placeWorkCell(files('README.md'), DEEP_UNITS), { unitId: 'unsorted', touches: [] });
 });
+
+test('placeWorkCell: an app\'s own src folder is as broad as the app itself', () => {
+  const units = [
+    { id: 'comms', paths: ['apps/backend-api/src'] },
+    { id: 'providers', paths: ['apps/backend-api/src/routes/admin'] },
+    { id: 'unsorted', paths: [] },
+  ];
+  const many = Array.from({ length: 20 }, (_, i) => `apps/backend-api/src/services/s${i}.ts`);
+  assert.equal(placeWorkCell(files(...many, 'apps/backend-api/src/routes/admin/a.ts'), units).unitId, 'providers');
+});
