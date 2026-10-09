@@ -114,6 +114,10 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Review mode: one idea at a time with Keep, Later and Discard; filters by status, date, part and "no destination yet"; each idea links to the item it went to and that item's chats.
   - The watcher marks an idea done when its destination item is ticked and its check passes, showing the proof (commit, test, release); an idea untouched for a while (accepted with no movement, later past its date) gets a reminder in "Waiting for you".
   - How to confirm it is done: the tab lists every item of the part with its status; Discard without a reason is refused; ticking a destination item with a passing check turns its idea done with a link to the proof; an idea accepted 14 days ago with no movement shows a reminder.
+- [ ] **important:** Live Changes tab: every file created, edited, deleted or renamed, with its diff `mm30`
+  - From the steps in every conversation (helpers and workflows included) and the working tree: who, where (project › part › file), lines added and removed, before/after, saved → committed → released; the box lights up; deleted files keep their previous content; filters and a daily timeline.
+- [ ] **important:** Workflows you can trace: from the request to every agent and the places it touches `mm31`
+  - Tree request → workflow → agents → live footprint; one colour per workflow and a dot per active agent on its box, several projects at once; trace both ways between a request and its files, commits and release.
 
 ### Released before the backlog moved into the parts
 

@@ -448,3 +448,21 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: see `mm27`.
   - Where it went: `mm27`.
   - Status: accepted.
+- [ ] The map is built from the code files, not from the markdown docs `id67`
+  - Asked: 2026-10-09 16:45 — "percebi que ta pegando so os arquivos md para editar, mas não é isso, é os arquivos com codigos"
+  - What it means: the model comes from the code files (census, extractors, import graph); the architecture markdown becomes an output generated and checked against the code, with file:line evidence.
+  - How to confirm it is done: every box lists the code files it owns; a doc sentence without evidence in the code is flagged; see `fd12`.
+  - Where it went: `fd12`.
+  - Status: accepted.
+- [ ] See where the work is happening: what is being created, edited and deleted `id68`
+  - Asked: 2026-10-09 16:46 — "quero ver onde eles estão mexendo o que estão criando, o que estão apagando, quero isso, saber tudo mesmo do programa"
+  - What it means: a live Changes tab with every file touched (created, edited, deleted, renamed), who touched it, where in the map, lines added and removed, the before/after diff, and whether it is saved, committed or released.
+  - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content; see `mm30`.
+  - Where it went: `mm30`.
+  - Status: accepted.
+- [ ] See where each workflow is working and which request started it, several places at once `id69`
+  - Asked: 2026-10-09 16:47 — "quero ver onde os workflow estão trabalhando onde pedi, porque sei que pode ser em varios locais ao mesmo tempo"
+  - What it means: a tree request → workflow → agents → live footprint, one colour per workflow with a dot per active agent on the boxes it touches (several projects at once), and tracing both ways between a request and the files, commits and release it produced.
+  - How to confirm it is done: with a workflow running, every active agent shows as a dot on the right box with its last step, and clicking a changed file shows the request that caused it; see `mm31`.
+  - Where it went: `mm31`.
+  - Status: accepted.

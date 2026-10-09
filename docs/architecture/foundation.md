@@ -89,3 +89,5 @@ Not built yet; until it is, the part lives in its own file:
 - [ ] Redo the maps of the owner's projects with the foundation, measure, then test with outside people `fd11`
   - Redo the architecture of session-map and of the owner's projects with the census and the extractors and measure the coverage; only then start the orchestration chat (`or01`); then a test with two or three people from outside. Includes the redo offered in `bi06`.
   - How to confirm it is done: each redone map shows its coverage numbers (files with an owner, routes, screens and tables documented) next to the old map's, and the notes of the outside test are written down.
+- [ ] **blocks:** The code is the source of truth; the architecture markdown is an output `fd12`
+  - The model is built from the code files (census, extractors, import graph); boxes are made of code files; the markdown is generated and checked against the code with file:line evidence, and the watcher flags any mismatch. First step of the foundation.
