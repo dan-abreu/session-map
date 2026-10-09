@@ -1,6 +1,6 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
-  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, liveNodes, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial,
+  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, liveNodes, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -162,10 +162,13 @@ function ownerChip(person) {
 // ---- the boxes ---------------------------------------------------------------------
 
 function countText(c) {
-  return c.total ? t('box.done', { done: c.done, total: c.total }) : t('box.empty');
+  const label = countLabel(c, listsDone(tree));
+  if (label.kind === 'open') return t.count('box.open', label.open);
+  return label.kind === 'done' ? t('box.done', label) : t('box.empty');
 }
 
 function progress(c) {
+  if (!listsDone(tree)) return null;
   const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
   return h('span', { class: 'bx-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` }));
 }
@@ -312,7 +315,7 @@ function renderSummary() {
   const parts = [h('button', { type: 'button', class: 'summary-project', title: t('project.open'), onclick: () => select({ type: 'project' }) }, project.name)];
   if (hasMap()) {
     parts.push(h('span', {}, t.count('summary.parts', project.arch.parts.length)));
-    parts.push(h('span', { class: 'num' }, t('summary.done', { done: tree.counts.done, total: tree.counts.total })));
+    parts.push(h('span', { class: 'num' }, listsDone(tree) ? t('summary.done', { done: tree.counts.done, total: tree.counts.total }) : t.count('summary.open', tree.counts.total)));
   }
   const busy = shown.chats.filter((c) => c.status === 'busy').length;
   if (busy) parts.push(h('span', { class: 'tone-active' }, t('summary.working', { n: busy })));

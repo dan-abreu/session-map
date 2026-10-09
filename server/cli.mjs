@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 import { collect } from './collect.mjs';
 import { claudeDir } from './sources/claude.mjs';
 import { pickLang, translator } from './web/i18n.js';
-import { archTree } from './web/tree.js';
+import { archTree, listsDone } from './web/tree.js';
 import { waitingEntries } from './web/views.js';
 
 const WATCH_MS = 5000;
@@ -39,8 +39,8 @@ function partMark(project, node) {
   return node.counts.total && node.counts.done === node.counts.total ? '✓' : '○';
 }
 
-const countWords = (counts, t) => [
-  t('cli.done', { done: counts.done, total: counts.total }),
+const countWords = (counts, t, ticks) => [
+  ticks ? t('cli.done', { done: counts.done, total: counts.total }) : t('cli.open', { n: counts.total }),
   counts.withUser ? t('cli.withYou', { n: counts.withUser }) : null,
   counts.blocks ? t('cli.blocking', { n: counts.blocks }) : null,
 ];
@@ -49,13 +49,14 @@ function archLines(project, t, money) {
   const shown = project.chats.filter((c) => !c.archived);
   const root = archTree(project);
   if (!root.children.length) return [[t('cli.noArch'), shown.length ? t.count('label.chats', shown.length) : null].filter(Boolean).join(' · ')];
+  const ticks = listsDone(root);
   const lines = [];
   for (const layer of root.children) {
-    lines.push(`${layer.label}  ${countWords(layer.counts, t).filter(Boolean).join(' · ')}`);
+    lines.push(`${layer.label}  ${countWords(layer.counts, t, ticks).filter(Boolean).join(' · ')}`);
     for (const part of layer.children) {
       const chats = shown.filter((c) => c.partId === part.partId);
       const cost = chats.reduce((sum, c) => sum + c.costUSD, 0);
-      const meta = [...countWords(part.counts, t), chats.length ? t.count('label.chats', chats.length) : null, cost > 0 ? money(cost) : null].filter(Boolean).join(' · ');
+      const meta = [...countWords(part.counts, t, ticks), chats.length ? t.count('label.chats', chats.length) : null, cost > 0 ? money(cost) : null].filter(Boolean).join(' · ');
       lines.push(`  ${partMark(project, part)} ${part.label}  ${meta}`);
       for (const w of project.workCells.filter((x) => x.partId === part.partId && x.status !== 'merged')) {
         const branchMark = w.clashWith.length ? '!' : w.status === 'active' ? '●' : '○';

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, liveNodes, branchMarks, clashMarks, changedNodes,
-  boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder,
+  boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder, countLabel, listsDone,
 } from '../server/web/tree.js';
 
 const item = (code, title, extra = {}) => ({ code, title, detail: [], status: 'todo', who: null, weight: null, milestone: null, line: 10, ...extra });
@@ -152,4 +152,16 @@ test('ownerHue, initial and filesByFolder keep working for the panels', () => {
   assert.equal(initial('  ana'), 'A');
   assert.equal(initial(''), '?');
   assert.deepEqual(filesByFolder([{ path: 'b/z.ts' }, { path: 'a.md' }, { path: 'b/a.ts' }]).map((g) => [g.folder, g.files.map((f) => f.name)]), [['', ['a.md']], ['b', ['a.ts', 'z.ts']]]);
+});
+
+test('countLabel reads "N open" everywhere when the map lists no done items, and "done of total" when it does', () => {
+  const openOnly = { total: 212, done: 0, doing: 3, withUser: 20, blocks: 4 };
+  assert.deepEqual(countLabel(openOnly, false), { kind: 'open', open: 212 });
+  assert.deepEqual(countLabel({ total: 5, done: 0, doing: 0, withUser: 0, blocks: 0 }, true), { kind: 'done', done: 0, total: 5 }, 'a map that ticks items keeps 0/5 on a box with none done yet');
+  assert.deepEqual(countLabel({ total: 5, done: 2, doing: 0, withUser: 0, blocks: 0 }, true), { kind: 'done', done: 2, total: 5 });
+  assert.deepEqual(countLabel({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0 }, false), { kind: 'empty' });
+  assert.equal(listsDone(archTree(project())), true);
+  const p = project();
+  for (const part of p.arch.parts) for (const g of part.groups) for (const i of g.items) i.status = 'todo';
+  assert.equal(listsDone(archTree(p)), false);
 });

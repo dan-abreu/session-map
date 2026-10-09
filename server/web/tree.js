@@ -237,3 +237,12 @@ export function filesByFolder(files) {
   return [...groups].sort(([a], [b]) => a.localeCompare(b))
     .map(([folder, list]) => ({ folder, files: list.sort((a, b) => a.name.localeCompare(b.name)) }));
 }
+
+// A map whose files keep only the open work (done items are deleted, not ticked) would read "0 of 212 done" everywhere:
+// it reads "212 open" instead, at every level.
+export const listsDone = (root) => root.counts.done > 0;
+
+export function countLabel(counts, ticks) {
+  if (!counts.total) return { kind: 'empty' };
+  return ticks ? { kind: 'done', done: counts.done, total: counts.total } : { kind: 'open', open: counts.total - counts.done };
+}
