@@ -59,7 +59,7 @@ async function perceiveChat(life, p, item, workCell, uncapped) {
   const { sessionId } = item.summary;
   const digest = digestOf(item.summary, workCell);
   let answer = null;
-  const ask = async (req) => (answer = await life.queue.ask({ ...req, uncapped }));
+  const ask = async (req) => (answer = await life.queue.ask({ ...req, uncapped, projectId: p.projectId }));
   const perception = await perceive(digest, unitsNow(p.smDir, p.projectId), ask);
   if (answer?.error === 'rate-limited') return null;
   life.perceived.set(sessionId, hashOf(digest));
@@ -70,7 +70,7 @@ async function perceiveChat(life, p, item, workCell, uncapped) {
 }
 
 async function consolidateProject(life, p, uncapped) {
-  const ask = (req) => life.queue.ask({ ...req, uncapped });
+  const ask = (req) => life.queue.ask({ ...req, uncapped, projectId: p.projectId });
   const changes = await consolidate(unitsNow(p.smDir, p.projectId), readEvents(p.smDir, p.projectId), ask);
   const before = unitsNow(p.smDir, p.projectId);
   const { units, events } = applyChanges(before, changes, new Date().toISOString());
@@ -124,7 +124,7 @@ export function aiStatus(life, projectId) {
   const boot = life.boot.get(projectId);
   const perCall = boot?.paid ? boot.costUSD / boot.paid : PERCEPTION_USD_GUESS;
   return {
-    ...life.queue.status(),
+    ...life.queue.status(projectId),
     bootstrap: boot ? { done: boot.done, total: boot.total, estimatedUSD: round6(boot.total * perCall) } : null,
   };
 }

@@ -180,7 +180,7 @@ export class AiQueue {
     return hit ? { ok: true, value: hit.value, costUSD: 0, cached: true } : null;
   }
 
-  async #call(hash, prompt, schemaHint, uncapped) {
+  async #call(hash, prompt, schemaHint, uncapped, projectId) {
     const hit = this.#cached(hash);
     if (hit) return hit;
     const now = this.#now();
@@ -191,28 +191,35 @@ export class AiQueue {
     }
     const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
     const day = localDay(now);
-    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0 };
-    this.#state.spent.usd += res.costUSD ?? 0;
+    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0, byProject: {} };
+    const spent = this.#state.spent;
+    spent.usd += res.costUSD ?? 0;
+    if (projectId) {
+      spent.byProject ??= {};
+      spent.byProject[projectId] = (spent.byProject[projectId] ?? 0) + (res.costUSD ?? 0);
+    }
     if (res.ok) this.#state.cache[hash] = { value: res.value, at: now };
     this.#save();
     return res;
   }
 
   // uncapped: the one-time bootstrap of a new project, which the hourly cap would stretch over hours.
-  ask({ key, prompt, schemaHint, uncapped = false }) {
+  ask({ key, prompt, schemaHint, uncapped = false, projectId = null }) {
     if (!this.enabled) return Promise.resolve({ ok: false, error: 'ai-off' });
     const hash = hashOf(key);
     const hit = this.#cached(hash);
     if (hit) return Promise.resolve(hit);
     this.#pending++;
-    const job = this.#tail.then(() => this.#call(hash, prompt, schemaHint, uncapped)).finally(() => { this.#pending--; });
+    const job = this.#tail.then(() => this.#call(hash, prompt, schemaHint, uncapped, projectId)).finally(() => { this.#pending--; });
     this.#tail = job.catch(() => {});
     return job;
   }
 
-  status() {
-    const { day, usd } = this.#state.spent;
-    const spentUSDToday = day === localDay(this.#now()) ? Math.round(usd * 1e6) / 1e6 : 0;
+  // With a projectId, what the map spent on that project only; the page adds the projects up.
+  status(projectId) {
+    const { day, usd, byProject } = this.#state.spent;
+    const amount = projectId === undefined ? usd : byProject?.[projectId] ?? 0;
+    const spentUSDToday = day === localDay(this.#now()) ? Math.round(amount * 1e6) / 1e6 : 0;
     return { enabled: this.enabled, model: this.model, spentUSDToday, queue: this.#pending };
   }
 }

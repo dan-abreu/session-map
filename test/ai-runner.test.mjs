@@ -205,3 +205,19 @@ test('AiQueue is off without claude or with ai.enabled false, and never calls it
     assert.equal(missing.status().enabled, false);
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
+
+test('AiQueue keeps today\'s spend per project as well as in total, also after a restart', async () => {
+  const smDir = tmp();
+  try {
+    const { run } = fakeRun([{ ok: true, value: {}, costUSD: 0.01 }, { ok: true, value: {}, costUSD: 0.02 }, { ok: true, value: {}, costUSD: 0.04 }]);
+    const q = new AiQueue({ smDir, bin: 'claude', run, now: () => NOON });
+    await q.ask({ key: 'a', prompt: 'p', projectId: 'shop' });
+    await q.ask({ key: 'b', prompt: 'p', projectId: 'blog' });
+    await q.ask({ key: 'c', prompt: 'p', projectId: 'shop' });
+    assert.equal(q.status('shop').spentUSDToday, 0.05);
+    assert.equal(q.status('blog').spentUSDToday, 0.02);
+    assert.equal(q.status('none').spentUSDToday, 0);
+    assert.equal(q.status().spentUSDToday, 0.07);
+    assert.equal(new AiQueue({ smDir, bin: 'claude', run, now: () => NOON }).status('shop').spentUSDToday, 0.05);
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
