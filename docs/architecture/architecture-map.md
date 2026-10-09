@@ -4,7 +4,7 @@ The convention that makes a project's architecture a folder of plain markdown: a
 
 ## How it works
 
-`detectArch` picks the folder (`docs/arquitetura`, `docs/architecture` or `docs/arch`, or the one in the config), from the working tree or, failing that, from the main branch. `parseArch` turns the files into layers, parts, groups and items, in Portuguese or English. `attach` hangs chats and branches on the parts. New items, progress marks and ticks come from the chats, which follow the rule that goes with every chat opened on the map and the `architecture` skill.
+`detectArch` picks the folder (`docs/arquitetura`, `docs/architecture` or `docs/arch`, or the one in the config), from the working tree or, failing that, from the main branch (`origin/main` when the local one is behind it). `parseArch` turns the files into layers, parts, groups and items, in Portuguese or English. `attach` hangs chats and branches on the parts. New items, progress marks and ticks come from the chats, which follow the rule that goes with every chat opened on the map and the `architecture` skill.
 
 ## Where in the code
 

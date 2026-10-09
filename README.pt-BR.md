@@ -33,7 +33,7 @@ Os prints vêm do `--demo`, que usa dados inventados (a tela fica em inglês por
 
 ## Mapa de arquitetura
 
-O mapa lê markdown puro, então funciona com ou sem o Claude, e o seu time lê no GitHub. Onde ele procura: a pasta da configuração `architecture`, senão a primeira que existir entre `docs/arquitetura`, `docs/architecture`, `docs/arch` (primeiro a árvore de trabalho, depois o ramo principal).
+O mapa lê markdown puro, então funciona com ou sem o Claude, e o seu time lê no GitHub. Onde ele procura: a pasta da configuração `architecture`, senão a primeira que existir entre `docs/arquitetura`, `docs/architecture`, `docs/arch` (primeiro a árvore de trabalho, depois o ramo principal, lido do `origin/main` quando o `main` local está atrás dele).
 
 - `README.md` da pasta: as camadas, num bloco mermaid com `subgraph` ou em títulos `##` que listam as partes.
 - Um arquivo por parte: título, parágrafo de abertura, "Onde está no código" (caminhos entre crases, que penduram conversas e ramos na parte) e **O que falta**, a lista de tarefas:

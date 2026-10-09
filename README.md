@@ -33,7 +33,7 @@ The screenshots come from `--demo`, which uses invented data.
 
 ## Architecture map
 
-The map reads plain markdown, so it works with or without Claude, and your teammates can read it on GitHub. Where it looks: the folder set in the config `architecture`, else the first that exists of `docs/arquitetura`, `docs/architecture`, `docs/arch` (the working tree first, then the main branch).
+The map reads plain markdown, so it works with or without Claude, and your teammates can read it on GitHub. Where it looks: the folder set in the config `architecture`, else the first that exists of `docs/arquitetura`, `docs/architecture`, `docs/arch` (the working tree first, then the main branch, read from `origin/main` when the local `main` is behind it).
 
 - `README.md` of the folder: the layers, as a mermaid `subgraph` block or as `##` headings listing the parts.
 - One file per part: a title, an opening paragraph, "Where in the code" (paths in backticks, which hang chats and branches on the part), and **What's missing**, the checklist:
