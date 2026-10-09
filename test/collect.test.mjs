@@ -226,6 +226,7 @@ test('a project without units.json bootstraps once: perceives recent chats outsi
     writeChat(dir, { id: C, cwd: root, title: 'Too old for bootstrap', prompts: ['old'], endedAgo: 3 * HOUR });
     const prompts = [];
     const run = async (prompt) => {
+      if (prompt.startsWith('You keep the short memory')) return { ok: true, value: { units: [] }, costUSD: 0.001 };
       prompts.push(prompt);
       if (prompt.startsWith('You keep the map')) return { ok: true, value: { changes: [] }, costUSD: 0.002 };
       return { ok: true, value: { unitId: null, name: 'Garden care', purpose: 'Keep plants alive', tags: ['garden'] }, costUSD: 0.002 };
@@ -447,6 +448,7 @@ test('a restart remembers what the AI already perceived: unchanged chats cost no
     const run = async (prompt) => {
       calls++;
       if (prompt.startsWith('You keep the map')) return { ok: true, value: { changes: [] }, costUSD: 0.001 };
+      if (prompt.startsWith('You keep the short memory')) return { ok: true, value: { units: [{ id: 'farm-work', state: 'mending', decided: [], todo: [] }] }, costUSD: 0.001 };
       return { ok: true, value: { unitId: null, name: 'Farm work', purpose: '', tags: [] }, costUSD: 0.001 };
     };
     const ai = { bin: 'fake-claude', run };
@@ -463,6 +465,47 @@ test('a restart remembers what the AI already perceived: unchanged chats cost no
     await settleAi(smDir);
     assert.equal(calls, 0, 'nothing changed, so nothing is asked again');
     assert.equal(again.projects[0].chats.find((c) => c.sessionId === A).unitId, 'farm-work');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});
+
+test('units without a card get a nucleus written by the AI from their chats; a card still wins', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'bakery'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    writeChat(dir, { id: A, cwd: root, title: 'Sourdough starter', prompts: ['feed the starter'] });
+    writeChat(dir, { id: B, cwd: root, title: 'Croissant layers', prompts: ['laminate the dough'], endedAgo: 2 * HOUR, card: { area: 'Pastry', doing: 'Folding butter', todo: ['bake'] } });
+    const nucleusAsks = [];
+    const run = async (prompt) => {
+      if (prompt.startsWith('You keep the map')) return { ok: true, value: { changes: [] }, costUSD: 0.001 };
+      if (prompt.startsWith('You keep the short memory')) {
+        nucleusAsks.push(prompt);
+        const ids = [...prompt.matchAll(/"id": "([^"]+)"/g)].map((m) => m[1]);
+        return { ok: true, value: { units: ids.map((id) => ({ id, state: `AI says ${id} is rising`, decided: ['rye flour'], todo: ['bake at dawn'] })) }, costUSD: 0.001 };
+      }
+      return { ok: true, value: { unitId: null, name: prompt.includes('Sourdough') ? 'Bread' : 'Pastry', purpose: '', tags: [] }, costUSD: 0.001 };
+    };
+    const ai = { bin: 'fake-claude', run };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    assert.equal(nucleusAsks.length, 1, 'the bootstrap writes the nuclei once, in one batch');
+    assert.match(nucleusAsks[0], /feed the starter/);
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    const p = state.projects[0];
+    const bread = p.units.find((u) => u.name === 'Bread');
+    assert.equal(bread.nucleus.state, 'AI says bread is rising');
+    assert.deepEqual(bread.nucleus.todo, ['bake at dawn']);
+    assert.equal(bread.nucleus.source, 'ai');
+    const pastry = p.units.find((u) => u.id === p.chats.find((c) => c.sessionId === B).unitId);
+    assert.equal(pastry.nucleus.state, 'Folding butter', 'the card wins');
+    assert.equal(pastry.nucleus.source, 'card');
+    assert.equal(nucleusAsks.length, 1, 'nothing changed, nothing asked again');
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(smDir, { recursive: true, force: true });

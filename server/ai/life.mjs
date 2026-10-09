@@ -5,6 +5,7 @@ import { appendEvents, readEvents } from '../brain/events.mjs';
 import { log } from '../log.mjs';
 import { applyChanges, consolidate, shouldConsolidate } from './consolidate.mjs';
 import { digestOf } from './digest.mjs';
+import { writeAiNuclei } from './nucleus.mjs';
 import { applyPerception, normalizeUnit, perceive } from './perceive.mjs';
 import { AiQueue } from './runner.mjs';
 
@@ -27,7 +28,7 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     ...('bin' in ai ? { bin: ai.bin } : {}),
     ...(ai.run ? { run: ai.run } : {}),
   });
-  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map(), consolidating: new Set() };
+  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map(), consolidating: new Set(), writingNuclei: new Set() };
   lives.set(smDir, life);
   return life;
 }
@@ -114,6 +115,30 @@ async function consolidateProject(life, p, uncapped) {
   }
 }
 
+export const aiNucleusFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'ai-nucleus.json');
+
+// p.nucleusInputs() builds, from the units as they are on disk now, what the AI reads for each nucleus.
+async function writeNuclei(life, p, uncapped) {
+  if (life.writingNuclei.has(p.projectId)) return;
+  life.writingNuclei.add(p.projectId);
+  try {
+    const file = aiNucleusFile(p.smDir, p.projectId);
+    const stored = readJsonFile(file, {});
+    const before = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    const ask = (req) => life.queue.ask({ ...req, uncapped, projectId: p.projectId });
+    const after = await writeAiNuclei(p.nucleusInputs(), before, ask);
+    if (JSON.stringify(after) !== JSON.stringify(before)) writeAtomic(file, JSON.stringify(after));
+  } finally {
+    life.writingNuclei.delete(p.projectId);
+  }
+}
+
+// Waits while perceptions are queued: they move chats between units, and the nucleus would be written twice.
+export function refreshNuclei(life, p) {
+  if (life.queue.status().queue > 0 || life.writingNuclei.has(p.projectId)) return;
+  track(life, writeNuclei(life, p, false));
+}
+
 // A new project: the most recent conversations are perceived right away, outside the hourly cap, then tidied once.
 export function startBootstrap(life, p, items) {
   const recent = [...items].sort((a, b) => b.ref.mtimeMs - a.ref.mtimeMs).slice(0, life.bootstrapLimit);
@@ -131,6 +156,7 @@ export function startBootstrap(life, p, items) {
       }
     }
     if (recent.length) await consolidateProject(life, p, true);
+    await writeNuclei(life, p, true);
   })());
 }
 

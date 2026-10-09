@@ -2,13 +2,15 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { aiStatus, lifeOf, perceiveChanged, startBootstrap, unitsFile } from './ai/life.mjs';
+import { digestOf } from './ai/digest.mjs';
+import { aiNucleusFile, aiStatus, lifeOf, perceiveChanged, refreshNuclei, startBootstrap, unitsFile } from './ai/life.mjs';
+import { nucleusInputOf } from './ai/nucleus.mjs';
 import { normalizeUnit } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy } from './brain/cells.mjs';
+import { UNSORTED, brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy } from './brain/cells.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
 import { linkUnits, parentOf, readLineage, specRefsOf } from './brain/lineage.mjs';
-import { emptyNucleus, mergeNucleus, readNucleus, seedNucleus, writeNucleus } from './brain/nucleus.mjs';
+import { emptyNucleus, mergeNucleus, readNucleus, seedNucleus, withAiNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, loadPrices, windowed } from './cost.mjs';
@@ -155,16 +157,17 @@ function placeInWorkCell(summary, card, workCells) {
 // ---- nucleus -------------------------------------------------------------------
 
 // Cards newer than the nucleus file are merged in once; edits made on the page after that stay.
-function nucleusOf(smDir, projectId, unit, cardItems, hints) {
+// Without a card or a page edit, the AI's nucleus (written in the background) stands in.
+function nucleusOf(smDir, projectId, unit, cardItems, hints, ai) {
   try {
     const file = join(brainDir(smDir, projectId), `${unit.id}.md`);
-    const stored = readNucleus(smDir, projectId, unit.id);
+    let stored = readNucleus(smDir, projectId, unit.id);
     const since = stored && existsSync(file) ? statSync(file).mtimeMs : -Infinity;
     const fresh = cardItems.filter((c) => Date.parse(c.updatedAt) > since).sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt));
-    let nucleus = stored ?? seedNucleus(unit, hints);
-    for (const c of fresh) nucleus = mergeNucleus(nucleus, c.card, c);
-    if (fresh.length) writeNucleus(smDir, projectId, unit.id, nucleus);
-    return nucleus;
+    const seed = seedNucleus(unit, hints);
+    for (const c of fresh) stored = mergeNucleus(stored ?? seed, c.card, c);
+    if (fresh.length) writeNucleus(smDir, projectId, unit.id, stored);
+    return withAiNucleus(stored, seed, ai);
   } catch (err) {
     log('warn', 'nucleus-failed', { projectId, unitId: unit.id, error: err.message });
     return emptyNucleus();
@@ -313,12 +316,13 @@ async function buildProject(ctx, { root, items }) {
   const hints = { openspec, milestones: roadmap?.milestones ?? [] };
   const own = new Map();
   const nuclei = new Map();
+  const aiNuclei = readJsonFile(aiNucleusFile(smDir, projectId), {}) ?? {};
   for (const u of units) {
     const cardItems = placed.filter((x) => x.unitId === u.id && x.item.card).map((x) => ({
       card: x.item.card, sessionId: x.item.summary.sessionId, updatedAt: x.updatedAt, title: x.item.summary.title,
       lastAssistantText: x.item.summary.lastAssistantText, lastPrompt: x.item.summary.lastPrompt,
     }));
-    const nucleus = nucleusOf(smDir, projectId, u, cardItems, hints);
+    const nucleus = nucleusOf(smDir, projectId, u, cardItems, hints, aiNuclei[u.id] ?? null);
     nuclei.set(u.id, nucleus);
     own.set(u.id, {
       chats: placed.filter((x) => x.unitId === u.id).length,
@@ -352,11 +356,28 @@ async function buildProject(ctx, { root, items }) {
 
   const aiOn = life.queue.enabled && config.ai?.enabled !== false;
   if (aiOn) {
-    const p = { smDir, projectId, workCellOf: (item) => workCells.find((w) => w.id === placed.find((x) => x.item === item)?.workCellId) ?? null };
+    const workCellOf = (item) => workCells.find((w) => w.id === placed.find((x) => x.item === item)?.workCellId) ?? null;
+    // Placed again from units.json as it is when asked: the bootstrap changes it after this collect started.
+    const nucleusInputs = () => {
+      const current = readJsonFile(unitsFile(smDir, projectId), []).map(normalizeUnit);
+      const hasFile = (u) => existsSync(join(brainDir(smDir, projectId), `${u.id}.md`));
+      const where = new Map(items.map((item) => [item, placeInUnit(item, current, overrides, root).unitId]));
+      return current.filter((u) => u.id !== UNSORTED && !hasFile(u)).flatMap((u) => {
+        const chats = items.filter((item) => where.get(item) === u.id).map((item) => ({
+          updatedAt: item.summary.endedAt ?? new Date(item.ref.mtimeMs).toISOString(),
+          digest: digestOf(item.summary, workCellOf(item)),
+          last: item.summary.lastAssistantText,
+        }));
+        const branches = workCells.filter((w) => w.unitId === u.id && w.status !== 'merged');
+        return chats.length || branches.length ? [nucleusInputOf(u, chats, branches)] : [];
+      });
+    };
+    const p = { smDir, projectId, workCellOf, nucleusInputs };
     if (isNew) startBootstrap(life, p, items);
     const boot = life.boot.get(projectId);
     if (!boot || boot.done >= boot.total) {
       perceiveChanged(life, p, placed.filter((x) => x.shown && !archived.has(x.item.summary.sessionId) && x.unitSource !== 'override' && x.unitSource !== 'card').map((x) => x.item));
+      if (!isNew) refreshNuclei(life, p);
     }
   }
 

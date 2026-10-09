@@ -90,6 +90,16 @@ export function writeNucleus(smDir, projectId, unitId, nucleus) {
   writeAtomic(pathOf(smDir, projectId, unitId), renderNucleus(nucleus));
 }
 
+// A nucleus from a card or from the page (stored) wins; without one the AI's reading of the chats fills it, and
+// only then the seed from OpenSpec and the roadmap. source tells the page who wrote it.
+export function withAiNucleus(stored, seed, ai) {
+  if (stored) return { ...stored, source: 'card' };
+  if (ai && (ai.state || ai.decided.length || ai.todo.length)) {
+    return { ...seed, state: ai.state, decided: [...ai.decided], todo: [...ai.todo], source: 'ai' };
+  }
+  return { ...seed, source: null };
+}
+
 // Starting point when a unit has no file yet: the open work OpenSpec and the roadmap already name after it.
 export function seedNucleus(unit, { openspec = [], milestones = [] } = {}) {
   const terms = [unit.id, unit.name].map(plain).filter((t) => t.length >= SEED_TERM_MIN);
