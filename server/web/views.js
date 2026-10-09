@@ -224,3 +224,9 @@ export function pcModeOffer(choice, current) {
   const mode = PC_MODES.has(choice) ? choice : null;
   return { mode, same: Boolean(mode) && mode === current };
 }
+
+// The chat input (mm08): one line when empty, growing with the text up to about 40% of the panel, then it scrolls.
+export function composerSize({ scrollHeight, paneHeight, minHeight }) {
+  const max = Math.max(minHeight, Math.round(paneHeight * 0.4));
+  return { height: Math.max(minHeight, Math.min(scrollHeight, max)), scroll: scrollHeight > max };
+}

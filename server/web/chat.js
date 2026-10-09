@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { foldReply } from './chatfold.js';
 import { modelName } from './live.js';
 import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } from './transcript.js';
-import { chatLog, chatState, pcModeOffer, runWords } from './views.js';
+import { chatLog, chatState, composerSize, pcModeOffer, runWords } from './views.js';
 import { signalCard } from './blocks.js';
 import { errorSignal } from './signals.js';
 
@@ -70,6 +70,7 @@ export function createChat({
   const fileEl = q('filepick');
   const pendingEl = q('pending');
   const suggestEl = q('suggest');
+  const modeNameEl = q('modename');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
   const uid = root.id || 'chat';
   let context = null;
@@ -419,10 +420,19 @@ export function createChat({
 
   const modeName = (mode) => t()(`chat.modeName.${mode}`);
 
+  // One line when empty, growing with the text up to about 40% of the panel, then it scrolls (mm08).
+  function fitInput() {
+    input.style.height = 'auto';
+    const { height, scroll } = composerSize({ scrollHeight: input.scrollHeight + 2, paneHeight: root.clientHeight, minHeight: 38 });
+    input.style.height = `${height}px`;
+    input.classList.toggle('is-scrolling', scroll);
+  }
+
   function renderMode() {
     const tt = t();
     modeEl.replaceChildren(...MODES.map((m) => h('option', { value: m }, m === 'settings' ? tt('chat.mode.settings', { mode: modeName(settings?.mode ?? 'default') }) : modeName(m))));
     modeEl.value = choice;
+    if (modeNameEl) modeNameEl.textContent = modeEl.selectedOptions?.[0]?.textContent ?? '';
     const offer = pcModeOffer(choice, null);
     pcBtn.disabled = !offer.mode;
     pcBtn.title = offer.mode ? tt('pcmode.hint') : tt('pcmode.pickFirst');
@@ -672,6 +682,7 @@ export function createChat({
     const word = suggest.kind === 'file' ? `@${option.value} ` : `${option.value} `;
     const caret = suggest.start + word.length;
     input.value = input.value.slice(0, suggest.start) + word + input.value.slice(suggest.end);
+    fitInput();
     input.setSelectionRange?.(caret, caret);
     return closeSuggest();
   }
@@ -809,6 +820,7 @@ export function createChat({
     const text = input.value.trim();
     if (!text || sendBtn.disabled) return;
     input.value = '';
+    fitInput();
     send(text);
   });
   // Claude Code's keys: Enter sends, Shift+Enter is a new line, Esc stops a reply, the arrow up on an empty box brings back
@@ -832,7 +844,7 @@ export function createChat({
     }
     if (e.key === 'ArrowUp' && !input.value) {
       const last = log?.items.findLast((i) => i.type === 'user' && !i.auto);
-      if (last) { e.preventDefault(); input.value = last.text; }
+      if (last) { e.preventDefault(); input.value = last.text; fitInput(); }
       return;
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -841,6 +853,7 @@ export function createChat({
     }
   });
   input.addEventListener('input', onType);
+  input.addEventListener('input', fitInput);
   input.addEventListener('blur', () => setTimeout(closeSuggest, 150));
   input.addEventListener('paste', (e) => {
     const files = [...(e.clipboardData?.items ?? [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile());
@@ -904,6 +917,7 @@ export function createChat({
     input.placeholder = t()('chat.placeholder');
     input.value = ctx.draft ?? '';
     root.hidden = false;
+    fitInput();
     buildFind();
     renderPending();
     renderMode();

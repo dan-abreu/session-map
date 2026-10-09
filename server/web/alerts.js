@@ -264,7 +264,7 @@ export function createAlerts(ctx) {
       ctx.toast(res.ok ? tt('notify.testSent') : ctx.errorText(res.error));
     };
     dialog.replaceChildren(...[
-      h('h2', { id: 'alertsTitle' }, tt('notify.title')),
+      h('h2', { id: 'alertsTitle', 'data-help': 'alerts' }, tt('notify.title')),
       h('p', { class: 'al-lede' }, tt('notify.lede')),
       canEdit ? null : h('p', { class: 'dv-warning' }, tt('notify.needKey')),
       h('section', { class: 'al-section', 'aria-labelledby': 'alHow' },

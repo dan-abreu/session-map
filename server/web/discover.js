@@ -1,3 +1,5 @@
+import { emptyState } from './empty.js';
+
 const TYPES = ['skill', 'plugin', 'marketplace', 'mcp', 'agent', 'hook'];
 const CATEGORIES = ['design', 'security', 'testing', 'code', 'writing', 'data', 'devops', 'product', 'marketing', 'media', 'workflow', 'education', 'ai', 'other'];
 const SORTS = ['stars', 'updated', 'name'];
@@ -5,7 +7,7 @@ const DEBOUNCE_MS = 250;
 
 // The Discover tab: a catalog of skills and plugins from GitHub, with a confirmation step before anything is installed.
 // ctx: h (element helper), t (translator getter), lang, project ({id, name} or null), toast.
-export function createDiscover({ root, h, t, lang, project, toast }) {
+export function createDiscover({ root, h, t, lang, project, toast, icon }) {
   const q = (sel) => root.querySelector(sel);
   const dialog = q('#installDialog');
   let loaded = false;
@@ -75,7 +77,7 @@ export function createDiscover({ root, h, t, lang, project, toast }) {
     q('#discoverStatus').textContent = notes.join(' · ');
     q('#discoverStatus').classList.toggle('is-error', Boolean(res.limited || res.error));
     const list = q('#discoverList');
-    list.replaceChildren(...(items.length ? items.map(card) : [h('li', { class: 'empty' }, res.total ? tt('discover.noMatch') : tt('discover.empty'))]));
+    list.replaceChildren(...(items.length ? items.map(card) : [h('li', { class: 'empty' }, emptyState({ h, icon }, res.total ? { art: 'search', title: tt('discover.noMatch'), text: tt('discover.noMatchText') } : { art: 'compass', title: tt('discover.emptyTitle'), text: tt('discover.empty') }))]));
   }
 
   async function load({ refresh = false } = {}) {

@@ -5,6 +5,7 @@ import { costRows, estimateTone, budgetTone, aiSpend } from './views.js';
 import { costInRange } from './range.js';
 import { signalCard } from './blocks.js';
 import { costSignal } from './signals.js';
+import { emptyState } from './empty.js';
 
 const HISTORY_DEBOUNCE_MS = 250;
 
@@ -19,7 +20,7 @@ export function createTabs(ctx) {
   let historyRun = 0;
 
   const partName = (p, id) => p.arch.parts.find((x) => x.id === id)?.name ?? '';
-  const emptyNote = (text) => h('p', { class: 'view-empty' }, text);
+  const empty = (art, title, text, compact = false) => emptyState({ h, icon: ctx.icon }, { art, title, text, compact });
 
   function itemCard(p, { nodeId, part, group, item }) {
     const tt = t();
@@ -52,9 +53,9 @@ export function createTabs(ctx) {
       h('h3', { id: `col-${k}` }, tt(`board.${k}`), h('span', { class: 'col-count num' }, String(columns[k].length))),
       columns[k].length
         ? h('ul', { class: 'cards' }, columns[k].map(({ p, entry }) => itemCard(p, entry)))
-        : h('p', { class: 'col-empty' }, tt(`board.${k}.empty`)));
+        : empty({ todo: 'check', doing: 'clock', done: 'check' }[k], tt(`board.${k}.empty`), null, true));
     root.replaceChildren(h('div', { class: 'view-wrap wide' },
-      h('div', { class: 'view-head' }, h('h2', {}, tt('board.title')), filter),
+      h('div', { class: 'view-head' }, h('h2', { 'data-help': 'board' }, tt('board.title')), filter),
       h('p', { class: 'view-lede' }, tt('board.lede')),
       noMap.length ? h('p', { class: 'view-note' }, tt('board.noMap', { names: noMap.map((p) => p.name).join(', ') })) : null,
       h('div', { class: 'board' }, ['todo', 'doing', 'done'].map(column))));
@@ -90,7 +91,7 @@ export function createTabs(ctx) {
         h('span', { class: 'hr-title' }, e.title || tt('history.untitled')),
         h('span', { class: 'hr-meta num' }, [fmt.shortDate(Date.parse(e.startedAt || e.endedAt)), projectOfEntry(e), fmt.money(e.costUSD || 0)].join(' · ')),
         e.userPrompts?.[0] ? h('span', { class: 'hr-line' }, e.userPrompts[0]) : null)))
-      : [h('li', { class: 'view-empty' }, pick.historyQuery ? tt('history.noMatch') : tt('history.empty'))]));
+      : [h('li', { class: 'view-empty' }, pick.historyQuery ? empty('search', tt('history.noMatch'), tt('history.noMatchText')) : empty('clock', tt('history.emptyTitle'), tt('history.empty')))]));
   }
 
   // An archived conversation reads like the chat screen (mm22): every step, question, image and helper, with its times.
@@ -166,7 +167,7 @@ export function createTabs(ctx) {
         h('option', { value: '' }, tt('board.all')),
         state.projects.map((p) => h('option', { value: p.name, selected: p.name === pick.historyProject }, p.name)));
       root.replaceChildren(h('div', { class: 'view-wrap wide' },
-        h('div', { class: 'view-head' }, h('h2', {}, tt('history.title'))),
+        h('div', { class: 'view-head' }, h('h2', { 'data-help': 'history' }, tt('history.title'))),
         h('p', { class: 'view-lede' }, tt('history.lede')),
         h('div', { class: 'dv-tools' },
           h('label', { class: 'dv-field grow' }, h('span', { class: 'visually-hidden' }, tt('history.search')), search),
@@ -202,7 +203,7 @@ export function createTabs(ctx) {
       h('span', { class: 'br-sub' }, x.queue ? tt.count('costs.aiQueue', x.queue) : tt('costs.aiIdle'))))) : null;
     const estimates = state.projects.flatMap((p) => p.workCells.filter((w) => w.estimateUSD).map((w) => ({ p, w })));
     root.replaceChildren(h('div', { class: 'view-wrap' },
-      h('div', { class: 'view-head' }, h('h2', {}, tt('costs.title')), ctx.rangeButton()),
+      h('div', { class: 'view-head' }, h('h2', { 'data-help': 'costs' }, tt('costs.title')), ctx.rangeButton()),
       h('p', { class: 'view-lede' }, tt('costs.honest')),
       budgetSign(root),
       ledger,
@@ -222,7 +223,7 @@ export function createTabs(ctx) {
             h('span', { class: 'lr-title' }, chat.title),
             h('span', { class: 'lr-date num strong' }, fmt.money(chat.costUSD)),
             h('span', { class: 'lr-line' }, [project.name, partName(project, chat.partId), fmt.relative(chat.updatedAt)].filter(Boolean).join(' · '))))))
-          : emptyNote(tt('costs.none')))));
+          : empty('chat', tt('costs.none'), tt('costs.noneText')))));
   }
 
   // The helpers' monthly budget nearly used is a sign: why, what to do, and the button that takes you to what they spent.

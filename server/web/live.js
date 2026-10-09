@@ -1,6 +1,7 @@
 // "Live" (plano-v02, v0.2.2 item 9): what every conversation is doing right now, the way down the map to the box it works
 // on, and the panel that lists it all. The pure part on top is what node:test loads; createLivePanel touches the DOM only
 // when called. Only step words cross here (never a file's contents or a command's output): the server already cut them.
+import { emptyState } from './empty.js';
 import { archTree, ancestorsOf } from './tree.js';
 import { nodeOfConversation, placeOf } from './convlist.js';
 
@@ -169,7 +170,7 @@ export function createLivePanel(ctx) {
     const several = out.groups.length > 1 || out.groups.some((g) => g.project.id !== p.id);
     body.replaceChildren(...(out.total ? out.groups.map((g) => h('section', { class: 'lv-group', 'aria-label': g.project.name },
       several ? h('h3', { class: 'lv-group-name' }, g.project.name, h('span', { class: 'lv-group-n num' }, String(g.entries.length))) : null,
-      h('ul', { class: 'lv-cards' }, g.entries.map(card)))) : [h('div', { class: 'lv-empty' }, h('p', { class: 'lv-empty-title' }, tt('live.emptyTitle')), h('p', {}, tt('live.empty')))]));
+      h('ul', { class: 'lv-cards' }, g.entries.map(card)))) : [emptyState({ h, icon }, { art: 'chat', title: tt('live.emptyTitle'), text: tt('live.empty') })]));
     body.scrollTop = top;
     if (keep?.session) body.querySelector(`[data-session="${CSS.escape(keep.session)}"] [data-act="${keep.act}"]`)?.focus({ preventScroll: true });
   }

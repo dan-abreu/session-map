@@ -17,6 +17,8 @@ class El {
     this.scrollTop = 0;
     this.clientHeight = 0;
     this.dataset = {};
+    this.style = {};
+    this.classList = { toggle() {} };
   }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, ...evt }); }

@@ -19,6 +19,9 @@ import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark } from './blocks.js';
+import { emptyState } from './empty.js';
+import { createTour, tourWanted } from './tour.js';
+import { createHelp } from './help.js';
 import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
 import { INFO_KINDS, pointTabs, kindDigest } from './kinds.js';
 import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
@@ -39,7 +42,11 @@ const store = {
 };
 
 let lang = pickLang(store.get('sm.lang'), navigator.language);
-let t = translator(lang);
+// "Technical details" (mm11): the original words (branch, commit, token…) in place of the plain ones, per browser.
+let tech = store.get('sm.tech') === '1';
+let t = translator(lang, { tech });
+let help = null;
+let tour = null;
 let state = null;
 let project = null; // the project as the server sent it
 let shown = null; // the same, minus archived chats unless asked
@@ -155,6 +162,8 @@ function applyStaticText() {
   for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
   for (const el of document.querySelectorAll('[data-i18n-title]')) el.setAttribute('title', t(el.dataset.i18nTitle));
   for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+  help?.relabel();
+  tour?.redraw();
   for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
   renderChanged();
   discover?.relabel();
@@ -459,7 +468,7 @@ function renderWaiting() {
   const listEl = $('#waitingItems');
   $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, n))));
   if (!entries.length) {
-    listEl.replaceChildren(h('li', { class: 'empty' }, scoped ? t('waiting.noneHere', { n: everyone.length }) : t('waiting.none')));
+    listEl.replaceChildren(h('li', { class: 'empty' }, emptyState({ h, icon }, { art: 'check', title: t('waiting.noneTitle'), text: scoped ? t('waiting.noneHere', { n: everyone.length }) : t('waiting.none') })));
     return;
   }
   const where = (p, partId) => {
@@ -979,7 +988,7 @@ function wcStatus(w) {
 }
 
 function panelHead(title, ...meta) {
-  $('#panelHead').replaceChildren(h('h2', { id: 'panelTitle', tabindex: '-1' }, title), h('p', { class: 'meta' }, ...meta.flat().filter(Boolean)));
+  $('#panelHead').replaceChildren(h('h2', { id: 'panelTitle', tabindex: '-1', 'data-help': 'panel' }, title), h('p', { class: 'meta' }, ...meta.flat().filter(Boolean)));
 }
 
 function startChat(title, subtitle, intro, start) {
@@ -1133,7 +1142,7 @@ function renderRelList() {
   };
   $('#relSub').textContent = [t.count('rel.count', visible.length), ignored.length ? t.count('rel.ignoredCount', ignored.length) : null].filter(Boolean).join(' · ');
   $('#relBody').replaceChildren(...[
-    visible.length ? h('ol', { class: 'rel-items' }, sortRelations(visible, partName).map((l) => row(l))) : h('p', { class: 'rel-empty' }, t('rel.empty')),
+    visible.length ? h('ol', { class: 'rel-items' }, sortRelations(visible, partName).map((l) => row(l))) : emptyState({ h, icon }, { art: 'links', title: t('rel.emptyTitle'), text: t('rel.empty') }),
     ignored.length ? h('details', { class: 'rel-ignored' }, h('summary', {}, t.count('rel.ignoredSection', ignored.length)),
       h('ol', { class: 'rel-items' }, sortRelations(ignored, partName).map((l) => row(l, { off: true })))) : null,
   ].filter(Boolean));
@@ -1615,12 +1624,24 @@ function wire() {
     b.addEventListener('click', () => {
       if (!LANGS[b.dataset.lang] || b.dataset.lang === lang) return;
       lang = b.dataset.lang;
-      t = translator(lang);
+      t = translator(lang, { tech });
       store.set('sm.lang', lang);
       renderAll();
       refreshView(true);
     });
   }
+  tour = createTour({ h, t: () => t, phone: () => PHONE.matches, onEnd: (how) => store.set('sm.tour', how) });
+  help = createHelp({
+    h, t: () => t, plain: () => translator(lang), tech: () => translator(lang, { tech: true }), getTech: () => tech,
+    setTech: (on) => {
+      tech = on;
+      store.set('sm.tech', on ? '1' : '0');
+      t = translator(lang, { tech });
+      renderAll();
+      refreshView(true);
+    },
+    onTour: () => tour.start(),
+  });
   rangePicker = createRangePicker({ h, icon, t: () => t, lang: () => lang, phone: PHONE, now: () => (state ? rangeNow() : Date.now()), get: () => rangeSel, set: setRange });
   const mapCtx = {
     content: boxContent, signature, toggleLabel,
@@ -1636,7 +1657,7 @@ function wire() {
   mindmap = createMindmap($('#mindmap'), mapCtx);
   outline = createOutline($('#outline'), mapCtx);
   discover = createDiscover({
-    root: $('#discover'), h, t: () => t, lang: () => lang, toast,
+    root: $('#discover'), h, t: () => t, lang: () => lang, toast, icon,
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
   chat = createChat({
@@ -1836,6 +1857,7 @@ async function main() {
   notice.textContent = t('state.loading');
   notice.hidden = false;
   const res = await api.state();
+  for (const el of document.querySelectorAll('.skeleton')) el.remove();
   if (!res.ok) {
     notice.textContent = res.error === 'token-required' ? t('err.token-required') : t('state.error');
     notice.classList.add('is-error');
@@ -1854,6 +1876,8 @@ async function main() {
     applyDeepLink();
     // A reload keeps the conversation that was open in the sheet.
     if (view === 'map' && !params.get('select')) chat.restore(project.id);
+    // The welcome tour plays once by itself on the first visit; the help menu plays it again.
+    if (tourWanted(store.get('sm.tour'))) setTimeout(() => tour.start(), 600);
   }
 }
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="light dark">
   <title>session-map</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2.5' y='12' width='9' height='8' rx='3' fill='%237c6bd6'/%3E%3Crect x='19' y='4' width='10.5' height='8' rx='3' fill='%233f8fd2'/%3E%3Crect x='19' y='20' width='10.5' height='8' rx='3' fill='%232f9a6f'/%3E%3Cpath d='M11.5 16C16 16 15 8 19 8M11.5 16C16 16 15 24 19 24' fill='none' stroke='%2394a3b8' stroke-width='1.8'/%3E%3C/svg%3E">
@@ -80,6 +80,15 @@
       <button type="button" class="tab" id="tab-discover" aria-current="false" data-i18n="tab.discover"></button>
     </nav>
     <div class="bar-end">
+      <button type="button" class="icon-btn bar-icon help-btn" id="helpBtn" popovertarget="helpMenu" aria-haspopup="true" aria-expanded="false" aria-controls="helpMenu" data-i18n-aria="help.title" data-i18n-title="help.title"><span aria-hidden="true">?</span></button>
+      <div class="help-menu" id="helpMenu" popover="auto" role="dialog" aria-labelledby="helpMenuTitle">
+        <h2 id="helpMenuTitle" data-i18n="help.title"></h2>
+        <button type="button" class="help-row" id="tourReplay"><svg class="btn-icon" aria-hidden="true"><use href="#i-compass"/></svg><span data-i18n="tour.replay"></span></button>
+        <label class="help-row help-switch"><input type="checkbox" id="techToggle" role="switch"><span><strong data-i18n="help.techLabel"></strong><small data-i18n="help.techHint"></small></span></label>
+        <h3 data-i18n="help.glossary"></h3>
+        <ul class="help-glossary" id="helpGlossary"></ul>
+      </div>
+      <div class="help-tip" id="helpTip" popover="auto" role="note"></div>
       <button type="button" class="icon-btn bar-icon" id="alertsBtn" aria-haspopup="dialog" aria-controls="alertsDialog" data-i18n-aria="notify.button" data-i18n-title="notify.button"><svg><use href="#i-bell"/></svg></button>
       <div class="lang" role="group" data-i18n-aria="lang.label">
         <button type="button" data-lang="en" lang="en">EN</button>
@@ -89,7 +98,7 @@
   </header>
 
   <section class="now" id="now" data-i18n-aria="now.label">
-    <button type="button" class="now-line" id="nowLine" aria-expanded="true" aria-controls="nowCards">
+    <button type="button" class="now-line" id="nowLine" data-help="now" aria-expanded="true" aria-controls="nowCards">
       <span class="now-title" data-i18n="now.title"></span>
       <span class="now-counts" id="nowCounts"></span>
       <svg class="now-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
@@ -105,7 +114,7 @@
     </div>
     <div class="cv-body" id="convsBody">
       <div class="cv-head">
-        <h2 id="convsTitle"><span data-i18n="convs.title"></span> <span class="cv-total num" id="convsTotal"></span></h2>
+        <h2 id="convsTitle" data-help="convs"><span data-i18n="convs.title"></span> <span class="cv-total num" id="convsTotal"></span></h2>
         <button type="button" class="icon-btn cv-collapse" id="convsCollapse" aria-controls="convsBody" aria-expanded="true" data-i18n-aria="convs.collapse" data-i18n-title="convs.collapse"><svg><use href="#i-sidebar"/></svg></button>
       </div>
       <div class="cv-tools">
@@ -120,14 +129,14 @@
         </div>
       </div>
       <div class="cv-filter" id="convsFilter" hidden></div>
-      <div class="cv-list" id="convsList" data-i18n-aria="convs.label" role="region"></div>
+      <div class="cv-list" id="convsList" data-i18n-aria="convs.label" role="region"><div class="skeleton" aria-hidden="true"><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span></div></div>
     </div>
   </aside>
   <div class="cv-scrim" id="convsScrim" hidden></div>
 
   <main class="stage" id="stage">
     <div class="mm-tools" id="tools">
-      <p class="summary" id="summary"></p>
+      <div class="summary-row"><p class="summary" id="summary" data-help="map"></p></div>
       <div class="mm-actions">
         <div class="mm-search" id="searchBox">
           <svg class="mm-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
@@ -158,7 +167,7 @@
     </section>
 
     <div class="mm-area">
-    <div class="mm" id="mindmap" data-i18n-aria="map.label" role="group"></div>
+    <div class="mm" id="mindmap" data-i18n-aria="map.label" role="group"><div class="skeleton sk-map" aria-hidden="true"><span class="sk-box"></span><span class="sk-col"><span class="sk-box"></span><span class="sk-box"></span></span><span class="sk-col"><span class="sk-box"></span><span class="sk-box"></span><span class="sk-box"></span></span></div></div>
     <div class="ol" id="outline" data-i18n-aria="map.label" role="group"></div>
 
     <div class="fit-btn zoom-tools" id="zoomTools" role="group" data-i18n-aria="view.zoom">
@@ -170,7 +179,7 @@
     <section id="relList" class="sheet rel-list" aria-labelledby="relTitle" hidden>
       <div class="sheet-head">
         <div>
-          <h2 id="relTitle" data-i18n="rel.title"></h2>
+          <h2 id="relTitle" data-i18n="rel.title" data-help="relations"></h2>
           <p class="meta rel-sub" id="relSub"></p>
         </div>
         <button type="button" class="icon-btn" data-close="rel" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
@@ -180,7 +189,7 @@
 
     <section id="waitingList" class="sheet waiting-list" aria-labelledby="waitingTitle" hidden>
       <div class="sheet-head">
-        <h2 id="waitingTitle" data-i18n="waiting.title"></h2>
+        <h2 id="waitingTitle" data-i18n="waiting.title" data-help="waiting"></h2>
         <button type="button" class="icon-btn" data-close="waiting" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
       </div>
       <div class="seg wl-scope" id="waitingScope" role="group" data-i18n-aria="waiting.scope" hidden>
@@ -194,7 +203,7 @@
     <section id="liveList" class="sheet live-list" aria-labelledby="liveTitle" hidden>
       <div class="sheet-head">
         <div>
-          <h2 id="liveTitle" data-i18n="live.title"></h2>
+          <h2 id="liveTitle" data-i18n="live.title" data-help="live"></h2>
           <p class="meta live-sub" data-live="sub"></p>
         </div>
         <button type="button" class="icon-btn" data-close="live" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
@@ -217,7 +226,7 @@
       <div class="sheet-head">
         <div>
           <p class="meta crumbs" id="chatContext" data-chat="context"></p>
-          <h2 id="chatTitle" data-chat="title"></h2>
+          <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
         </div>
         <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
       </div>
@@ -228,11 +237,14 @@
       <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
         <div class="chat-run" id="chatRun" data-chat="run"></div>
         <div class="run-panel" id="chatRunPanel" data-chat="runpanel" hidden></div>
-        <div class="chat-mode">
-          <label for="chatMode" data-i18n="chat.modeLabel"></label>
-          <select id="chatMode" data-chat="mode"></select>
-          <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
-        </div>
+        <details class="chat-mode">
+          <summary><span data-i18n="chat.modeLabel"></span><span class="chat-mode-now" data-chat="modename"></span><svg class="chat-mode-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+          <div class="chat-mode-body">
+            <label for="chatMode" class="visually-hidden" data-i18n="chat.modeLabel"></label>
+            <select id="chatMode" data-chat="mode"></select>
+            <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
+          </div>
+        </details>
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
         <div class="chat-where" data-chat="where" hidden></div>
         <ul id="chatList" data-chat="list" class="plain rows chat-list" hidden></ul>
@@ -244,7 +256,7 @@
           <div class="chat-pending" data-chat="pending" hidden></div>
           <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
           <div class="chat-input-wrap">
-            <textarea id="chatInput" data-chat="input" rows="3" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="chatSuggest"></textarea>
+            <textarea id="chatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="chatSuggest"></textarea>
             <ul class="chat-suggest" id="chatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
           </div>
           <div class="chat-bar">
@@ -265,7 +277,7 @@
     <section id="view-flow" class="view flow" aria-labelledby="tab-flow" data-mode="view" hidden>
       <div class="fl-bar">
         <div class="fl-heading">
-          <h2 id="flowTitle"></h2>
+          <h2 id="flowTitle" data-help="flow"></h2>
           <p class="fl-source" id="flowSource"></p>
         </div>
         <div class="seg fl-modes" role="group" data-i18n-aria="flow.modes">
@@ -344,11 +356,14 @@
         <div class="chat-pane">
           <div class="chat-run" data-chat="run"></div>
           <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel" hidden></div>
-          <div class="chat-mode">
-            <label for="flowChatMode" data-i18n="chat.modeLabel"></label>
-            <select id="flowChatMode" data-chat="mode"></select>
-            <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
-          </div>
+          <details class="chat-mode">
+            <summary><span data-i18n="chat.modeLabel"></span><span class="chat-mode-now" data-chat="modename"></span><svg class="chat-mode-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <div class="chat-mode-body">
+              <label for="flowChatMode" class="visually-hidden" data-i18n="chat.modeLabel"></label>
+              <select id="flowChatMode" data-chat="mode"></select>
+              <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
+            </div>
+          </details>
           <p class="chat-note" data-chat="note" role="status" hidden></p>
           <ul data-chat="list" class="plain rows chat-list" hidden></ul>
           <div class="chat-find" data-chat="find" hidden></div>
@@ -359,7 +374,7 @@
             <div class="chat-pending" data-chat="pending" hidden></div>
             <label class="visually-hidden" for="flowChatInput" data-i18n="chat.inputLabel"></label>
             <div class="chat-input-wrap">
-              <textarea id="flowChatInput" data-chat="input" rows="3" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="flowChatSuggest"></textarea>
+              <textarea id="flowChatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="flowChatSuggest"></textarea>
               <ul class="chat-suggest" id="flowChatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
             </div>
             <div class="chat-bar">
@@ -381,7 +396,7 @@
 
     <section id="discover" class="discover" aria-labelledby="discoverTitle" hidden>
       <div class="dv-wrap">
-        <h2 id="discoverTitle" data-i18n="discover.title"></h2>
+        <h2 id="discoverTitle" data-i18n="discover.title" data-help="discover"></h2>
         <p class="dv-lede" data-i18n="discover.lede"></p>
         <div class="dv-tools">
           <label class="dv-field"><span class="visually-hidden" data-i18n="discover.searchLabel"></span><input type="search" id="discoverSearch" autocomplete="off"></label>

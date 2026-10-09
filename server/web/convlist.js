@@ -294,10 +294,10 @@ export function createConvList(ctx) {
     const top = list.scrollTop;
     let body = scope === 'all' ? out.sections.map((sec) => folderView(sec, p.id)) : out.sections.flatMap((sec) => groupsOf(sec, 'h3'));
     if (!body.length) {
-      let empty = scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty');
-      if (filter) empty = tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) });
-      if (query.trim()) empty = tt('convs.noMatch', { q: query.trim() });
-      body = [h('p', { class: 'cv-empty' }, empty)];
+      let empty = { art: 'chat', title: tt('convs.emptyTitle'), text: scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty') };
+      if (filter) empty = { art: 'map', title: tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) }), text: tt('convs.filterEmptyText') };
+      if (query.trim()) empty = { art: 'search', title: tt('convs.noMatch', { q: query.trim() }), text: tt('convs.noMatchText') };
+      body = [emptyState({ h, icon: ctx.icon }, { ...empty, compact: true })];
     }
     list.replaceChildren(...body);
     list.scrollTop = top;

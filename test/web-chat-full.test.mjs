@@ -20,6 +20,7 @@ class El {
     this.selectionStart = 0;
     this.selectionEnd = 0;
     this.dataset = {};
+    this.style = {};
     this.classes = new Set(String(this.attrs.class ?? '').split(' ').filter(Boolean));
     this.classList = { toggle: (c, on) => (on ? this.classes.add(c) : this.classes.delete(c)), contains: (c) => this.classes.has(c) };
     this.scrolled = 0;
