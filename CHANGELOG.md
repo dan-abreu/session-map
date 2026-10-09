@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- New: the Flow tab. The architecture's mermaid diagram, drawn with a pinned copy of mermaid shipped with the plugin
+  (no CDN, strict security level). Each box tied to a part is colored by its situation, with marks for blockers and
+  people waiting, and opens that part's chat and details beside the drawing.
+- New: export the map as a mermaid flowchart (Copy, Download `.mmd`), and import one back: paste or pick a file, see
+  what changes (new parts and the file each gets, moves, parts left out, arrows), then confirm. Only the README's
+  mermaid block and a skeleton file per new part are written; nothing is deleted; each apply goes to `actions.log`.
+- New: the flow workshop, a shared draft per project. A side chat redraws it from every reply, and tools add boxes,
+  arrows and layers, rename, move and remove, with a text editor and undo/redo. Nothing reaches the project until you
+  apply it through the import preview.
+- New: the chat sheet is as wide as you drag it (arrow keys too; a double click resets), on the map and in the
+  workshop.
+- Fixed: maps that list only open items read "N open" instead of "0 of N done".
+
 ## 0.2.0
 
 The map is now your project's architecture, read from plain markdown in the repository, with every conversation and
