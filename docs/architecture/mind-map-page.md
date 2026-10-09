@@ -29,6 +29,10 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - In "All projects": one collapsible header per project (name, color, working and waiting counters), like project folders in Claude or ChatGPT and channels in Slack. Every row shows a project badge, also in "This project".
   - Inside a project: the orchestration chat pinned on top, then Working now and Waiting for you, then by date (Today, Yesterday, Last 7 days, Older). The Now strip and the alerts use the same order and badges.
   - Test: in "All projects" no row lacks the project name.
+- [ ] **important:** Show every conversation exactly like Claude Code shows it `mm22`
+  - Every message from both sides with the same formatting (markdown, tables, code, links), the time of each message and the date when the day changes, Claude's steps (read, ran, edited) as collapsible blocks, multiple-choice questions with the owner's answer, images, nested helper agents, cost per reply and total.
+  - Search inside a conversation, jump to a day or time, and a live mirror for a conversation still running. Secrets in steps shown masked.
+  - Applies to every origin (VS Code, terminal, map) and to archived conversations, including ones Claude Code already deleted.
 - [ ] **important:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
