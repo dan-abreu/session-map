@@ -121,3 +121,10 @@ test('a new idea on a map read from the main branch: show the line and where it 
   assert.ok(!/Read docs\/arquitetura\/README\.md/.test(text), 'the folder is not in this working tree');
   assert.match(text, /where it goes/);
 });
+
+// Seen on Windows: a part about the README named readme.md replaced the map's README.md (names ignore case there).
+test('creating the map: part files are named in lowercase with dashes and never README', () => {
+  const text = all(contextOf(NONE, { kind: 'create-arch' }));
+  assert.match(text, /lowercase with dashes/);
+  assert.match(text, /never README\.md, in any case/);
+});

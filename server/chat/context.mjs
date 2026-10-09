@@ -58,7 +58,7 @@ const CREATE_TEXT = [
   '3. Wait for the person\'s OK. Write nothing before it, and change the list if they ask.',
   '4. Then write the folder docs/architecture/ (docs/arquitetura/ if the project\'s docs are written in Portuguese):',
   '   - README.md: what the map is, a mermaid flowchart where each layer is `subgraph id["Layer name"]` holding one node `ID[Part name]` per part, and a list linking each part to its file: `[Part name](part-file.md)`.',
-  '   - One file per part: `# Part name`, an opening paragraph saying what it is, then "## How it works", "## Where in the code" (paths in backticks, relative to the repository root), "## Rules that must not break" and "## What\'s missing" with items `- [ ] what to do` that end with a code in backticks, the code being two or three letters of the part plus a number.',
+  '   - One file per part, named after the part in lowercase with dashes (never README.md, in any case: on Windows it would replace the map\'s README): `# Part name`, an opening paragraph saying what it is, then "## How it works", "## Where in the code" (paths in backticks, relative to the repository root), "## Rules that must not break" and "## What\'s missing" with items `- [ ] what to do` that end with a code in backticks, the code being two or three letters of the part plus a number.',
   '   - In Portuguese the sections are "## Como funciona", "## Onde está no código", "## Regras que não podem quebrar" and "## O que falta".',
   '5. Do not change anything outside that folder.',
 ].join('\n');
