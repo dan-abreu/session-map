@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.3
+
+Conversations started from the page stay, and the page chat runs in your own Claude Code permission mode.
+
+- A conversation opened with Continue vanished once the sheet was closed: the sheet kept it only in memory and opened
+  a blank new one every time, and the server never recorded which unit it came from, so the brain left it unsorted
+  (or wherever the AI later guessed) and its title was the context block session-map adds to the first message. Now
+  the server keeps each page conversation in `page-chats.json` (unit, branch, folder, the person's own first words,
+  the permission mode picked, the tools allowed for the whole conversation) and places it in the unit it was opened
+  on:
+  - the unit's chat sheet lists the conversations opened there, the one used last first; tapping one shows its
+    history (from Claude's transcript, or from the running process) and continues it with `--resume`, also after
+    the server restarts or the process stopped when idle;
+  - reloading the page reopens the conversation that was open (kept in `localStorage`; closing the sheet forgets
+    it);
+  - the server repeats every message it takes, so a sheet reopened on a running conversation shows the whole turn;
+  - a conversation's title is what the person wrote, without the context block.
+- The page chat used to force `--permission-mode default` and asked for every tool. It now runs in
+  `permissions.defaultMode` from your Claude settings (`~/.claude/settings.json`, then the project's
+  `.claude/settings.json`, then `.claude/settings.local.json`; the more specific file wins), `default` when none
+  is set. A selector in the chat header changes it per conversation (Same as Claude, Ask every time, Edits on their
+  own, Automatic); a running conversation switches from its next step, and the status line shows the mode Claude
+  reports. `bypassPermissions` is never passed: a setting with it runs the chat in `auto` and says so in the
+  sheet. Whatever the mode still asks about keeps Allow / Deny, and "Always in this conversation" now survives a
+  resume.
+
 ## 0.1.2
 
 Switching projects no longer leaves a conversation of the previous project open over the new one.
