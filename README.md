@@ -1,11 +1,18 @@
 # session-map
 
+[![test](https://github.com/dan-abreu/session-map/actions/workflows/test.yml/badge.svg)](https://github.com/dan-abreu/session-map/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/dan-abreu/session-map)](https://github.com/dan-abreu/session-map/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [Português](README.pt-BR.md)
 
-A Claude Code plugin that turns every conversation on your machine into a living brain in the browser. Each project is a body: **organs** and **tissues** group **cells** (areas of the work), each cell has a small **nucleus** (what is decided, what is left) and its **neurons** are your chats. Branches show up as work in progress, and a board, a cost view and a searchable history sit next to the brain.
+A Claude Code plugin that draws your project's **architecture as a mind map** and hangs every Claude conversation, branch and commit on the part it belongs to. Layers open into parts, parts into groups and items; each item is a line of plain markdown in your repository. You see what is done, what is in progress, what waits for you, what it costs, and you start a chat on any box, or drop in a new idea and let the AI put it in the right place.
 
-![The brain view](docs/screenshot-brain.png)
-![The board view](docs/screenshot-board.png)
+![The mind map](docs/images/mind-map-desktop.png)
+
+| Board | On a phone |
+|---|---|
+| ![The board](docs/images/board-desktop.png) | ![The map on a phone](docs/images/mind-map-phone.png) |
 
 The screenshots come from `--demo`, which uses invented data.
 
@@ -16,7 +23,30 @@ The screenshots come from `--demo`, which uses invented data.
 /plugin install session-map@session-map
 ```
 
-**Requirements:** Claude Code and Node.js 20 or newer on your `PATH`. The native Claude Code installer does not bring Node; without it the server, the hook that archives finished chats and the three commands do not run.
+**Requirements:** Claude Code and Node.js 20 or newer on your `PATH`. The native Claude Code installer does not bring Node; without it the server, the hook that archives finished chats and the commands do not run.
+
+## Getting started
+
+1. Run `/session-map:map` and open the link it prints.
+2. Pick a project. If it already has an architecture folder, the map shows it at once. If not, a banner offers to create one: a chat studies the repository, proposes the parts, and writes nothing until you say OK.
+3. Click a box to see its conversations, branches and files, and to chat about exactly that point. **New idea** opens a chat on the whole project: it proposes the part and the group, shows the line it would write, and writes it only after your OK.
+
+## Architecture map
+
+The map reads plain markdown, so it works with or without Claude, and your teammates can read it on GitHub. Where it looks: the folder set in the config `architecture`, else the first that exists of `docs/arquitetura`, `docs/architecture`, `docs/arch` (the working tree first, then the main branch).
+
+- `README.md` of the folder: the layers, as a mermaid `subgraph` block or as `##` headings listing the parts.
+- One file per part: a title, an opening paragraph, "Where in the code" (paths in backticks, which hang chats and branches on the part), and **What's missing**, the checklist:
+
+```markdown
+### Sign in
+
+- [ ] **in progress · Ana and Claude · step 2 of the roadmap:** Show the error under the field `lg07`
+- [ ] **with Ana · blocks:** Pick the text of the reset e-mail `lg08`
+- [x] **Claude:** Lock the account after 5 tries `lg06`
+```
+
+English and Portuguese section names both work. The `architecture` skill teaches this to every chat, VS Code included, so a new request becomes an item, starting marks it in progress, and finishing ticks it. See [docs/architecture](docs/architecture/README.md) for this repository mapped the same way.
 
 ## Commands
 
@@ -29,11 +59,11 @@ The screenshots come from `--demo`, which uses invented data.
 
 Without the plugin: `node server/main.mjs [--lan] [--port 4001]`, or `--demo` for sample data.
 
-**Terminal only?** `node server/cli.mjs` (or `session-map` once the package is linked) prints the body as text: organs, tissues and cells with ● working / ○ quiet / ! waiting / ? not sorted, then the "Waiting for you" list and costs. It asks the running server and, if there is none, reads your history directly with the AI off. `--project <name>` narrows it, `--watch` redraws every 5 seconds, `--json` prints the state.
+**Terminal only?** `node server/cli.mjs` (or `session-map` once the package is linked) prints the map as text: layers and parts with ● working / ○ quiet / ! waiting / ✓ all done, then the "Waiting for you" list and costs. It asks the running server and, if there is none, reads your history directly with the AI off. `--project <name>` narrows it, `--watch` redraws every 5 seconds, `--json` prints the state.
 
 ## Files
 
-Open a unit or a branch and its **Files** section lists the files, new and changed ones marked. Tapping one opens it read-only (up to 1 MB, text only, never `.git`, never `.env` files) with the lines the branch changed highlighted. **Open in VS Code** opens that file on this PC, **Open terminal in this folder** opens a shell there, and **VS Code on your phone** appears when you set `tunnelUrl`. Reading files needs the token, like the chat.
+Open a part, an item or a branch and its **Files** section lists the files, new and changed ones marked. Tapping one opens it read-only (up to 1 MB, text only, never `.git`, never `.env` files) with the lines the branch changed highlighted. **Open in VS Code** opens that file on this PC, **Open terminal in this folder** opens a shell there, and **VS Code on your phone** appears when you set `tunnelUrl`. Reading files needs the token, like the chat.
 
 ## On your phone
 
@@ -43,7 +73,7 @@ Open a unit or a branch and its **Files** section lists the files, new and chang
 
 For chats that run on this PC, turn on **Enable Remote Control for all sessions** in `/config`: the page then offers a button that continues that conversation from claude.ai or the Claude app. The page can also start and drive its own chats with your `claude` CLI.
 
-**Conversations stay.** A conversation started on a unit is listed in that unit's chat sheet (the one used last first), and the brain shows it in that unit. Closing the sheet does not stop it; tapping it again shows its history and continues it (`claude --resume`), even after the server restarts. Reloading the page reopens the conversation that was open.
+**Conversations stay.** A conversation started on a box of the map is listed in that box's chat (the one used last first), and the map shows it on that part. Closing the sheet does not stop it; tapping it again shows its history and continues it (`claude --resume`), even after the server restarts. Reloading the page reopens the conversation that was open.
 
 **Permissions.** A page chat runs in the permission mode of your own Claude Code: `permissions.defaultMode` from `~/.claude/settings.json`, then the project's `.claude/settings.json`, then `.claude/settings.local.json` (the more specific file wins, as in Claude Code). With nothing set, that is `default`, which asks before every tool that is not already allowed. The selector in the chat header changes it for that conversation only: **Same as Claude**, **Ask every time** (`default`), **Edits on their own** (`acceptEdits`) or **Automatic** (`auto`); the choice is kept per conversation and switches a running one from its next step. Whatever the mode still asks about appears in the sheet with **Allow** / **Deny** (no answer in 25 s denies it), and **Always in this conversation** is remembered for that conversation, also after a resume. `bypassPermissions` is never used: if your settings say so, the page runs the chat in `auto` and tells you.
 
@@ -61,13 +91,13 @@ The plugin reads Claude Code's local files (sessions, transcripts, skills). Thos
 
 The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes only to `~/.claude/session-map/`: token, config, archive, notes and logs. Data leaves your machine in two cases.
 
-**AI organisation, on by default.** The map names and groups your work with your own `claude` CLI (`claude -p`, model `haiku`), so it goes to Anthropic like any Claude Code prompt. Each call sends a digest of one conversation, never the transcript: its title, up to 8 of your prompts cut to 160 characters, up to 30 file paths, up to 10 commit subjects, the branch name, and the names and purposes of the project's current units. To write the short memory of a unit that has no `/board` card ("where it stands", "decided", "to do"), a call sends the same digests (without file paths) of its 6 newest conversations, the last reply of each cut to 200 characters, and its branches' names, commit counts and last commit subjects, five units per call. The first time a project shows up, its 60 most recent conversations are read at once, outside the cap of 30 calls per hour; the page shows the estimated cost of this first organisation. Every call counts against your subscription limits or your API spend. To turn it off, put this in `~/.claude/session-map/config.json`:
+**AI organisation, on by default.** The map places the conversations the code could not place with your own `claude` CLI (`claude -p`, model `haiku`), so it goes to Anthropic like any Claude Code prompt. Only conversations that no item code and no edited file could place are shown to the AI, once each. A call sends a digest of one conversation, never the transcript: its title, up to 8 of your prompts cut to 160 characters, up to 30 file paths, up to 10 commit subjects, the branch name, and the name, layer, purpose and folders of each part of the project's architecture. At most 30 calls per hour. Every call counts against your subscription limits or your API spend. To turn it off, put this in `~/.claude/session-map/config.json`:
 
 ```json
 { "ai": { "enabled": false } }
 ```
 
-The map then groups chats by the files they touch and by the cards from `/session-map:board`.
+The map then places chats by the item codes they cite, by the files they touch and by the cards from `/session-map:board`.
 
 **Discover tab.** It asks the GitHub API for public plugin repositories, and looks up the marketplaces you already added, only when you open the tab. If `GITHUB_TOKEN` is set, or `gh auth token` answers, that token goes to GitHub with these requests, for a wider search and a higher rate limit.
 
@@ -79,7 +109,7 @@ Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is 
 
 ```json
 {
-  "ai": { "enabled": true, "model": "haiku", "maxCallsPerHour": 30, "bootstrapLimit": 60 },
+  "ai": { "enabled": true, "model": "haiku", "maxCallsPerHour": 30 },
   "budget": { "monthlyUSD": 100 },
   "currency": { "code": "BRL", "rate": 5.4 },
   "tunnelUrl": "https://vscode.dev/tunnel/my-pc",
@@ -98,6 +128,10 @@ Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is 
   - `autoFetchMinutes`: runs `git fetch` that often so branches pushed from other machines show up. Off by default.
   - `ai`: `{ "enabled": false }` here turns the AI off for that project only.
 
+
+## Contributing
+
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 

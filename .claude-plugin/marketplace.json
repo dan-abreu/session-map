@@ -5,7 +5,7 @@
     {
       "name": "session-map",
       "source": "./",
-      "description": "A living brain of every Claude Code conversation on this machine, in the browser."
+      "description": "A living mind map of your project architecture, with every Claude Code conversation hung on its parts, in the browser."
     }
   ]
 }
