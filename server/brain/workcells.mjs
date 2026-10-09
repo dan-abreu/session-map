@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { log } from '../log.mjs';
 import { listWorktrees } from '../sources/git.mjs';
-import { UNSORTED, unitsTouchedBy } from './cells.mjs';
+import { UNSORTED, covers, isBroadPath, slash } from './cells.mjs';
 
 const TIMEOUT_MS = 10_000;
 const IDLE_AFTER_MS = 7 * 86_400_000;
@@ -72,18 +72,32 @@ function ownerOf(commits) {
   return { owner, authors: authors.map((a) => a.author) };
 }
 
-// Each file votes for the unit(s) whose paths cover it most closely; the unit with most files holds the cell.
-function placeOf(files, units) {
-  const votes = new Map();
+// Each file votes for the unit whose path covers it most deeply. Votes through a broad path
+// (apps/backend-api) count only when no file reached a specific one; a tie at the top leaves the branch unsorted.
+export function placeWorkCell(files, units) {
+  const specific = new Map();
+  const broad = new Map();
+  const add = (votes, id, w) => votes.set(id, (votes.get(id) ?? 0) + w);
   for (const { path } of files) {
-    for (const id of unitsTouchedBy([path], units)) votes.set(id, (votes.get(id) ?? 0) + 1);
+    let best = null;
+    for (const u of units) {
+      for (const p of u.paths ?? []) {
+        const prefix = slash(p).replace(/\/+$/, '');
+        if (!prefix || !covers(path, prefix)) continue;
+        const depth = prefix.split('/').length;
+        if (!best || depth > best.depth) best = { depth, prefix, ids: new Set([u.id]) };
+        else if (depth === best.depth) best.ids.add(u.id);
+      }
+    }
+    if (!best) continue;
+    for (const id of best.ids) add(isBroadPath(best.prefix) ? broad : specific, id, 1);
   }
-  let unitId = UNSORTED;
-  let best = 0;
-  for (const { id } of units) {
-    if ((votes.get(id) ?? 0) > best) [unitId, best] = [id, votes.get(id)];
-  }
-  return { unitId, touches: units.map((u) => u.id).filter((id) => id !== unitId && votes.has(id)) };
+  const votes = specific.size ? specific : broad;
+  const top = Math.max(0, ...votes.values());
+  const leaders = [...votes].filter(([, v]) => v === top).map(([id]) => id);
+  const unitId = leaders.length === 1 ? leaders[0] : UNSORTED;
+  const touched = new Set([...specific.keys(), ...broad.keys()]);
+  return { unitId, touches: units.map((u) => u.id).filter((id) => id !== unitId && touched.has(id)) };
 }
 
 async function cellOf(root, base, branch, units, worktrees, now) {
@@ -102,7 +116,7 @@ async function cellOf(root, base, branch, units, worktrees, now) {
     remote: branch.remote,
     path: branch.remote ? null : worktrees.get(branch.branch) ?? null,
     ...ownerOf(commits),
-    ...placeOf(files, units),
+    ...placeWorkCell(files, units),
     ahead: commits.length,
     commits: commits.length,
     files,
@@ -145,11 +159,11 @@ export async function workCellsOf(root, units, { main, includeRemote = true, pre
     if (cell) alive.push(cell);
   }
 
-  // Two branches nobody touched for a week (old bot updates, say) sharing a lockfile are not news.
+  // A branch nobody touched for a week (an old bot update, an abandoned try) sharing a file is not news.
   for (const cell of alive) {
     const mine = new Set(cell.files.map((f) => f.path));
-    cell.clashWith = alive
-      .filter((o) => o !== cell && (cell.status === 'active' || o.status === 'active') && o.files.some((f) => mine.has(f.path)))
+    cell.clashWith = cell.status !== 'active' ? [] : alive
+      .filter((o) => o !== cell && o.status === 'active' && o.files.some((f) => mine.has(f.path)))
       .map((o) => o.id);
   }
 

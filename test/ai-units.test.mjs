@@ -177,12 +177,13 @@ test('fuse never makes a unit its own parent, even on a tree that already breaks
 });
 
 test('applyPerception learns the folders of the chat files as path hints, so branches and commits find the unit', () => {
-  const files = ['src/cart/total.ts', 'src/cart/total.test.ts', 'docs/cart.md', 'README.md'];
+  // Top-level folders and whole apps (docs, apps/api) are true of almost any work: they are not learned.
+  const files = ['src/cart/total.ts', 'src/cart/total.test.ts', 'docs/cart.md', 'README.md', 'apps/api/package.json', 'apps/api/src/cart/x.ts'];
   const fitted = applyPerception(seedUnits(), { sessionId: S1, files }, { unitId: 'coupons', name: 'Cupons', purpose: '', tags: [] }, NOW);
-  assert.deepEqual(fitted.find((u) => u.id === 'coupons').paths, ['src/cart', 'docs']);
+  assert.deepEqual(fitted.find((u) => u.id === 'coupons').paths, ['src/cart', 'apps/api/src/cart']);
   const born = applyPerception(seedUnits(), { sessionId: S1, files }, { unitId: null, name: 'Frete', purpose: '', tags: [] }, NOW);
-  assert.deepEqual(born.find((u) => u.name === 'Frete').paths, ['src/cart', 'docs']);
-  const many = Array.from({ length: 40 }, (_, i) => `pkg${i}/a.ts`);
+  assert.deepEqual(born.find((u) => u.name === 'Frete').paths, ['src/cart', 'apps/api/src/cart']);
+  const many = Array.from({ length: 40 }, (_, i) => `src/pkg${i}/a.ts`);
   assert.equal(applyPerception(seedUnits(), { sessionId: S1, files: many }, { unitId: 'coupons', name: 'Cupons', purpose: '', tags: [] }, NOW)
     .find((u) => u.id === 'coupons').paths.length, 20);
 });

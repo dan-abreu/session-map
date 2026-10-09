@@ -57,8 +57,15 @@ export function newUnitId(name, units) {
   return id;
 }
 
-const slash = (p) => String(p).replaceAll('\\', '/');
-const covers = (path, prefix) => path === prefix || path.startsWith(`${prefix}/`);
+export const slash = (p) => String(p).replaceAll('\\', '/');
+export const covers = (path, prefix) => path === prefix || path.startsWith(`${prefix}/`);
+
+const CONTAINERS = new Set(['apps', 'packages', 'services', 'libs', 'modules', 'crates', 'projects', 'plugins', 'tools']);
+// A top-level folder, or a whole app in a monorepo (apps/backend-api): true of almost any work, so it says little.
+export function isBroadPath(path) {
+  const parts = slash(path).split('/').filter(Boolean);
+  return parts.length <= 1 || (parts.length === 2 && CONTAINERS.has(parts[0].toLowerCase()));
+}
 
 // Backticked `a/b` or a bare token with at least two slashes; URLs and "/api/x" never match.
 const CITED_PATH_RE = /`([^`\s]+)`|(?<![\w/:.@`-])([\w.@-]+(?:\/[\w.@-]+){2,})/g;

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { backfillMerges, detectTransitions, workCellsOf } from '../server/brain/workcells.mjs';
+import { backfillMerges, detectTransitions, placeWorkCell, workCellsOf } from '../server/brain/workcells.mjs';
 import { appendEvents, eventsPath, readEvents } from '../server/brain/events.mjs';
 import { autoFetch } from '../server/sources/fetch.mjs';
 import { normalizePath } from '../server/paths.mjs';
@@ -317,7 +317,7 @@ test('backfillMerges with since only reads merges inside the window', async () =
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
-test('workCellsOf: two idle cells do not clash, but an active one still clashes with an idle one', async () => {
+test('workCellsOf: a branch idle for a week clashes with nobody, only two active ones do', async () => {
   const { base, root } = makeRepo();
   try {
     twoBranches(root);
@@ -327,8 +327,34 @@ test('workCellsOf: two idle cells do not clash, but an active one still clashes 
     git(root, ['checkout', '-q', 'main']);
     const cells = await workCellsOf(root, UNITS, { main: 'main', now: clock });
     const of = (id) => cells.find((c) => c.id === id).clashWith.sort();
-    assert.deepEqual(of('feature/ana'), ['feature/zoe']);
-    assert.deepEqual(of('feature/rui'), ['feature/zoe']);
-    assert.deepEqual(of('feature/zoe'), ['feature/ana', 'feature/rui']);
+    assert.deepEqual(of('feature/ana'), []);
+    assert.deepEqual(of('feature/rui'), []);
+    assert.deepEqual(of('feature/zoe'), []);
   } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+const files = (...paths) => paths.map((path) => ({ path, status: 'M' }));
+const DEEP_UNITS = [
+  { id: 'comms', paths: ['apps/backend-api', 'packages/core/src/whatsapp'] },
+  { id: 'providers', paths: ['apps/backend-api/src/routes/admin'] },
+  { id: 'billing', paths: ['apps/backend-api/src/billing'] },
+  { id: 'unsorted', paths: [] },
+];
+
+test('placeWorkCell: the deepest specific path wins over a broad app folder, however many files the broad one covers', () => {
+  const many = Array.from({ length: 30 }, (_, i) => `apps/backend-api/src/services/s${i}.ts`);
+  const place = placeWorkCell(files(...many, 'apps/backend-api/src/routes/admin/a.ts', 'apps/backend-api/src/routes/admin/b.ts'), DEEP_UNITS);
+  assert.equal(place.unitId, 'providers');
+  assert.deepEqual(place.touches, ['comms']);
+});
+
+test('placeWorkCell: a tie between specific paths goes to unsorted and touches both', () => {
+  const place = placeWorkCell(files('apps/backend-api/src/routes/admin/a.ts', 'apps/backend-api/src/billing/b.ts'), DEEP_UNITS);
+  assert.equal(place.unitId, 'unsorted');
+  assert.deepEqual(place.touches.sort(), ['billing', 'providers']);
+});
+
+test('placeWorkCell: only broad matches still place the branch, and nothing matching leaves it unsorted', () => {
+  assert.equal(placeWorkCell(files('apps/backend-api/package.json', 'apps/backend-api/src/x.ts'), DEEP_UNITS).unitId, 'comms');
+  assert.deepEqual(placeWorkCell(files('README.md'), DEEP_UNITS), { unitId: 'unsorted', touches: [] });
 });

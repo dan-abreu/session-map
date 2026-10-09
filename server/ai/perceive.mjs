@@ -1,4 +1,4 @@
-import { UNSORTED, newUnitId } from '../brain/cells.mjs';
+import { UNSORTED, isBroadPath, newUnitId } from '../brain/cells.mjs';
 import { cleanUnitName, plain, readableName, sameName } from '../brain/names.mjs';
 import { PERCEIVE_SCHEMA, perceivePrompt } from './prompts.mjs';
 
@@ -56,7 +56,7 @@ export function applyPerception(units, chat, p, now = new Date().toISOString()) 
   }
   target.chatIds.push(chat.sessionId);
   // Work cells and commits find their unit by these folders; specs rarely cite code paths, so the chats teach them.
-  const folders = (chat.files ?? []).filter((f) => f.includes('/')).map((f) => f.slice(0, f.lastIndexOf('/')));
+  const folders = (chat.files ?? []).filter((f) => f.includes('/')).map((f) => f.slice(0, f.lastIndexOf('/'))).filter((f) => !isBroadPath(f));
   if (!target.pinned) target.paths = [...new Set([...target.paths, ...folders])].slice(0, PATHS_MAX);
   return next;
 }
