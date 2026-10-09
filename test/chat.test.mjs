@@ -109,12 +109,22 @@ test('buildArgs: stream-json both ways, partial messages, our MCP only, default 
 test('firstPrompt: the unit nucleus, the mother card, the board hint, then what the person wrote', () => {
   const state = makeState('/x');
   const [project] = state.projects;
-  const text = firstPrompt({ unit: project.units[0], nucleus: project.units[0].nucleus, mother: project.chats[2], text: 'Add the error message' });
+  const text = firstPrompt({ unit: project.units[0], nucleus: project.units[0].nucleus, mother: project.chats[2], text: 'Add the error message', board: true });
   for (const piece of ['Auth', 'Login works with email.', 'Sessions live 30 days', 'Rate limit the form', 'Login form', 'Wiring the submit button', 'Use fetch', '/session-map:board', 'Add the error message']) {
     assert.ok(text.includes(piece), piece);
   }
   assert.ok(text.indexOf('/session-map:board') < text.indexOf('Add the error message'));
   assert.equal(firstPrompt({ text: 'Just this' }).endsWith('Just this'), true);
+});
+
+test('firstPrompt without the plugin explains the session-map block inline instead of naming /session-map:board', () => {
+  const state = makeState('/x');
+  const [project] = state.projects;
+  const text = firstPrompt({ unit: project.units[0], nucleus: project.units[0].nucleus, text: 'Add the error message', board: false });
+  assert.ok(!text.includes('/session-map:board'));
+  assert.match(text, /```session-map/);
+  assert.match(text, /"doing"/);
+  assert.ok(text.indexOf('```session-map') < text.indexOf('Add the error message'));
 });
 
 test('start a new chat: session, text and turn-end arrive in order; the mother is recorded in lineage.json', async () => {
@@ -130,7 +140,7 @@ test('start a new chat: session, text and turn-end arrive in order; the mother i
     assert.deepEqual([...new Set(types)], ['session', 'text', 'turn-end']);
     assert.ok(r.events.every((e, i) => i === 0 || e.id > r.events[i - 1].id));
     const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
-    assert.ok(final.includes('Wiring the submit button') && final.includes('/session-map:board') && final.includes('Hello there'));
+    assert.ok(final.includes('Wiring the submit button') && final.includes('```session-map') && final.includes('Hello there'));
     const sessionId = r.events[0].data.sessionId;
     assert.equal(readLineage(smDir)[sessionId], MOTHER);
   });

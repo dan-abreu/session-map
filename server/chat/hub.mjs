@@ -30,8 +30,18 @@ const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true,
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
 const list = (items) => items.map((i) => `- ${i}`).join('\n');
 
+// Without the plugin there is no /session-map:board: the chat is told the card format itself.
+const CARD_HINT = [
+  'When you finish a step, end your reply with a short block like this, so session-map can show where the work stands:',
+  '```session-map',
+  '{"title": "what this conversation is about", "doing": "the step you are on", "todo": ["what is left"], "decided": ["what was settled"], "waiting": ["questions for the person"]}',
+  '```',
+  'Use only the fields that apply; keep each line short.',
+].join('\n');
+
 // What a new chat reads instead of the whole history (desenho-2 § 21, "Continuar aqui").
-export function firstPrompt({ unit, nucleus, mother, workCell, text }) {
+// board: the session-map plugin is installed and on, so its /session-map:board command exists.
+export function firstPrompt({ unit, nucleus, mother, workCell, text, board = false }) {
   const parts = [];
   if (unit) {
     const lines = [`Area: ${unit.name}${unit.purpose ? ` (${unit.purpose})` : ''}`];
@@ -51,7 +61,8 @@ export function firstPrompt({ unit, nucleus, mother, workCell, text }) {
     parts.push(lines.join('\n'));
   }
   if (!parts.length) return text;
-  return `Context from session-map (this is all you need from earlier work):\n\n${parts.join('\n\n')}\n\nWhen you finish a step, run /session-map:board.\n\n${text}`;
+  const hint = board ? 'When you finish a step, run /session-map:board.' : CARD_HINT;
+  return `Context from session-map (this is all you need from earlier work):\n\n${parts.join('\n\n')}\n\n${hint}\n\n${text}`;
 }
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
@@ -218,7 +229,8 @@ export function createChatHub({ smDir, bin, env = process.env, permissionTimeout
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const nucleus = unit ? readNucleus(smDir, project.id, unit.id) ?? unit.nucleus : null;
-      prompt = firstPrompt({ unit, nucleus, mother, workCell, text: body.text });
+      const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
+      prompt = firstPrompt({ unit, nucleus, mother, workCell, text: body.text, board });
       cwd = workCell?.path ?? project.root;
     }
 
