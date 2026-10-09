@@ -6,7 +6,7 @@ import { collect } from './collect.mjs';
 import { claudeDir } from './sources/claude.mjs';
 import { pickLang, translator } from './web/i18n.js';
 import { archTree, listsDone } from './web/tree.js';
-import { waitingEntries } from './web/views.js';
+import { clashWords, waitingEntries } from './web/views.js';
 
 const WATCH_MS = 5000;
 const SERVER_TIMEOUT_MS = 1500;
@@ -80,7 +80,9 @@ function waitingLines(state, t) {
     const reason = decision
       ? t(decision.kind === 'item' ? 'waiting.withYou' : `waiting.${decision.kind}`)
       : t(chat.waiting.strong ? 'waiting.question' : chat.waiting.items.length ? 'waiting.item' : 'waiting.ends');
-    return `! ${reason}: ${trim(decision ? decision.text : chat.title)}${where ? `  (${where})` : ''}`;
+    const clash = decision?.kind === 'clash' ? clashWords(decision) : null;
+    const title = clash ? t(clash.key, clash.vars) : decision ? decision.text : chat.title;
+    return `! ${reason}: ${trim(title)}${where ? `  (${where})` : ''}`;
   });
 }
 
@@ -93,7 +95,7 @@ export function renderState(state, { lang = 'en', project } = {}) {
   const sum = (key) => money(shown.reduce((total, p) => total + p.cost[key], 0));
   const lines = [`session-map · ${t('cli.totals', { today: sum('today'), d7: sum('d7'), d30: sum('d30') })}`, t('cli.legend')];
   for (const p of shown) {
-    lines.push('', `${p.name}${p.mainBranch ? ` (${p.mainBranch})` : ''}`);
+    lines.push('', p.name);
     lines.push(...archLines(p, t, money));
   }
   lines.push('', t('waiting.title'), ...waitingLines({ ...state, projects: shown }, t));

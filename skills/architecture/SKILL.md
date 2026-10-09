@@ -57,3 +57,7 @@ Read the README and the likely parts, say which part (or a new part, with its la
 ## No map yet
 
 Offer to create one, and ask first. With the OK: study the repository, propose the layers and parts in the chat (name, what it is, main folders), wait for a second OK, then write `docs/architecture/` (`docs/arquitetura/` when the project's docs are in Portuguese): the README with the mermaid block and the links, and one file per part (named in lowercase with dashes, never `README.md` in any case) with the opening paragraph, "How it works", "Where in the code", "Rules that must not break" and "What's missing" ("Como funciona", "Onde está no código", "Regras que não podem quebrar", "O que falta"). Nothing is written before the OK.
+
+## Talking to the person
+
+When you tell the person about the map, use their language and plain words: "part" and "item", "line of work" for a branch, "saved" and "joined" for commit and merge, "team of helpers" for workflows and agents, "drawing" for the diagram. Say what you changed and what is waiting for them in one or two short sentences; the item code goes at the end, in backticks, for the map.

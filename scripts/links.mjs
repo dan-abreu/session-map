@@ -22,6 +22,17 @@ export function buildLinks({ token, port, addresses = privateAddresses(), local 
   };
 }
 
+// What the person reads: where each link opens, and that the key in it is theirs alone.
+export function linkLines(links) {
+  return [
+    `On this computer: ${links.local}`,
+    ...links.lan.map((l) => `On your phone or another computer on the same Wi-Fi: ${l}`),
+    links.lan.length ? 'Keep these links to yourself: they carry your key. Do not share them.' : 'Keep this link to yourself: it carries your key. Do not share it.',
+  ];
+}
+
+export const notRunningText = () => 'session-map is not on yet. Ask /session-map:map in Claude Code to turn it on.';
+
 async function answers(port) {
   try {
     return (await fetch(`http://127.0.0.1:${port}/api/state`, { signal: AbortSignal.timeout(2000) })).ok;
@@ -42,11 +53,11 @@ async function main() {
     up = await answers(port);
   }
   if (!up) {
-    console.error(`session-map is not running on port ${port}.`);
+    console.error(notRunningText(port));
     process.exit(1);
   }
   const links = buildLinks({ token: loadToken(join(claudeDir(), 'session-map')), port, local: values.local });
-  console.log([`This PC: ${links.local}`, ...links.lan.map((l) => `Network: ${l}`)].join('\n'));
+  console.log(linkLines(links).join('\n'));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

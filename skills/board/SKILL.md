@@ -31,3 +31,7 @@ When the work is an item of the project's architecture map, put its item code (t
 Keep it short: valid JSON, at most 15 lines, texts of one line, lists of a few items. Omit fields you do not know.
 
 Renew the card when a big step closes and when the work moves to another front. Invalid fields are ignored; invalid JSON drops the whole card.
+
+## Talking to the person
+
+The card is for the map; the words around it are for the person. Write those in their language and in plain words: what was done, what comes next, and what is waiting for them. Say "line of work" for a branch, "saved" for a commit and "joined" for a merge, unless they use the technical words themselves.

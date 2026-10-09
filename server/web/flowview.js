@@ -342,7 +342,7 @@ export function createFlowView(ctx) {
     const res = await renderMermaid(canvas, text, ctx.phone.matches);
     if (res.stale) return;
     if (!res.ok) {
-      canvas.replaceChildren(h('p', { class: 'fl-error', role: 'alert' }, t()('flow.drawFailed'), h('code', {}, res.error)));
+      canvas.replaceChildren(h('div', { class: 'fl-error', role: 'alert' }, h('p', {}, t()('flow.drawFailed')), h('details', {}, h('summary', {}, t()('tech.details')), h('code', {}, res.error))));
       return;
     }
     fitWidth(res.svg, canvas);
@@ -714,7 +714,7 @@ export function createFlowView(ctx) {
       h('div', { class: 'actions' }, back, h('span', { class: 'grow' }), close, plan.unchanged ? null : applyBtn)));
     renderMermaid(preview, text, ctx.phone.matches).then((res) => {
       if (res.ok) fitWidth(res.svg, preview, 0);
-      if (!res.ok && !res.stale) preview.replaceChildren(h('p', { class: 'fl-error' }, t()('flow.drawFailed'), h('code', {}, res.error)));
+      if (!res.ok && !res.stale) preview.replaceChildren(h('div', { class: 'fl-error' }, h('p', {}, t()('flow.drawFailed')), h('details', {}, h('summary', {}, t()('tech.details')), h('code', {}, res.error))));
     }).catch(() => preview.replaceChildren(h('p', { class: 'fl-error' }, t()('flow.mermaidFailed'))));
     (plan.unchanged ? close : applyBtn.disabled ? close : applyBtn).focus();
   }

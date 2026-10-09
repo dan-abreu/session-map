@@ -164,6 +164,6 @@ test('history-search prints at most 5 results of at most 4 lines', () => {
   assert.ok(blocks.length >= 1 && blocks.length <= 5);
   for (const block of blocks) assert.ok(block.split('\n').length <= 4);
   assert.match(out, /Checkout page work/);
-  assert.match(execFileSync(process.execPath, [search, 'zzzz-none'], { env }).toString(), /No matches/);
+  assert.match(execFileSync(process.execPath, [search, 'zzzz-none'], { env }).toString(), /Nothing found/);
   rmSync(root, { recursive: true, force: true });
 });

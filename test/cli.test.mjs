@@ -14,7 +14,7 @@ test('renderState draws layers and parts with their marks, counts, chats and bra
   assert.match(line('Storefront'), /^ {2}! Storefront {2}2\/6 done · 2 with you · 1 blocking · 1 chat · \$2\.90$/, 'items with a person mark the part');
   assert.match(line('Orders and cart'), /^ {2}● Orders and cart/, 'a working chat marks the part');
   assert.match(line('Courier app'), /^ {2}○ Courier app/);
-  assert.match(line('feat/typo-search'), /^ {4}! feat\/typo-search {2}Rui Costa · 4 commits/, 'a clashing branch hangs under its part');
+  assert.match(line('feat/typo-search'), /^ {4}! feat\/typo-search {2}Rui Costa · 4 saved changes/, 'a clashing branch hangs under its part');
   assert.ok(!lines.some((l) => l.includes('feat/magic-link')), 'merged branches are left out');
   assert.ok(lines.includes('Not on the map: 1 chat'));
   assert.ok(lines.includes('No architecture map yet · 3 chats'), 'the notes app has no map');
@@ -39,6 +39,8 @@ test('renderState speaks Portuguese, shows branches that are growing and handles
   assert.ok(pt.includes('feat/typo-search'), 'branches that are still growing hang under their part');
   assert.ok(pt.includes('com você'));
   assert.ok(!pt.includes('feat/magic-link'), 'merged branches are left out');
+  assert.ok(pt.includes('Suas linhas de trabalho feat/stock-alerts e feat/typo-search mexem no mesmo arquivo'), 'a clash is worded in the chosen language');
+  assert.ok(!/touch the same file|(main)/.test(pt), 'no English left over and no bare branch name next to the project');
   assert.match(renderState({ ...DEMO, projects: [], waitingCount: 0 }, { lang: 'en' }), /No Claude Code conversations/);
 });
 
@@ -90,4 +92,16 @@ test('the real command runs from a shell and answers --help', () => {
   assert.match(out, /--watch/);
   assert.match(out, /--json/);
   assert.match(out, /--project/);
+});
+
+test('the help and the wrong-option message say what to do in plain words', async () => {
+  let err = '';
+  const code = await run(['--nope'], { err: { write: (x) => { err += x; } }, out: { write() {} }, env: { LANG: 'pt_BR.UTF-8' }, getState: async () => ({ state: DEMO, source: 'server' }) });
+  assert.equal(code, 2);
+  assert.match(err, /Não conheço a opção --nope/);
+  assert.match(err, /session-map --help/);
+  let out = '';
+  await run(['--help'], { out: { write: (x) => { out += x; } }, env: { LANG: 'pt_BR.UTF-8' } });
+  assert.match(out, /Como usar/);
+  assert.doesNotMatch(out, /JSON|servidor|porta do servidor/);
 });
