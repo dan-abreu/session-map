@@ -19,15 +19,25 @@ function project() {
 const readFolder = (root, dir = DIR) => Object.fromEntries(readdirSync(join(root, dir)).map((f) => [f, readFileSync(join(root, dir, f), 'utf8')]));
 const archOf = (root, dir = DIR) => ({ ...parseArch(dir, readFolder(root, dir)), links: [{ a: 'pagamentos', b: 'seguranca', weight: 1, since: null, reasons: [] }] });
 
-test('export: one subgraph per layer, the parts as boxes (README ids kept), the README arrows and the relations dotted', () => {
+test('export: one subgraph per layer, the parts as boxes (README ids kept) and only the README arrows when it drew some', () => {
   const arch = archOf(project());
   const text = exportMermaid(arch);
   assert.match(text, /^flowchart LR\n/);
   assert.match(text, /\n {2}subgraph entrada\["Por onde as pessoas entram"\]\n {4}VIT\["Vitrine"\]\n {4}APP\["App do entregador"\]\n {2}end\n/);
-  assert.match(text, /\n {2}VIT --> CES\n {2}CES --> PAG\n {2}APP --> CES\n/);
-  assert.match(text, /\n {2}PAG -\.-> SEG$/);
+  assert.match(text, /\n {2}VIT --> CES\n {2}CES --> PAG\n {2}APP --> CES$/);
+  assert.doesNotMatch(text, /-\.->/);
   const model = archFlow(arch);
   assert.equal(model.nodes.length, 5);
+});
+
+test('export: the relations session-map found fill in, dotted, only when the README drew no arrows', () => {
+  const root = project();
+  const readme = join(root, DIR, 'README.md');
+  writeFileSync(readme, readFileSync(readme, 'utf8').replace(/\n[ \t]*\w+ --> \w+/g, ''));
+  const arch = archOf(root);
+  assert.equal(parseFlow(arch.mermaid).edges.length, 0);
+  assert.match(exportMermaid(arch), /\n {2}PAG -\.-> SEG$/);
+  assert.equal(planImport(arch, exportMermaid(arch)).unchanged, true);
 });
 
 test('export of a map without a README diagram still draws every part in its layer', () => {

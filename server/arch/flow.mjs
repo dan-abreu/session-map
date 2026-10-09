@@ -17,7 +17,7 @@ const SKELETON = {
 const README_TITLE = { en: 'Architecture', pt: 'Arquitetura' };
 
 // The map as one flowchart: a subgraph per layer, a box per part (with the README's own id and shape when it drew the
-// part), the README's other boxes and arrows, and the relations session-map found as dotted arrows.
+// part), the README's other boxes and arrows, or, when it drew none, the relations session-map found as dotted arrows.
 export function archFlow(arch) {
   const readme = arch.mermaid ? parseFlow(arch.mermaid) : null;
   const drawn = readme?.ok ? readme : null;
@@ -65,7 +65,9 @@ export function archFlow(arch) {
     const from = idOf.get(e.from), to = idOf.get(e.to);
     if (from && to) model.edges.push({ ...e, from, to });
   }
-  for (const l of arch.links ?? []) {
+  // The README's arrows are the drawing someone made; relations (shared branches, chats, file mentions) join nearly
+  // every pair on a real project, so they only fill in a drawing with no arrows of its own.
+  for (const l of drawn?.edges.length ? [] : arch.links ?? []) {
     const from = partNode.get(l.a), to = partNode.get(l.b);
     if (from && to && !joined(from, to)) model.edges.push({ from, to, label: null, kind: 'dotted' });
   }
