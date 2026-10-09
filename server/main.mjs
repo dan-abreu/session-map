@@ -254,7 +254,8 @@ export function createApp({
   const currentArch = async (project) => (demo || project.arch.source === 'main-branch' ? project.arch : { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch.links ?? [] });
   async function flowRoute(req, res, parts) {
     if (!demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
-    const project = (await state()).projects.find((p) => p.id === parts[3]);
+    // The disk copy is enough here: the map itself is read from the folder, and only the project's root and name come from the state.
+    const project = (await firstAnswer()).projects.find((p) => p.id === parts[3]);
     if (!project) throw new HttpError(404, 'unknown-project');
     const route = parts.slice(4).join('/');
     if (req.method === 'GET' && route === 'mermaid') return send(res, 200, { ok: true, text: exportMermaid(await currentArch(project)) });

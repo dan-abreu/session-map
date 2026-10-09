@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +13,8 @@ const FIX = join(import.meta.dirname, 'fixtures', 'arch-pt');
 const DIR = 'docs/arquitetura';
 const folder = (root) => Object.fromEntries(readdirSync(join(root, DIR)).map((f) => [f, readFileSync(join(root, DIR, f), 'utf8')]));
 
-async function withServer(fn, { demo = false } = {}) {
+// slowCollect: the first collect never finishes (a restart rereading every chat), and only the disk copy of the state answers.
+async function withServer(fn, { demo = false, slowCollect = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'sm-flowsrv-root-'));
   mkdirSync(join(root, DIR), { recursive: true });
   cpSync(FIX, join(root, DIR), { recursive: true });
@@ -27,7 +28,8 @@ async function withServer(fn, { demo = false } = {}) {
     ],
   };
   const token = demo ? 'f'.repeat(64) : loadToken(smDir);
-  const app = createApp({ dir, smDir, demo, chat: null, token, collectFn: () => state });
+  if (slowCollect) writeFileSync(join(smDir, 'state-cache.json'), JSON.stringify(state));
+  const app = createApp({ dir, smDir, demo, chat: null, token, collectFn: () => (slowCollect ? new Promise(() => {}) : state) });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
   const host = `127.0.0.1:${port}`;
@@ -62,6 +64,20 @@ test('export: the map as mermaid, only with the token', async () => {
     assert.match(res.body.text, /^flowchart LR\n {2}subgraph entrada\["Por onde as pessoas entram"\]/);
     assert.equal((await call('GET', '/api/arch/nope/mermaid', { headers: read })).status, 404);
   });
+});
+
+test('after a restart the Flow answers from the disk copy of the state while the first collect is still running', { timeout: 10_000 }, async () => {
+  await withServer(async ({ call, read, write }) => {
+    const res = await call('GET', `${P}/mermaid`, { headers: read });
+    assert.equal(res.status, 200);
+    assert.match(res.body.text, /^flowchart LR/);
+    const { text } = res.body;
+    const plan = await call('POST', `${P}/mermaid/preview`, { headers: write, body: { text } });
+    assert.equal(plan.status, 200);
+    assert.equal(plan.body.unchanged, true);
+    assert.equal((await call('GET', `${P}/draft`, { headers: read })).status, 200);
+    assert.equal((await call('GET', '/api/arch/nope/mermaid', { headers: read })).status, 404);
+  }, { slowCollect: true });
 });
 
 test('preview then apply: the README block and the new part file are written, logged in actions.log; the same text again changes nothing', async () => {
