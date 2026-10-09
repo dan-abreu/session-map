@@ -41,11 +41,12 @@
       </label>
     </div>
     <nav class="tabs" data-i18n-aria="tabs.label">
-      <button type="button" class="tab" aria-current="page" data-i18n="tab.brain"></button>
+      <button type="button" class="tab" id="tabBrain" aria-current="page" data-i18n="tab.brain"></button>
       <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.map"></button>
       <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.board"></button>
       <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.history"></button>
       <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.costs"></button>
+      <button type="button" class="tab" id="tabDiscover" data-i18n="tab.discover"></button>
     </nav>
     <div class="bar-end">
       <div class="lang" role="group" data-i18n-aria="lang.label">
@@ -100,6 +101,23 @@
     <button type="button" id="fit" class="icon-btn fit-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
 
     <p class="notice" id="notice" role="status"></p>
+
+    <section id="discover" class="discover" aria-labelledby="discoverTitle" hidden>
+      <div class="dv-wrap">
+        <h2 id="discoverTitle" data-i18n="discover.title"></h2>
+        <p class="dv-lede" data-i18n="discover.lede"></p>
+        <div class="dv-tools">
+          <label class="dv-field"><span class="visually-hidden" data-i18n="discover.searchLabel"></span><input type="search" id="discoverSearch" autocomplete="off"></label>
+          <label class="dv-field"><span data-i18n="discover.sort"></span><select id="discoverSort"></select></label>
+          <label class="dv-field"><span data-i18n="discover.type"></span><select id="discoverType"></select></label>
+          <label class="dv-field"><span data-i18n="discover.category"></span><select id="discoverCategory"></select></label>
+          <button type="button" class="btn" id="discoverRefresh" data-i18n="discover.refresh"></button>
+        </div>
+        <p class="dv-status" id="discoverStatus" role="status"></p>
+        <ul class="dv-list" id="discoverList"></ul>
+      </div>
+      <dialog id="installDialog" class="dv-dialog" aria-label="Install"></dialog>
+    </section>
   </main>
 
   <footer class="timeline">

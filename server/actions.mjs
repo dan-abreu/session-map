@@ -1,11 +1,12 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJsonFile, writeAtomic } from './brain/cells.mjs';
+import { installFromCatalog } from './sources/catalog.mjs';
 import { killProcess, newTerminal, openUrl, processName as processNameDefault } from './launch.mjs';
 import { log } from './log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive']);
+const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install']);
 const CLAUDE_PROCESS_RE = /claude|node/i;
 
 // The key collect uses to hand the actions what the page must not see (cwd, pid); Symbol.for so neither file imports the other.
@@ -62,6 +63,11 @@ async function dispatch(body, deps) {
   const launchOpts = { platform, spawner, ...(hasWt ? { hasWt } : {}) };
   if (!body || typeof body !== 'object' || !ACTIONS.has(body.action)) return reply(400, { error: 'bad-action' });
 
+  if (body.action === 'install') {
+    const { status, ...rest } = await installFromCatalog(body, deps);
+    return reply(status, rest);
+  }
+
   if (body.action === 'new') {
     if (typeof body.frontId !== 'string') return reply(400, { error: 'bad-front' });
     const found = findWorkCell(state, body.frontId, typeof body.projectId === 'string' ? body.projectId : null);
@@ -98,6 +104,9 @@ function logAction(smDir, body, status) {
   const line = { ts: new Date().toISOString(), action: String(body?.action ?? '').slice(0, 20), status };
   if (typeof body?.sessionId === 'string') line.sessionId = body.sessionId.slice(0, 40);
   if (typeof body?.frontId === 'string') line.frontId = body.frontId.slice(0, 200);
+  if (typeof body?.repo === 'string') line.repo = body.repo.slice(0, 100);
+  if (typeof body?.scope === 'string') line.scope = body.scope.slice(0, 10);
+  if (typeof body?.plugin === 'string') line.plugin = body.plugin.slice(0, 100);
   try {
     mkdirSync(smDir, { recursive: true });
     appendFileSync(join(smDir, 'actions.log'), `${JSON.stringify(line)}\n`);

@@ -1,6 +1,7 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import { createBrain, neuronKind, isUnsure } from './brain.js';
 import { unitTree, ownerHue, initial, filesByFolder } from './body.js';
+import { createDiscover } from './discover.js';
 
 const $ = (sel) => document.querySelector(sel);
 const PLAY_MS = 9000;
@@ -81,6 +82,17 @@ function applyStaticText() {
   for (const el of document.querySelectorAll('[data-i18n-title]')) el.setAttribute('title', t(el.dataset.i18nTitle));
   for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
   setPlayIcon();
+  discover?.relabel();
+}
+
+let discover = null;
+function showView(name) {
+  const onDiscover = name === 'discover';
+  $('#tabBrain').setAttribute('aria-current', onDiscover ? 'false' : 'page');
+  $('#tabDiscover').setAttribute('aria-current', onDiscover ? 'page' : 'false');
+  document.body.classList.toggle('view-discover', onDiscover);
+  if (onDiscover) discover.show();
+  else $('#discover').hidden = true;
 }
 
 let toastTimer = 0;
@@ -613,6 +625,12 @@ function wire() {
     });
   }
   for (const tab of document.querySelectorAll('[data-soon]')) tab.addEventListener('click', () => toast(t('tab.soon')));
+  discover = createDiscover({
+    root: $('#discover'), h, t: () => t, lang: () => lang, toast,
+    project: () => (project ? { id: project.id, name: project.name } : null),
+  });
+  $('#tabBrain').addEventListener('click', () => showView('brain'));
+  $('#tabDiscover').addEventListener('click', () => showView('discover'));
   $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeWaiting()));
   for (const b of document.querySelectorAll('[data-close]')) {
     b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeWaiting()));

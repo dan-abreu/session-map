@@ -15,6 +15,7 @@ import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { collect } from './collect.mjs';
 import { log } from './log.mjs';
+import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -123,11 +124,12 @@ async function serveFile(res, path) {
   res.end(body);
 }
 
-// collectFn and ai are replaceable for tests; addressOf stands in for the socket's remote address.
+// collectFn, ai and catalog ({token, fetchFn, exec, bin}) are replaceable for tests; addressOf stands in for the socket's remote address.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir }),
+  catalog = {},
 } = {}) {
   let cached = null;
   const state = () => {
@@ -185,6 +187,13 @@ export function createApp({
     return send(res, result.status, result.body);
   }
 
+  // One GitHub round at a time, however many tabs ask.
+  let catalogRun = null;
+  const loadCatalog = (force) => {
+    catalogRun ??= fetchCatalog({ smDir, dir, force, ...catalog }).finally(() => { catalogRun = null; });
+    return catalogRun;
+  };
+
   async function route(req, res, url) {
     const path = url.pathname;
     const parts = path.split('/').map((p) => decodeURIComponent(p));
@@ -236,9 +245,17 @@ export function createApp({
       fresh();
       return send(res, 200, { ok: true });
     }
+    if (req.method === 'GET' && path === '/api/catalog') {
+      if (demo) throw new HttpError(403, 'demo');
+      // A refetch spends the user's GitHub quota: only a page that holds the token may ask for one.
+      const refresh = url.searchParams.get('refresh') === '1' && sameToken(cookieToken(req), token);
+      const { items, ...meta } = await loadCatalog(refresh);
+      const query = Object.fromEntries(['sort', 'type', 'category', 'q'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
+      return send(res, 200, { ...meta, total: items.length, items: markInstalled(filterCatalog(items, query), dir) });
+    }
     if (req.method === 'POST' && path === '/api/action') {
       if (demo) throw new HttpError(403, 'demo');
-      const result = await runAction(await readBody(req), { state: await state(), dir, smDir });
+      const result = await runAction(await readBody(req), { state: await state(), dir, smDir, exec: catalog.exec, bin: catalog.bin });
       fresh();
       return send(res, result.status, result.body);
     }

@@ -523,6 +523,41 @@ button, select, input { font: inherit; color: inherit; }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 
+/* ---------- discover ---------- */
+
+.discover { position: absolute; inset: 0; z-index: 2; overflow-y: auto; background: var(--bg); }
+.dv-wrap { width: min(920px, 100%); margin: 0 auto; padding: 24px 16px 40px; }
+.dv-wrap h2 { margin: 0; font-size: 1.25rem; letter-spacing: -0.015em; }
+.dv-lede { margin: 4px 0 16px; color: var(--ink-2); max-width: 64ch; }
+.dv-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.dv-field { display: grid; gap: 3px; font-size: 0.75rem; color: var(--ink-2); }
+.dv-field input, .dv-field select {
+  height: 34px; padding: 0 10px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--bg-2); color: var(--ink);
+}
+.dv-field input { width: min(260px, 100%); }
+.dv-status { margin: 12px 0; min-height: 1.45em; color: var(--ink-2); font-size: 0.8125rem; }
+.dv-status.is-error { color: var(--waiting-ink); }
+.dv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dv-list .empty { padding: 20px 4px; color: var(--ink-2); }
+.dv-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
+.dv-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.dv-name { font-weight: 650; color: var(--ink); }
+.dv-owner, .dv-stars, .dv-fact { color: var(--ink-2); font-size: 0.8125rem; }
+.dv-stars { margin-left: auto; }
+.dv-desc { margin: 6px 0 8px; overflow-wrap: anywhere; }
+.dv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; }
+.dv-card .actions { margin-top: 12px; }
+.dv-dialog {
+  width: min(480px, calc(100% - 32px)); padding: 20px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--bg-2); color: var(--ink); box-shadow: var(--shadow);
+}
+.dv-dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.dv-dialog h2 { margin: 0 0 8px; font-size: 1.0625rem; overflow-wrap: anywhere; }
+.dv-warning { margin: 12px 0; padding: 10px 12px; border-radius: 9px; background: var(--waiting-fill); color: var(--waiting-ink); font-weight: 550; }
+.dv-dialog .dv-field { margin-top: 10px; }
+body.view-discover .timeline { display: none; }
+
 /* ---------- timeline ---------- */
 
 .timeline {
