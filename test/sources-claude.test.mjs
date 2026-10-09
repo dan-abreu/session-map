@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, utimesSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, utimesSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -223,6 +223,17 @@ test('readWorkflows dates a running agent by its own transcript, so a long agent
     const one = readWorkflows(join(dir, A)).find((w) => w.id === 'wf_one');
     assert.equal(one.updatedAt, journalAt.toISOString());
     assert.equal(one.running[0].activeAt, movedAt.toISOString());
+  });
+});
+
+test('readWorkflows names a workflow as Claude Code writes it: workflowName in the meta, or the script file while it runs', () => {
+  withTempDir((dir) => {
+    cpSync(join(PROJ, A), join(dir, A), { recursive: true });
+    writeFileSync(join(dir, A, 'workflows', 'wf_one.json'), JSON.stringify({ runId: 'wf_one', workflowName: 'checkout-release' }));
+    mkdirSync(join(dir, A, 'workflows', 'scripts'), { recursive: true });
+    writeFileSync(join(dir, A, 'workflows', 'scripts', 'shop-v2-launch-wf_two.js'), '');
+    const byId = Object.fromEntries(readWorkflows(join(dir, A)).map((w) => [w.id, w.name]));
+    assert.deepEqual(byId, { wf_one: 'checkout-release', wf_two: 'shop-v2-launch' });
   });
 });
 

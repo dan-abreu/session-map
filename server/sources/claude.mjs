@@ -525,6 +525,7 @@ function agentMovedAt(dir, agentId) {
 
 export function readWorkflows(sessionDir) {
   const workflows = [];
+  const scripts = listDir(join(sessionDir, 'workflows', 'scripts')).map((f) => f.name);
   for (const wf of listDir(join(sessionDir, 'subagents', 'workflows'))) {
     if (!wf.isDirectory()) continue;
     const journalPath = join(sessionDir, 'subagents', 'workflows', wf.name, 'journal.jsonl');
@@ -534,11 +535,14 @@ export function readWorkflows(sessionDir) {
     try { mtimeMs = statSync(journalPath).mtimeMs; } catch { continue; }
     const events = parseLines(text);
     const started = events.filter((e) => e.type === 'started');
-    let name = wf.name;
+    // The meta file is written when the run ends; while it runs, the script's file name ("<name>-<id>.js") holds the name.
+    const suffix = `-${wf.name}.js`;
+    let name = scripts.find((f) => f.endsWith(suffix))?.slice(0, -suffix.length) || wf.name;
     try {
       const meta = JSON.parse(readText(join(sessionDir, 'workflows', `${wf.name}.json`)));
-      if (typeof meta?.name === 'string' && meta.name) name = meta.name;
-    } catch { /* no name file: the id stands in */ }
+      const named = [meta?.workflowName, meta?.name].find((n) => typeof n === 'string' && n);
+      if (named) name = named;
+    } catch { /* no meta file yet */ }
     const answered = new Set(events.filter((e) => e.type === 'result').map((e) => e.agentId));
     workflows.push({
       id: wf.name,
