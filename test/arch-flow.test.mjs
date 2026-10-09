@@ -40,6 +40,24 @@ test('export: the relations session-map found fill in, dotted, only when the REA
   assert.equal(planImport(arch, exportMermaid(arch)).unchanged, true);
 });
 
+// fl05: a README with no diagram at all shows the automatic draft, and "Save to project" must be able to write it.
+test('the automatic draft of a README with no diagram is a change that can be saved, and saving it makes it the README own', () => {
+  const root = project();
+  const readme = join(root, DIR, 'README.md');
+  writeFileSync(readme, readFileSync(readme, 'utf8').replace(/```mermaid[\s\S]*?```\r?\n?/, ''));
+  const arch = archOf(root);
+  assert.equal(arch.mermaid, null, 'no diagram in this README');
+  const draft = exportMermaid(arch);
+  const plan = planImport(arch, draft);
+  assert.equal(plan.unchanged, false, 'there is something to save');
+  assert.equal(plan.diagramChanged, true);
+  assert.deepEqual([plan.partsNew, plan.partsMoved, plan.partsMissing, plan.edgesAdded, plan.edgesRemoved].map((l) => l.length), [0, 0, 0, 0, 0], 'no part or arrow changes');
+  const out = applyImport({ root, arch, text: draft });
+  assert.deepEqual(out, { ok: true, changed: true, files: [`${DIR}/README.md`] });
+  assert.match(readFileSync(readme, 'utf8'), /```mermaid\nflowchart LR/);
+  assert.equal(planImport(archOf(root), draft).unchanged, true, 'saved: the next preview has nothing left to say');
+});
+
 // Seen in a real test: the drawing carried 3 dotted relations that were written to the README as arrows, but the preview
 // counted only the 2 arrows that were really new.
 test('the preview lists the relations an imported drawing turns into README arrows as their own line', () => {

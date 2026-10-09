@@ -6,7 +6,7 @@ const GAP_X = 74;
 const GAP_Y = 12;
 const TWEEN_MS = 300;
 const FIT_PAD = 28;
-const SCALE = [0.3, 1.6];
+const SCALE = [0.1, 4];
 const READABLE = 0.85;
 const CAPTION_GAP = 6;
 
@@ -70,7 +70,7 @@ const lerpBox = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p), w: l
 // The horizontal mind map (desenho-3 § 2): rounded boxes per level, smooth curves, a round toggle beside each box,
 // zoom and drag. The page hands it the tree and what lights each box; it owns only positions and motion.
 // ctx: content(node) → DOM children of a box, signature(node) → string that changes when the content must be rebuilt,
-// onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), freeArea() → {left, top, width, height};
+// onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), linkTip(link), freeArea() → {left, top, width, height};
 // count(node) → {n, label, pressed} or null: the number of conversations hung on the box, onCount(node) when it is pressed.
 export function createMindmap(root, ctx) {
   const world = document.createElement('div');
@@ -80,12 +80,17 @@ export function createMindmap(root, ctx) {
   const relLayer = svg('g', { class: 'mm-rels' });
   wires.append(edgeLayer, relLayer);
   world.append(wires);
-  root.append(world);
+  const tip = document.createElement('div');
+  tip.className = 'mm-reltip';
+  tip.setAttribute('aria-hidden', 'true');
+  tip.hidden = true;
+  root.append(world, tip);
 
   const nodes = new Map(); // id → {el, box, toggle, sig}
   let boxes = new Map(); // where each box is drawn now
   let edges = [];
   let rels = [];
+  let relLit = null; // the key (a|b) of the line the Relations list lights
   let tween = 0;
   let transform = { x: 0, y: 0, k: 1 };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -181,11 +186,28 @@ export function createMindmap(root, ctx) {
       const x2 = b.x + b.w + TOGGLE + 6, y2 = b.y + b.h / 2;
       const cx = Math.max(x1, x2) + 28 + Math.min(150, Math.abs(y2 - y1) * 0.2);
       const d = `M${x1},${y1}C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
+      const key = `${l.a}|${l.b}`;
+      const state = relLit === null ? '' : relLit === key ? ' is-lit' : ' is-dim';
+      const line = svg('path', { d, class: `mm-rel w-${l.weight}${state}`, 'data-key': key });
       const hit = svg('path', { d, class: 'mm-rel-hit', tabindex: '0', role: 'button', 'aria-label': ctx.linkLabel(l) });
       const pick = () => ctx.onLink(l);
+      const show = (x, y) => {
+        line.classList.add('is-hover');
+        tip.textContent = ctx.linkTip(l);
+        tip.hidden = false;
+        const r = root.getBoundingClientRect();
+        tip.style.left = `${Math.max(8, Math.min(x - r.left + 14, r.width - tip.offsetWidth - 8))}px`;
+        tip.style.top = `${Math.max(8, y - r.top - tip.offsetHeight - 10)}px`;
+      };
+      const hide = () => { line.classList.remove('is-hover'); tip.hidden = true; };
       hit.addEventListener('click', pick);
       hit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
-      return [svg('path', { d, class: `mm-rel w-${l.weight}` }), hit];
+      hit.addEventListener('pointerenter', (e) => show(e.clientX, e.clientY));
+      hit.addEventListener('pointermove', (e) => show(e.clientX, e.clientY));
+      hit.addEventListener('pointerleave', hide);
+      hit.addEventListener('focus', () => { const r = hit.getBoundingClientRect(); show(r.left + r.width / 2, r.top + r.height / 2); });
+      hit.addEventListener('blur', hide);
+      return [line, hit];
     }));
   }
 
@@ -219,6 +241,7 @@ export function createMindmap(root, ctx) {
     const next = layoutTree(tree, (id) => view.open.has(id), (node) => sizes.get(node.id), { gapX: GAP_X, gapY: GAP_Y });
     edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: view.live.has(e.to) }));
     rels = view.relations ?? [];
+    relLit = view.relLit ?? null;
     wires.setAttribute('width', String(next.width + 400));
     wires.setAttribute('height', String(next.height + 40));
 
@@ -314,5 +337,11 @@ export function createMindmap(root, ctx) {
     if (n) pulseOn(n.el);
   }
 
-  return { render, fit, reveal, focus, pulse, zoomBy: (f) => sel.transition().duration(200).call(zoom.scaleBy, f) };
+  // +/− zoom around the middle of the free part of the stage, where the person is looking.
+  function zoomBy(factor) {
+    const area = ctx.freeArea();
+    sel.transition().duration(reduced.matches ? 0 : 200).call(zoom.scaleBy, factor, [area.left + area.width / 2, area.top + area.height / 2]);
+  }
+
+  return { render, fit, reveal, focus, pulse, zoomBy };
 }

@@ -154,6 +154,14 @@ function partsEditedMost(files, arch, topLevel, own) {
   return [...count].sort((p, q) => q[1] - p[1] || p[0].localeCompare(q[0])).slice(0, CHAT_LINKS_MAX).map(([id]) => id);
 }
 
+const EVIDENCE_FILES_MAX = 3;
+const definedOnly = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+// The files a chat edited that sit in one of the parts: the proof shown beside a "same conversation touched both" reason.
+function filesIn(files, arch, topLevel, partIds) {
+  return files.filter((f) => bestByFile([f], arch, topLevel).some((b) => partIds.some((id) => b.ids.has(id)))).slice(0, EVIDENCE_FILES_MAX);
+}
+
 // Related parts for "Show relations" (desenho-3 § 2), from the v0.1 cell links: a chat or a branch that worked on both,
 // a chat continued from one in the other, a part file that links to the other. chats carry `files` (repo paths).
 export function linkParts(arch, chats, workCells, { topLevel } = {}) {
@@ -168,21 +176,23 @@ export function linkParts(arch, chats, workCells, { topLevel } = {}) {
     link.reasons.push(reason);
     links.set(`${a}\n${b}`, link);
   };
-  const fan = (from, ids, since, reason) => {
-    if (known.has(from)) for (const id of ids) add(from, id, since, reason);
-    else for (const x of ids) for (const y of ids) if (x < y) add(x, y, since, reason);
+  // reasonFor(partIds): the reason for a link between the parts of one fan, with what shows it.
+  const fan = (from, ids, since, reasonFor) => {
+    if (known.has(from)) for (const id of ids) add(from, id, since, reasonFor([id]));
+    else for (const x of ids) for (const y of ids) if (x < y) add(x, y, since, reasonFor([x, y]));
   };
   const chatById = new Map(chats.map((c) => [c.sessionId, c]));
   for (const chat of chats) {
-    fan(chat.partId, partsEditedMost(chat.files ?? [], arch, topLevel, chat.partId), chat.startedAt, { kind: 'shared-chat', text: chat.title, sessionId: chat.sessionId });
+    fan(chat.partId, partsEditedMost(chat.files ?? [], arch, topLevel, chat.partId), chat.startedAt, (ids) => ({ kind: 'shared-chat', text: chat.title, sessionId: chat.sessionId, files: filesIn(chat.files ?? [], arch, topLevel, ids) }));
     const parent = chatById.get(chat.parentId);
-    if (parent) add(chat.partId, parent.partId, chat.startedAt, { kind: 'lineage', text: chat.title, sessionId: chat.sessionId });
+    if (parent) add(chat.partId, parent.partId, chat.startedAt, { kind: 'lineage', text: chat.title, sessionId: chat.sessionId, fromSessionId: parent.sessionId });
   }
   for (const cell of workCells) {
     const ids = new Set([...(cell.touches ?? []), ...(cell.chatIds ?? []).map((id) => chatById.get(id)?.partId)].filter((id) => known.has(id) && id !== cell.partId));
-    fan(cell.partId, [...ids], cell.bornAt, { kind: 'shared-branch', text: cell.branch });
+    const evidence = { workCellId: cell.id, commit: cell.lastCommit?.subject, spec: cell.openspec ? { change: cell.openspec.change, done: cell.openspec.done, total: cell.openspec.total } : undefined };
+    fan(cell.partId, [...ids], cell.bornAt, () => ({ kind: 'shared-branch', text: cell.branch, ...definedOnly(evidence) }));
   }
-  for (const p of arch.parts) for (const to of p.refs ?? []) add(p.id, to, null, { kind: 'file-ref', text: `${p.name} → ${nameOf.get(to)}` });
+  for (const p of arch.parts) for (const to of p.refs ?? []) add(p.id, to, null, { kind: 'file-ref', text: `${p.name} → ${nameOf.get(to)}`, ...definedOnly({ file: p.file }) });
   return [...links.values()]
     .map((l) => ({ a: l.a, b: l.b, weight: Math.min(l.reasons.length, MAX_WEIGHT), since: l.since, reasons: l.reasons }))
     .sort((p, q) => q.weight - p.weight || p.a.localeCompare(q.a) || p.b.localeCompare(q.b));

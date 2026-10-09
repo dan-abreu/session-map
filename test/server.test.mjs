@@ -145,6 +145,25 @@ test('--demo serves demo/state.json without touching the user disk', async () =>
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('history takes a period: from and to (ms) keep only conversations active inside it (mm06)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-srv-hist-'));
+  const dir = join(root, 'claude');
+  const smDir = join(root, 'sm');
+  cpSync(new URL('./fixtures/claude/', import.meta.url), dir, { recursive: true });
+  const S1 = '11111111-1111-4111-8111-111111111111';
+  assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S1), smDir), 'archived');
+  try {
+    await withServer({ dir, smDir }, async ({ call }) => {
+      const count = async (query) => JSON.parse((await call('GET', `/api/history?q=checkout${query}`)).text).results.length;
+      assert.ok(await count('') >= 1);
+      assert.equal(await count('&from=99999999999999'), 0, 'a period in the far future');
+      assert.equal(await count('&to=1000'), 0, 'a period before everything');
+      assert.ok(await count('&from=1000&to=99999999999999') >= 1);
+      assert.ok(await count('&from=abc') >= 1, 'a bad number is no limit');
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('history search and archived conversation routes validate their input', async () => {
   await withServer({}, async ({ call, token }) => {
     const res = await call('GET', '/api/history?q=cart');

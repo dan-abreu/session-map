@@ -1,9 +1,8 @@
 // Pure view logic for the page: no DOM, no fetch, so node:test can load it.
 import { summaryOf } from './alerts.js';
 import { modelName } from './live.js';
+import { inRange } from './range.js';
 
-const DAY = 864e5;
-const RANGE_DAYS = { d7: 7, d30: 30 };
 
 // Everything that waits for the person, in the order the list shows it: strong questions first. With a project id, only
 // that project's; without, every project's.
@@ -54,20 +53,10 @@ export function visibleProject(project, showArchived) {
   };
 }
 
-export function rangeStart(range, now) {
-  if (range === 'today') {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }
-  return now - RANGE_DAYS[range] * DAY;
-}
-
 // A conversation's cost is its whole life; the period picks which conversations were active in it.
-export function costRows(state, range, now) {
-  const from = rangeStart(range, now);
+export function costRows(state, range) {
   return state.projects
-    .flatMap((project) => project.chats.filter((c) => Date.parse(c.updatedAt) >= from).map((chat) => ({ project, chat })))
+    .flatMap((project) => project.chats.filter((c) => inRange(Date.parse(c.updatedAt), range)).map((chat) => ({ project, chat })))
     .sort((a, b) => b.chat.costUSD - a.chat.costUSD);
 }
 

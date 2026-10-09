@@ -4,13 +4,14 @@ The picture of how the parts talk to each other: a mermaid diagram kept in the a
 
 ## How it works
 
-The Flow tab draws the first mermaid block of the README (layers are `subgraph`s, arrows are who talks to whom). A box that matches a part opens that part's panel and chat and takes its status color. The diagram can be exported and imported as mermaid with a preview of what changes, and a draft studio on the side lets a chat and manual tools edit a draft that touches nothing until "Apply".
+The Flow tab draws the first mermaid block of the README (layers are `subgraph`s, arrows are who talks to whom). A box that matches a part opens that part's panel and chat and takes its status color. With no diagram in the README it shows an automatic draft built from the layers, parts and relations, with "Improve with the AI" and "Save to project". The drawing exports as SVG, PNG, Markdown or mermaid, and can be imported as mermaid with a preview of what changes, and a draft studio on the side lets a chat and manual tools edit a draft that touches nothing until "Apply".
 
 ## Where in the code
 
 - `server/arch/flow.mjs`
 - `server/web/flow.js`
 - `server/web/flowview.js`
+- `server/web/flowexport.js`
 - `server/web/vendor/`
 
 ## Rules that must not break
@@ -31,12 +32,12 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 
 ### Fluid Flow
 
-- [ ] **important:** Read the Flow without a key on this PC `fl04`
+- [x] **Claude:** Read the Flow without a key on this PC `fl04`
   - A read request from `127.0.0.1` must not ask for the key; the key is for writes and for access from outside. Today the mermaid route answers 401 locally and the tab stays blank. Fix every read route and show the "open with the key" message only on write buttons.
-- [ ] **important:** Automatic draft when the README has no diagram `fl05`
+- [x] **Claude:** Automatic draft when the README has no diagram `fl05`
   - A project with an architecture but no diagram shows at once a draft built from layers, parts and relations, with no AI, marked "automatic draft".
   - Buttons: "Improve with the AI" (opens the studio already asking for the real flow) and "Save to project" (preview and confirmation).
-- [ ] **important:** Export the drawing as SVG, PNG and Markdown `fl06`
+- [x] **Claude:** Export the drawing as SVG, PNG and Markdown `fl06`
   - SVG and PNG from the drawing on screen; Markdown with the mermaid block. The `.mmd` export stays.
 
 ### Detailed Flow

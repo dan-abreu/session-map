@@ -10,6 +10,10 @@
 </head>
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true">
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4.5" y="5.5" width="15" height="14" rx="2.5"/><path d="M4.5 10h15M8.5 3.5v4M15.5 3.5v4"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M14 7l-5 5 5 5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5.5 12h13"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
     <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
@@ -130,7 +134,7 @@
           <input type="search" id="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list" data-i18n-placeholder="search.placeholder">
           <ul id="searchResults" class="mm-results" role="listbox" data-i18n-aria="search.results" hidden></ul>
         </div>
-        <div class="seg mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
+        <div class="mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
         <button type="button" class="btn primary" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
         <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
@@ -156,7 +160,22 @@
     <div class="mm" id="mindmap" data-i18n-aria="map.label" role="group"></div>
     <div class="ol" id="outline" data-i18n-aria="map.label" role="group"></div>
 
-    <button type="button" id="fit" class="icon-btn fit-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
+    <div class="fit-btn zoom-tools" id="zoomTools" role="group" data-i18n-aria="view.zoom">
+      <button type="button" id="zoomIn" class="icon-btn" data-i18n-aria="view.zoomIn" data-i18n-title="view.zoomIn"><svg><use href="#i-plus"/></svg></button>
+      <button type="button" id="zoomOut" class="icon-btn" data-i18n-aria="view.zoomOut" data-i18n-title="view.zoomOut"><svg><use href="#i-minus"/></svg></button>
+      <button type="button" id="fit" class="icon-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
+    </div>
+
+    <section id="relList" class="sheet rel-list" aria-labelledby="relTitle" hidden>
+      <div class="sheet-head">
+        <div>
+          <h2 id="relTitle" data-i18n="rel.title"></h2>
+          <p class="meta rel-sub" id="relSub"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close="rel" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div class="rel-body" id="relBody"></div>
+    </section>
 
     <section id="waitingList" class="sheet waiting-list" aria-labelledby="waitingTitle" hidden>
       <div class="sheet-head">
@@ -254,7 +273,15 @@
         </div>
         <div class="fl-actions" id="flowActions">
           <button type="button" class="btn" id="flowCopy"><svg class="btn-icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="flow.copy"></span></button>
-          <button type="button" class="btn" id="flowDownload"><svg class="btn-icon" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="flow.download"></span></button>
+          <details class="menu" id="flowExport">
+            <summary class="btn" id="flowExportBtn"><svg class="btn-icon" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="flow.export"></span></summary>
+            <div class="menu-pop" role="group" data-i18n-aria="flow.export">
+              <button type="button" data-export="svg" data-i18n="flow.export.svg"></button>
+              <button type="button" data-export="png" data-i18n="flow.export.png"></button>
+              <button type="button" data-export="md" data-i18n="flow.export.md"></button>
+              <button type="button" data-export="mmd" data-i18n="flow.export.mmd"></button>
+            </div>
+          </details>
           <button type="button" class="btn" id="flowImport"><svg class="btn-icon" aria-hidden="true"><use href="#i-import"/></svg><span data-i18n="flow.import"></span></button>
         </div>
       </div>
@@ -291,6 +318,14 @@
           <p class="fl-editor-error" id="flowEditorError" role="status"></p>
         </div>
         <div class="fl-canvas-wrap">
+          <div class="fl-auto" id="flowAuto" role="note" hidden>
+            <span class="fl-auto-tag" data-i18n="flow.auto.tag"></span>
+            <p data-i18n="flow.auto.text"></p>
+            <div class="fl-auto-actions">
+              <button type="button" class="btn primary" id="flowAutoImprove" data-i18n="flow.auto.improve"></button>
+              <button type="button" class="btn" id="flowAutoSave" data-i18n="flow.auto.save"></button>
+            </div>
+          </div>
           <div class="fl-canvas" id="flowCanvas" role="group" data-i18n-aria="flow.canvas"></div>
           <ul class="fl-legend" id="flowLegend"></ul>
         </div>

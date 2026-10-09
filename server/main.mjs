@@ -333,7 +333,8 @@ export function createApp({
   // A map the state read from the main branch stays refused even if a folder appeared since: apply never guesses.
   const currentArch = async (project) => (demo || project.arch.source === 'main-branch' ? project.arch : { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch.links ?? [] });
   async function flowRoute(req, res, parts) {
-    if (!demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    // A read is open on this PC (authorize already let only a local or keyed one in); every write needs the key.
+    if (req.method !== 'GET' && !demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
     // The disk copy is enough here: the map itself is read from the folder, and only the project's root and name come from the state.
     const project = (await firstAnswer()).projects.find((p) => p.id === parts[3]);
     if (!project) throw new HttpError(404, 'unknown-project');
@@ -392,7 +393,8 @@ export function createApp({
     if (req.method === 'GET' && path === '/api/history') {
       if (demo) return send(res, 200, { results: [] });
       const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir));
-      return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20 }) });
+      const ms = (name) => { const n = Number(url.searchParams.get(name)); return url.searchParams.get(name) && Number.isFinite(n) ? n : undefined; };
+      return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20, from: ms('from'), to: ms('to') }) });
     }
     if (req.method === 'POST' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'place' && parts.length === 5) return placeRoute(req, res, parts[3]);
     if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {

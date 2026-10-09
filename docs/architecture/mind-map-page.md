@@ -4,7 +4,7 @@ The browser page: a tree from the project through layers and parts to groups and
 
 ## How it works
 
-Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking a box opens its panel and a chat on that point. A green dot pulses where a chat is working; "Show relations" draws dotted lines between related parts; "What changed" lights today, 7 or 30 days. Open or closed state, search and zoom are remembered per project.
+Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking a box opens its panel and a chat on that point. A green dot pulses where a chat is working; "Show relations" draws dotted lines between related parts; "What changed" lights the parts that moved in the period picked on a bank-statement-style button (also used by History, Costs and the activity lists). Open or closed state, search and zoom are remembered per project.
 
 ## Where in the code
 
@@ -43,13 +43,16 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
-- [ ] **important:** Relations you can zoom, select and read `mm05`
+- [x] **Claude:** Relations you can zoom, select and read `mm05`
   - Wider zoom range, +/−/fit buttons, pinch on phones, a click on a box centers it.
   - A wide invisible hit area (about 16 px) on every line, a summary on hover ("A ↔ B · 3 reasons") and a "Relations" list sorted by strength that lights the line when clicked.
   - Relation panel: both parts, strength, every reason with its evidence (chats, branches, commits, shared files, spec excerpt, the AI's explanation), since when, confirmed or detected. Actions: open the chats, put it on the Flow drawing, ignore it (kept per project).
-- [ ] **important:** Bank-statement-style date range `mm06`
+- [x] **Claude:** Bank-statement-style date range `mm06`
   - Buttons Today, 7, 15, 30, 60, 90 days, This month, Last month, Custom. Custom has From and To fields and a two-month calendar (click the start, click the end, the range is painted), Apply and Clear; on phones a one-month calendar in a bottom sheet.
   - The range shows on the button ("3–9 Oct"), is remembered per project and applies to "What changed", History, Costs and Activity.
+- [ ] **important:** The AI's plain-words reason for a relation `mm32`
+  - What is left of `mm05`: the relation panel shows every reason with its evidence (chats, files, branch, last commit, plan), but not a sentence from the AI saying why the two parts are tied.
+  - One cheap AI call per relation, cached in the session-map storage and redone only when its reasons change.
 - [ ] **important:** Panels separated by kind of information `mm07`
   - Distinct blocks with their own color, icon and plain title: Tasks, Chats, Lines of work (branches), What changed, Files. Each block says where its data comes from.
   - Tabs in the panel (Summary, Tasks, Chats, Changes, Files); the Summary shows only the essentials. The same colors and icons for each kind everywhere: map, lists, Now strip, alerts.

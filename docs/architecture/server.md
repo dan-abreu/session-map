@@ -4,7 +4,7 @@ The local HTTP server that serves the page, the state and every action. It liste
 
 ## How it works
 
-Reads need nothing from `127.0.0.1`; every write, and every access from another address, needs the token (and a CSRF header for writes). Writes are recorded in an action log. `--demo` serves invented data and never touches the disk.
+Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, the history search), except the ones that run code or show what a conversation read and ran (the chat, project files, a saved conversation, the settings), which keep asking for the token even here; every write, and every access from another address, needs the token (and a CSRF header for writes). Writes are recorded in an action log. `--demo` serves invented data and never touches the disk.
 
 ## Where in the code
 

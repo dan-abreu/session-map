@@ -9,6 +9,7 @@ import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
 import { projectIdOf } from '../server/paths.mjs';
+import { isoDay } from '../server/web/range.js';
 
 const INTERNALS = Symbol.for('session-map.internals');
 
@@ -170,6 +171,9 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     assert.equal(state.waitingCount, 3, 'the chat\'s weak end and item, plus the item waiting on Ana');
 
     assert.deepEqual(p.cost, { today: 4, d7: 6, d30: 6 });
+    const todayKey = isoDay(NOW);
+    assert.equal(p.costByDay[todayKey], 4, 'the same money, day by day (mm06)');
+    assert.equal(Object.values(p.costByDay).reduce((s, v) => s + v, 0), 6);
     assert.deepEqual(state.totals, { today: 4, d7: 6, d30: 6 });
     assert.deepEqual(state.currency, { code: 'BRL', rate: 5 });
     assert.deepEqual(state.budget, { monthlyUSD: 100, used: 6 });

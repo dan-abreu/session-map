@@ -146,10 +146,11 @@ function withAncestors(root, partIds, extra = []) {
 
 // "What changed": the parts with a commit, a branch event or a chat since `since` (ms). Items whose state changed
 // are seen through the commits that edited the part's file, which counts as one of its paths.
-export function changedNodes(project, root, since) {
+export function changedNodes(project, root, since, until = Number.POSITIVE_INFINITY) {
   const parts = new Set();
-  for (const a of project.activity) if (Date.parse(a.ts) >= since) for (const id of a.partIds ?? []) parts.add(id);
-  for (const c of project.chats) if (c.partId && Date.parse(c.updatedAt) >= since) parts.add(c.partId);
+  const inside = (iso) => { const ms = Date.parse(iso); return ms >= since && ms <= until; };
+  for (const a of project.activity) if (inside(a.ts)) for (const id of a.partIds ?? []) parts.add(id);
+  for (const c of project.chats) if (c.partId && inside(c.updatedAt)) parts.add(c.partId);
   return withAncestors(root, parts, parts.size ? [root.id] : []);
 }
 

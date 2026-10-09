@@ -2,8 +2,8 @@ import { api } from './api.js';
 import { boardItems } from './tree.js';
 import { createTranscript, dayName, timeOf, withDays } from './transcript.js';
 import { costRows, estimateTone, budgetTone, aiSpend } from './views.js';
+import { costInRange } from './range.js';
 
-const RANGES = ['today', 'd7', 'd30'];
 const HISTORY_DEBOUNCE_MS = 250;
 
 // The list views beside the mind map: Board, History and Costs (desenho-3 § 2, desenho-2 § 16 and § 18).
@@ -12,7 +12,7 @@ const HISTORY_DEBOUNCE_MS = 250;
 export function createTabs(ctx) {
   const { h, fmt } = ctx;
   const t = () => ctx.t();
-  const pick = { board: null, costs: 'd30', historyProject: '', historyQuery: '', reading: null };
+  const pick = { board: null, historyProject: '', historyQuery: '', reading: null };
   let historyTimer = 0;
   let historyRun = 0;
 
@@ -74,7 +74,8 @@ export function createTabs(ctx) {
     const list = root.querySelector('#historyList');
     const status = root.querySelector('#historyStatus');
     status.textContent = t()('history.loading');
-    const res = await api.history(pick.historyQuery, pick.historyProject);
+    const range = ctx.range();
+    const res = await api.history(pick.historyQuery, pick.historyProject, range);
     if (run !== historyRun) return;
     if (!res.ok) {
       status.textContent = ctx.errorText(res.error);
@@ -167,7 +168,8 @@ export function createTabs(ctx) {
         h('p', { class: 'view-lede' }, tt('history.lede')),
         h('div', { class: 'dv-tools' },
           h('label', { class: 'dv-field grow' }, h('span', { class: 'visually-hidden' }, tt('history.search')), search),
-          h('label', { class: 'dv-field' }, h('span', {}, tt('history.project')), project)),
+          h('label', { class: 'dv-field' }, h('span', {}, tt('history.project')), project),
+          h('div', { class: 'dv-field' }, h('span', {}, tt('range.label')), ctx.rangeButton())),
         h('p', { class: 'dv-status', id: 'historyStatus', role: 'status' }),
         h('div', { class: 'history' },
           h('ul', { class: 'hist-list', id: 'historyList' }),
@@ -181,16 +183,14 @@ export function createTabs(ctx) {
   function renderCosts(root) {
     const tt = t();
     const state = ctx.state();
-    const range = pick.costs;
-    const now = Date.parse(state.generatedAt);
-    const rows = costRows(state, range, now);
+    const range = ctx.range();
+    const rows = costRows(state, range);
+    const spent = (p) => costInRange(p.costByDay, range);
+    const total = state.projects.reduce((sum, p) => sum + spent(p), 0);
     const ai = aiSpend(state);
-    const ranges = h('div', { class: 'seg', role: 'group', 'aria-label': tt('costs.range') }, RANGES.map((r) => h('button', {
-      type: 'button', 'aria-pressed': String(r === range), onclick: () => { pick.costs = r; renderCosts(root); },
-    }, tt(`costs.range.${r}`))));
-    const maxProject = Math.max(1e-9, ...state.projects.map((p) => p.cost[range]));
+    const maxProject = Math.max(1e-9, ...state.projects.map(spent));
     const ledger = h('dl', { class: 'ledger' },
-      h('div', {}, h('dt', {}, tt(`costs.total.${range}`)), h('dd', { class: 'num strong' }, fmt.money(state.totals[range]))),
+      h('div', {}, h('dt', {}, tt(range ? 'costs.total.range' : 'costs.total.all')), h('dd', { class: 'num strong' }, fmt.money(total))),
       state.budget ? budgetRow(state.budget) : null,
       h('div', {}, h('dt', {}, tt('costs.ai')), h('dd', {}, h('span', { class: 'num' }, fmt.money(ai.todayUSD),
         h('span', { class: 'muted' }, ` · ${ai.projects.length ? tt('costs.aiModel', { model: ai.projects[0].model }) : tt('costs.aiOff')}`)))));
@@ -200,14 +200,14 @@ export function createTabs(ctx) {
       h('span', { class: 'br-sub' }, x.queue ? tt.count('costs.aiQueue', x.queue) : tt('costs.aiIdle'))))) : null;
     const estimates = state.projects.flatMap((p) => p.workCells.filter((w) => w.estimateUSD).map((w) => ({ p, w })));
     root.replaceChildren(h('div', { class: 'view-wrap' },
-      h('div', { class: 'view-head' }, h('h2', {}, tt('costs.title')), ranges),
+      h('div', { class: 'view-head' }, h('h2', {}, tt('costs.title')), ctx.rangeButton()),
       h('p', { class: 'view-lede' }, tt('costs.honest')),
       ledger,
       h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.byProject')),
         h('ul', { class: 'plain rows bars' }, state.projects.map((p) => h('li', { class: 'bar-row' },
           h('span', { class: 'br-name' }, p.name),
-          h('span', { class: 'br-value num' }, fmt.money(p.cost[range])),
-          h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((p.cost[range] / maxProject) * 100).toFixed(1)}%` })))))),
+          h('span', { class: 'br-value num' }, fmt.money(spent(p))),
+          h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((spent(p) / maxProject) * 100).toFixed(1)}%` })))))),
       h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList),
       estimates.length ? h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.estimates')),
         h('ul', { class: 'plain rows' }, estimates.map(({ p, w }) => h('li', {},

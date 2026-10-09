@@ -44,6 +44,25 @@ export function windowed(rows, now, prices = loadPrices()) {
   return out;
 }
 
+// The cost of each local day ("YYYY-MM-DD"), so the page can add up any range the person picks (mm06). A day that costs
+// nothing is left out.
+export function dailyCost(rows, prices = loadPrices()) {
+  const byDay = new Map();
+  for (const r of rows) {
+    const d = new Date(r.ts);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(r);
+  }
+  const out = {};
+  for (const [day, list] of [...byDay].sort(([a], [b]) => a.localeCompare(b))) {
+    const usd = costOf(list, prices).usd;
+    if (usd > 0) out[day] = Math.round(usd * 1e6) / 1e6;
+  }
+  return out;
+}
+
 export function toCurrency(usd, currency) {
   return currency ? usd * currency.rate : usd;
 }

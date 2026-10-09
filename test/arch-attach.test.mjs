@@ -102,7 +102,7 @@ test('linkParts: a chat that edited the files of another part links its own part
   const chats = [chatOn('c1', 'checkout', { files: ['apps/web/src/checkout/pay.ts', 'apps/api/src/billing/tax.ts', 'apps/api/src/billing/vat.ts'] })];
   assert.deepEqual(linkParts(SHOP, chats, []), [{
     a: 'billing', b: 'checkout', weight: 1, since: '2026-10-01T10:00:00Z',
-    reasons: [{ kind: 'shared-chat', text: 'Chat c1', sessionId: 'c1' }],
+    reasons: [{ kind: 'shared-chat', text: 'Chat c1', sessionId: 'c1', files: ['apps/api/src/billing/tax.ts', 'apps/api/src/billing/vat.ts'] }],
   }]);
 });
 
@@ -125,9 +125,22 @@ test('linkParts: branches, lineage and file links add reasons; weight is the cou
   assert.equal(pay.since, '2026-10-02T10:00:00Z');
   assert.equal(links[0], pay, 'the strongest link comes first');
   const ref = links.find((l) => l.a === 'api' && l.b === 'web');
-  assert.deepEqual(ref, { a: 'api', b: 'web', weight: 1, since: null, reasons: [{ kind: 'file-ref', text: 'Web → Api' }] });
+  assert.deepEqual(ref, { a: 'api', b: 'web', weight: 1, since: null, reasons: [{ kind: 'file-ref', text: 'Web → Api', file: 'docs/architecture/web.md' }] });
   const many = Array.from({ length: 6 }, (_, i) => chatOn(`m${i}`, 'checkout', { files: ['apps/api/src/billing/tax.ts'] }));
   assert.equal(linkParts(SHOP, many, [])[0].weight, 4);
+});
+
+test('linkParts: every reason carries its evidence — files, the branch with its last commit and plan, the chat it continued from (mm05)', () => {
+  const chats = [
+    chatOn('p1', 'billing'),
+    chatOn('c2', 'checkout', { parentId: 'p1', files: Array.from({ length: 5 }, (_, i) => `apps/api/src/billing/f${i}.ts`) }),
+  ];
+  const cell = cellOn('feat/pay', 'checkout', { touches: ['billing'], lastCommit: { hash: 'abc1234', subject: 'Pay with the saved card' }, openspec: { change: 'pay', done: 2, total: 5 } });
+  const [link] = linkParts(SHOP, chats, [cell]);
+  const byKind = Object.fromEntries(link.reasons.map((r) => [r.kind, r]));
+  assert.deepEqual(byKind['shared-chat'].files, ['apps/api/src/billing/f0.ts', 'apps/api/src/billing/f1.ts', 'apps/api/src/billing/f2.ts'], 'the first three files, no more');
+  assert.deepEqual(byKind.lineage, { kind: 'lineage', text: 'Chat c2', sessionId: 'c2', fromSessionId: 'p1' });
+  assert.deepEqual(byKind['shared-branch'], { kind: 'shared-branch', text: 'feat/pay', workCellId: 'feat/pay', commit: 'Pay with the saved card', spec: { change: 'pay', done: 2, total: 5 } });
 });
 
 test('linkParts ignores unknown parts, self links and a chat in the same part as its parent', () => {

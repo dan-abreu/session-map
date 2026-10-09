@@ -4,6 +4,7 @@
 import { api } from './api.js';
 import { createChat } from './chat.js';
 import { addBox, addLayer, connect, matchParts, moveToLayer, parseFlow, printFlow, removeNode, rename } from './flow.js';
+import { exportFileName, isAutoDraft, markdownOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
 import { createResizer } from './resize.js';
 import { nodeById } from './tree.js';
 
@@ -51,10 +52,7 @@ export function svgNodeId(domId, ids) {
   return m && ids.has(m[1]) ? m[1] : null;
 }
 
-export function mmdFileName(projectName) {
-  const base = String(projectName ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return base ? `${base}-flow.mmd` : 'flow.mmd';
-}
+export const mmdFileName = (projectName) => exportFileName(projectName, 'mmd');
 
 // ---- mermaid: the vendored copy, loaded the first time the tab draws -------------------------
 
@@ -234,15 +232,16 @@ export function createFlowView(ctx) {
     if (arch.source === 'none') words = tt('flow.source.none');
     else if (arch.mermaid) words = tt('flow.source.readme', { file: `${arch.dir}/README.md` });
     else words = tt('flow.source.layers');
-    const ask = arch.source !== 'none' && !arch.mermaid
-      ? h('button', { type: 'button', class: 'meta-link', onclick: () => askToDraw() }, tt('flow.ask'))
-      : null;
-    src.replaceChildren(words, arch.source === 'main-branch' ? ` ${tt('flow.source.main')}` : '', ask ? ' ' : '', ask ?? '');
+    src.replaceChildren(words, arch.source === 'main-branch' ? ` ${tt('flow.source.main')}` : '');
+    $('#flowAuto').hidden = mode !== 'view' || !isAutoDraft(arch);
     for (const b of root.querySelectorAll('.fl-modes button')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
     root.dataset.mode = mode;
     $('#flowTools').hidden = mode !== 'workshop';
     const none = arch.source === 'none';
-    for (const id of ['#flowCopy', '#flowDownload']) $(id).disabled = mode === 'view' && (none || !exportText);
+    const nothing = mode === 'view' && (none || !exportText);
+    $('#flowCopy').disabled = nothing;
+    $('#flowExportBtn').setAttribute('aria-disabled', String(nothing));
+    if (nothing) $('#flowExport').open = false;
   }
 
   // ---- the diagram as the project has it ---------------------------------------------------
@@ -406,13 +405,30 @@ export function createFlowView(ctx) {
 
   async function flushSave() {
     clearTimeout(saveTimer);
-    if (!hist || hist.now === savedText) return;
+    if (!hist || hist.now === savedText) return { ok: true };
     const text = hist.now;
     const res = await api.flowSaveDraft(draftFor, text);
     if (res.ok) {
       savedText = text;
       if (hist.now === text) savedEl.textContent = t()('flow.saved');
     } else savedEl.textContent = errorText(res.error);
+    return res;
+  }
+
+  // A relation from the map, drawn as a dotted "related" arrow between the two parts' boxes in the draft (mm05).
+  async function putRelation(partA, partB) {
+    await loadDraft();
+    if (!hist) return { ok: false, error: 'network' };
+    const m = model();
+    if (!m.ok) return { ok: false, error: 'not-flowchart' };
+    const boxOf = (partId) => [...matchParts(m, project().arch.parts)].find(([, id]) => id === partId)?.[0];
+    const from = boxOf(partA), to = boxOf(partB);
+    if (!from || !to) return { ok: false, error: 'no-box' };
+    const next = connect(m, from, to, null, 'dotted');
+    if (next === m) return { ok: true, already: true };
+    hist = historyPush(hist, printFlow(next));
+    const saved = await flushSave();
+    return saved.ok ? { ok: true } : saved;
   }
 
   function pick(nodeId) {
@@ -572,15 +588,30 @@ export function createFlowView(ctx) {
     }
   }
 
-  function download() {
+  // The drawing as it is on screen (SVG, PNG) or the mermaid text behind it (Markdown, .mmd). One click, one file.
+  async function exportAs(kind) {
+    const name = project().name;
     const text = currentText();
-    if (!text) return;
-    const url = URL.createObjectURL(new Blob([`${text}\n`], { type: 'text/plain;charset=utf-8' }));
-    const a = h('a', { href: url, download: mmdFileName(project().name) });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const svg = canvas.querySelector('svg');
+    const done = (file) => toast(t()('flow.exported', { name: file }));
+    try {
+      if (kind === 'mmd' || kind === 'md') {
+        if (!text) return;
+        const file = exportFileName(name, kind);
+        const body = kind === 'md' ? markdownOf(name, text, t()('flow.mode.view')) : `${text}
+`;
+        saveBlob(new Blob([body], { type: 'text/plain;charset=utf-8' }), file);
+        done(file);
+        return;
+      }
+      if (!svg) return;
+      const { markup, width, height } = standaloneSvg(svg, getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim() || '#ffffff');
+      const file = exportFileName(name, kind);
+      saveBlob(kind === 'svg' ? new Blob([markup], { type: 'image/svg+xml' }) : await svgToPng(markup, width, height), file);
+      done(file);
+    } catch {
+      toast(t()('flow.exportFailed'));
+    }
   }
 
   // ---- import: paste or a .mmd → preview → confirm → apply ----------------------------------
@@ -693,7 +724,18 @@ export function createFlowView(ctx) {
   for (const b of root.querySelectorAll('.fl-modes button')) b.addEventListener('click', () => setMode(b.dataset.mode));
   for (const b of root.querySelectorAll('.fl-tool[data-tool]')) b.addEventListener('click', () => openTool(b.dataset.tool));
   $('#flowCopy').addEventListener('click', copyText);
-  $('#flowDownload').addEventListener('click', download);
+  const exportMenu = $('#flowExport');
+  $('#flowExportBtn').addEventListener('click', (e) => { if ($('#flowExportBtn').getAttribute('aria-disabled') === 'true') e.preventDefault(); });
+  exportMenu.addEventListener('click', (e) => {
+    const kind = e.target.closest('[data-export]')?.dataset.export;
+    if (!kind) return;
+    exportMenu.open = false;
+    exportAs(kind);
+  });
+  document.addEventListener('click', (e) => { if (exportMenu.open && !exportMenu.contains(e.target)) exportMenu.open = false; });
+  exportMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape' && exportMenu.open) { exportMenu.open = false; $('#flowExportBtn').focus(); } });
+  $('#flowAutoImprove').addEventListener('click', () => askToDraw());
+  $('#flowAutoSave').addEventListener('click', () => { if (exportText) openImport({ text: exportText, fromDraft: true }); });
   $('#flowImport').addEventListener('click', () => openImport());
   $('#flowUndo').addEventListener('click', () => { if (hist?.past.length) { hist = historyUndo(hist); scheduleSave(); renderWorkshop(); } });
   $('#flowRedo').addEventListener('click', () => { if (hist?.future.length) { hist = historyRedo(hist); scheduleSave(); renderWorkshop(); } });
@@ -793,6 +835,7 @@ export function createFlowView(ctx) {
       return undefined;
     },
     relabel() { if (visible) rerender(); },
+    putRelation,
     isWorkshop: () => mode === 'workshop',
     setMode,
     openTool,

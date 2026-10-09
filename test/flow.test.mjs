@@ -91,6 +91,13 @@ test('newId makes a mermaid-safe id that is unique and never a keyword', () => {
   assert.equal(newId(m, '***'), 'box');
 });
 
+test('connect can draw a dotted "related" arrow, the one a relation from the map becomes (mm05)', () => {
+  const m = connect(parseFlow('flowchart LR\n  a[A]\n  b[B]'), 'a', 'b', null, 'dotted');
+  assert.deepEqual(m.edges, [{ from: 'a', to: 'b', label: null, kind: 'dotted' }]);
+  assert.match(printFlow(m), /a -\.-> b/);
+  assert.equal(connect(m, 'b', 'a', null, 'dotted'), m, 'either direction is the same pair');
+});
+
 test('manual tools: add a box, connect, add a layer, rename, move, remove — each gives the right mermaid', () => {
   let m = parseFlow('flowchart LR\n  subgraph app["App"]\n    web[Web]\n  end');
   m = addLayer(m, 'Back end');

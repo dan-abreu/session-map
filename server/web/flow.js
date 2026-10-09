@@ -196,11 +196,13 @@ export function addBox(model, label, layerId = null) {
   return next;
 }
 
-export function connect(model, from, to, label = null) {
+// kind 'dotted' is a "related" line, which has no direction: the pair in either order is already there.
+export function connect(model, from, to, label = null, kind = 'arrow') {
   const known = (id) => model.nodes.some((n) => n.id === id);
-  if (!known(from) || !known(to) || model.edges.some((e) => e.from === from && e.to === to)) return model;
+  const there = (e) => (e.from === from && e.to === to) || (kind === 'dotted' && e.from === to && e.to === from);
+  if (!known(from) || !known(to) || model.edges.some(there)) return model;
   const next = copy(model);
-  next.edges.push({ from, to, label: label ? String(label).trim() : null, kind: 'arrow' });
+  next.edges.push({ from, to, label: label ? String(label).trim() : null, kind });
   return next;
 }
 

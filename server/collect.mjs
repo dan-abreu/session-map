@@ -12,7 +12,7 @@ import { appendEvents, readEvents } from './brain/events.mjs';
 import { parentOf, readLineage } from './brain/lineage.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
-import { costOf, loadPrices, windowed } from './cost.mjs';
+import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
@@ -430,6 +430,7 @@ async function buildProject(ctx, { root, items }) {
       ],
       skills: listSkills(root, dir),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
+      costByDay: dailyCost(allRows, prices),
     },
     rows: allRows,
   };

@@ -78,6 +78,16 @@ test('searchIndex matches words in title, prompts and card, and filters by proje
   assert.ok(searchIndex(entries, 'a', { limit: 1 }).length <= 1);
 });
 
+test('searchIndex keeps the conversations that were active inside the period (mm06)', () => {
+  const entry = (id, startedAt, endedAt) => ({ sessionId: id, title: id, projectDir: 'p', cwd: '/p', userPrompts: [], card: null, lastAssistantText: '', commits: [], startedAt, endedAt });
+  const entries = [entry('old', '2026-09-01T10:00:00Z', '2026-09-02T10:00:00Z'), entry('span', '2026-10-01T10:00:00Z', '2026-10-09T10:00:00Z'), entry('new', '2026-10-12T10:00:00Z', '2026-10-12T11:00:00Z')];
+  const ids = (opts) => searchIndex(entries, '', { limit: 10, ...opts }).map((e) => e.sessionId).sort();
+  assert.deepEqual(ids({}), ['new', 'old', 'span']);
+  assert.deepEqual(ids({ from: Date.parse('2026-10-03T00:00:00Z'), to: Date.parse('2026-10-05T00:00:00Z') }), ['span'], 'running through the period counts');
+  assert.deepEqual(ids({ from: Date.parse('2026-10-09T00:00:00Z') }), ['new', 'span']);
+  assert.deepEqual(ids({ to: Date.parse('2026-09-30T00:00:00Z') }), ['old']);
+});
+
 test('readArchived returns user and assistant messages, tools on one line', () => {
   const { dir, smDir } = setup();
   archiveAll(dir, smDir);

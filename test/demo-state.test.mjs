@@ -11,7 +11,7 @@ const items = (p) => p.arch.parts.flatMap((part) => part.groups.flatMap((g) => g
 
 test('demo projects carry the architecture map, not the cell tree', () => {
   for (const p of state.projects) {
-    for (const key of ['arch', 'workCells', 'mainBranch', 'fetchedAt', 'ai', 'activity', 'chats', 'decisions', 'skills', 'cost']) assert.ok(key in p, `${p.name} has ${key}`);
+    for (const key of ['arch', 'workCells', 'mainBranch', 'fetchedAt', 'ai', 'activity', 'chats', 'decisions', 'skills', 'cost', 'costByDay']) assert.ok(key in p, `${p.name} has ${key}`);
     for (const key of ['units', 'unitLinks', 'cells', 'fronts']) assert.ok(!(key in p), `${p.name} still has ${key}`);
     for (const key of ['source', 'dir', 'lang', 'layers', 'parts', 'links']) assert.ok(key in p.arch, `${p.name} arch.${key}`);
   }

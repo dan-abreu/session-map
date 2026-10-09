@@ -148,7 +148,8 @@ export function planImport(arch, text, { dir = arch.dir ?? DEFAULT_DIR[arch.lang
   const relationEdges = [...after].filter(([k]) => before.has(k) && !readmeEdges.has(k)).map(([, e]) => e);
 
   // Direction, labels, arrow kinds, shapes and kept lines live only in the diagram: any of them changing rewrites it.
-  const diagramChanged = printed !== printFlow(base) && printed !== arch.mermaid;
+  // A README with no diagram at all has a change to take: the draft itself (fl05), even when it equals the export.
+  const diagramChanged = !arch.mermaid || (printed !== printFlow(base) && printed !== arch.mermaid);
   const unchanged = !diagramChanged && ![layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved].some((list) => list.length);
   return { ok: true, unchanged, diagramChanged, warnings: next.warnings, layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved, edgesFromRelations: unchanged ? [] : relationEdges };
 }

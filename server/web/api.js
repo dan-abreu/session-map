@@ -21,7 +21,7 @@ const seg = encodeURIComponent;
 
 export const api = {
   state: () => call('GET', '/api/state'),
-  history: (q, project) => call('GET', `/api/history?${new URLSearchParams({ q, ...(project ? { project } : {}) })}`),
+  history: (q, project, range) => call('GET', `/api/history?${new URLSearchParams({ q, ...(project ? { project } : {}), ...(range ? { from: String(range.from), to: String(range.to) } : {}) })}`),
   conversation: (id) => call('GET', `/api/conversation/${seg(id)}`),
   deleteConversation: (id) => call('DELETE', `/api/conversation/${seg(id)}`),
   placeConversation: (id, body) => call('POST', `/api/conversation/${seg(id)}/place`, body),

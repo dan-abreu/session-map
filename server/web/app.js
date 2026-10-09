@@ -16,13 +16,17 @@ import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
 import { createAlerts } from './alerts.js';
-import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
+import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
+import { createRangePicker } from './rangepicker.js';
+import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
+import {
+  declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, serializeIgnored, sortRelations, splitIgnored, strengthOf,
+} from './relations.js';
 
 const $ = (sel) => document.querySelector(sel);
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
 const VIEWS = ['map', 'flow', 'board', 'history', 'costs', 'discover'];
-const RANGES = ['all', 'today', 'd7', 'd30'];
 const SEARCH_MAX = 8;
 const CHAT_WIDTH = 460;
 
@@ -41,8 +45,27 @@ let open = new Set();
 let selection = null;
 let view = 'map';
 let showArchived = store.get('sm.archived') === '1';
-let changedRange = RANGES.includes(store.get('sm.changed')) ? store.get('sm.changed') : 'all';
+// The period of the open project (mm06), one for the map's "What changed", History, Costs and the activity lists.
+let rangeSel = { preset: 'all' };
+let rangePicker = null;
+const rangeKey = (projectId) => `sm.range.${projectId}`;
+const legacyRange = () => parseSel(['today', 'd7', 'd30'].includes(store.get('sm.changed')) ? store.get('sm.changed') : 'all');
+const loadRange = (projectId) => { const raw = store.get(rangeKey(projectId)); rangeSel = raw === null ? legacyRange() : parseSel(raw); };
+const rangeNow = () => Date.parse(state.generatedAt);
+const activeRange = () => resolveRange(rangeSel, rangeNow());
+function setRange(sel) {
+  rangeSel = sel;
+  store.set(rangeKey(project.id), serializeSel(sel));
+  renderMap();
+  rerender();
+  refreshView(true);
+}
 let relationsOn = store.get('sm.relations') === '1';
+// Relations the person asked to stop seeing (mm05): kept in this browser, per project.
+let ignoredRel = new Set();
+let relLit = null; // the relation (a|b) the Relations list lights on the map
+const ignoredKey = (projectId) => `sm.relIgnored.${projectId}`;
+const saveIgnored = () => store.set(ignoredKey(project.id), serializeIgnored(ignoredRel));
 let waitingScope = store.get('sm.waiting.scope') === 'all' ? 'all' : 'project'; // the counter follows the open project unless asked
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
@@ -302,9 +325,10 @@ function liveCaptions() {
 }
 
 function mapView() {
-  const lit = changedRange === 'all' ? null : changedNodes(shown, tree, rangeStart(changedRange, Date.parse(state.generatedAt)));
+  const range = activeRange();
+  const lit = range ? changedNodes(shown, tree, range.from, range.to) : null;
   const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
-  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? relationLinks(shown) : null };
+  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? splitIgnored(relationLinks(shown), ignoredRel).shown : null, relLit };
 }
 
 const activeMap = () => (PHONE.matches ? outline : mindmap);
@@ -314,6 +338,7 @@ function renderMap(opts) {
   activeMap().render(tree, mapView(), opts);
   $('#relations').setAttribute('aria-pressed', String(relationsOn));
   $('#relations').hidden = !relationLinks(shown).length;
+  if (!$('#relList').hidden) renderRelList();
 }
 
 function toggleNode(node) {
@@ -326,7 +351,7 @@ function toggleNode(node) {
 function freeArea() {
   const mm = $('#mindmap').getBoundingClientRect();
   let width = mm.width;
-  for (const sheet of [$('#panel'), $('#chat'), $('#waitingList'), $('#liveList')]) {
+  for (const sheet of [$('#panel'), $('#chat'), $('#waitingList'), $('#liveList'), $('#relList')]) {
     if (sheet.hidden) continue;
     const r = sheet.getBoundingClientRect();
     width = Math.min(width, Math.max(240, r.left - mm.left - 12));
@@ -342,11 +367,11 @@ function revealNode(id, opts) {
 }
 
 function renderChanged() {
-  const seg = $('#changed');
-  seg.replaceChildren(...RANGES.map((r) => h('button', {
-    type: 'button', 'aria-pressed': String(r === changedRange), title: r === 'all' ? t('changed.allHint') : t('changed.hint'),
-    onclick: () => { changedRange = r; store.set('sm.changed', r); renderChanged(); renderMap(); },
-  }, t(`changed.${r}`))));
+  if (!rangePicker) return;
+  const slot = $('#changed');
+  const btn = rangePicker.button();
+  btn.title = t('changed.hint');
+  slot.replaceChildren(h('span', { class: 'mm-changed-label' }, t('changed.label')), btn);
 }
 
 // ---- summary and the waiting list ------------------------------------------------------
@@ -459,6 +484,7 @@ function openWaiting() {
   closePanel(false);
   chat.close();
   live.close();
+  hideRelList();
   $('#waitingList').hidden = false;
   $('#waitingBtn').setAttribute('aria-expanded', 'true');
   $('#waitingList').querySelector('button')?.focus();
@@ -468,6 +494,7 @@ function closeLists() {
   $('#waitingList').hidden = true;
   $('#waitingBtn').setAttribute('aria-expanded', 'false');
   live.close();
+  hideRelList();
 }
 
 // ---- live: what is being worked on now -----------------------------------------------------
@@ -475,6 +502,7 @@ function closeLists() {
 function openLive() {
   closePanel(false);
   chat.close();
+  hideRelList();
   $('#waitingList').hidden = true;
   $('#waitingBtn').setAttribute('aria-expanded', 'false');
   live.open();
@@ -526,6 +554,15 @@ function activityRow(item, { showChat }) {
 
 const activityList = (items, opts) => (items.length ? h('ul', { class: 'activity' }, items.map((i) => activityRow(i, opts))) : null);
 const newestFirst = (a, b) => b.ts.localeCompare(a.ts);
+
+// The recent activity of a part or a branch, inside the period picked at the top (mm06); with a period on, it says so.
+function activitySection(items) {
+  const range = activeRange();
+  const inside = items.filter((a) => inRange(Date.parse(a.ts), range));
+  const rows = activityList(inside.sort(newestFirst).slice(0, 10), { showChat: true });
+  if (!range) return section(t('activity.title'), rows);
+  return section(`${t('activity.title')} · ${spanWords(range, lang, rangeNow())}`, rows ?? h('p', { class: 'muted' }, t('range.none')));
+}
 
 async function runAction(body, okText) {
   const res = await api.action(body);
@@ -580,7 +617,7 @@ function openPoint(node, { tab = 'chat' } = {}) {
   $('#pointTabs').hidden = false;
   setPointTab(tab);
   renderPointDetails();
-  revealNode(node.id);
+  revealNode(node.id, { center: true });
 }
 
 const openPartPoint = (partId, opts) => {
@@ -786,7 +823,7 @@ function partDetails(node) {
     section(t('point.chats'), chatRows(shown.chats.filter((x) => x.partId === part.id))),
     section(t('point.branches'), branchRows(project.workCells.filter((w) => w.partId === part.id && w.status !== 'merged'))),
     section(t('point.related'), linkRows(part.id)),
-    section(t('activity.title'), activityList(project.activity.filter((a) => (a.partIds ?? []).includes(part.id)).sort(newestFirst).slice(0, 10), { showChat: true })),
+    activitySection(project.activity.filter((a) => (a.partIds ?? []).includes(part.id))),
     part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null,
     filesSection({ part: part.id }),
   ];
@@ -882,23 +919,133 @@ function renderWorkCellPanel(w) {
     section(t('wc.todo'), list(w.nucleus.todo)),
     filesSection({ workCell: w.id, files: w.files, folder: Boolean(!w.remote || w.path) }),
     section(t('wc.chats'), chatRows(chats) ?? h('p', { class: 'muted' }, t('wc.noChats'))),
-    section(t('activity.title'), activityList(project.activity.filter((a) => a.workCellId === w.id).sort(newestFirst).slice(0, 10), { showChat: true })),
+    activitySection(project.activity.filter((a) => a.workCellId === w.id)),
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
   ].filter(Boolean));
 }
 
+// ---- relations: the list beside the map and the panel of one line (mm05) -----------------------------
+
+const partName = (id) => partById(id)?.name ?? id;
+const linkOf = (key) => (project.arch.links ?? []).find((l) => relationKey(l) === key);
+
+function strengthEl(weight) {
+  const word = t(`rel.strength.${strengthOf(weight)}`);
+  return h('span', { class: `rel-strength s-${strengthOf(weight)}`, role: 'img', 'aria-label': `${t('rel.strength')}: ${word}` },
+    Array.from({ length: 4 }, (_, i) => h('i', { class: i < weight ? 'on' : '' })), h('span', { class: 'rel-strength-word' }, word));
+}
+
+function openRelList() {
+  closePanel(false);
+  chat.close();
+  $('#waitingList').hidden = true;
+  $('#waitingBtn').setAttribute('aria-expanded', 'false');
+  live.close();
+  renderRelList();
+  $('#relList').hidden = false;
+  requestAnimationFrame(() => mindmap.fit(true));
+}
+
+function hideRelList() {
+  if ($('#relList').hidden) return;
+  $('#relList').hidden = true;
+  if (relLit !== null) {
+    relLit = null;
+    renderMap();
+  }
+}
+
+function lightRelation(key) {
+  relLit = relLit === key ? null : key;
+  renderMap();
+  const link = linkOf(key);
+  if (relLit && link) revealNode(`pt:${link.a}`);
+}
+
+function renderRelList() {
+  const { shown: visible, ignored } = splitIgnored(relationLinks(shown), ignoredRel);
+  const pairs = declaredPairs(project.arch);
+  const row = (l, { off = false } = {}) => {
+    const key = relationKey(l);
+    return h('li', { class: `rel-item${relLit === key ? ' is-lit' : ''}` },
+      h('button', { type: 'button', class: 'rel-row', 'aria-pressed': String(relLit === key), disabled: off, onclick: () => lightRelation(key) },
+        h('span', { class: 'rel-names' }, `${partName(l.a)} ↔ ${partName(l.b)}`),
+        h('span', { class: 'rel-meta' }, strengthEl(l.weight), h('span', { class: `rel-kind ${isDeclared(l, pairs) ? 'is-declared' : 'is-detected'}` }, t(isDeclared(l, pairs) ? 'rel.declared' : 'rel.detected')),
+          h('span', { class: 'num' }, t.count('link.reasons', l.reasons.length)))),
+      off
+        ? h('button', { type: 'button', class: 'btn small-btn', onclick: () => setIgnored(l, false) }, t('rel.restore'))
+        : h('button', { type: 'button', class: 'icon-btn rel-open', title: t('rel.details'), 'aria-label': `${t('rel.details')}: ${partName(l.a)} ↔ ${partName(l.b)}`, onclick: () => select({ type: 'link', id: key }) }, icon('next', '')));
+  };
+  $('#relSub').textContent = [t.count('rel.count', visible.length), ignored.length ? t.count('rel.ignoredCount', ignored.length) : null].filter(Boolean).join(' · ');
+  $('#relBody').replaceChildren(...[
+    visible.length ? h('ol', { class: 'rel-items' }, sortRelations(visible, partName).map((l) => row(l))) : h('p', { class: 'rel-empty' }, t('rel.empty')),
+    ignored.length ? h('details', { class: 'rel-ignored' }, h('summary', {}, t.count('rel.ignoredSection', ignored.length)),
+      h('ol', { class: 'rel-items' }, sortRelations(ignored, partName).map((l) => row(l, { off: true })))) : null,
+  ].filter(Boolean));
+}
+
+function setIgnored(link, on) {
+  const key = relationKey(link);
+  if (on) ignoredRel.add(key);
+  else ignoredRel.delete(key);
+  saveIgnored();
+  if (relLit === key) relLit = null;
+  renderMap();
+  if (selection?.type === 'link' && selection.id === key) renderLinkPanel(link);
+}
+
+// Draws the line as a dotted "related" arrow in the Flow draft (a write: it needs the key), then shows the workshop.
+async function putOnFlow(link) {
+  const res = await flow.putRelation(link.a, link.b);
+  if (!res.ok) return toast(res.error === 'no-box' ? t('rel.flowNoBox') : errorText(res.error));
+  toast(t(res.already ? 'rel.flowAlready' : 'rel.flowDone'));
+  showView('flow');
+  return flow.setMode('workshop');
+}
+
+function reasonEvidence(r) {
+  const out = [];
+  if (r.kind === 'shared-chat' && r.files?.length) out.push(h('span', { class: 'rel-ev' }, t('link.ev.files', { files: r.files.join(', ') })));
+  if (r.kind === 'shared-branch') {
+    if (r.commit) out.push(h('span', { class: 'rel-ev' }, t('link.ev.commit', { subject: r.commit })));
+    if (r.spec) out.push(h('span', { class: 'rel-ev' }, t('link.ev.plan', r.spec)));
+  }
+  if (r.kind === 'lineage' && r.fromSessionId) {
+    const from = chatById(r.fromSessionId);
+    if (from) out.push(h('span', { class: 'rel-ev' }, t('link.ev.from', { title: from.title })));
+  }
+  if (r.kind === 'file-ref' && r.file) out.push(h('span', { class: 'rel-ev' }, t('link.ev.file', { file: r.file })));
+  return out;
+}
+
 function renderLinkPanel(link) {
   const a = partById(link.a), b = partById(link.b);
-  panelHead(`${a.name} ↔ ${b.name}`, h('span', {}, t.count('link.reasons', link.reasons.length)),
-    link.since ? h('span', {}, t('link.since', { date: shortDate(Date.parse(link.since)) })) : null, partLink(a), partLink(b));
+  const key = relationKey(link);
+  const declared = isDeclared(link, declaredPairs(project.arch));
+  const off = ignoredRel.has(key);
+  panelHead(`${a.name} ↔ ${b.name}`, strengthEl(link.weight), h('span', {}, t.count('link.reasons', link.reasons.length)),
+    link.since ? h('span', {}, t('link.since', { date: shortDate(Date.parse(link.since)) })) : null,
+    linkTo(t('rel.back'), () => { closePanel(); openRelList(); }));
   const reasons = link.reasons.map((r) => {
     const c = r.sessionId && chatById(r.sessionId);
-    const parts = [h('span', { class: 'lr-kind' }, t(`link.kind.${r.kind}`)), h('span', { class: 'lr-line' }, r.text), c ? h('span', { class: 'lr-open' }, t('link.open', { title: c.title })) : null];
-    return h('li', {}, c
-      ? h('button', { type: 'button', class: 'link-row reason', onclick: () => select({ type: 'chat', id: c.sessionId }) }, parts)
-      : h('div', { class: 'link-row reason static' }, parts));
+    const w = r.workCellId && workCellById(r.workCellId);
+    const parts = [h('span', { class: 'lr-kind' }, t(`link.kind.${r.kind}`)), h('span', { class: 'lr-line' }, r.text), ...reasonEvidence(r), c ? h('span', { class: 'lr-open' }, t('link.open', { title: c.title })) : null];
+    const go = c ? () => select({ type: 'chat', id: c.sessionId }) : w ? () => select({ type: 'workcell', id: w.id }) : null;
+    return h('li', {}, go ? h('button', { type: 'button', class: 'link-row reason', onclick: go }, parts) : h('div', { class: 'link-row reason static' }, parts));
   });
-  $('#panelBody').replaceChildren(section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)));
+  const chatIds = [...new Set(link.reasons.flatMap((r) => [r.sessionId, r.fromSessionId]).filter(Boolean))].map(chatById).filter(Boolean)
+    .sort((p, q) => q.updatedAt.localeCompare(p.updatedAt));
+  $('#panelBody').replaceChildren(...[
+    off ? h('p', { class: 'note' }, t('rel.ignoredNote')) : null,
+    h('div', { class: `callout rel-kind-note ${declared ? 'is-declared' : 'is-detected'}` }, h('h3', {}, t(declared ? 'rel.declared' : 'rel.detected')), h('p', {}, t(declared ? 'rel.declaredWhy' : 'rel.detectedWhy'))),
+    section(t('rel.parts'), h('div', { class: 'rel-pair' }, partLink(a), h('span', { 'aria-hidden': 'true' }, '↔'), partLink(b))),
+    section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)),
+    chatIds.length ? section(t('rel.chats'), chatRows(chatIds)) : null,
+    h('div', { class: 'tools' }, h('div', { class: 'actions' },
+      button(chatIds.length ? t('rel.openChats', { n: chatIds.length }) : t('rel.noChats'), () => select({ type: 'chat', id: chatIds[0].sessionId }), { primary: true, disabled: !chatIds.length }),
+      button(t('rel.flow'), () => putOnFlow(link)),
+      button(t(off ? 'rel.unignore' : 'rel.ignore'), () => setIgnored(link, !off), { cls: off ? '' : 'danger-quiet' }))),
+  ].filter(Boolean));
 }
 
 function chatTools(c) {
@@ -991,9 +1138,9 @@ function renderProjectPanel() {
       h('dl', { class: 'facts first' },
         h('dt', {}, t('project.root')), h('dd', {}, h('code', { class: 'path' }, p.root)),
         hasMap() ? [h('dt', {}, t('project.map')), h('dd', {}, h('code', { class: 'path' }, p.arch.dir), p.arch.source === 'main-branch' ? ` · ${t('project.fromMain', { main: p.mainBranch })}` : '')] : null,
-        h('dt', {}, t('costs.range.today')), h('dd', { class: 'num' }, money(p.cost.today)),
-        h('dt', {}, t('costs.range.d7')), h('dd', { class: 'num' }, money(p.cost.d7)),
-        h('dt', {}, t('costs.range.d30')), h('dd', { class: 'num' }, money(p.cost.d30)),
+        h('dt', {}, t('range.today')), h('dd', { class: 'num' }, money(p.cost.today)),
+        h('dt', {}, t('range.d7')), h('dd', { class: 'num' }, money(p.cost.d7)),
+        h('dt', {}, t('range.d30')), h('dd', { class: 'num' }, money(p.cost.d30)),
         p.fetchedAt ? [h('dt', {}, t('project.fetched')), h('dd', {}, clock(p.fetchedAt))] : null),
       section(hasMap() ? t('project.offMap') : t('project.chats'), chatRows(loose)),
       section(t('project.ai'), p.ai
@@ -1121,6 +1268,10 @@ function setProject(id) {
   tree = archTree(shown);
   refreshMarks();
   loadOpen();
+  loadRange(project.id);
+  renderChanged();
+  ignoredRel = parseIgnored(store.get(ignoredKey(project.id)));
+  relLit = null;
   store.set('sm.project', project.id);
   closePanel(false);
   chat.showProject(project.id);
@@ -1307,6 +1458,7 @@ function wire() {
       refreshView(true);
     });
   }
+  rangePicker = createRangePicker({ h, icon, t: () => t, lang: () => lang, phone: PHONE, now: () => (state ? rangeNow() : Date.now()), get: () => rangeSel, set: setRange });
   const mapCtx = {
     content: boxContent, signature, toggleLabel,
     onPick: (node) => openPoint(node),
@@ -1315,6 +1467,7 @@ function wire() {
     onCount: (node) => convs.filterTo(convs.filterNode() === node.id ? null : node.id),
     onLink: (l) => select({ type: 'link', id: `${l.a}|${l.b}` }),
     linkLabel: (l) => t('link.aria', { a: partById(l.a)?.name ?? l.a, b: partById(l.b)?.name ?? l.b }),
+    linkTip: (l) => relationTip(l, partName, (n) => t.count('link.reasons', n)),
     freeArea,
   };
   mindmap = createMindmap($('#mindmap'), mapCtx);
@@ -1378,11 +1531,12 @@ function wire() {
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
     prefs: { archived: () => showArchived, setArchived },
+    range: () => activeRange(), rangeButton: () => rangePicker.button(),
   });
   for (const v of VIEWS) $(`#tab-${v}`).addEventListener('click', () => showView(v));
   $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeLists()));
   $('#liveBtn').addEventListener('click', () => (live.isOpen() ? closeLists() : openLive()));
-  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"]')) {
+  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"], [data-close="rel"]')) {
     b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
   }
   $('#ptab-chat').addEventListener('click', () => setPointTab('chat'));
@@ -1405,10 +1559,16 @@ function wire() {
     });
   }
   $('#relations').addEventListener('click', () => {
-    relationsOn = !relationsOn;
+    // With the lines on and the list closed, the button brings the list back; a second press turns the lines off.
+    const reopen = relationsOn && $('#relList').hidden && !PHONE.matches;
+    relationsOn = reopen || !relationsOn;
     store.set('sm.relations', relationsOn ? '1' : '0');
+    if (relationsOn && !PHONE.matches) openRelList();
+    else hideRelList();
     renderMap();
   });
+  $('#zoomIn').addEventListener('click', () => mindmap.zoomBy(1.4));
+  $('#zoomOut').addEventListener('click', () => mindmap.zoomBy(1 / 1.4));
   const search = $('#search');
   search.addEventListener('input', () => { query = search.value.trim(); renderResults(); });
   search.addEventListener('keydown', (e) => {
@@ -1429,7 +1589,7 @@ function wire() {
     if (picker.isOpen()) picker.close();
     else if (now.isOpen()) now.close();
     else if (convs.isDrawerOpen()) convs.closeDrawer();
-    else if (!$('#waitingList').hidden || live.isOpen()) closeLists();
+    else if (!$('#waitingList').hidden || live.isOpen() || !$('#relList').hidden) closeLists();
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
@@ -1449,7 +1609,7 @@ function applyDeepLink() {
   const params = new URLSearchParams(location.search);
   if (params.get('project')) setProject(params.get('project'));
   if (params.has('relations')) relationsOn = params.get('relations') === '1';
-  if (RANGES.includes(params.get('changed'))) changedRange = params.get('changed');
+  if (params.has('changed')) { rangeSel = parseSel(params.get('changed')); store.set(rangeKey(project.id), serializeSel(rangeSel)); }
   const openParam = params.get('open');
   if (openParam === 'all') {
     const walk = (n) => { if (n.children.length) open.add(n.id); n.children.forEach(walk); };

@@ -1,9 +1,10 @@
 import { test } from 'node:test';
+import { resolveRange } from '../server/web/range.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   costRows, estimateTone, budgetTone, aiSpend, chatButtons, chatLog, visibleProject, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
-  waitingKind, rangeStart, pcModeOffer,
+  waitingKind, pcModeOffer,
 } from '../server/web/views.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
@@ -13,13 +14,17 @@ const shop = () => clone(DEMO.projects[0]);
 test('costRows lists the conversations active in the period, most expensive first', () => {
   const state = clone(DEMO);
   const now = Date.parse(state.generatedAt);
-  const d30 = costRows(state, 'd30', now);
+  const d30 = costRows(state, resolveRange({ preset: 'd30' }, now));
   assert.ok(d30.length > 0);
   for (let i = 1; i < d30.length; i++) assert.ok(d30[i - 1].chat.costUSD >= d30[i].chat.costUSD);
   assert.ok(d30.every((r) => now - Date.parse(r.chat.updatedAt) <= 30 * 864e5));
-  const today = costRows(state, 'today', now);
+  const today = costRows(state, resolveRange({ preset: 'today' }, now));
   assert.ok(today.length < d30.length);
   assert.ok(today.every((r) => new Date(r.chat.updatedAt).toDateString() === new Date(now).toDateString()));
+  assert.ok(costRows(state, null).length >= d30.length, 'no range lists everything');
+  const day = Date.parse(d30[0].chat.updatedAt);
+  const custom = costRows(state, { from: day - 1000, to: day + 1000 });
+  assert.ok(custom.length >= 1 && custom.every((r) => Math.abs(Date.parse(r.chat.updatedAt) - day) <= 1000), 'a custom period lists only its days');
 });
 
 test('estimateTone and budgetTone follow the thresholds of the design', () => {
@@ -194,13 +199,6 @@ test('waitingKind: an item waiting on a person is its own kind, after questions 
   assert.equal(waitingKind({ project: p, decision: { kind: 'item' } }), 'item');
   const entries = [{ project: p, decision: { kind: 'decision' } }, { project: p, decision: { kind: 'item' } }, { project: p, decision: { kind: 'item' } }];
   assert.deepEqual(waitingCounts(entries), [{ kind: 'item', n: 2 }, { kind: 'decision', n: 1 }]);
-});
-
-test('rangeStart: today starts at local midnight, 7 and 30 days count back from now', () => {
-  const now = new Date(2026, 9, 9, 15, 30).getTime();
-  assert.equal(rangeStart('today', now), new Date(2026, 9, 9).getTime());
-  assert.equal(rangeStart('d7', now), now - 7 * 864e5);
-  assert.equal(rangeStart('d30', now), now - 30 * 864e5);
 });
 
 test('pcModeOffer: only a real mode can go to the whole PC, and saying the same mode again is no change', () => {

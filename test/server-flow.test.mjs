@@ -56,9 +56,13 @@ async function withServer(fn, { demo = false, slowCollect = false } = {}) {
 const P = '/api/arch/feira-abc123';
 const withBox = (text) => text.replace('  subgraph base', '    NF["Notas fiscais"]\n  end\n  subgraph base').replace('    PAG["Pagamentos"]\n  end\n    NF', '    PAG["Pagamentos"]\n    NF');
 
-test('export: the map as mermaid, only with the token', async () => {
+test('export: the map as mermaid, read on this PC without the key (fl04)', async () => {
   await withServer(async ({ call, read }) => {
-    assert.equal((await call('GET', `${P}/mermaid`)).status, 401);
+    const local = await call('GET', `${P}/mermaid`);
+    assert.equal(local.status, 200, 'a read from 127.0.0.1 needs no key');
+    assert.match(local.body.text, /^flowchart LR/);
+    assert.equal((await call('GET', `${P}/draft`)).status, 200);
+    assert.equal((await call('GET', `${P}/mermaid`, { headers: { host: 'evil.example:80' } })).status, 401, 'a foreign Host is not local');
     const res = await call('GET', `${P}/mermaid`, { headers: read });
     assert.equal(res.status, 200);
     assert.match(res.body.text, /^flowchart LR\n {2}subgraph entrada\["Por onde as pessoas entram"\]/);

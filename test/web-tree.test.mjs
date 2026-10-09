@@ -128,6 +128,8 @@ test('changedNodes lights the parts with commits or chats since a date, and the 
   const since = Date.parse('2026-10-09T00:00:00Z');
   assert.deepEqual([...changedNodes(project(), root, since)].sort(), ['l:back', 'l:front', 'p', 'pt:courier', 'pt:pay']);
   assert.deepEqual([...changedNodes(project(), root, Date.parse('2026-08-01'))].sort(), ['l:back', 'l:front', 'p', 'pt:courier', 'pt:pay', 'pt:shop']);
+  assert.equal(changedNodes(project(), root, Date.parse('2026-08-01'), Date.parse('2026-08-02')).size, 0, 'a period that ends before everything lights nothing (mm06)');
+  assert.ok(changedNodes(project(), root, since, Date.parse('2999-01-01')).has('pt:pay'), 'a period that ends later keeps what is inside');
 });
 
 test('boardItems sorts every item into todo, doing and done, blockers and items with a person first', () => {

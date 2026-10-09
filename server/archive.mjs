@@ -124,12 +124,15 @@ export function archiveAll(dir, smDir) {
   return count;
 }
 
-export function searchIndex(entries, query, { project, limit = 5 } = {}) {
+// from / to (ms): only the conversations that were running at some point inside that period.
+export function searchIndex(entries, query, { project, limit = 5, from = -Infinity, to = Infinity } = {}) {
   const words = String(query).toLowerCase().split(/\s+/).filter(Boolean);
   const wanted = project?.toLowerCase();
   const scored = [];
   for (const e of entries) {
     if (wanted && !`${e.projectDir} ${e.cwd}`.toLowerCase().includes(wanted)) continue;
+    const began = Date.parse(e.startedAt ?? e.endedAt), ended = Date.parse(e.endedAt ?? e.startedAt);
+    if ((from > -Infinity || to < Infinity) && !(began <= to && ended >= from)) continue;
     const title = e.title.toLowerCase();
     const body = [...e.userPrompts, e.card ? JSON.stringify(Object.values(e.card)) : '', e.lastAssistantText, ...e.commits.map((c) => c.subject)]
       .join(' ')

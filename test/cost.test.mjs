@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { costOf, windowed, toCurrency, budgetStatus, estimateStatus, loadPrices, priceFor } from '../server/cost.mjs';
+import { costOf, dailyCost, windowed, toCurrency, budgetStatus, estimateStatus, loadPrices, priceFor } from '../server/cost.mjs';
 
 const M = 1_000_000;
 const prices = {
@@ -73,4 +73,16 @@ test('shipped prices cover the current models and the fixtures', () => {
 test('user overrides win over shipped prices', () => {
   const p = loadPrices({ 'claude-opus-5-5': { input: 1, output: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 1 } });
   assert.equal(costOf([row({ model: 'claude-opus-5-5', input: M })], p).usd, 1);
+});
+
+test('dailyCost: the cost of each local day, so any range can be summed later (mm06)', () => {
+  const day = (d, h) => new Date(2026, 9, d, h, 0, 0).toISOString();
+  const rows = [
+    row({ input: M, ts: day(8, 0) }),
+    row({ input: M, ts: day(8, 23) }),
+    row({ output: M, ts: day(3, 10) }),
+    row({ model: 'mystery', input: M, ts: day(5, 10) }),
+  ];
+  assert.deepEqual(dailyCost(rows, prices), { '2026-10-03': 25, '2026-10-08': 10 }, 'an unpriced model adds no day');
+  assert.deepEqual(dailyCost([], prices), {});
 });
