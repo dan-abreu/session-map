@@ -4,10 +4,12 @@ import { modelName } from './live.js';
 const DAY = 864e5;
 const RANGE_DAYS = { d7: 7, d30: 30 };
 
-// Everything that waits for the person, in the order the list shows it: strong questions first.
-export function waitingEntries(state) {
+// Everything that waits for the person, in the order the list shows it: strong questions first. With a project id, only
+// that project's; without, every project's.
+export function waitingEntries(state, projectId = null) {
   const out = [];
   for (const p of state.projects) {
+    if (projectId && p.id !== projectId) continue;
     for (const d of p.decisions || []) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
     for (const c of p.chats) {
       if (!c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length)) {

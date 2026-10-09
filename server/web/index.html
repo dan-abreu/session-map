@@ -143,6 +143,10 @@
         <h2 id="waitingTitle" data-i18n="waiting.title"></h2>
         <button type="button" class="icon-btn" data-close="waiting" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
       </div>
+      <div class="seg wl-scope" id="waitingScope" role="group" data-i18n-aria="waiting.scope" hidden>
+        <button type="button" data-scope="project" aria-pressed="true"></button>
+        <button type="button" data-scope="all" aria-pressed="false"></button>
+      </div>
       <ul id="waitingCounts" class="waiting-counts"></ul>
       <ul id="waitingItems"></ul>
     </section>

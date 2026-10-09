@@ -551,6 +551,8 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .btn.primary:hover { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); }
 
+.wl-scope { margin: 10px 16px 0 20px; width: fit-content; max-width: calc(100% - 36px); }
+.wl-scope[hidden] { display: none; }
 .waiting-counts {
   display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 10px 16px 8px 20px;
   border-bottom: 1px solid var(--line);

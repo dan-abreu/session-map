@@ -40,6 +40,7 @@ let view = 'map';
 let showArchived = store.get('sm.archived') === '1';
 let changedRange = RANGES.includes(store.get('sm.changed')) ? store.get('sm.changed') : 'all';
 let relationsOn = store.get('sm.relations') === '1';
+let waitingScope = store.get('sm.waiting.scope') === 'all' ? 'all' : 'project'; // the counter follows the open project unless asked
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
 let convCounts = new Map();
@@ -361,18 +362,28 @@ function goTo(projectId, sel) {
 }
 
 function renderWaiting() {
-  $('#waitingLabel').textContent = t('waiting.button', { n: state.waitingCount });
-  $('#waitingBtn').classList.toggle('is-zero', state.waitingCount === 0);
-  const entries = waitingEntries(state);
+  const everyone = waitingEntries(state);
+  const several = state.projects.length > 1;
+  const scoped = waitingScope === 'project' && several && !!project;
+  const entries = scoped ? waitingEntries(state, project.id) : everyone;
+  $('#waitingLabel').textContent = t(scoped ? 'waiting.buttonHere' : 'waiting.button', { n: entries.length });
+  $('#waitingBtn').classList.toggle('is-zero', entries.length === 0);
+  $('#waitingBtn').title = scoped && everyone.length > entries.length ? t('waiting.elsewhere', { n: everyone.length - entries.length }) : '';
+  $('#waitingScope').hidden = !several;
+  for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
+    const all = b.dataset.scope === 'all';
+    b.setAttribute('aria-pressed', String(all !== scoped));
+    b.textContent = t(all ? 'waiting.scope.all' : 'waiting.scope.project', { n: all ? everyone.length : project ? waitingEntries(state, project.id).length : 0 });
+  }
   const listEl = $('#waitingItems');
   $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, n))));
   if (!entries.length) {
-    listEl.replaceChildren(h('li', { class: 'empty' }, t('waiting.none')));
+    listEl.replaceChildren(h('li', { class: 'empty' }, scoped ? t('waiting.noneHere', { n: everyone.length }) : t('waiting.none')));
     return;
   }
   const where = (p, partId) => {
     const part = partId && p.arch.parts.find((x) => x.id === partId);
-    return [state.projects.length > 1 ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
+    return [several && !scoped ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
   };
   listEl.replaceChildren(...entries.map((entry) => {
     const { project: p, chat: c, decision } = entry;
@@ -1002,6 +1013,7 @@ function setProject(id) {
   if (chat.isOpen() && pointNode && !nodeById(tree, pointNode)) chat.close();
   renderSummary();
   renderBanner();
+  renderWaiting();
   $('#notice').hidden = true;
   renderMap();
   convs.render();
@@ -1238,6 +1250,13 @@ function wire() {
   $('#fit').addEventListener('click', () => mindmap.fit(true));
   $('#newIdea').addEventListener('click', openIdea);
   $('#createArch').addEventListener('click', createArch);
+  for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
+    b.addEventListener('click', () => {
+      waitingScope = b.dataset.scope === 'all' ? 'all' : 'project';
+      store.set('sm.waiting.scope', waitingScope);
+      renderWaiting();
+    });
+  }
   $('#relations').addEventListener('click', () => {
     relationsOn = !relationsOn;
     store.set('sm.relations', relationsOn ? '1' : '0');

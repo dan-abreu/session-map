@@ -142,6 +142,21 @@ test('waitingEntries ranks strong questions first, then decisions and items, and
   assert.equal(waitingEntries(archived).length, entries.length - 1);
 });
 
+test('waitingEntries can be limited to one project, so the counter follows the project that is open', () => {
+  const state = clone(DEMO);
+  const shopId = state.projects[0].id;
+  const notesId = state.projects[1].id;
+  const mine = waitingEntries(state, shopId);
+  assert.equal(mine.length, waitingEntries(state).length, 'the demo waits only in its first project');
+  assert.ok(mine.every((e) => e.project.id === shopId));
+  assert.deepEqual(waitingEntries(state, notesId), []);
+  const other = clone(DEMO);
+  other.projects[1].decisions = [{ kind: 'item', text: 'Pick the logo', partId: 'x', code: 'zz01', who: 'Ana' }];
+  assert.equal(waitingEntries(other, notesId).length, 1);
+  assert.equal(waitingEntries(other, shopId).length, mine.length);
+  assert.equal(waitingEntries(other).length, mine.length + 1);
+});
+
 test('safeTunnel lets only an https link through to a href', () => {
   assert.equal(safeTunnel('https://vscode.dev/tunnel/my-pc'), 'https://vscode.dev/tunnel/my-pc');
   for (const bad of ['http://vscode.dev/tunnel/x', 'javascript:alert(1)', ' https://x', 'vscode://file/x', '', null, undefined, 42]) assert.equal(safeTunnel(bad), null, String(bad));
