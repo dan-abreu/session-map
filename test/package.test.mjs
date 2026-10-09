@@ -11,9 +11,9 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 const json = (p) => JSON.parse(read(p));
 
 function frontmatter(path) {
-  const m = read(path).match(/^---\n([\s\S]*?)\n---\n/);
+  const m = read(path).match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   assert.ok(m, `${path} has frontmatter`);
-  return Object.fromEntries(m[1].split('\n').map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
+  return Object.fromEntries(m[1].split(/\r?\n/).map((l) => [l.slice(0, l.indexOf(':')), l.slice(l.indexOf(':') + 1).trim()]));
 }
 
 test('plugin manifest names the plugin and its license', () => {
@@ -113,4 +113,10 @@ test('package.json exposes the session-map command and the test script finds the
   assert.ok(existsSync(join(root, pkg.bin['session-map'])));
   assert.match(read(pkg.bin['session-map']), /^#!\/usr\/bin\/env node\n/);
   assert.equal(pkg.scripts.test, 'node --test "test/*.test.mjs"');
+});
+
+test('.gitattributes keeps text files on LF in every checkout, so the shebang and the fixtures read the same on Windows', () => {
+  const rules = read('.gitattributes');
+  assert.match(rules, /^\* text=auto eol=lf\r?$/m);
+  assert.match(rules, /^\*\.png binary\r?$/m);
 });
