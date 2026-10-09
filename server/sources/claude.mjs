@@ -515,7 +515,7 @@ function agentModel(dir, agentId) {
 
 // When a workflow agent last wrote to its own transcript: a killed workflow leaves agents with no result behind forever.
 function agentMovedAt(dir, agentId) {
-  if (typeof agentId !== 'string' || !/^[w-]+$/.test(agentId)) return null;
+  if (typeof agentId !== 'string' || !/^[\w-]+$/.test(agentId)) return null;
   try {
     return statSync(join(dir, `agent-${agentId}.jsonl`)).mtimeMs;
   } catch {

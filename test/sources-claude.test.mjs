@@ -211,6 +211,21 @@ test('readWorkflows lists the agents still running, with their label and the mod
   assert.deepEqual(two.running, [], 'every agent of wf_two answered');
 });
 
+test('readWorkflows dates a running agent by its own transcript, so a long agent stays live while the journal sleeps', () => {
+  withTempDir((dir) => {
+    cpSync(join(PROJ, A), join(dir, A), { recursive: true });
+    const wf = join(dir, A, 'subagents', 'workflows', 'wf_one');
+    const journalAt = new Date('2026-01-01T10:00:00.000Z');
+    const movedAt = new Date('2026-01-01T10:40:00.000Z');
+    utimesSync(join(wf, 'journal.jsonl'), journalAt, journalAt);
+    writeFileSync(join(wf, 'agent-b2.jsonl'), '');
+    utimesSync(join(wf, 'agent-b2.jsonl'), movedAt, movedAt);
+    const one = readWorkflows(join(dir, A)).find((w) => w.id === 'wf_one');
+    assert.equal(one.updatedAt, journalAt.toISOString());
+    assert.equal(one.running[0].activeAt, movedAt.toISOString());
+  });
+});
+
 test('readFullTranscript returns readable messages with tools in one line', () => {
   const msgs = readFullTranscript(transcript(A));
   assert.equal(msgs[0].role, 'user');
