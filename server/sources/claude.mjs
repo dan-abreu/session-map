@@ -4,7 +4,7 @@ import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } fr
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
-import { personsWords } from '../chat/prompt.mjs';
+import { CONTEXT_HEAD, personsWords } from '../chat/prompt.mjs';
 import { log } from '../log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -291,6 +291,7 @@ function summarize(entries, sessionId) {
   let endedAt = null;
   let turnStartedAt = null;
   const userPrompts = [];
+  let fromPage = false;
   const usageById = new Map();
   const toolUses = [];
   const results = new Map();
@@ -318,6 +319,7 @@ function summarize(entries, sessionId) {
     const prompt = humanPromptOf(entry);
     // A chat the page started opens with a context block: the person's own words are what names it.
     if (prompt) {
+      if (!userPrompts.length) fromPage = prompt.startsWith(CONTEXT_HEAD);
       turnStartedAt = entry.timestamp ?? turnStartedAt;
       userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
       noteCodes(prompt);
@@ -374,6 +376,7 @@ function summarize(entries, sessionId) {
     title: aiTitle ?? (userPrompts[0] ?? '').slice(0, TITLE_MAX),
     lastPrompt: lastPromptLine ?? userPrompts.at(-1) ?? '',
     userPrompts,
+    fromPage,
     lastAssistantText,
     turnStartedAt,
     pendingQuestion: lastTool?.name === 'AskUserQuestion' && !results.has(lastTool.id),

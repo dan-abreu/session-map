@@ -3,7 +3,7 @@ import { RUN_NOTE_END, RUN_NOTE_HEAD } from './run.mjs';
 // The first message of a chat the page starts: what session-map knows, then the person's words.
 const list = (items) => items.map((i) => `- ${i}`).join('\n');
 
-const CONTEXT_HEAD = 'Context from session-map (this is all you need from earlier work):';
+export const CONTEXT_HEAD = 'Context from session-map (this is all you need from earlier work):';
 const BOARD_HINT = 'When you finish a step, run /session-map:board.';
 // Without the plugin there is no /session-map:board: the chat is told the card format itself.
 const CARD_HINT = [

@@ -238,8 +238,9 @@ function activityItems(raw, events, touched, workCells, items) {
   return [...fromGit, ...fromEvents].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, ACTIVITY_MAX);
 }
 
-function originOf(sessionId, entrypoint, pageChats) {
-  if (pageChats[sessionId]) return 'map';
+// fromPage: the chat opens with the page's context block, so it is the page's even when page-chats.json lost it.
+function originOf(sessionId, entrypoint, pageChats, fromPage = false) {
+  if (pageChats[sessionId] || (fromPage && entrypoint.startsWith('sdk'))) return 'map';
   if (entrypoint === 'claude-vscode') return 'vscode';
   if (entrypoint === 'claude-desktop') return 'desktop';
   if (/^(remote|mobile)/.test(entrypoint)) return 'remote';
@@ -262,7 +263,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
     return {
       sessionId: s.sessionId,
       title: cut(titleOf(s) || page?.title),
-      origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats),
+      origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats, s.fromPage),
       partId: x.partId,
       partSource: x.partSource,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId) ?? nodeOf(page)?.code ?? null,

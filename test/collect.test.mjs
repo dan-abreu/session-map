@@ -563,6 +563,20 @@ test('the origin tells VS Code, the Claude app, a terminal, the phone, the map a
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
+test('a chat the page started reads "Map" even when the page\'s own record of it is gone', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Asked from the map', entrypoint: 'sdk-cli', prompts: ['Context from session-map (this is all you need from earlier work):\n\nArea: Shop\n\nwhat stopped here?'] });
+    writeChat(dir, { id: B, cwd: root, title: 'A script', entrypoint: 'sdk-ts', prompts: ['run the nightly report'] });
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const origin = Object.fromEntries(p.conversations.map((r) => [r.title, r.origin]));
+    assert.deepEqual(origin, { 'Asked from the map': 'map', 'A script': 'sdk' });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+
 test('the owner moves a conversation to another project and part and renames it: that choice wins over every rule', async () => {
   const dir = tmp();
   const smDir = tmp();
