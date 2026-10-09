@@ -142,11 +142,15 @@ export function planImport(arch, text, { dir = arch.dir ?? DEFAULT_DIR[arch.lang
   const after = edgeSet(next, now);
   const edgesAdded = [...after].filter(([k]) => !before.has(k)).map(([, e]) => e);
   const edgesRemoved = [...before].filter(([k]) => !after.has(k)).map(([, e]) => e);
+  // Relations session-map found, dotted in the export, are not in the README yet: an applied drawing writes them there as arrows.
+  const readmeOnly = archFlow({ ...arch, links: [] });
+  const readmeEdges = edgeSet(readmeOnly, entities(readmeOnly, arch.parts));
+  const relationEdges = [...after].filter(([k]) => before.has(k) && !readmeEdges.has(k)).map(([, e]) => e);
 
   // Direction, labels, arrow kinds, shapes and kept lines live only in the diagram: any of them changing rewrites it.
   const diagramChanged = printed !== printFlow(base) && printed !== arch.mermaid;
   const unchanged = !diagramChanged && ![layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved].some((list) => list.length);
-  return { ok: true, unchanged, diagramChanged, warnings: next.warnings, layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved };
+  return { ok: true, unchanged, diagramChanged, warnings: next.warnings, layersNew, partsNew, partsMoved, partsMissing, edgesAdded, edgesRemoved, edgesFromRelations: unchanged ? [] : relationEdges };
 }
 
 function withBlock(readme, block) {

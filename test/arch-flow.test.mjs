@@ -40,6 +40,32 @@ test('export: the relations session-map found fill in, dotted, only when the REA
   assert.equal(planImport(arch, exportMermaid(arch)).unchanged, true);
 });
 
+// Seen in a real test: the drawing carried 3 dotted relations that were written to the README as arrows, but the preview
+// counted only the 2 arrows that were really new.
+test('the preview lists the relations an imported drawing turns into README arrows as their own line', () => {
+  const root = project();
+  const readme = join(root, DIR, 'README.md');
+  writeFileSync(readme, readFileSync(readme, 'utf8').replace(/\n[ \t]*\w+ --> \w+/g, ''));
+  const arch = archOf(root);
+  const exported = exportMermaid(arch);
+  const same = planImport(arch, exported);
+  assert.equal(same.unchanged, true);
+  assert.deepEqual(same.edgesFromRelations, [], 'nothing is written, so nothing to list');
+  const drawn = printFlow(connect(parseFlow(exported), 'VIT', 'CES'));
+  const plan = planImport(arch, drawn);
+  assert.deepEqual(plan.edgesAdded, [{ from: 'Vitrine', to: 'Cesta e pedidos' }], 'the new arrow is still its own line');
+  assert.deepEqual(plan.edgesFromRelations, [{ from: 'Pagamentos', to: 'Segurança' }]);
+  const out = applyImport({ root, arch, text: drawn });
+  assert.equal(out.ok, true);
+  assert.match(readFileSync(readme, 'utf8'), /PAG -\.-> SEG/, 'the relation really went into the README');
+});
+
+test('the preview has no relation line when the README already drew its arrows', () => {
+  const arch = archOf(project());
+  const plan = planImport(arch, printFlow(connect(parseFlow(exportMermaid(arch)), 'VIT', 'PAG')));
+  assert.deepEqual(plan.edgesFromRelations, []);
+});
+
 test('export of a map without a README diagram still draws every part in its layer', () => {
   const arch = { source: 'worktree', dir: 'docs/architecture', lang: 'en', mermaid: null, links: [], layers: [{ id: 'engine', name: 'Engine', partIds: ['orders', 'end'] }], parts: [{ id: 'orders', name: 'Orders' }, { id: 'end', name: 'End user' }] };
   assert.equal(exportMermaid(arch), 'flowchart LR\n  subgraph engine["Engine"]\n    orders["Orders"]\n    end_box["End user"]\n  end');
