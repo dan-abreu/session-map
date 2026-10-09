@@ -3,7 +3,7 @@
 
 const EMPTY_COUNTS = () => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0 });
 const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-const isPerson = (who) => Boolean(who) && plain(who) !== 'claude';
+export const isPerson = (who) => Boolean(who) && plain(who) !== 'claude';
 
 function itemCounts(item) {
   const open = item.status !== 'done';
@@ -178,7 +178,8 @@ export function branchMarks(project) {
   return out;
 }
 
-export function clashMarks(project) {
+// ignored: the pairs the person chose to stop seeing, by the sorted ids of both branches (wa07).
+export function clashMarks(project, ignored = new Set()) {
   const byId = new Map(project.workCells.map((w) => [w.id, w]));
   const out = new Map();
   const put = (partId, pair) => {
@@ -191,7 +192,7 @@ export function clashMarks(project) {
     if (w.status === 'merged') continue;
     for (const otherId of w.clashWith ?? []) {
       const o = byId.get(otherId);
-      if (!o || o.status === 'merged') continue;
+      if (!o || o.status === 'merged' || ignored.has([w.id, o.id].sort().join('|'))) continue;
       const pair = [w.branch, o.branch].sort();
       put(w.partId, pair);
       put(o.partId, pair);

@@ -6,6 +6,7 @@ import {
   costRows, estimateTone, budgetTone, aiSpend, chatButtons, chatLog, visibleProject, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
   waitingKind, pcModeOffer,
 } from '../server/web/views.js';
+import { clashKey } from '../server/web/signals.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -206,4 +207,15 @@ test('pcModeOffer: only a real mode can go to the whole PC, and saying the same 
   assert.deepEqual(pcModeOffer('acceptEdits', 'default'), { mode: 'acceptEdits', same: false });
   assert.deepEqual(pcModeOffer('auto', 'auto'), { mode: 'auto', same: true });
   assert.deepEqual(pcModeOffer('bypassPermissions', null), { mode: null, same: false });
+});
+
+test('an ignored clash leaves the waiting list, and comes back when it is no longer ignored', () => {
+  const state = clone(DEMO);
+  const all = waitingEntries(state);
+  const clash = all.find((e) => e.decision?.kind === 'clash');
+  assert.ok(clash, 'the demo has a clash');
+  const key = clashKey(clash.decision);
+  assert.equal(waitingEntries(state, null, new Set([key])).length, all.length - 1);
+  assert.ok(waitingEntries(state, null, new Set([key])).every((e) => e.decision?.kind !== 'clash' || clashKey(e.decision) !== key));
+  assert.equal(waitingEntries(state, null, new Set()).length, all.length);
 });

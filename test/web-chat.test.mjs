@@ -417,7 +417,7 @@ test('a conversation a restart cut off says so, and Continue picks it up with on
   await settle();
   assert.equal(part('#chatStatus').dataset.state, 'interrupted');
   assert.equal(part('#chatStatus').textContent, 'chat.state.interrupted');
-  const cont = walk(part('#chatLog')).find((e) => e.attrs['data-chat-act'] === 'continue');
+  const cont = walk(part('#chatLog')).find((e) => e.attrs['data-sig-act'] === 'continue');
   assert.ok(cont, 'the cut-off card offers Continue');
   cont.attrs.onclick();
   await settle();

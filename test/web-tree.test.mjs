@@ -162,3 +162,8 @@ test('countLabel reads "N open" everywhere when the map lists no done items, and
   for (const part of p.arch.parts) for (const g of part.groups) for (const i of g.items) i.status = 'todo';
   assert.equal(listsDone(archTree(p)), false);
 });
+
+test('clashMarks leaves out the pairs the person chose to ignore', () => {
+  assert.equal(clashMarks(project(), new Set(['feat/a|feat/b'])).size, 0);
+  assert.equal(clashMarks(project(), new Set(['feat/a|other'])).size, 2);
+});

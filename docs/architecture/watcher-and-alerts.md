@@ -37,11 +37,11 @@ The server compares each session's state from one read to the next and turns the
 
 ### Signs that explain themselves
 
-- [ ] **important:** One format for every sign: what it is · why · what to do + a button `wa06`
+- [x] **Claude:** One format for every sign: what it is · why · what to do + a button `wa06`
   - A test fails if any kind of sign has the three fields empty.
-- [ ] **important:** Branch clash sign with a recommendation `wa07`
+- [x] **Claude:** Branch clash sign with a recommendation `wa07`
   - Which branches, who owns them, the files they share, why it makes a conflict, the advice (join the most advanced first, then update the other). Buttons: "Resolve with the AI" (opens an activity chat with the task and asks for an OK before joining), "See files", "Ignore".
-- [ ] **important:** The other signs in the same format `wa08`
+- [x] **Claude:** The other signs in the same format `wa08`
   - Waiting for you (the question, the chat, the project, Answer); Blocks something else (what, why, what unblocks it); Error or interruption in plain words (Try again, Continue); Relation (why, whether it asks for action); High cost (why it was spent and a suggestion).
 
 ### Limits and the map

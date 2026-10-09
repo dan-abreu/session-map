@@ -53,7 +53,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [ ] **important:** The AI's plain-words reason for a relation `mm32`
   - What is left of `mm05`: the relation panel shows every reason with its evidence (chats, files, branch, last commit, plan), but not a sentence from the AI saying why the two parts are tied.
   - One cheap AI call per relation, cached in the session-map storage and redone only when its reasons change.
-- [ ] **important:** Panels separated by kind of information `mm07`
+- [x] **Claude:** Panels separated by kind of information `mm07`
   - Distinct blocks with their own color, icon and plain title: Tasks, Chats, Lines of work (branches), What changed, Files. Each block says where its data comes from.
   - Tabs in the panel (Summary, Tasks, Chats, Changes, Files); the Summary shows only the essentials. The same colors and icons for each kind everywhere: map, lists, Now strip, alerts.
 - [ ] **important:** Visual polish of the whole program, written down in `DESIGN.md` `mm08`

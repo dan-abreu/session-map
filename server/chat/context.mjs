@@ -2,7 +2,7 @@
 // and the rule that keeps the map true. Pure: it receives the project and returns text.
 // Keep code-shaped tokens out of the fixed texts: the transcript reader counts them as item codes and places the chat by them.
 
-const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow']);
+const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow', 'clash']);
 const LIST_MAX = 40;
 
 const WORDS = {
@@ -90,6 +90,35 @@ function flowText(project, draft) {
   ];
 }
 
+// Two lines of work that change the same files: the AI studies the pair and proposes how to join them, but joins nothing
+// before the person says OK (wa07).
+function clashContext(project, node) {
+  const ids = node.workCellIds;
+  if (!Array.isArray(ids) || ids.length !== 2 || ids[0] === ids[1]) return fail(400, 'bad-node');
+  const cells = ids.map((id) => (project.workCells ?? []).find((w) => w.id === id));
+  if (cells.some((c) => !c)) return fail(404, 'unknown-front');
+  const [first, second] = [...cells].sort((p, q) => q.ahead - p.ahead);
+  const theirs = new Set(second.files.map((f) => f.path));
+  const shared = first.files.map((f) => f.path).filter((f) => theirs.has(f));
+  if (!shared.length) return fail(409, 'no-clash');
+  const main = project.mainBranch || 'the main line';
+  const line = (c) => [
+    `- ${c.branch}, by ${c.owner.name}: ${c.ahead} ${c.ahead === 1 ? 'commit' : 'commits'} ahead of ${main}`,
+    c.lastCommit?.subject && `last: "${c.lastCommit.subject}"`,
+    c.path && `folder: ${c.path}`,
+  ].filter(Boolean).join('; ');
+  return {
+    part: null,
+    sections: [
+      `Project: ${project.name}`,
+      `Two lines of work change the same files, so joining both into ${main} would make a conflict:\n${line(first)}\n${line(second)}\nFiles both change: ${shared.join(', ')}`,
+      `Advice: join the most advanced line (${first.branch}) first, then update ${second.branch} on top of the result and settle what is left in the shared files.`,
+      'Study both lines with git (log, diff) and say in a few lines the order you suggest, the commands, and what you expect to settle in each shared file.',
+      'Do not merge, rebase, push, delete a branch or change any file until the person says OK in this chat. After the OK, do one step at a time and tell what happened.',
+    ],
+  };
+}
+
 function findItem(part, node) {
   for (const group of part.groups) {
     const item = group.items.find((i) => (node.code ? i.code === node.code : Number.isInteger(node.line) && i.line === node.line));
@@ -113,6 +142,7 @@ function partSections(project, part, extra) {
 export function contextOf(project, node, { draft = '' } = {}) {
   if (!node || typeof node !== 'object' || !KINDS.has(node.kind)) return fail(400, 'bad-node');
   if (node.kind === 'flow') return { sections: flowText(project, draft), part: null };
+  if (node.kind === 'clash') return clashContext(project, node);
   const { arch } = project;
   const hasArch = arch && arch.source !== 'none';
   if (node.kind === 'create-arch') return hasArch ? fail(409, 'arch-exists') : { sections: [CREATE_TEXT], part: null };

@@ -46,6 +46,11 @@
   --lv2-bg: #daf2e5; --lv2-line: #a7dbc0; --lv2-ink: #163d2c;
   --lv3-bg: #fbefdc; --lv3-line: #ecd1a3; --lv3-ink: #47320f;
   --lv4-bg: #ffffff; --lv4-line: #d5ddd9;
+  --k-tasks: #2f7a5f; --k-tasks-ink: #23634c; --k-tasks-fill: rgb(47 122 95 / 0.1);
+  --k-chats: #2f74c0; --k-chats-ink: #1f5a9a; --k-chats-fill: rgb(47 116 192 / 0.1);
+  --k-branches: #7b5fd0; --k-branches-ink: #5b43ad; --k-branches-fill: rgb(123 95 208 / 0.1);
+  --k-changes: #1f8a96; --k-changes-ink: #146b75; --k-changes-fill: rgb(31 138 150 / 0.1);
+  --k-files: #6b7a75; --k-files-ink: #4a5c57; --k-files-fill: rgb(93 113 107 / 0.09);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -93,6 +98,11 @@
     --lv2-bg: #163129; --lv2-line: #295343; --lv2-ink: #ccedde;
     --lv3-bg: #33291a; --lv3-line: #594528; --lv3-ink: #f2e1c3;
     --lv4-bg: #141c1f; --lv4-line: #2a3834;
+    --k-tasks: #5ec29c; --k-tasks-ink: #74d1ad; --k-tasks-fill: rgb(94 194 156 / 0.11);
+    --k-chats: #6aa8ea; --k-chats-ink: #8dbdf0; --k-chats-fill: rgb(106 168 234 / 0.12);
+    --k-branches: #a596f2; --k-branches-ink: #bdb2f6; --k-branches-fill: rgb(165 150 242 / 0.12);
+    --k-changes: #4fc3d0; --k-changes-ink: #76d4de; --k-changes-fill: rgb(79 195 208 / 0.11);
+    --k-files: #9db0a9; --k-files-ink: #b3c3bd; --k-files-fill: rgb(157 176 169 / 0.09);
   }
 }
 
@@ -721,9 +731,6 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 }
 .link-row .lr-date .owner { font-size: 0.75rem; font-weight: 550; color: var(--ink-2); }
 
-.callout.clash { background: var(--clash-fill); }
-.callout.clash h3 { color: var(--clash-ink); }
-.callout.clash p + p { margin-top: 6px; }
 
 .progress { height: 6px; border-radius: 6px; background: var(--bg-3); overflow: hidden; }
 .progress span { display: block; height: 100%; border-radius: 6px; background: var(--active); }
@@ -1471,6 +1478,7 @@ body.is-empty .convs { display: none; }
 }
 .mm-count { position: absolute; top: -9px; right: 12px; z-index: 1; height: 18px; padding: 0 6px 0 5px; box-shadow: 0 1px 2px -1px rgb(20 35 32 / 0.2); }
 .mm-count[hidden] { display: none; }
+.mm-count:not([aria-pressed="true"]), .ol-count:not([aria-pressed="true"]) { color: var(--k-chats-ink); }
 .mm-count svg, .ol-count svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .mm-count:hover, .ol-count:hover { border-color: var(--ink-2); color: var(--ink); }
 .mm-count[aria-pressed="true"], .ol-count[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
@@ -1658,7 +1666,8 @@ body.is-empty .convs { display: none; }
 .al-dot { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 4px var(--tone-fill); }
 .al-text { min-width: 0; }
 .al-text p { margin: 0; overflow-wrap: anywhere; }
-.al-title { font-size: 0.875rem; font-weight: 650; line-height: 1.35; }
+.al-title { display: flex; align-items: flex-start; gap: 6px; font-size: 0.875rem; font-weight: 650; line-height: 1.35; }
+.al-title .kind-mark { margin-top: 1px; }
 .al-body { margin-top: 3px !important; font-size: 0.8125rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .al-todo { margin-top: 4px !important; font-size: 0.75rem; color: var(--ink-2); line-height: 1.4; }
 .al-actions { margin-top: 10px; }
@@ -1803,7 +1812,8 @@ body.is-empty .now { display: none; }
 .k-waiting .now-kind { color: var(--waiting-ink); }
 .k-finished .now-kind { color: var(--ink-2); }
 .now-when { color: var(--ink-2); white-space: nowrap; }
-.now-card-title { font-size: 0.8125rem; font-weight: 650; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.8125rem; font-weight: 650; line-height: 1.35; }
+.now-card-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-where { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.75rem; color: var(--ink-2); }
 .now-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-detail { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
@@ -2149,3 +2159,65 @@ body.is-empty .now { display: none; }
 @media (max-width: 719px) {
   .rel-list { top: auto; right: 0; width: auto; max-height: 78%; }
 }
+
+/* ---------- signs that explain themselves (wa06-wa08) ---------- */
+
+.sig {
+  --tone: var(--waiting); --tone-ink: var(--waiting-ink); --tone-fill: var(--waiting-fill);
+  margin-top: 16px; padding: 12px 14px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent); background: var(--tone-fill);
+}
+.sig.sig-clash { --tone: var(--clash); --tone-ink: var(--clash-ink); --tone-fill: var(--clash-fill); }
+.sig.sig-rel { --tone: var(--rel); --tone-ink: color-mix(in srgb, var(--rel) 72%, var(--ink)); --tone-fill: color-mix(in srgb, var(--rel) 11%, transparent); }
+.sig-head { display: flex; align-items: flex-start; gap: 8px; }
+.sig-icon { flex: none; width: 18px; height: 18px; margin-top: 1px; fill: none; stroke: var(--tone-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sig .sig-what { margin: 0; font-size: 0.9375rem; font-weight: 650; line-height: 1.35; letter-spacing: 0; color: var(--tone-ink); }
+.sig-words { display: grid; gap: 1px; margin: 8px 0 0; }
+.sig-words dt { margin-top: 8px; font-size: 0.75rem; font-weight: 700; color: var(--ink-2); }
+.sig-words dd { margin: 0; overflow-wrap: anywhere; }
+.sig .sig-facts { grid-template-columns: 1fr; gap: 2px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--tone) 28%, transparent); }
+.sig .sig-facts dt { margin-top: 8px; font-size: 0.75rem; font-weight: 700; }
+.sig .sig-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; text-align: left; overflow-wrap: anywhere; }
+.sig .sig-facts dd .plain { width: 100%; }
+.sig .sig-facts .plain { gap: 3px; }
+.sig .actions { margin-top: 12px; }
+.sig-sub { margin-top: 8px !important; font-size: 0.8125rem; font-weight: 600; color: var(--ink-2); }
+.sig-ignored { margin-top: 12px !important; }
+.msg-cut .sig { margin-top: 0; }
+
+/* the waiting list: each row is a sign in three lines, with its button */
+.wi-reason { display: flex; align-items: center; gap: 6px; }
+.wi-do { margin-top: 4px; font-size: 0.8125rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wi-do-label { font-weight: 650; color: var(--ink-2); }
+.wi-go { margin-top: 6px; justify-self: start; padding: 3px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 0.75rem; font-weight: 650; }
+.wi-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 10px; }
+
+/* ---------- the five kinds of information (mm07): one colour and one icon each, everywhere ---------- */
+
+.kind-tasks { --k: var(--k-tasks); --k-ink: var(--k-tasks-ink); --k-fill: var(--k-tasks-fill); }
+.kind-chats { --k: var(--k-chats); --k-ink: var(--k-chats-ink); --k-fill: var(--k-chats-fill); }
+.kind-branches { --k: var(--k-branches); --k-ink: var(--k-branches-ink); --k-fill: var(--k-branches-fill); }
+.kind-changes { --k: var(--k-changes); --k-ink: var(--k-changes-ink); --k-fill: var(--k-changes-fill); }
+.kind-files { --k: var(--k-files); --k-ink: var(--k-files-ink); --k-fill: var(--k-files-fill); }
+
+.kind-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.kind-mark { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--k-fill); color: var(--k-ink); }
+.kind-mark .kind-icon { width: 13px; height: 13px; }
+.block.kind > .kind-title { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 0.875rem; font-weight: 650; color: var(--k-ink); }
+.block.kind > .kind-from { margin: 2px 0 10px; font-size: 0.75rem; color: var(--ink-2); }
+
+.kind-rows { margin-top: 16px; gap: 6px; }
+.kind-row {
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "mark title next" "mark digest next"; align-items: center; column-gap: 10px;
+  width: 100%; padding: 9px 12px 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); text-align: left; cursor: pointer;
+}
+.kind-row:hover { border-color: var(--k); background: var(--k-fill); }
+.kind-row .kind-mark { grid-area: mark; width: 28px; height: 28px; border-radius: 8px; }
+.kind-row .kind-mark .kind-icon { width: 16px; height: 16px; }
+.kr-title { grid-area: title; font-weight: 650; }
+.kr-digest { grid-area: digest; font-size: 0.8125rem; color: var(--ink-2); }
+.kr-next { grid-area: next; width: 14px; height: 14px; fill: none; stroke: var(--ink-2); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.ptabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; margin: 12px 0 14px; }
+.ptabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: auto; padding: 6px 2px 5px; font-size: 0.75rem; line-height: 1.2; overflow-wrap: anywhere; }
+.ptabs button .kind-mark { width: 20px; height: 20px; }
+.ptabs button[aria-selected="true"] .kind-mark { background: color-mix(in srgb, var(--bg) 22%, transparent); color: var(--bg); }

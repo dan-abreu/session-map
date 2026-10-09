@@ -3,6 +3,8 @@ import { foldReply } from './chatfold.js';
 import { modelName } from './live.js';
 import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } from './transcript.js';
 import { chatLog, chatState, pcModeOffer, runWords } from './views.js';
+import { signalCard } from './blocks.js';
+import { errorSignal } from './signals.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
@@ -444,14 +446,16 @@ export function createChat({
     ].filter(Boolean) : []));
   }
 
-  // A conversation cut off in the middle: what happened and the one button that picks it up again.
+  // A conversation cut off in the middle is a sign (wa08): what happened, why, and the one button that picks it up again.
   function cutCard(state) {
     const tt = t();
+    if (state.resumable) {
+      const card = signalCard({ h, icon, t: tt }, errorSignal(state.reason), { continue: () => { if (!sendBtn.disabled) send(tt('chat.continueText')); } });
+      return h('li', { class: 'msg msg-cut' }, card);
+    }
     return h('li', { class: 'msg msg-cut', role: 'group', 'aria-label': tt('chat.cut.title') },
       h('p', { class: 'msg-cut-title' }, tt('chat.cut.title')),
-      h('p', {}, tt(state.resumable ? 'chat.cut.body' : 'chat.cut.bodyNew')),
-      state.resumable ? h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn primary', 'data-chat-act': 'continue', onclick: () => { if (!sendBtn.disabled) send(tt('chat.continueText')); } }, tt('chat.cut.continue'))) : null);
+      h('p', {}, tt('chat.cut.bodyNew')));
   }
 
   function statusText(state) {

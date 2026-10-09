@@ -1,6 +1,7 @@
 // Alerts (watcher-and-alerts wa02, wa05): the words and the grouping the page and the server's own desktop and phone
 // alerts share. The pure part on top is what node:test and the server load; the DOM part only runs when the page calls it.
 import { foldReply } from './chatfold.js';
+import { kindMark } from './blocks.js';
 
 const SUMMARY_MAX = 200;
 
@@ -134,7 +135,7 @@ export function createAlerts(ctx) {
     const el = h('li', { class: `al-card tone-${TONE[g.kind] ?? 'active'}`, role: 'group', 'aria-label': words.title },
       h('span', { class: 'al-dot', 'aria-hidden': 'true' }),
       h('div', { class: 'al-text' },
-        h('p', { class: 'al-title' }, words.title),
+        h('p', { class: 'al-title' }, kindMark({ h, icon: ctx.icon, t: tt }, g.kind === 'clash' ? 'branches' : 'chats'), words.title),
         h('p', { class: 'al-body' }, words.body),
         h('p', { class: 'al-todo' }, words.todo),
         test ? null : h('div', { class: 'al-actions' },

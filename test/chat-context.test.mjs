@@ -169,3 +169,33 @@ test('the flow workshop: the draft goes along, the reply must end with the whole
   const bare = all(contextOf(NONE, { kind: 'flow' }, { draft: 'flowchart LR' }));
   assert.match(bare, /no architecture map yet/i, 'a project without a map can draw one too');
 });
+
+const withBranches = (arch) => ({
+  ...project(arch),
+  workCells: ['pay', 'cart'].map((name, i) => ({
+    id: `w${i + 1}`, branch: `feat/${name}`, owner: { name: i ? 'Beto' : 'Ana', email: `${name}@x.org` }, ahead: i ? 2 : 7, status: 'active',
+    files: [{ path: 'src/pay.js' }, { path: `src/${name}.js` }], lastCommit: { subject: `work on ${name}` }, path: `/work/feira-${name}`,
+  })),
+});
+
+test('a clash chat gets both branches, their owners, the shared files, the advice and the rule to ask before joining', () => {
+  const ctx = contextOf(withBranches(EN.arch), { kind: 'clash', workCellIds: ['w1', 'w2'] });
+  assert.equal(ctx.error, undefined);
+  assert.equal(ctx.part, null);
+  const text = all(ctx);
+  for (const piece of ['feat/pay', 'feat/cart', 'Ana', 'Beto', 'src/pay.js', '7 commits', '2 commits']) assert.ok(text.includes(piece), piece);
+  assert.ok(!text.includes('src/cart.js, '), 'only the shared files are listed as shared');
+  assert.match(text, /most advanced/i);
+  assert.match(text, /do not (merge|join)[^.]*until[^.]*OK/i, 'the rule: no joining before the person says OK');
+  assert.deepEqual(codesIn(text), [], 'no code-shaped tokens that the transcript reader would take for items');
+});
+
+test('a clash chat refuses branches that are not in the project, a pair that does not clash and a missing map', () => {
+  const p = withBranches(EN.arch);
+  assert.equal(contextOf(p, { kind: 'clash', workCellIds: ['w1', 'nope'] }).error, 'unknown-front');
+  assert.equal(contextOf(p, { kind: 'clash', workCellIds: ['w1'] }).error, 'bad-node');
+  assert.equal(contextOf(p, { kind: 'clash' }).error, 'bad-node');
+  const apart = { ...p, workCells: [{ ...p.workCells[0], files: [{ path: 'a.js' }] }, { ...p.workCells[1], files: [{ path: 'b.js' }] }] };
+  assert.equal(contextOf(apart, { kind: 'clash', workCellIds: ['w1', 'w2'] }).error, 'no-clash');
+  assert.equal(contextOf({ ...p, workCells: undefined }, { kind: 'clash', workCellIds: ['w1', 'w2'] }).error, 'unknown-front');
+});

@@ -936,3 +936,23 @@ test('a message can carry pasted images, which reach claude as image blocks (mm2
     assert.ok(r.events.some((e) => e.type === 'text' && !e.data.partial && e.data.text.endsWith('[images:2]')));
   });
 });
+
+test('"Resolve with the AI" on a clash opens at the project root and tells the AI to ask the OK before joining anything', async () => {
+  const log = join(mkdtempSync(join(tmpdir(), 'sm-chat-log-')), 'fake.json');
+  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state, root }) => {
+    const [project] = state.projects;
+    const cell = (id, name, ahead) => ({ id, branch: name, path: join(root, name), ahead, status: 'active', owner: { name: 'Ana', email: 'a@x.org' }, lastCommit: { subject: `work on ${name}` }, files: [{ path: 'src/pay.js' }], clashWith: [] });
+    project.workCells = [cell('w1', 'feat/pay', 5), cell('w2', 'feat/cart', 1)];
+    const res = await hub.start({ projectId: 'demo-abc123', node: { kind: 'clash', workCellIds: ['w1', 'w2'] }, text: 'Resolve this clash.' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const final = r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
+    for (const piece of ['feat/pay', 'feat/cart', 'src/pay.js', 'until the person says OK']) assert.ok(final.includes(piece), piece);
+    const norm = (p) => p.replaceAll('\\', '/').toLowerCase();
+    assert.equal(norm(JSON.parse(readFileSync(log, 'utf8')).cwd), norm(root), 'the joining happens in the main folder');
+    const bad = await hub.start({ projectId: 'demo-abc123', node: { kind: 'clash', workCellIds: ['w1', 'nope'] }, text: 'x' }, state);
+    assert.deepEqual([bad.status, bad.body.error], [404, 'unknown-front']);
+  });
+});

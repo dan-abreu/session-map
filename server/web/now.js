@@ -3,6 +3,7 @@
 import { archTree } from './tree.js';
 import { nodeOfConversation, placeOf, projectHue, originIcon } from './convlist.js';
 import { modelName, runningWorkflows, stepWords } from './live.js';
+import { kindMark } from './blocks.js';
 
 const DAY_MS = 86_400_000;
 const KIND_ORDER = { waiting: 0, working: 1, finished: 2 };
@@ -135,7 +136,7 @@ export function createNowStrip(ctx) {
         h('span', { class: 'now-top' },
           h('span', { class: 'now-kind' }, card.kind === 'finished' ? icon('check', 'now-kind-check') : h('span', { class: 'now-dot', 'aria-hidden': 'true' }), tt(`now.kind.${card.kind}`)),
           when ? h('span', { class: 'now-when num' }, when) : null),
-        h('span', { class: 'now-card-title' }, title),
+        h('span', { class: 'now-card-title' }, kindMark({ h, icon, t: tt }, 'chats'), h('span', { class: 'now-card-name' }, title)),
         h('span', { class: 'now-where' }, where(card)),
         h('span', { class: 'now-detail' }, detail(card)),
         meta.length ? h('span', { class: 'now-meta' }, meta) : null));

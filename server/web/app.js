@@ -1,6 +1,6 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
-  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone,
+  archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -18,6 +18,9 @@ import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWord
 import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
+import { signalCard, kindBlock, kindMark } from './blocks.js';
+import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
+import { INFO_KINDS, pointTabs, kindDigest } from './kinds.js';
 import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
 import {
   declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, serializeIgnored, sortRelations, splitIgnored, strengthOf,
@@ -66,6 +69,10 @@ let ignoredRel = new Set();
 let relLit = null; // the relation (a|b) the Relations list lights on the map
 const ignoredKey = (projectId) => `sm.relIgnored.${projectId}`;
 const saveIgnored = () => store.set(ignoredKey(project.id), serializeIgnored(ignoredRel));
+// Clashes the person chose to stop seeing (wa07): kept in this browser, per project, by the pair of branches.
+let ignoredClash = new Set();
+const clashIgnoredKey = (projectId) => `sm.clashIgnored.${projectId}`;
+const saveClashIgnored = () => store.set(clashIgnoredKey(project.id), serializeIgnored(ignoredClash));
 let waitingScope = store.get('sm.waiting.scope') === 'all' ? 'all' : 'project'; // the counter follows the open project unless asked
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
@@ -140,7 +147,6 @@ const chatById = (id) => project.chats.find((c) => c.sessionId === id);
 const workCellById = (id) => project.workCells.find((w) => w.id === id);
 const partById = (id) => project.arch.parts.find((p) => p.id === id);
 const hasMap = () => project.arch.parts.length > 0;
-const isPerson = (who) => Boolean(who) && who.trim().toLowerCase() !== 'claude';
 const itemNodeId = (partId, code) => `i:${partId}:${code}`;
 
 function applyStaticText() {
@@ -185,6 +191,11 @@ function confirmAction(text, label) {
 
 const joinDots = (parts) => parts.flatMap((p, i) => (i ? [h('span', { class: 'sep', 'aria-hidden': 'true' }, '·'), p] : [p]));
 const pill = (tone, text) => h('span', { class: `pill tone-${tone}` }, h('span', { class: 'pill-dot', 'aria-hidden': 'true' }), text);
+
+// The shapes the panels share (blocks.js): a sign that explains itself, a block of one kind of information.
+const sigCard = (sig, handlers, extra) => signalCard({ h, icon, t }, sig, handlers, extra);
+const kblock = (kind, opts, ...content) => kindBlock({ h, icon, t }, kind, opts, ...content);
+const kmark = (kind) => kindMark({ h, icon, t }, kind);
 
 function section(title, ...content) {
   const body = content.flat().filter(Boolean);
@@ -432,10 +443,10 @@ function goTo(projectId, sel) {
 }
 
 function renderWaiting() {
-  const everyone = waitingEntries(state);
+  const everyone = waitingEntries(state, null, ignoredClash);
   const several = state.projects.length > 1;
   const scoped = waitingScope === 'project' && several && !!project;
-  const entries = scoped ? waitingEntries(state, project.id) : everyone;
+  const entries = scoped ? waitingEntries(state, project.id, ignoredClash) : everyone;
   $('#waitingLabel').textContent = t(scoped ? 'waiting.buttonHere' : 'waiting.button', { n: entries.length });
   $('#waitingBtn').classList.toggle('is-zero', entries.length === 0);
   $('#waitingBtn').title = scoped && everyone.length > entries.length ? t('waiting.elsewhere', { n: everyone.length - entries.length }) : '';
@@ -443,7 +454,7 @@ function renderWaiting() {
   for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
     const all = b.dataset.scope === 'all';
     b.setAttribute('aria-pressed', String(all !== scoped));
-    b.textContent = t(all ? 'waiting.scope.all' : 'waiting.scope.project', { n: all ? everyone.length : project ? waitingEntries(state, project.id).length : 0 });
+    b.textContent = t(all ? 'waiting.scope.all' : 'waiting.scope.project', { n: all ? everyone.length : project ? waitingEntries(state, project.id, ignoredClash).length : 0 });
   }
   const listEl = $('#waitingItems');
   $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, n))));
@@ -455,29 +466,44 @@ function renderWaiting() {
     const part = partId && p.arch.parts.find((x) => x.id === partId);
     return [several && !scoped ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
   };
-  listEl.replaceChildren(...entries.map((entry) => {
-    const { project: p, chat: c, decision } = entry;
-    const kind = waitingKind(entry);
-    if (decision) {
-      const clashing = decision.kind === 'clash' ? p.workCells.find((w) => w.id === decision.workCellIds?.[0]) : null;
-      const words = decision.kind === 'clash' ? clashWords(decision) : null;
-      const target = decision.kind === 'item'
-        ? { type: 'node', id: decision.code ? itemNodeId(decision.partId, decision.code) : `pt:${decision.partId}` }
-        : clashing ? { type: 'workcell', id: clashing.id } : decision.sessionId ? { type: 'chat', id: decision.sessionId } : null;
-      return h('li', {}, h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, target) },
-        h('span', { class: 'wi-reason' }, decision.kind === 'item' ? t('waiting.withYou') : t(`waiting.${decision.kind}`)),
-        h('span', { class: 'wi-title' }, words ? t(words.key, words.vars) : decision.text),
-        words?.vars.files ? h('span', { class: 'wi-detail mono' }, words.vars.files) : null,
-        decision.kind === 'item' && decision.who ? h('span', { class: 'wi-detail' }, [decision.who, decision.code].filter(Boolean).join(' · ')) : null,
-        h('span', { class: 'wi-where' }, where(p, decision.partId ?? clashing?.partId))));
-    }
-    const reason = c.waiting.strong ? t('waiting.question') : c.waiting.items.length ? t('waiting.item') : t('waiting.ends');
-    return h('li', {}, h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, { type: 'chat', id: c.sessionId }) },
-      h('span', { class: 'wi-reason' }, reason),
-      h('span', { class: 'wi-title' }, c.title),
-      h('span', { class: 'wi-where' }, where(p, c.partId)),
-      h('span', { class: 'wi-detail' }, c.waiting.items[0] || tail(c.lastAssistantText, 140))));
-  }));
+  listEl.replaceChildren(...entries.map((entry) => waitingRow(entry, { where, scoped })));
+}
+
+// One row of "Waiting for you": the sign in three lines (what it is, why, what to do) and the button that does it.
+function waitingRow(entry, { where }) {
+  const { project: p, chat: c, decision } = entry;
+  const kind = waitingKind(entry);
+  const sig = decision?.kind === 'clash' ? clashSignal(decision) : waitingSignal({ chat: c, decision });
+  const words = sig ? signalWords(t, sig) : null;
+  const clashing = decision?.kind === 'clash' ? p.workCells.find((w) => w.id === decision.workCellIds?.[0]) : null;
+  const other = clashing && p.workCells.find((w) => w.id === decision.workCellIds?.[1]);
+  const clashText = decision?.kind === 'clash' ? clashWords(decision) : null;
+  let target;
+  if (decision) {
+    target = decision.kind === 'item'
+      ? { type: 'node', id: decision.code ? itemNodeId(decision.partId, decision.code) : `pt:${decision.partId}` }
+      : clashing ? { type: 'workcell', id: clashing.id } : decision.sessionId ? { type: 'chat', id: decision.sessionId } : null;
+  } else target = { type: 'chat', id: c.sessionId };
+  const reason = decision
+    ? (decision.kind === 'item' ? t('waiting.withYou') : t(`waiting.${decision.kind}`))
+    : c.waiting.strong ? t('waiting.question') : c.waiting.items.length ? t('waiting.item') : t('waiting.ends');
+  const title = clashText ? t(clashText.key, clashText.vars) : decision ? decision.text : c.title;
+  const detail = clashText?.vars.files
+    ? h('span', { class: 'wi-detail mono' }, clashText.vars.files)
+    : decision ? (decision.kind === 'item' && decision.who ? h('span', { class: 'wi-detail' }, [decision.who, decision.code].filter(Boolean).join(' · ')) : null)
+      : h('span', { class: 'wi-detail' }, c.waiting.items[0] || tail(c.lastAssistantText, 140));
+  const main = h('button', { type: 'button', class: `waiting-item k-${kind}`, onclick: () => goTo(p.id, target) },
+    h('span', { class: 'wi-reason' }, kmark(decision?.kind === 'clash' ? 'branches' : decision ? 'tasks' : 'chats'), reason),
+    h('span', { class: 'wi-title' }, title),
+    detail,
+    h('span', { class: 'wi-where' }, where(p, decision?.partId ?? clashing?.partId ?? c?.partId)),
+    words ? h('span', { class: 'wi-do' }, h('span', { class: 'wi-do-label' }, `${t('sig.label.todo')}: `), words.todo) : null,
+    words && decision?.kind !== 'clash' ? h('span', { class: 'wi-go' }, words.actions[0].label) : null);
+  // A clash is settled with the AI or ignored right from the list; the other rows open where the answer is.
+  const buttons = decision?.kind === 'clash' && clashing && other ? h('div', { class: 'wi-actions' },
+    h('button', { type: 'button', class: 'btn primary small-btn', onclick: () => startClashChat(p, clashing, other) }, t('sig.act.resolve-ai')),
+    h('button', { type: 'button', class: 'btn small-btn', onclick: () => setClashIgnored(decision, true) }, t('sig.act.ignore'))) : null;
+  return h('li', {}, main, buttons);
 }
 
 function openWaiting() {
@@ -560,8 +586,8 @@ function activitySection(items) {
   const range = activeRange();
   const inside = items.filter((a) => inRange(Date.parse(a.ts), range));
   const rows = activityList(inside.sort(newestFirst).slice(0, 10), { showChat: true });
-  if (!range) return section(t('activity.title'), rows);
-  return section(`${t('activity.title')} · ${spanWords(range, lang, rangeNow())}`, rows ?? h('p', { class: 'muted' }, t('range.none')));
+  if (!range) return kblock('changes', {}, rows);
+  return kblock('changes', { title: `${t('kind.changes.title')} · ${spanWords(range, lang, rangeNow())}` }, rows ?? h('p', { class: 'muted' }, t('range.none')));
 }
 
 async function runAction(body, okText) {
@@ -582,7 +608,7 @@ function filesSection({ part, workCell, files: fileList, folder = true }) {
   const tools = folder || tunnel ? h('div', { class: 'actions secondary' },
     folder ? button(t('files.openTerminal'), terminal, { title: t('files.fromPhone') }) : null,
     tunnel ? h('a', { class: 'btn', href: tunnel, target: '_blank', rel: 'noopener noreferrer' }, t('files.phone')) : null) : null;
-  return section(t('files.title'), tools, files.tree({ part, workCell, files: fileList }));
+  return kblock('files', workCell ? { from: t('kind.files.fromBranch') } : {}, tools, files.tree({ part, workCell, files: fileList }));
 }
 
 // ---- a point of the map: the chat beside it and its details ------------------------------
@@ -604,6 +630,7 @@ function setPointTab(tab) {
 }
 
 let pointNode = null;
+let pointSub = 'summary'; // the tab of the details: Summary, Tasks, Conversations, Changes or Files (mm07)
 
 function openPoint(node, { tab = 'chat' } = {}) {
   if (node.kind === 'project') return select({ type: 'project' });
@@ -613,6 +640,7 @@ function openPoint(node, { tab = 'chat' } = {}) {
   chat.open({
     projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: nodeRef(node) },
   });
+  if (pointNode !== node.id) pointSub = 'summary';
   pointNode = node.id;
   $('#pointTabs').hidden = false;
   setPointTab(tab);
@@ -679,6 +707,7 @@ function openConversation({ row, project: p, nodeId, place }) {
   });
   if (node.kind === 'project') plainPoint();
   else {
+    if (pointNode !== node.id) pointSub = 'summary';
     pointNode = node.id;
     $('#pointTabs').hidden = false;
     setPointTab('chat');
@@ -811,35 +840,112 @@ function mainBranchNote() {
   return project.arch.source === 'main-branch' ? h('p', { class: 'note' }, t('point.mainBranch', { dir: project.arch.dir, main: project.mainBranch })) : null;
 }
 
+const itemsOf = (nodes) => nodes.flatMap((n) => (n.kind === 'item' ? [n] : n.children));
+
+// The open lines of work that change this part's files, at home here or only passing through.
+const linesOn = (part) => project.workCells.filter((w) => w.status !== 'merged' && (w.partId === part.id || (w.touches ?? []).includes(part.id)));
+
+// Every sign of a part or item worth seeing at the top of its Summary: clashes, what blocks, who waits for the person.
+function partSigns(part, items) {
+  const pairs = new Map();
+  for (const w of linesOn(part)) {
+    for (const o of w.clashWith.map(workCellById).filter(Boolean)) pairs.set([w.id, o.id].sort().join('|'), [w, o]);
+  }
+  const clashes = [...pairs.values()].map(([w, o]) => clashCard(w, o));
+  const blocking = items.filter((n) => blocksSignal(n.item, part.name)).slice(0, 2).map((n) => itemSign(n.item, part));
+  const waiting = shown.chats.filter((c) => c.partId === part.id && waitingSignal({ chat: c })).slice(0, 2)
+    .map((c) => sigCard(waitingSignal({ chat: c }), { answer: () => answerChat(c) }, [h('p', { class: 'sig-sub' }, c.title)]));
+  return [...clashes, ...blocking, ...waiting];
+}
+
+// What an item that blocks the rest says, with the button that starts it.
+function itemSign(i, part) {
+  const blocks = blocksSignal(i, part.name);
+  return blocks ? sigCard(blocks, { 'work-on': () => workOnPoint() }) : null;
+}
+
+function workOnPoint() {
+  setPointTab('chat');
+  $('#chatInput')?.focus();
+}
+
+const setPointSub = (tab) => {
+  pointSub = tab;
+  renderPointDetails();
+};
+
+// The strip Summary · Tasks · Conversations · Changes · Files (only the tabs with something in them).
+function pointTabStrip(tabs) {
+  if (!tabs.includes(pointSub)) pointSub = 'summary';
+  const kindOf = { tasks: 'tasks', chats: 'chats', changes: 'changes', files: 'files' };
+  return h('div', { class: 'seg ptabs', role: 'tablist', 'aria-label': t('ptab.label') }, tabs.map((tab) => h('button', {
+    type: 'button', role: 'tab', 'data-ptab': tab, class: kindOf[tab] ? `kind-${kindOf[tab]}` : '', 'aria-selected': String(pointSub === tab), onclick: () => setPointSub(tab),
+  }, kindOf[tab] ? kmark(kindOf[tab]) : null, t(`ptab.${tab}`))));
+}
+
+// A row of the Summary: one kind, how much of it there is, and a click that opens its tab.
+function digestRow(kind, counts, tab) {
+  return h('li', {}, h('button', { type: 'button', class: `kind-row kind-${kind}`, onclick: () => setPointSub(tab) },
+    kmark(kind), h('span', { class: 'kr-title' }, t(`kind.${kind}.title`)), h('span', { class: 'kr-digest' }, kindDigest(t, kind, counts)), icon('next', 'kr-next')));
+}
+
 function partDetails(node) {
   const part = node.part;
   const c = node.counts;
-  return [
-    part.about ? h('p', { class: 'lead' }, part.about) : null,
-    h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c),
-      linkTo(part.file, () => files.open(part.file), 'meta-link path')),
-    mainBranchNote(),
-    section(t('point.missing'), itemList(node.children)),
-    section(t('point.chats'), chatRows(shown.chats.filter((x) => x.partId === part.id))),
-    section(t('point.branches'), branchRows(project.workCells.filter((w) => w.partId === part.id && w.status !== 'merged'))),
-    section(t('point.related'), linkRows(part.id)),
-    activitySection(project.activity.filter((a) => (a.partIds ?? []).includes(part.id))),
-    part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null,
-    filesSection({ part: part.id }),
-  ];
+  const items = itemsOf(node.children);
+  const open = items.filter((n) => n.item.status !== 'done');
+  const chats = shown.chats.filter((x) => x.partId === part.id);
+  const cells = linesOn(part);
+  const range = activeRange();
+  const changes = project.activity.filter((a) => (a.partIds ?? []).includes(part.id) && inRange(Date.parse(a.ts), range));
+  const tabs = pointTabs({ tasks: items.length > 0, chats: chats.length > 0 || cells.length > 0, changes: changes.length > 0 || Boolean(range), files: true });
+  const strip = pointTabStrip(tabs);
+  let body;
+  if (pointSub === 'tasks') body = [kblock('tasks', { vars: { file: part.file } }, itemList(node.children))];
+  else if (pointSub === 'chats') {
+    body = [kblock('chats', { empty: t('kind.empty') }, chatRows(chats)), kblock('branches', {}, branchRows(cells))];
+  } else if (pointSub === 'changes') body = [activitySection(project.activity.filter((a) => (a.partIds ?? []).includes(part.id)))];
+  else if (pointSub === 'files') {
+    body = [filesSection({ part: part.id }),
+      part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null];
+  } else {
+    body = [
+      part.about ? h('p', { class: 'lead' }, part.about) : null,
+      h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), linkTo(part.file, () => files.open(part.file), 'meta-link path')),
+      mainBranchNote(),
+      ...partSigns(part, items),
+      h('ul', { class: 'plain rows kind-rows' },
+        digestRow('tasks', { open: open.length, blocks: c.blocks }, 'tasks'),
+        digestRow('chats', { n: chats.length, waiting: chats.filter((x) => waitingSignal({ chat: x })).length }, 'chats'),
+        digestRow('branches', { n: cells.length, clashing: cells.filter((w) => w.clashWith.length).length }, 'chats'),
+        digestRow('changes', { n: changes.length }, 'changes'),
+        digestRow('files', { n: part.codePaths.length }, 'files')),
+      section(t('point.related'), linkRows(part.id)),
+    ];
+  }
+  return [strip, ...body];
 }
 
 function itemDetails(node) {
   const i = node.item;
   const part = partById(node.partId);
+  const tabs = pointTabs({ tasks: i.detail.length > 0, files: true });
+  const strip = pointTabStrip(tabs);
+  if (pointSub === 'tasks') return [strip, kblock('tasks', { vars: { file: part.file } }, list(i.detail))];
+  if (pointSub === 'files') return [strip, filesSection({ part: part.id })];
+  const person = isPerson(i.who) && i.status !== 'done' && !blocksSignal(i, part.name);
+  const withYou = person ? sigCard(waitingSignal({ decision: { kind: 'item', text: node.label, who: i.who, code: i.code } }), { 'open-item': () => files.open(part.file, null, { line: i.line }) }) : null;
   return [
+    strip,
     h('p', { class: 'meta' },
       pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)),
       i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
       i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
       i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,
       i.code ? h('code', { class: 'bx-code' }, i.code) : null),
-    i.detail.length ? section(t('point.detail'), list(i.detail)) : null,
+    itemSign(i, part),
+    withYou,
+    i.detail.length ? kblock('tasks', { vars: { file: part.file } }, list(i.detail)) : null,
     h('div', { class: 'actions secondary' },
       button(t('point.openLine', { n: i.line }), () => files.open(part.file, null, { line: i.line })),
       button(t('point.openPart', { name: part.name }), () => openPartPoint(part.id, { tab: 'details' }))),
@@ -854,7 +960,7 @@ function renderPointDetails() {
   let body;
   if (node.kind === 'part') body = partDetails(node);
   else if (node.kind === 'item') body = itemDetails(node);
-  else if (node.kind === 'group') body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)), section(t('point.missing'), itemList(node.children))];
+  else if (node.kind === 'group') body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)), kblock('tasks', {}, itemList(node.children))];
   else {
     body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
       section(t('point.parts'), h('ul', { class: 'plain rows' }, node.children.map((p) => h('li', {},
@@ -862,7 +968,7 @@ function renderPointDetails() {
           h('span', { class: 'lr-title' }, p.label), h('span', { class: 'lr-date num' }, countText(p.counts)),
           p.part.about ? h('span', { class: 'lr-line' }, p.part.about) : null)))))];
   }
-  $('#pointDetails').replaceChildren(...body.filter(Boolean));
+  $('#pointDetails').replaceChildren(...body.flat().filter(Boolean));
 }
 
 // ---- the side panel: project, conversation, branch, relation -------------------------------
@@ -882,11 +988,59 @@ function startChat(title, subtitle, intro, start) {
   plainPoint();
 }
 
-function clashLines(w) {
-  return w.clashWith.map(workCellById).filter(Boolean).map((o) => {
-    const shared = w.files.map((f) => f.path).filter((p) => o.files.some((f) => f.path === p));
-    return h('p', {}, t('wc.clashText', { a: w.owner.name, b: o.owner.name, files: shared.join(', ') }), ' ', branchLink(o));
+function setClashIgnored(d, on) {
+  const key = clashKey(d);
+  if (on) ignoredClash.add(key);
+  else ignoredClash.delete(key);
+  saveClashIgnored();
+  refreshMarks();
+  renderWaiting();
+  renderMap();
+  rerender();
+}
+
+// "Resolve with the AI": a conversation about the pair that studies both lines of work and asks for the OK before joining.
+function startClashChat(p, a, b) {
+  if (p.id !== project.id) setProject(p.id);
+  closeLists();
+  closePanel(false);
+  chat.open({
+    projectId: p.id, title: t('clash.chatTitle', { a: a.branch, b: b.branch }), subtitle: p.name, intro: t('clash.chatIntro'),
+    draft: t('clash.chatDraft', { a: a.branch, b: b.branch }), start: { node: { kind: 'clash', workCellIds: [a.id, b.id] } },
   });
+  plainPoint();
+}
+
+const SHARED_MAX = 4;
+const sharedFiles = (w, o) => w.files.map((f) => f.path).filter((p) => o.files.some((f) => f.path === p));
+
+// One clash as a sign: both lines of work, whose they are, the files they share, why it conflicts and the advice, with the
+// buttons that do it. Ignored, it shrinks to a line that brings it back.
+function clashCard(w, o) {
+  const d = { workCellIds: [w.id, o.id] };
+  if (ignoredClash.has(clashKey(d))) {
+    return h('p', { class: 'note sig-ignored' }, t('clash.ignored', { a: w.branch, b: o.branch }), ' ', linkTo(t('clash.restore'), () => setClashIgnored(d, false)));
+  }
+  const shared = sharedFiles(w, o);
+  const named = [...shared.slice(0, SHARED_MAX), ...(shared.length > SHARED_MAX ? [t('clash.facts.more', { n: shared.length - SHARED_MAX })] : [])];
+  const sig = clashSignal({ ...d, branches: [w.branch, o.branch], owners: [w.owner.name, o.owner.name], files: named, sameOwner: w.owner.email === o.owner.email });
+  const facts = h('dl', { class: 'facts sig-facts' },
+    h('dt', {}, t('clash.facts.branches')), h('dd', {}, branchLink(w), ' ', branchLink(o)),
+    h('dt', {}, t('clash.facts.owners')), h('dd', {}, ownerChip(w.owner), w.owner.email === o.owner.email ? null : ownerChip(o.owner)),
+    h('dt', {}, t('clash.facts.ahead')), h('dd', {}, t('clash.facts.aheadValue', { a: w.branch, na: t.count('wc.commitsCount', w.ahead), b: o.branch, nb: t.count('wc.commitsCount', o.ahead) })),
+    h('dt', {}, t('clash.facts.files')), h('dd', {}, h('ul', { class: 'plain code-paths' }, shared.slice(0, SHARED_MAX).map((p) => h('li', {}, h('code', {}, p))),
+      shared.length > SHARED_MAX ? h('li', { class: 'muted' }, t('clash.facts.more', { n: shared.length - SHARED_MAX })) : null)));
+  return sigCard(sig, {
+    'resolve-ai': () => startClashChat(project, w, o),
+    'see-files': () => $('#panelBody .kind-files, #pointDetails .kind-files')?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+    ignore: () => setClashIgnored(d, true),
+  }, [facts]);
+}
+
+// A branch past what it was expected to cost.
+function costCard(w) {
+  const sig = costSignal(w, { money, kind: 'estimate' });
+  return sig ? sigCard(sig, { 'see-costs': () => showView('costs') }) : null;
 }
 
 function renderWorkCellPanel(w) {
@@ -906,7 +1060,8 @@ function renderWorkCellPanel(w) {
   ].filter(Boolean);
   const alive = w.status !== 'merged';
   $('#panelBody').replaceChildren(...[
-    w.clashWith.length ? h('div', { class: 'callout clash' }, h('h3', {}, t('wc.clash')), clashLines(w)) : null,
+    ...w.clashWith.map(workCellById).filter(Boolean).map((o) => clashCard(w, o)),
+    costCard(w),
     w.remote ? h('p', { class: 'note' }, t('wc.remote'), project.fetchedAt ? ` ${t('wc.fetched', { time: clock(project.fetchedAt) })}` : '') : null,
     alive && !w.remote ? h('div', { class: 'tools' }, h('div', { class: 'actions' },
       button(t('action.continue'), () => startChat(t('chat.newOn', { branch: w.branch }), home ? home.name : '', t('chat.introBranch', { branch: w.branch }), { workCellId: w.id, ...(home ? { partId: home.id } : {}) }), { primary: true }),
@@ -916,9 +1071,9 @@ function renderWorkCellPanel(w) {
       h('div', { class: 'progress', role: 'img', 'aria-label': t('chat.openspec', w.openspec) },
         h('span', { style: `width:${Math.round((w.openspec.done / Math.max(1, w.openspec.total)) * 100)}%` })),
       h('p', { class: 'muted small' }, `${w.openspec.change} · ${t('chat.openspec', w.openspec)}`)) : null,
-    section(t('wc.todo'), list(w.nucleus.todo)),
+    kblock('tasks', { from: t('kind.tasks.fromBranch') }, list(w.nucleus.todo)),
     filesSection({ workCell: w.id, files: w.files, folder: Boolean(!w.remote || w.path) }),
-    section(t('wc.chats'), chatRows(chats) ?? h('p', { class: 'muted' }, t('wc.noChats'))),
+    kblock('chats', { empty: t('wc.noChats') }, chatRows(chats)),
     activitySection(project.activity.filter((a) => a.workCellId === w.id)),
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
   ].filter(Boolean));
@@ -1018,6 +1173,9 @@ function reasonEvidence(r) {
   return out;
 }
 
+// A part has work open now: a line of work being changed, or a conversation running.
+const partBusy = (id) => project.workCells.some((w) => w.partId === id && w.status === 'active') || project.chats.some((c) => c.partId === id && c.status === 'busy');
+
 function renderLinkPanel(link) {
   const a = partById(link.a), b = partById(link.b);
   const key = relationKey(link);
@@ -1040,12 +1198,19 @@ function renderLinkPanel(link) {
     h('div', { class: `callout rel-kind-note ${declared ? 'is-declared' : 'is-detected'}` }, h('h3', {}, t(declared ? 'rel.declared' : 'rel.detected')), h('p', {}, t(declared ? 'rel.declaredWhy' : 'rel.detectedWhy'))),
     section(t('rel.parts'), h('div', { class: 'rel-pair' }, partLink(a), h('span', { 'aria-hidden': 'true' }, '↔'), partLink(b))),
     section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)),
-    chatIds.length ? section(t('rel.chats'), chatRows(chatIds)) : null,
-    h('div', { class: 'tools' }, h('div', { class: 'actions' },
-      button(chatIds.length ? t('rel.openChats', { n: chatIds.length }) : t('rel.noChats'), () => select({ type: 'chat', id: chatIds[0].sessionId }), { primary: true, disabled: !chatIds.length }),
-      button(t('rel.flow'), () => putOnFlow(link)),
-      button(t(off ? 'rel.unignore' : 'rel.ignore'), () => setIgnored(link, !off), { cls: off ? '' : 'danger-quiet' }))),
+    chatIds.length ? kblock('chats', { title: t('rel.chats') }, chatRows(chatIds)) : null,
   ].filter(Boolean));
+  $('#panelBody').prepend(sigCard(relationSignal(link, { nameOf: partName, bothBusy: partBusy(link.a) && partBusy(link.b), kindWord: (k) => t(`link.kind.${k}`) }), {
+    'open-chats': chatIds.length ? { label: t('rel.openChats', { n: chatIds.length }), run: () => select({ type: 'chat', id: chatIds[0].sessionId }) } : null,
+    'put-on-flow': () => putOnFlow(link),
+    ignore: { label: t(off ? 'rel.unignore' : 'rel.ignore'), run: () => setIgnored(link, !off) },
+  }));
+}
+
+// Answer a conversation that waits: here when the page may write in it, otherwise where it lives.
+function answerChat(c) {
+  if (chatButtons(c).write === 'page') startChat(c.title, t('chat.resuming'), t('chat.introResume'), { sessionId: c.sessionId });
+  else select({ type: 'chat', id: c.sessionId });
 }
 
 function chatTools(c) {
@@ -1077,11 +1242,8 @@ function renderChatPanel(c) {
   const parent = c.parentId && chatById(c.parentId);
   const card = c.card || {};
   panelHead(c.title, pill(chatTone(c), t(`chat.${c.status}`)), c.archived ? h('span', { class: 'level-badge' }, t('chat.archived')) : null, part ? partLink(part) : null);
-  const waitingBlock = c.waiting.strong || c.waiting.items.length || c.waiting.weak ? h('div', { class: 'callout' },
-    h('h3', {}, t('chat.waitingFor')),
-    c.waiting.strong ? h('p', {}, t('chat.question')) : null,
-    !c.waiting.strong && c.waiting.weak ? h('p', {}, t('chat.endsWithQuestion')) : null,
-    list(c.waiting.items)) : null;
+  const waitingSig = waitingSignal({ chat: c });
+  const waitingBlock = waitingSig ? sigCard(waitingSig, { answer: () => answerChat(c) }, c.waiting.items.length ? [list(c.waiting.items)] : []) : null;
   const facts = [
     [t('chat.cost'), h('span', { class: 'num' }, money(c.costUSD))],
     [t('chat.branch'), wc ? branchLink(wc) : h('span', { class: 'branch-name' }, project.mainBranch || '—')],
@@ -1096,10 +1258,10 @@ function renderChatPanel(c) {
     !part && hasMap() ? h('p', { class: 'note' }, t('chat.offMap')) : null,
     chatTools(c),
     section(t('chat.doing'), card.doing ? h('p', { class: 'lead' }, card.doing) : null),
-    section(t('chat.todo'), list(card.todo)),
+    kblock('tasks', { from: t('kind.tasks.fromChat') }, list(card.todo)),
     section(t('chat.lastPrompt'), c.lastPrompt ? h('p', { class: 'quote' }, c.lastPrompt) : null),
     section(t('chat.lastReply'), c.lastAssistantText ? h('p', {}, c.lastAssistantText) : null),
-    section(t('chat.commits'), activityList(project.activity.filter((a) => isWork(a) && a.sessionId === c.sessionId).sort(newestFirst), { showChat: false })),
+    kblock('changes', { title: t('chat.commits') }, activityList(project.activity.filter((a) => isWork(a) && a.sessionId === c.sessionId).sort(newestFirst), { showChat: false })),
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
   ].filter(Boolean));
 }
@@ -1247,7 +1409,7 @@ async function pcMode(mode) {
 
 function refreshMarks() {
   liveEntries = workingIn(shown, tree, Date.parse(state.generatedAt));
-  marks = { live: livePaths(liveEntries).nodes, branches: branchMarks(shown), clashes: clashMarks(shown) };
+  marks = { live: livePaths(liveEntries).nodes, branches: branchMarks(shown), clashes: clashMarks(shown, ignoredClash) };
   convCounts = conversationCounts(project, tree, { showArchived });
 }
 
@@ -1264,6 +1426,7 @@ function setProject(id) {
   const before = project?.id;
   project = state.projects.find((p) => p.id === id) || state.projects[0];
   if (project.id !== before) convs.projectChanged();
+  ignoredClash = parseIgnored(store.get(clashIgnoredKey(project.id)));
   shown = visibleProject(project, showArchived);
   tree = archTree(shown);
   refreshMarks();

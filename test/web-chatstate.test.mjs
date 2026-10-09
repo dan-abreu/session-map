@@ -23,7 +23,7 @@ test('finished, with the reply\'s own words as the summary, never looks stuck on
 
 test('interrupted: cut off by a restart (from the history) or a process that died; continuing clears it', () => {
   const cut = chatLog(undefined, { type: 'history', data: { messages: [{ role: 'user', text: 'Fix the form' }], interrupted: true } });
-  assert.deepEqual(chatState(cut, { sessionId: 's' }), { kind: 'interrupted', resumable: true });
+  assert.deepEqual(chatState(cut, { sessionId: 's' }), { kind: 'interrupted', resumable: true, reason: 'restart' });
   const died = fold([sent, { type: 'error', data: { error: 'exited' } }, { type: 'session', data: { state: 'ended' } }]);
   assert.equal(chatState(died, { sessionId: 's' }).kind, 'interrupted');
   assert.equal(chatState(died, { sessionId: null }).resumable, false);

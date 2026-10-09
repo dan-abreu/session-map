@@ -3,6 +3,8 @@ import { boardItems } from './tree.js';
 import { createTranscript, dayName, timeOf, withDays } from './transcript.js';
 import { costRows, estimateTone, budgetTone, aiSpend } from './views.js';
 import { costInRange } from './range.js';
+import { signalCard } from './blocks.js';
+import { costSignal } from './signals.js';
 
 const HISTORY_DEBOUNCE_MS = 250;
 
@@ -202,13 +204,14 @@ export function createTabs(ctx) {
     root.replaceChildren(h('div', { class: 'view-wrap' },
       h('div', { class: 'view-head' }, h('h2', {}, tt('costs.title')), ctx.rangeButton()),
       h('p', { class: 'view-lede' }, tt('costs.honest')),
+      budgetSign(root),
       ledger,
       h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.byProject')),
         h('ul', { class: 'plain rows bars' }, state.projects.map((p) => h('li', { class: 'bar-row' },
           h('span', { class: 'br-name' }, p.name),
           h('span', { class: 'br-value num' }, fmt.money(spent(p))),
           h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((spent(p) / maxProject) * 100).toFixed(1)}%` })))))),
-      h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList),
+      h('section', { class: 'tree-block', id: 'aiCosts' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList),
       estimates.length ? h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.estimates')),
         h('ul', { class: 'plain rows' }, estimates.map(({ p, w }) => h('li', {},
           h('button', { type: 'button', class: 'est-row', onclick: () => ctx.go(p.id, { type: 'workcell', id: w.id }) },
@@ -220,6 +223,13 @@ export function createTabs(ctx) {
             h('span', { class: 'lr-date num strong' }, fmt.money(chat.costUSD)),
             h('span', { class: 'lr-line' }, [project.name, partName(project, chat.partId), fmt.relative(chat.updatedAt)].filter(Boolean).join(' · '))))))
           : emptyNote(tt('costs.none')))));
+  }
+
+  // The helpers' monthly budget nearly used is a sign: why, what to do, and the button that takes you to what they spent.
+  function budgetSign(root) {
+    const budget = ctx.state().budget;
+    const sig = budget && costSignal({ usedUSD: budget.used, monthlyUSD: budget.monthlyUSD }, { money: fmt.money, kind: 'budget' });
+    return sig ? signalCard({ h, icon: ctx.icon, t: t() }, sig, { 'see-costs': () => root.querySelector('#aiCosts')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }) : null;
   }
 
   function budgetRow(budget) {

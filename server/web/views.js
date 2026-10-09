@@ -2,15 +2,16 @@
 import { summaryOf } from './alerts.js';
 import { modelName } from './live.js';
 import { inRange } from './range.js';
+import { clashKey } from './signals.js';
 
 
 // Everything that waits for the person, in the order the list shows it: strong questions first. With a project id, only
-// that project's; without, every project's.
-export function waitingEntries(state, projectId = null) {
+// that project's; without, every project's. ignored: the clashes the person chose to stop seeing (wa07), by clashKey.
+export function waitingEntries(state, projectId = null, ignored = new Set()) {
   const out = [];
   for (const p of state.projects) {
     if (projectId && p.id !== projectId) continue;
-    for (const d of p.decisions || []) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
+    for (const d of p.decisions || []) if (d.kind !== 'clash' || !ignored.has(clashKey(d))) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
     for (const c of p.chats) {
       if (!c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length)) {
         out.push({ project: p, chat: c, rank: c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3, ts: c.updatedAt });
@@ -183,7 +184,7 @@ export function chatState(log, { sessionId }) {
   if (!log) return { kind: 'new' };
   if (log.running) return { kind: log.items.some((i) => i.type === 'permission' && i.state === 'asked') ? 'permission' : 'working' };
   const last = log.items.at(-1);
-  if (log.interrupted || (last?.type === 'error' && last.error === 'exited')) return { kind: 'interrupted', resumable: Boolean(sessionId) };
+  if (log.interrupted || (last?.type === 'error' && last.error === 'exited')) return { kind: 'interrupted', resumable: Boolean(sessionId), reason: log.interrupted ? 'restart' : 'exited' };
   if (last?.type === 'error') return { kind: 'error' };
   if (last?.type === 'assistant') return { kind: 'finished', summary: summaryOf(last.text) };
   if (log.ended) return { kind: 'paused' };
