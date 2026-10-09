@@ -12,6 +12,16 @@ const text = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().
 const ids = (v) => (Array.isArray(v) ? [...new Set(v.filter((id) => typeof id === 'string'))] : []);
 const rank = (u) => LEVELS.indexOf(u.level ?? 'cell');
 
+// Walks up from a unit; the seen set stops on a loop an older units.json may already hold.
+function hasAncestor(byId, id, ancestors) {
+  const seen = new Set();
+  for (let p = byId.get(id)?.parentId; p != null && !seen.has(p); p = byId.get(p)?.parentId) {
+    if (ancestors.includes(p)) return true;
+    seen.add(p);
+  }
+  return false;
+}
+
 export const shouldConsolidate = (perceptionsSince, lastAtMs, now) =>
   perceptionsSince >= PERCEPTIONS_PER_PASS || (perceptionsSince > 0 && (lastAtMs == null || now - lastAtMs >= DAY));
 
@@ -33,7 +43,9 @@ function isValid(units, c) {
   switch (c.kind) {
     case 'fuse':
       return c.ids.length > 0 && !c.ids.includes(c.into) && free(c.into) && c.ids.every(free)
-        && c.ids.every((id) => rank(byId.get(id)) === rank(byId.get(c.into)));
+        && c.ids.every((id) => rank(byId.get(id)) === rank(byId.get(c.into)))
+        // Same level should rule this out, but a tree saved before the level rule may not follow it.
+        && !hasAncestor(byId, c.into, c.ids);
     case 'group': {
       if (c.ids.length < 2 || !c.name || !c.ids.every(free) || !c.ids.every(leftParentFree)) return false;
       const level = rank(byId.get(c.ids[0]));
@@ -81,8 +93,10 @@ export function applyChanges(units, changes, now = new Date().toISOString()) {
     } else if (c.kind === 'group') {
       const children = c.ids.map((id) => byId.get(id));
       const parents = new Set(children.map((u) => u.parentId));
-      const level = LEVELS[rank(children[0]) + 1];
-      const parent = newUnit(next, { ...c, level, parentId: parents.size === 1 ? children[0].parentId : null }, now);
+      const level = rank(children[0]) + 1;
+      const shared = parents.size === 1 ? byId.get(children[0].parentId) : null;
+      const parentId = shared && rank(shared) > level ? shared.id : null;
+      const parent = newUnit(next, { ...c, level: LEVELS[level], parentId }, now);
       for (const child of children) child.parentId = parent.id;
       next.push(parent);
       events.push(event('grouped', now, [parent.id, ...c.ids], parent.name));

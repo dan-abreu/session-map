@@ -155,3 +155,22 @@ test('shouldConsolidate after 5 new perceptions or a day since the last pass', (
   assert.equal(shouldConsolidate(0, now - 48 * 60 * 60 * 1000, now), false);
   assert.equal(shouldConsolidate(1, null, now), true);
 });
+
+test('group keeps the shared parent only when it sits above the new level', () => {
+  const underTissue = [unit('t', { level: 'tissue' }), unit('a', { parentId: 't' }), unit('b', { parentId: 't' })];
+  const { units: next } = applyChanges(underTissue, [{ kind: 'group', ids: ['a', 'b'], name: 'New' }], NOW);
+  const born = next.find((u) => u.id !== 't' && u.level === 'tissue');
+  assert.equal(born.parentId, null, 'a tissue never sits under a tissue');
+
+  const underOrgan = [unit('o', { level: 'organ' }), unit('a', { parentId: 'o' }), unit('b', { parentId: 'o' })];
+  const kept = applyChanges(underOrgan, [{ kind: 'group', ids: ['a', 'b'], name: 'New' }], NOW).units;
+  assert.equal(kept.find((u) => u.level === 'tissue').parentId, 'o');
+});
+
+test('fuse never makes a unit its own parent, even on a tree that already breaks the levels', () => {
+  const broken = [unit('t', { level: 'tissue' }), unit('n', { level: 'tissue', parentId: 't' }), unit('a', { parentId: 'n' })];
+  const { units: next, events } = applyChanges(broken, [{ kind: 'fuse', ids: ['t'], into: 'n' }], NOW);
+  assert.deepEqual(events, []);
+  assert.ok(next.every((u) => u.parentId !== u.id));
+  assert.equal(next.find((u) => u.id === 'n').parentId, 't');
+});
