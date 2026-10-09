@@ -185,6 +185,31 @@ function chatTone(chat) {
   return k === 'busy' ? 'active' : 'idle';
 }
 
+const isWork = (item) => item.kind === 'commit' || item.kind === 'merge';
+
+function activityRow(item, { showChat }) {
+  const chat = showChat && item.sessionId && project.chats.find((c) => c.sessionId === item.sessionId);
+  const title = item.kind === 'push' ? t('activity.pushed', { branch: item.branch })
+    : item.kind === 'tag' ? t('activity.tagged', { tag: item.subject })
+      : item.subject;
+  const icon = svgEl('svg', { class: 'act-icon', 'aria-hidden': 'true' });
+  icon.append(svgEl('use', { href: `#i-${item.kind}` }));
+  const who = [t('activity.by', { name: item.author.name }), item.coAuthor ? t('activity.with', { name: item.coAuthor }) : null].filter(Boolean).join(' · ');
+  return h('li', { class: `act act-${item.kind}` },
+    icon,
+    h('div', { class: 'act-body' },
+      h('span', { class: 'act-title' }, item.hash && isWork(item) ? h('code', { class: 'act-hash' }, item.hash.slice(0, 7)) : null, title),
+      h('span', { class: 'act-meta' }, who,
+        chat ? [' · ', `${t('activity.in')} `, h('button', { type: 'button', class: 'meta-link', onclick: () => select({ type: 'chat', id: chat.sessionId }, { zoom: true }) }, chat.title)] : null,
+        ' · ', h('span', { class: 'num' }, relative(item.ts)))));
+}
+
+function activityList(items, opts) {
+  return items.length ? h('ul', { class: 'activity' }, items.map((i) => activityRow(i, opts))) : null;
+}
+
+const newestFirst = (a, b) => b.ts.localeCompare(a.ts);
+
 function renderCellPanel(cell) {
   const nucleus = cell.nucleus;
   const chatById = new Map(project.chats.map((c) => [c.sessionId, c]));
@@ -201,6 +226,7 @@ function renderCellPanel(cell) {
     section(t('cell.state'), nucleus.state ? h('p', { class: 'lead' }, nucleus.state) : h('p', { class: 'muted' }, t('cell.empty'))),
     section(t('cell.decided'), list(nucleus.decided)),
     section(t('cell.todo'), list(nucleus.todo)),
+    section(t('activity.title'), activityList((project.activity || []).filter((a) => a.cellIds.includes(cell.id)).sort(newestFirst).slice(0, 10), { showChat: true })),
     section(t('cell.recent'), recent.length ? h('ul', { class: 'plain rows' }, recent) : null),
     inertActions([t('action.continue')]),
   ].filter(Boolean));
@@ -274,6 +300,7 @@ function renderChatPanel(chat) {
     section(t('chat.todo'), list(card.todo)),
     section(t('chat.lastPrompt'), chat.lastPrompt ? h('p', { class: 'quote' }, chat.lastPrompt) : null),
     section(t('chat.lastReply'), chat.lastAssistantText ? h('p', {}, chat.lastAssistantText) : null),
+    section(t('chat.commits'), activityList((project.activity || []).filter((a) => isWork(a) && a.sessionId === chat.sessionId).sort(newestFirst), { showChat: false })),
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
     inertActions(actions),
   ].filter(Boolean));

@@ -275,10 +275,10 @@ button, select, input { font: inherit; color: inherit; }
 
 .cell-link { cursor: pointer; outline: none; }
 .link-hit { fill: none; stroke: transparent; stroke-width: 18; stroke-linecap: round; }
-.link-axon { fill: none; stroke: var(--link); stroke-linecap: round; }
-.link-bulb { fill: var(--link); }
-.cell-link:hover .link-axon, .cell-link.is-related .link-axon { stroke: var(--link-strong); }
-.cell-link:hover .link-bulb, .cell-link.is-related .link-bulb { fill: var(--link-strong); }
+.link-axon { fill: none; stroke: var(--link); stroke-linecap: round; stroke-opacity: 0.6; }
+.link-bulb { fill: var(--link); fill-opacity: 0.75; }
+.cell-link:hover .link-axon, .cell-link.is-related .link-axon { stroke: var(--link-strong); stroke-opacity: 1; }
+.cell-link:hover .link-bulb, .cell-link.is-related .link-bulb { fill: var(--link-strong); fill-opacity: 1; }
 .cell-link:focus-visible .link-hit { stroke: color-mix(in srgb, var(--focus) 35%, transparent); }
 
 .synapse { fill: none; pointer-events: none; }
@@ -315,7 +315,7 @@ button, select, input { font: inherit; color: inherit; }
 .label text {
   font-size: 12.5px; font-weight: 650; letter-spacing: -0.005em;
   fill: var(--ink);
-  paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round;
 }
 .label .meta { font-size: 11px; font-weight: 550; fill: var(--tone-ink); }
 
@@ -407,6 +407,21 @@ button, select, input { font: inherit; color: inherit; }
 .link-row.static:hover { background: none; }
 .lr-kind { font-size: 0.75rem; font-weight: 650; color: var(--ink-2); }
 .lr-open { font-size: 0.8125rem; font-weight: 600; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+
+.activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.act { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+.act-icon {
+  width: 18px; height: 18px; margin-top: 1px;
+  fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.act-body { display: grid; gap: 2px; min-width: 0; }
+.act-title { font-weight: 600; overflow-wrap: anywhere; }
+.act-push .act-title, .act-tag .act-title { font-weight: 550; }
+.act-hash {
+  margin-right: 6px; font: 500 0.75rem/1 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  color: var(--ink-2);
+}
+.act-meta { font-size: 0.8125rem; color: var(--ink-2); }
 
 .callout {
   margin-top: 16px; padding: 12px 14px; border-radius: 10px;

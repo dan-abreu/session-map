@@ -63,6 +63,11 @@
             "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
             "28fac6de-3493-4fc8-ade1-a93bf6866e47"
           ],
+          "work": {
+            "chats": 3,
+            "commits": 4,
+            "decisions": 2
+          },
           "status": "active"
         },
         {
@@ -111,6 +116,11 @@
             "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
             "a7b85b90-4018-47df-a818-cb376816bc8c"
           ],
+          "work": {
+            "chats": 5,
+            "commits": 5,
+            "decisions": 2
+          },
           "status": "waiting"
         },
         {
@@ -148,6 +158,11 @@
             "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
             "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962"
           ],
+          "work": {
+            "chats": 2,
+            "commits": 5,
+            "decisions": 2
+          },
           "status": "idle"
         },
         {
@@ -191,6 +206,11 @@
             "cb361ee4-1b48-425d-a4de-121de0988e28",
             "694b2b06-89b1-4985-a7cf-d87fcacf6870"
           ],
+          "work": {
+            "chats": 3,
+            "commits": 3,
+            "decisions": 1
+          },
           "status": "waiting"
         },
         {
@@ -227,6 +247,11 @@
             "8f355f13-d5c6-485a-abeb-dec3de7070d3",
             "a98f62e0-89dc-4009-a78f-63fad5422b31"
           ],
+          "work": {
+            "chats": 2,
+            "commits": 3,
+            "decisions": 1
+          },
           "status": "idle"
         },
         {
@@ -255,6 +280,11 @@
           "chatIds": [
             "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
           ],
+          "work": {
+            "chats": 1,
+            "commits": 1,
+            "decisions": 1
+          },
           "status": "idle"
         },
         {
@@ -285,6 +315,11 @@
           "chatIds": [
             "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8"
           ],
+          "work": {
+            "chats": 1,
+            "commits": 3,
+            "decisions": 1
+          },
           "status": "waiting"
         },
         {
@@ -314,6 +349,11 @@
             "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
             "3fbce6fc-f22d-44f0-a630-516b16d603c9"
           ],
+          "work": {
+            "chats": 2,
+            "commits": 2,
+            "decisions": 0
+          },
           "status": "idle"
         }
       ],
@@ -416,6 +456,540 @@
               "text": "Sales dashboard charts reads totals from the orders tables.",
               "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
             }
+          ]
+        }
+      ],
+      "activity": [
+        {
+          "kind": "commit",
+          "ts": "2026-09-09T17:00:00.000Z",
+          "hash": "ecf5f48b5022adfeb534164932d10f83bae92c67",
+          "subject": "Add weekly revenue chart to the admin home",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
+          "cellIds": [
+            "admin"
+          ],
+          "files": [
+            "src/admin/home.tsx",
+            "src/orders/totals.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-11T17:30:00.000Z",
+          "hash": "d7a4fe41d869310e28a616a7949958fb8437a79c",
+          "subject": "Swipe and keyboard support in the product gallery",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
+          "cellIds": [
+            "catalog"
+          ],
+          "files": [
+            "src/catalog/gallery.tsx"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-13T16:30:00.000Z",
+          "hash": "c5c98e68a1faf5d4e851d6d9aa65c1c1a4d41a0c",
+          "subject": "Single-use reset tokens with a 30 minute expiry",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Haiku 4.5",
+          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+          "cellIds": [
+            "accounts"
+          ],
+          "files": [
+            "src/auth/reset.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-13T17:30:00.000Z",
+          "hash": "3b60be77f6fc07aed4a3ef33c5f65e68426387c2",
+          "subject": "Shared layout for account emails",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Haiku 4.5",
+          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+          "cellIds": [
+            "accounts",
+            "notifications"
+          ],
+          "files": [
+            "src/email/layout.tsx"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-09-14T15:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "admin",
+            "catalog",
+            "accounts",
+            "notifications"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-15T17:00:00.000Z",
+          "hash": "ff16e719dc82e48a30dc75ac486530632caf4193",
+          "subject": "Export shipping labels as one PDF per day",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
+          "cellIds": [
+            "orders"
+          ],
+          "files": [
+            "src/shipping/labels.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-16T19:00:00.000Z",
+          "hash": "b11744f830b36520be9d240ddfd0af14b11420b6",
+          "subject": "Add the one-click checkout proposal",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
+          "cellIds": [
+            "checkout"
+          ],
+          "files": [
+            "openspec/changes/one-click-checkout/proposal.md"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-18T16:00:00.000Z",
+          "hash": "3ea981e71af45778bbb449f522e9745cf6a24e8a",
+          "subject": "Highlight matched words in search results",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
+          "cellIds": [
+            "search"
+          ],
+          "files": [
+            "src/search/results.tsx"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-20T20:00:00.000Z",
+          "hash": "e53cd62bbc02fb5bc18817a19c0eca0e56eeb1ce",
+          "subject": "Keep unavailable variants focusable",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
+          "cellIds": [
+            "catalog"
+          ],
+          "files": [
+            "src/catalog/variant-picker.tsx"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-09-21T15:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "cellIds": [
+            "orders",
+            "search",
+            "catalog"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-22T18:00:00.000Z",
+          "hash": "1e9ad92290a679f7b0b250a6eeebd77376a71609",
+          "subject": "Tokenized saved cards through the payment provider",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
+          "cellIds": [
+            "checkout"
+          ],
+          "files": [
+            "src/payments/saved-cards.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-22T22:00:00.000Z",
+          "hash": "462b89e4f3581fe9f8da2bd7a6148ca1c702768a",
+          "subject": "Remove a saved card from the account page",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
+          "cellIds": [
+            "checkout",
+            "accounts"
+          ],
+          "files": [
+            "src/account/cards.tsx"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-09-23T15:00:00.000Z",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "cellIds": [
+            "checkout",
+            "accounts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-24T17:00:00.000Z",
+          "hash": "8e4993f64f9673e0e7293ea9328ac4efed8cd1e2",
+          "subject": "Add the typo-tolerant search proposal",
+          "branch": "feat/typo-search",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
+          "cellIds": [
+            "search"
+          ],
+          "files": [
+            "openspec/changes/typo-tolerant-search/proposal.md"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-26T16:00:00.000Z",
+          "hash": "cd6e0f3991caa040a423a03ccc097e0d978406d1",
+          "subject": "Upgrade the test runner to the latest major",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Haiku 4.5",
+          "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
+          "cellIds": [
+            "unsorted"
+          ],
+          "files": [
+            "package.json"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-27T17:00:00.000Z",
+          "hash": "bbabb57a83b4aa6063a3940833e6a36ab0a9cde2",
+          "subject": "Collapse the order summary on small screens",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
+          "cellIds": [
+            "checkout"
+          ],
+          "files": [
+            "src/checkout/summary.tsx"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-29T18:00:00.000Z",
+          "hash": "580baf2e56983815c9ea793b79ed71a6a7262243",
+          "subject": "Sign in with a magic link behind a setting",
+          "branch": "feat/magic-link",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
+          "cellIds": [
+            "accounts"
+          ],
+          "files": [
+            "src/auth/magic-link.ts"
+          ]
+        },
+        {
+          "kind": "merge",
+          "ts": "2026-09-30T15:00:00.000Z",
+          "hash": "6bb8f7f532950484789b3685320eb3bf553f3317",
+          "subject": "Merge feat/magic-link into main",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "accounts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-09-30T16:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "unsorted",
+            "checkout",
+            "accounts"
+          ]
+        },
+        {
+          "kind": "tag",
+          "ts": "2026-09-30T17:00:00.000Z",
+          "hash": "08ee7fbd19641a881ceb12c35d5b214f2810eb66",
+          "subject": "v1.2.0",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "accounts",
+            "checkout",
+            "catalog",
+            "search",
+            "orders",
+            "unsorted"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-02T17:00:00.000Z",
+          "hash": "4c14cd64fb4f4a4a857a80d9b1ba23ef682ca075",
+          "subject": "Order status timeline on the order page",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
+          "cellIds": [
+            "orders"
+          ],
+          "files": [
+            "src/orders/timeline.tsx"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-02T17:36:00.000Z",
+          "hash": "c3f5d9d7237d2db2f977c83ab3c799a4f6166cd2",
+          "subject": "Shipped email template",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
+          "cellIds": [
+            "orders",
+            "notifications"
+          ],
+          "files": [
+            "src/email/order-shipped.tsx"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-03T15:48:00.000Z",
+          "hash": "d0e796c860860f12ccfb5b55d93feb8355c77ddf",
+          "subject": "Remove six fully rolled-out feature flags",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Haiku 4.5",
+          "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
+          "cellIds": [
+            "unsorted"
+          ],
+          "files": [
+            "src/flags.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-10-03T17:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "cellIds": [
+            "orders",
+            "notifications",
+            "unsorted"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-04T18:00:00.000Z",
+          "hash": "7f9fcd136f6c82c2a38abb6457e261b41778b2b9",
+          "subject": "Queue back-in-stock alerts in 15 minute batches",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
+          "cellIds": [
+            "notifications"
+          ],
+          "files": [
+            "src/notifications/stock-alerts.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-06T11:00:00.000Z",
+          "hash": "6010e340b557b5d97aab0a68aeacc73fd55c214a",
+          "subject": "Trigram similarity on product names",
+          "branch": "feat/typo-search",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
+          "cellIds": [
+            "search",
+            "catalog"
+          ],
+          "files": [
+            "src/search/fuzzy.ts",
+            "src/catalog/index-names.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-10-07T12:00:00.000Z",
+          "branch": "feat/typo-search",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "search",
+            "catalog"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-08T11:00:00.000Z",
+          "hash": "4bf812f9f2a3cdac8868d323ef3f76ae8757f0ef",
+          "subject": "Map decline codes to three groups",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+          "cellIds": [
+            "checkout"
+          ],
+          "files": [
+            "src/payments/declines.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-08T11:00:00.000Z",
+          "hash": "c268854ce8ae9a6146149b265f5c77b32cd5124b",
+          "subject": "Cursor pagination for the category endpoint",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
+          "cellIds": [
+            "catalog"
+          ],
+          "files": [
+            "src/catalog/listing.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-10-08T12:00:00.000Z",
+          "branch": "feat/one-click-checkout",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "cellIds": [
+            "checkout"
           ]
         }
       ],
@@ -1204,6 +1778,11 @@
             "76d24210-7faa-46a5-a0d3-499e901e5508",
             "a045e45d-84e1-470e-a3e8-94fb7e2e985d"
           ],
+          "work": {
+            "chats": 3,
+            "commits": 2,
+            "decisions": 1
+          },
           "status": "active"
         },
         {
@@ -1239,6 +1818,11 @@
             "93f04f6b-fae1-4642-a92f-17434e88ccfe",
             "cdf96840-4345-4c47-a456-760099458a24"
           ],
+          "work": {
+            "chats": 2,
+            "commits": 3,
+            "decisions": 1
+          },
           "status": "idle"
         },
         {
@@ -1267,6 +1851,11 @@
           "chatIds": [
             "8c0f5f1c-de23-4452-abb6-8fccb981c5f7"
           ],
+          "work": {
+            "chats": 1,
+            "commits": 1,
+            "decisions": 1
+          },
           "status": "idle"
         }
       ],
@@ -1282,6 +1871,144 @@
               "text": "Undo history across sessions keeps each note history in the sync queue.",
               "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508"
             }
+          ]
+        }
+      ],
+      "activity": [
+        {
+          "kind": "commit",
+          "ts": "2026-09-17T17:00:00.000Z",
+          "hash": "eebbe12886db307dfb995dceaacfa95d2b738997",
+          "subject": "Markdown shortcuts for headings, lists and quotes",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
+          "cellIds": [
+            "editor"
+          ],
+          "files": [
+            "src/editor/shortcuts.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-21T19:00:00.000Z",
+          "hash": "ce4929ae0990b829b4575b305ef5acc296766d8d",
+          "subject": "Offline edit queue with ordered replay",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
+          "cellIds": [
+            "sync"
+          ],
+          "files": [
+            "src/sync/queue.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-09-22T15:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "editor",
+            "sync"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-28T17:00:00.000Z",
+          "hash": "0164dbbd911dbabe16a4a33793c8aff7835b0613",
+          "subject": "Persist undo history per note",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "coAuthor": "Claude Haiku 4.5",
+          "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
+          "cellIds": [
+            "editor",
+            "sync"
+          ],
+          "files": [
+            "src/editor/history.ts",
+            "src/sync/store.ts"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-09-30T17:00:00.000Z",
+          "hash": "d67a4638c9209ad73bd3c03113c3e980f8424094",
+          "subject": "Read-only share links with revoke",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
+          "cellIds": [
+            "sharing"
+          ],
+          "files": [
+            "src/share/links.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-10-01T15:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Ana Lima",
+            "email": "ana.lima@example.com"
+          },
+          "cellIds": [
+            "editor",
+            "sync",
+            "sharing"
+          ]
+        },
+        {
+          "kind": "commit",
+          "ts": "2026-10-06T18:00:00.000Z",
+          "hash": "e7ccf1c1b275ca9f123f7aba55f7b6fbd91fa610",
+          "subject": "Paragraph-level merge on conflicts",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "coAuthor": "Claude Opus 5.5",
+          "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
+          "cellIds": [
+            "sync"
+          ],
+          "files": [
+            "src/sync/merge.ts"
+          ]
+        },
+        {
+          "kind": "push",
+          "ts": "2026-10-07T10:00:00.000Z",
+          "branch": "main",
+          "author": {
+            "name": "Rui Costa",
+            "email": "rui.costa@example.com"
+          },
+          "cellIds": [
+            "sync"
           ]
         }
       ],

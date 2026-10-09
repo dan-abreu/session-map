@@ -11,7 +11,9 @@ function hash(str) {
   return (h >>> 0) / 4294967296;
 }
 
-const radiusFor = (count) => 30 + 17 * Math.sqrt(count);
+// Size follows accumulated work (conversations + commits + decisions), on a square-root scale.
+const radiusFor = (work) => 28 + 12 * Math.sqrt(work);
+const isWork = (item) => item.kind === 'commit' || item.kind === 'merge';
 
 // Labels live outside the zoomed group so they stay readable at any zoom; the layout reserves room for them.
 function wrapLabel(text, max = 16) {
@@ -85,13 +87,17 @@ function layout(project, aspect, labelFor, metaFor) {
   const cells = project.cells.map((cell, idx) => {
     const chats = cell.chatIds.map((id) => chatById.get(id)).filter(Boolean)
       .sort((a, b) => (a.frontId || '').localeCompare(b.frontId || '') || a.startedAt.localeCompare(b.startedAt));
-    const rFull = radiusFor(chats.length);
+    const commitTimes = (project.activity || []).filter((a) => isWork(a) && a.cellIds.includes(cell.id))
+      .map((a) => Date.parse(a.ts)).sort((a, b) => a - b);
+    const decisions = cell.work?.decisions ?? cell.nucleus.decided.length;
+    const workTotal = chats.length + commitTimes.length + decisions;
+    const rFull = radiusFor(workTotal);
     const lines = wrapLabel(labelFor(cell));
     const labelHalf = Math.max(Math.max(...lines.map((l) => l.length)) * 3.9, metaFor(cell, chats.length).length * 3.3);
     const seed = hash(cell.id);
     return {
-      id: cell.id, data: cell, chats, rFull, rNow: 0, rTarget: 0, lines, seed, idx,
-      labelHalf, collide: Math.max(rFull + 34 + 14 * (lines.length - 1), labelHalf + 14),
+      id: cell.id, data: cell, chats, commitTimes, decisions, workTotal, rFull, rNow: 0, rTarget: 0, lines, seed, idx,
+      labelHalf, collide: Math.max(rFull + 40 + 14 * (lines.length - 1), labelHalf + 20),
     };
   });
 
@@ -348,7 +354,10 @@ export function createBrain(svgEl, { onSelect, labelFor, statusLabel, chatsLabel
     for (const n of model.neurons) n.target = n.t <= t ? 1 : 0;
     for (const c of model.cells) {
       const visible = model.neurons.filter((n) => n.cell === c && n.target === 1).length;
-      c.rTarget = c.chats.length === 0 || visible > 0 ? radiusFor(visible) : 0;
+      const commits = c.commitTimes.filter((ts) => ts <= t).length;
+      // Decisions carry no date: they count once the area has a conversation.
+      const work = visible + commits + (visible > 0 ? c.decisions : 0);
+      c.rTarget = c.workTotal === 0 || work > 0 ? radiusFor(work) : 0;
       c.visible = visible;
     }
     for (const l of model.links) l.target = l.t <= t && l.a.rTarget > 0 && l.b.rTarget > 0 ? 1 : 0;
