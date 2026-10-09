@@ -37,7 +37,7 @@ async function withServer(opts, fn) {
   }
 }
 
-const REMOTE = { addressOf: () => '192.168.0.50' };
+const REMOTE = { addressOf: () => '10.0.0.50' };
 
 test('loadToken creates a 32-byte hex token once and keeps it; sameToken compares safely', () => {
   const smDir = mkdtempSync(join(tmpdir(), 'sm-tok-'));
