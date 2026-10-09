@@ -25,3 +25,15 @@ The `map` command starts the server and prints the links. `board` makes the curr
 
 - [x] **Claude:** One-step install from the marketplace `pt01`
 - [ ] **important:** Listing in more plugin directories `pt02`
+
+### Plain language
+
+- [ ] **Plain-language skill replies and terminal view** `pt03`
+  - The replies of `/session-map:map`, `:board`, `:history` and `:architecture` and the text view (`server/cli.mjs`) use simple words and say what to do, never raw codes. Part of the round in `mm11`.
+- [ ] **Lay step-by-step READMEs in English and Portuguese, with real screenshots** `pt05`
+  - Install and first use, written for someone who does not code.
+
+### Architecture and Flow together
+
+- [ ] **Skill `architecture` requires updating both the architecture and the Flow** `pt04`
+  - A new feature, part or link means an item or part in the architecture and a box or arrow in the Flow; a small task is only an item (it shows in the Flow as a signal). Applies in every chat, VS Code included. Part of `fl12`.

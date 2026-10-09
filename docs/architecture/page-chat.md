@@ -26,3 +26,11 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 ### Permissions
 
 - [x] **Claude:** Mode per conversation, or one mode for every Claude on this PC, with undo `pc04`
+
+### Chat states
+
+- [ ] **important:** Clear state on every page chat `pc05`
+  - Working, finished (with the final summary), interrupted, waiting for permission. A chat that ended must never look stuck.
+  - An on-screen notice when a chat finishes.
+- [ ] **important:** A server restart must not kill a running chat `pc06`
+  - Either the process runs detached, or the chat resumes automatically with "the chat was interrupted by the restart, continue?".

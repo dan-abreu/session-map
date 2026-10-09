@@ -26,3 +26,9 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 - [x] **Claude:** Keep all Claude Code format knowledge in `server/sources/claude.mjs` `rd01`
 - [x] **Claude:** Read the waiting questions out of the cards from the board skill `rd02`
 - [ ] **detail:** Read OpenSpec changes from other tools' task files too `rd03`
+
+### Sources
+
+- [ ] **with the owner:** Import the claude.ai history `rd04`
+  - Proposed, waiting for the owner's OK. The official "Export data" zip (`conversations.json`) dropped on the page: the chats enter the archive with a "claude.ai" badge, searchable, tied to a project by the AI (only title and summary go to the AI).
+  - Origin badges in the list: VS Code, Terminal, Map, Phone (Remote Control), claude.ai.

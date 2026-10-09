@@ -29,3 +29,10 @@ Reads need nothing from `127.0.0.1`; every write, and every access from another 
 ### Reach
 
 - [x] **Claude:** `--demo` with invented data for screenshots `sv03`
+
+### Later (ideas, not committed)
+
+- [ ] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`
+  - To show the live map to another person.
+- [ ] **detail:** Team plan in the cloud: a brain shared between machines `sv05`
+  - Validate with an interest list after launch; nothing of it goes into v0.x.

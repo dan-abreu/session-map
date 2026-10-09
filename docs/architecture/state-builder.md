@@ -30,3 +30,12 @@ Joins the readers' answers into the one state the page draws: projects, chats, b
 ### Cost
 
 - [x] **Claude:** Estimate cost from the tokens in local history `sb04`
+- [ ] **Savings report in the Costs tab** `sb05`
+  - Cost per task and per model, with suggestions: a long chat should become a new one opened from the map; a task that would fit a smaller model.
+
+### Later (ideas, not committed)
+
+- [ ] **detail:** Explain a project that looks empty but shows a high 30-day cost `sb06`
+  - Say "chats older than 24 h are in History" or show the recent ones that were deleted.
+- [ ] **detail:** Other AIs for session-map's own AI tasks `sb07`
+  - A DeepSeek, Gemini or OpenRouter key in place of the cheap Claude model.

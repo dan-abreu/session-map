@@ -13,6 +13,10 @@ flowchart LR
     subgraph engine["What it works out"]
         SB[State builder]
         PC[Page chat]
+        FL[Flow]
+        OR[Orchestration]
+        WA[Watcher and alerts]
+        BI[Bootstrap and inspection]
     end
     subgraph surface["What you touch"]
         SV[Server]
@@ -21,6 +25,17 @@ flowchart LR
     end
     RD --> SB
     AM --> SB
+    AM --> FL
+    SB --> FL
+    RD --> WA
+    SB --> WA
+    SB --> OR
+    OR --> PC
+    BI --> PC
+    BI --> AM
+    BI --> FL
+    FL --> SV
+    WA --> SV
     SB --> SV
     PC --> SV
     SV --> MM
@@ -35,6 +50,10 @@ flowchart LR
 | [Architecture map](architecture-map.md) | Reads a project's architecture folder; chats write it. |
 | [State builder](state-builder.md) | Joins everything into one state, with the AI's help. |
 | [Page chat](page-chat.md) | Starts and drives Claude chats from the page. |
+| [Flow](flow.md) | The diagram of how the parts talk, kept in step with the architecture. |
+| [Orchestration](orchestration.md) | A senior conductor chat per project that hands work to activity chats. |
+| [Watcher and alerts](watcher-and-alerts.md) | Watches every session and tells you what needs you, and why. |
+| [Bootstrap and inspection](bootstrap-and-inspection.md) | Builds the map of a repository that has none and inspects it down to the comma. |
 | [Server](server.md) | The local HTTP server, its token and its actions. |
 | [Mind map page](mind-map-page.md) | The browser page. |
 | [Plugin and terminal](plugin-and-terminal.md) | Commands, skills, hook and the text view. |
