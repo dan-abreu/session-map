@@ -92,3 +92,32 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - What each is good for, price and API. It is the base of the Arsenal idea (`or11`).
 - [ ] **detail:** Discover updates itself in the background and pages past 50 results per topic `mm20`
   - Today it refreshes only when the tab opens after 24 hours or on the Update button.
+
+### Where the work really is
+
+- [ ] **important:** Real footprint of every conversation, file by file `mm24`
+  - From each conversation's edited and mentioned files, plus the edits of its helpers and workflows, find every project and part it really touches (by the parts' paths): it shows in each project it touches ("born in A · working in B"), and its parts light in proportion to the files edited there.
+  - Live lights the part of the file in the latest step; before work starts, the orchestration says "will touch: A, B, C". A middle level of components sits between a part and its items (level 2 of `fl09`, also on the mind map), and an item that spans parts shows in each, linked. Refined later with the census (`fd01`).
+  - How to confirm it is done: a chat opened in project A that edits files of project B is listed in both with "born in A · working in B"; the parts it edited light with a share matching the files edited; Live lights the part of the file named in its last step.
+- [ ] **important:** Files, lines and share of the program in every box `mm25`
+  - Each box shows its files, lines and % of the program, summed on the levels above; a Files panel per box lists them by folder (lines per file), split by kind (screens, server, tests, docs) and what changed in the period; the root shows "N files with no box on the map" in a strong color.
+  - Base: files assigned to parts by their paths over `git ls-files`, counted by session-map itself; exact numbers from the census (`fd01`).
+  - How to confirm it is done: the root's count equals the number of tracked files minus the ones left out on purpose; every layer equals the sum of its parts; the "no box" number equals the census list of files without an owner.
+- [ ] **important:** Walk through the files of a box `mm26`
+  - A file tree per box like VS Code's explorer; code colored, with line numbers and search in the file; jump to the files it uses and the files that use it (import graph); Open in VS Code at the line.
+  - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
+
+### Ideas
+
+- [ ] **important:** Ideas tab: every request and idea, its life and whether it was done `mm27`
+  - Reads the "Ideas and requests" part of the project (one item per request, with the owner's words, dates, meaning, check, destination and status). Life of an idea: new, accepted, in progress, done, later, discarded (a reason is required to discard).
+  - Review mode: one idea at a time with Keep, Later and Discard; filters by status, date, part and "no destination yet"; each idea links to the item it went to and that item's chats.
+  - The watcher marks an idea done when its destination item is ticked and its check passes, showing the proof (commit, test, release); an idea untouched for a while (accepted with no movement, later past its date) gets a reminder in "Waiting for you".
+  - How to confirm it is done: the tab lists every item of the part with its status; Discard without a reason is refused; ticking a destination item with a passing check turns its idea done with a link to the proof; an idea accepted 14 days ago with no movement shows a reminder.
+
+### Released before the backlog moved into the parts
+
+- [x] **Claude:** Conversation list, a column on the left of the map `mm28`
+  - Every conversation of the last 31 days wherever it ran, as Working now, Waiting for you and Recent, with its place on the map, age, cost and origin; search; This project / All projects; a click opens the branches to its box and the conversation. Released in v0.2.2.
+- [x] **Claude:** Live: what is working now, in every project `mm29`
+  - One card per working conversation with its way down the map, latest steps, workflows (done/total) and helpers with their model; on the map the path to the box being worked lights up with the latest step. Released in v0.2.2.

@@ -35,3 +35,11 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - An on-screen notice when a chat finishes.
 - [x] **Claude:** A server restart must not kill a running chat `pc06`
   - Either the process runs detached, or the chat resumes automatically with "the chat was interrupted by the restart, continue?".
+
+### How it runs
+
+- [x] **Claude:** Automatic and Manual ways a page chat runs, with the model and effort shown `pc07`
+  - Automatic (default): Opus at high sizes each request by the CLAUDE.md rule: small ones directly, medium ones through helpers with an explicit model and effort, large or sensitive ones only after a plain explanation, an estimate and the owner's Yes (or within the monthly limit `budget.reinforcedMonthlyUSD`).
+  - Manual: Maestro, Ultracode (after a cost warning), a fixed model and level, Same as my Claude. The header shows the model and effort that really run, the cost and why. Released in v0.2.2.
+- [x] **Claude:** The chat sheet as wide as the owner drags it `pc08`
+  - A handle on the edge, arrow keys, the width remembered, a double click resets; on the map and in the Flow workshop. Released in v0.2.1.

@@ -25,6 +25,8 @@ The `map` command starts the server and prints the links. `board` makes the curr
 
 - [x] **Claude:** One-step install from the marketplace `pt01`
 - [ ] **important:** Listing in more plugin directories `pt02`
+- [x] **Claude:** A text view for people who use only the terminal `pt06`
+  - `node server/cli.mjs` prints the map with working, quiet and waiting marks, "Waiting for you" and costs; `--watch`, `--project`, `--json`. Released in v0.1.0.
 
 ### Plain language
 

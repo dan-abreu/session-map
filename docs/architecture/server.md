@@ -29,6 +29,10 @@ Reads need nothing from `127.0.0.1`; every write, and every access from another 
 ### Reach
 
 - [x] **Claude:** `--demo` with invented data for screenshots `sv03`
+- [x] **Claude:** Open, start, close and archive a chat from the page `sv06`
+  - Open where it runs (VS Code or a terminal), a new chat on the same point, close only a stopped chat (checking the process still belongs to that session), archive and show archived; every action in the action log. Released in v0.1.0.
+- [x] **Claude:** A part's files on the page, read-only, with Open in VS Code and Open terminal here `sv07`
+  - New and changed files marked, the branch's changed lines highlighted, up to 1 MB, text only, never `.git` or `.env`. Released in v0.1.0.
 
 ### Later (ideas, not committed)
 

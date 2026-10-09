@@ -24,7 +24,7 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 - [ ] **blocks:** Orchestration chat per project `or01`
   - Pinned on top of the list and on the root node. Starts from the compact project summary, absorbs "New idea" (puts items in the right place), and when long it summarizes and continues (`--resume` with its own summary, or a chained new session).
-  - First thing to do of the whole backlog.
+  - First of the backlog once the foundation is done (the owner decided on 2026-10-09 that understanding the programs comes first; see the Foundation part, `fd11`).
 - [ ] **blocks:** Activity chats started from the orchestration `or02`
   - A chat focused on one item of the map, started by a tool or a `POST /api/chat/start` per item, with the model chosen by the Automatic mode and always with confirmation.
   - When it ends it ticks the item in the architecture and posts its result in the orchestration thread (item, outcome, tests, what is left).

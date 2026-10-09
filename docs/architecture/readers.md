@@ -26,6 +26,14 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 - [x] **Claude:** Keep all Claude Code format knowledge in `server/sources/claude.mjs` `rd01`
 - [x] **Claude:** Read the waiting questions out of the cards from the board skill `rd02`
 - [ ] **detail:** Read OpenSpec changes from other tools' task files too `rd03`
+- [x] **Claude:** Archive every conversation, read only when asked `rd05`
+  - A compressed copy outside the folders Claude Code cleans, by a scan and the `SessionEnd` hook; an index with no AI; History on the page; `/session-map:history` answers with at most 5 short matches. Released in v0.1.0.
+- [x] **Claude:** The skills installed in each project `rd06`
+  - User, project and plugin skills with origin, on or off, and the command that calls each. Released in v0.1.0.
+- [x] **Claude:** Who did what: commits, pushes, merges and tags `rd07`
+  - Author and AI co-author of each commit, the chat that made it, pushes from the reflog, merges and tags, branches ahead of main with their owner and their join into main. Released in v0.1.0.
+- [x] **Claude:** Discover: repositories of skills and plugins from GitHub `rd08`
+  - Sorted by stars, with what each is for, type and category, an "installed" mark and an install that always asks first. Released in v0.1.0.
 
 ### Sources
 

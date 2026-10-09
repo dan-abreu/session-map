@@ -9,6 +9,8 @@ flowchart LR
     subgraph sources["What it reads"]
         RD[Readers]
         AM[Architecture map]
+        FD[Foundation]
+        ID[Ideas and requests]
     end
     subgraph engine["What it works out"]
         SB[State builder]
@@ -40,6 +42,12 @@ flowchart LR
     PC --> SV
     SV --> MM
     PL --> SV
+    FD --> AM
+    FD --> FL
+    FD --> BI
+    FD --> WA
+    ID --> AM
+    ID --> OR
 ```
 
 ## The parts
@@ -48,6 +56,8 @@ flowchart LR
 |---|---|
 | [Readers](readers.md) | Reads Claude Code's local files, git and the config. |
 | [Architecture map](architecture-map.md) | Reads a project's architecture folder; chats write it. |
+| [Foundation](foundation.md) | Exact facts from the code, counted letter by letter, that everything else is checked against. |
+| [Ideas and requests](ideas.md) | Every request of the owner, in his words, with where it went and where it stands. |
 | [State builder](state-builder.md) | Joins everything into one state, with the AI's help. |
 | [Page chat](page-chat.md) | Starts and drives Claude chats from the page. |
 | [Flow](flow.md) | The diagram of how the parts talk, kept in step with the architecture. |
@@ -60,4 +70,4 @@ flowchart LR
 
 ## How to keep this true
 
-When someone asks for something new, add it as an item under "What's missing" of the right part before starting; mark it in progress when it starts and tick it when it is done. The `architecture` skill teaches this to every chat.
+When someone asks for something new, add it as an item under "What's missing" of the right part before starting; mark it in progress when it starts and tick it when it is done. Every request the owner makes is also recorded in [Ideas and requests](ideas.md), pointing to the item it became. The `architecture` skill teaches this to every chat.
