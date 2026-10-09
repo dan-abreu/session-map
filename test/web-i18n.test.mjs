@@ -61,3 +61,9 @@ test('translator counts with plural forms and falls back to English', () => {
   assert.equal(t.count('summary.chats', 3), '3 conversas');
   assert.equal(translator('xx')('tab.brain'), 'Brain');
 });
+
+// CLDR puts 0 in the "one" form for Portuguese, but nobody writes "0 conversa".
+test('translator uses the plural form for zero', () => {
+  assert.equal(translator('pt-BR').count('summary.chats', 0), '0 conversas');
+  assert.equal(translator('en').count('summary.chats', 0), '0 conversations');
+});

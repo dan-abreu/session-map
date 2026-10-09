@@ -881,7 +881,7 @@ export function translator(lang) {
   const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => (vars && k in vars ? vars[k] : `{${k}}`));
   const t = (key, vars) => fill(dict[key] ?? en[key] ?? key, vars);
   t.count = (key, n) => {
-    const form = plural.select(n) === 'one' ? 'one' : 'other';
+    const form = n !== 0 && plural.select(n) === 'one' ? 'one' : 'other';
     return t(`${key}.${form}`, { n });
   };
   return t;
