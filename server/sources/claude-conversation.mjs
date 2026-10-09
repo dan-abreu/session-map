@@ -19,27 +19,53 @@ const COMMAND_RE = /^<command-name>\s*([^<]*?)\s*<\/command-name>/;
 const COMMAND_ARGS_RE = /<command-args>([\s\S]*?)<\/command-args>/;
 const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 
-// Most specific first: a whole key block, then the shapes a token has, then anything long that mixes cases and digits
-// (lowercase hex, such as commit hashes and ids, stays readable).
+// A name that holds a secret, however it is prefixed or cased: DB_PASSWORD, apiKey, AWS_SECRET_ACCESS_KEY, x-api-key.
+const SECRET_NAME = /(?:api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|token|secret|password|passwd|pwd)$/i;
+// Every pattern here is linear: a long run is matched whole once (the lookbehind keeps it from restarting inside the
+// run) and judged by a function, never by lookaheads that rescan it from every position.
+const NAME_THEN_SIGN = /(?<![\w-])([\w-]+)(["']?[ \t]*[=:]\s*["']?)/g;
+const VALUE = /[^\s"'&,]+/y;
+const LONG_RUN = /(?<![\w+-])[\w+-]{32,}={0,2}/g;
+const mixesCasesAndDigits = (s) => /[a-z]/.test(s) && /[A-Z]/.test(s) && /\d/.test(s);
+
+// Most specific first: a whole key block, then the shapes a token has, a password in a URL, then anything long that
+// mixes cases and digits (lowercase hex, such as commit hashes and ids, stays readable).
 const SECRETS = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '…'],
   [/\b(bearer|basic)\s+[^\s"']+/gi, '$1 …'],
   [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '…'],
   [/\b(?:sk|pk|rk)-[\w-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|\bxox[abprs]-[\w-]{10,}|\bAKIA[0-9A-Z]{16}\b|\bAIza[\w-]{30,}/g, '…'],
-  [/\b((?:api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|token|secret|password|passwd|pwd)["']?\s*[=:]\s*["']?)[^\s"'&,]+/gi, '$1…'],
-  [/(?=[\w+-]*[a-z])(?=[\w+-]*[A-Z])(?=[\w+-]*\d)[\w+-]{32,}={0,2}/g, '…'],
+  [/(:\/\/[^\s:/@]+:)[^\s/@]+@/g, '$1…@'],
 ];
+
+function maskNamedValues(text) {
+  let out = '';
+  let from = 0;
+  for (const m of text.matchAll(NAME_THEN_SIGN)) {
+    if (m.index < from || !SECRET_NAME.test(m[1])) continue;
+    const start = m.index + m[0].length;
+    VALUE.lastIndex = start;
+    const value = VALUE.exec(text);
+    if (!value) continue;
+    out += `${text.slice(from, start)}…`;
+    from = start + value[0].length;
+  }
+  return out + text.slice(from);
+}
 
 export function maskSecrets(text) {
   let out = String(text ?? '');
   for (const [re, to] of SECRETS) out = out.replace(re, to);
-  return out;
+  out = maskNamedValues(out);
+  return out.replace(LONG_RUN, (run) => (mixesCasesAndDigits(run) ? '…' : run));
 }
 
-const maskDeep = (value) => {
-  if (typeof value === 'string') return maskSecrets(value);
-  if (Array.isArray(value)) return value.map(maskDeep);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskDeep(v)]));
+// A value under a secret's name is masked whole, whatever it looks like; the rest is masked by its shape.
+const maskDeep = (value, secret = false) => {
+  if (typeof value === 'string') return secret && value ? '…' : maskSecrets(value);
+  if (typeof value === 'number' && secret) return '…';
+  if (Array.isArray(value)) return value.map((v) => maskDeep(v, secret));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskDeep(v, secret || SECRET_NAME.test(k))]));
   return value;
 };
 

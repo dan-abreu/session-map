@@ -103,6 +103,36 @@ test('maskSecrets keeps paths, commit hashes and uuids readable', () => {
   assert.match(maskSecrets('-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----'), /^…$/);
 });
 
+test('maskSecrets masks the .env and config shapes: a prefixed key, a YAML colon, a password in a URL', () => {
+  assert.equal(maskSecrets('DB_PASSWORD=hunter2'), 'DB_PASSWORD=…');
+  assert.equal(maskSecrets('JWT_SECRET=mysecretvalue'), 'JWT_SECRET=…');
+  assert.equal(maskSecrets('API_TOKEN=abc123def'), 'API_TOKEN=…');
+  assert.equal(maskSecrets('  POSTGRES_PASSWORD: s3cr3t'), '  POSTGRES_PASSWORD: …');
+  assert.equal(maskSecrets('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'), 'AWS_SECRET_ACCESS_KEY=…');
+  assert.equal(maskSecrets('"dbPassword": "hunter2"'), '"dbPassword": "…"');
+  assert.equal(maskSecrets('DATABASE_URL=postgres://user:Sup3rS3cret@db:5432/app'), 'DATABASE_URL=postgres://user:…@db:5432/app');
+  assert.equal(maskSecrets('open https://x.test/cb?state=1&access_token=abc123 now'), 'open https://x.test/cb?state=1&access_token=… now');
+});
+
+test('maskSecrets leaves look-alike words and ports alone', () => {
+  const plain = 'max_tokens: 4096 tokenizer=bpe https://example.com:8080/path user: ana';
+  assert.equal(maskSecrets(plain), plain);
+});
+
+test('toolDetails masks a value by its key, nested ones too', () => {
+  const { input } = toolDetails('Bash', { command: 'run', env: { password: 'hunter2', apiKey: 'k-123', nested: { DB_PASSWORD: 'p4ss' }, retries: 3 } }, '');
+  for (const leaked of ['hunter2', 'k-123', 'p4ss']) assert.ok(!input.includes(leaked), input);
+  assert.match(input, /"retries": 3/);
+});
+
+test('maskSecrets stays linear on long runs that are almost secrets', () => {
+  for (const run of ['a1'.repeat(16_000), 'ab-'.repeat(11_000), `${'k'.repeat(30_000)}=`]) {
+    const started = performance.now();
+    maskSecrets(run);
+    assert.ok(performance.now() - started < 100, `${run.slice(0, 6)}… took ${Math.round(performance.now() - started)} ms`);
+  }
+});
+
 test('readConversation shows an edit as before and after', () => {
   withTranscript([
     human(0, 'Rename it'),
