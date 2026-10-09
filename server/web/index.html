@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>session-map</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%232f7a5f' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%232f7a5f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg width="0" height="0" class="sprite" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+  </svg>
+
+  <header class="bar">
+    <div class="bar-start">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="11.5" class="mark-membrane"/><circle cx="16" cy="16" r="4.5" class="mark-nucleus"/><circle cx="25" cy="8" r="2.4" class="mark-neuron"/></svg>
+      </span>
+      <span class="brand" data-i18n="app.name"></span>
+      <label class="project">
+        <span class="visually-hidden" data-i18n="project.label"></span>
+        <select id="project"></select>
+        <svg class="select-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <nav class="tabs" data-i18n-aria="tabs.label">
+      <button type="button" class="tab" aria-current="page" data-i18n="tab.brain"></button>
+      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.map"></button>
+      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.board"></button>
+      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.history"></button>
+      <button type="button" class="tab" aria-disabled="true" data-soon data-i18n="tab.costs"></button>
+    </nav>
+    <div class="bar-end">
+      <div class="lang" role="group" data-i18n-aria="lang.label">
+        <button type="button" data-lang="en" lang="en">EN</button>
+        <button type="button" data-lang="pt-BR" lang="pt-BR">PT</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <svg id="brain" class="brain" role="group"></svg>
+
+    <p class="summary" id="summary"></p>
+
+    <button type="button" id="waitingBtn" class="waiting-btn" aria-expanded="false" aria-controls="waitingList">
+      <span class="waiting-dot" aria-hidden="true"></span><span id="waitingLabel"></span>
+    </button>
+
+    <section id="waitingList" class="sheet waiting-list" aria-labelledby="waitingTitle" hidden>
+      <div class="sheet-head">
+        <h2 id="waitingTitle" data-i18n="waiting.title"></h2>
+        <button type="button" class="icon-btn" data-close="waiting" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <ul id="waitingItems"></ul>
+    </section>
+
+    <aside id="panel" class="sheet panel" aria-labelledby="panelTitle" hidden>
+      <div class="sheet-head">
+        <div id="panelHead"></div>
+        <button type="button" class="icon-btn" data-close="panel" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div id="panelBody" class="panel-body"></div>
+    </aside>
+
+    <details class="legend" id="legend">
+      <summary data-i18n="legend.title"></summary>
+      <ul>
+        <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-busy"/></svg><span data-i18n="legend.busy"></span></li>
+        <li><svg viewBox="-10 -10 20 20"><circle r="5.5" class="lg-idle"/></svg><span data-i18n="legend.idle"></span></li>
+        <li><svg viewBox="-10 -10 20 20"><circle r="4.2" class="lg-closed"/></svg><span data-i18n="legend.closed"></span></li>
+        <li><svg viewBox="-10 -10 20 20"><circle r="7.5" class="lg-waiting"/><path d="M0,-3.6V0.6" class="lg-glyph"/><circle cy="2.9" r="1.1" class="lg-glyph-dot"/></svg><span data-i18n="legend.waiting"></span></li>
+        <li><svg viewBox="-10 -10 20 20"><g class="lg-unsure"><circle r="5.6"/><path d="M-1.9,-1.9a1.95,1.95 0 1 1 2.4,1.9c-0.5,0.15-0.5,0.5-0.5,1.1"/><circle class="ask-dot" cy="2.7" r="0.85"/></g></svg><span data-i18n="legend.unsure"></span></li>
+        <li><svg viewBox="0 0 28 12"><path d="M2,9Q14,-1 26,9" class="lg-parent"/></svg><span data-i18n="legend.parent"></span></li>
+        <li><svg viewBox="0 0 28 12"><path d="M2,6H26" class="lg-front"/></svg><span data-i18n="legend.front"></span></li>
+      </ul>
+    </details>
+
+    <button type="button" id="fit" class="icon-btn fit-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg><use href="#i-fit"/></svg></button>
+
+    <p class="notice" id="notice" role="status"></p>
+  </main>
+
+  <footer class="timeline">
+    <button type="button" id="play" class="icon-btn play-btn"><svg><use href="#i-play"/></svg></button>
+    <div class="track">
+      <svg id="growth" class="growth" aria-hidden="true" preserveAspectRatio="none"></svg>
+      <input type="range" id="time" min="0" max="1000" step="1" value="1000">
+    </div>
+    <output id="timeLabel" for="time" class="time-label"></output>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/d3-dispatch.min.js"></script>
+  <script src="vendor/d3-quadtree.min.js"></script>
+  <script src="vendor/d3-timer.min.js"></script>
+  <script src="vendor/d3-force.min.js"></script>
+  <script src="vendor/d3-selection.min.js"></script>
+  <script src="vendor/d3-color.min.js"></script>
+  <script src="vendor/d3-interpolate.min.js"></script>
+  <script src="vendor/d3-ease.min.js"></script>
+  <script src="vendor/d3-transition.min.js"></script>
+  <script src="vendor/d3-drag.min.js"></script>
+  <script src="vendor/d3-zoom.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

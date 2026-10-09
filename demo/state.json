@@ -1,0 +1,1385 @@
+{
+  "generatedAt": "2026-10-08T15:00:00.000Z",
+  "waitingCount": 3,
+  "currency": {
+    "code": "USD",
+    "rate": 1
+  },
+  "totals": {
+    "today": 10.8,
+    "d7": 26.65,
+    "d30": 88.45
+  },
+  "budget": {
+    "monthlyUSD": 150,
+    "used": 88.45
+  },
+  "projects": [
+    {
+      "id": "acme-shop-8324f1",
+      "name": "acme-shop",
+      "root": "/home/dev/code/acme-shop",
+      "cells": [
+        {
+          "id": "catalog",
+          "name": "Catalog",
+          "paths": [
+            "src/catalog/",
+            "src/products/"
+          ],
+          "nucleus": {
+            "state": "Product pages are complete. Category listing is being sped up right now.",
+            "decided": [
+              "Gallery images lazy-load below the fold",
+              "Unavailable variants stay focusable"
+            ],
+            "todo": [
+              "Cache the first listing page",
+              "Product reviews"
+            ],
+            "recent": [
+              {
+                "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
+                "title": "Faster category listing",
+                "date": "2026-10-07",
+                "line": "The listing query scans every variant."
+              },
+              {
+                "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
+                "title": "Variant picker for sizes and colors",
+                "date": "2026-09-20",
+                "line": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them."
+              },
+              {
+                "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
+                "title": "Product page image gallery",
+                "date": "2026-09-11",
+                "line": "The gallery now supports swipe and keyboard arrows."
+              }
+            ]
+          },
+          "chatIds": [
+            "8732a63f-a8ca-457e-a6f4-075340d65154",
+            "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
+            "28fac6de-3493-4fc8-ade1-a93bf6866e47"
+          ],
+          "status": "active"
+        },
+        {
+          "id": "checkout",
+          "name": "Checkout",
+          "paths": [
+            "src/checkout/",
+            "src/payments/"
+          ],
+          "nucleus": {
+            "state": "One-click checkout is halfway: saved cards work, retry and button states are in progress.",
+            "decided": [
+              "Cards are tokenized by the provider, never stored raw",
+              "One-click only for signed-in customers"
+            ],
+            "todo": [
+              "Retry policy for declined cards",
+              "Receipt email",
+              "End-to-end test with test cards"
+            ],
+            "recent": [
+              {
+                "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
+                "title": "Checkout button states",
+                "date": "2026-10-08",
+                "line": "Working on it: the button now disables while paying and shows the decline message inline."
+              },
+              {
+                "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+                "title": "Retry failed payments",
+                "date": "2026-10-06",
+                "line": "I mapped the decline codes into three groups."
+              },
+              {
+                "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
+                "title": "Order summary redesign",
+                "date": "2026-09-27",
+                "line": "The summary now collapses line items on small screens and keeps the total always visible."
+              }
+            ]
+          },
+          "chatIds": [
+            "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
+            "cb9f444b-8c33-42fe-a521-421ab317fa3b",
+            "82deffef-f504-460a-af9d-5690e87ad768",
+            "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+            "a7b85b90-4018-47df-a818-cb376816bc8c"
+          ],
+          "status": "waiting"
+        },
+        {
+          "id": "accounts",
+          "name": "Accounts",
+          "paths": [
+            "src/auth/",
+            "src/account/"
+          ],
+          "nucleus": {
+            "state": "Sign in works with password or email link. Nothing in progress.",
+            "decided": [
+              "Reset links expire after 30 minutes",
+              "Magic links expire after 15 minutes"
+            ],
+            "todo": [
+              "Two-step sign in for admins"
+            ],
+            "recent": [
+              {
+                "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
+                "title": "Sign in with magic link",
+                "date": "2026-09-29",
+                "line": "Magic links are live behind a setting."
+              },
+              {
+                "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+                "title": "Password reset emails",
+                "date": "2026-09-13",
+                "line": "Reset tokens now expire after 30 minutes and are single-use."
+              }
+            ]
+          },
+          "chatIds": [
+            "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+            "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962"
+          ],
+          "status": "idle"
+        },
+        {
+          "id": "search",
+          "name": "Search",
+          "paths": [
+            "src/search/"
+          ],
+          "nucleus": {
+            "state": "Typo-tolerant search is being built on a trigram index.",
+            "decided": [
+              "No external search service for now"
+            ],
+            "todo": [
+              "Decide on indexing the brand field",
+              "Benchmark on the full catalog"
+            ],
+            "recent": [
+              {
+                "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
+                "title": "Fuzzy matching on product names",
+                "date": "2026-10-05",
+                "line": "Fuzzy matching works on product names with a similarity threshold of 0.3."
+              },
+              {
+                "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
+                "title": "Typo-tolerant search proposal",
+                "date": "2026-09-24",
+                "line": "Proposal written: trigram index on product names, 6 tasks, no new service needed."
+              },
+              {
+                "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
+                "title": "Search result highlighting",
+                "date": "2026-09-18",
+                "line": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes."
+              }
+            ]
+          },
+          "chatIds": [
+            "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
+            "cb361ee4-1b48-425d-a4de-121de0988e28",
+            "694b2b06-89b1-4985-a7cf-d87fcacf6870"
+          ],
+          "status": "waiting"
+        },
+        {
+          "id": "orders",
+          "name": "Orders",
+          "paths": [
+            "src/orders/",
+            "src/shipping/"
+          ],
+          "nucleus": {
+            "state": "Customers can follow their order; labels export daily.",
+            "decided": [
+              "One label PDF per day, sorted by carrier"
+            ],
+            "todo": [
+              "Partial refunds"
+            ],
+            "recent": [
+              {
+                "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
+                "title": "Order status timeline",
+                "date": "2026-10-02",
+                "line": "The order page now shows a status timeline: paid, packed, shipped, delivered."
+              },
+              {
+                "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
+                "title": "Shipping label export",
+                "date": "2026-09-15",
+                "line": "Daily label export is in place: one PDF per day, sorted by carrier."
+              }
+            ]
+          },
+          "chatIds": [
+            "8f355f13-d5c6-485a-abeb-dec3de7070d3",
+            "a98f62e0-89dc-4009-a78f-63fad5422b31"
+          ],
+          "status": "idle"
+        },
+        {
+          "id": "admin",
+          "name": "Admin",
+          "paths": [
+            "src/admin/"
+          ],
+          "nucleus": {
+            "state": "Dashboard shows weekly revenue.",
+            "decided": [
+              "Charts render on the server"
+            ],
+            "todo": [
+              "Export reports as CSV"
+            ],
+            "recent": [
+              {
+                "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
+                "title": "Sales dashboard charts",
+                "date": "2026-09-09",
+                "line": "Added the weekly revenue chart with a 12-week window and a table fallback for screen readers."
+              }
+            ]
+          },
+          "chatIds": [
+            "7d6a043d-9b77-43c8-ac41-a8129cfebe99"
+          ],
+          "status": "idle"
+        },
+        {
+          "id": "notifications",
+          "name": "Notifications",
+          "paths": [
+            "src/notifications/",
+            "src/email/"
+          ],
+          "nucleus": {
+            "state": "Back-in-stock alerts are ready but switched off.",
+            "decided": [
+              "Alerts are sent in batches every 15 minutes"
+            ],
+            "todo": [
+              "Pick the sender address",
+              "Turn alerts on"
+            ],
+            "recent": [
+              {
+                "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
+                "title": "Back-in-stock alerts",
+                "date": "2026-10-04",
+                "line": "Alerts are queued and sent in batches every 15 minutes."
+              }
+            ]
+          },
+          "chatIds": [
+            "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8"
+          ],
+          "status": "waiting"
+        },
+        {
+          "id": "unsorted",
+          "name": "Unsorted",
+          "paths": [],
+          "nucleus": {
+            "state": "Conversations that did not match any area yet.",
+            "decided": [],
+            "todo": [],
+            "recent": [
+              {
+                "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
+                "title": "Clean up old feature flags",
+                "date": "2026-10-03",
+                "line": "Removed 6 flags that were fully rolled out and deleted their dead branches."
+              },
+              {
+                "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
+                "title": "Upgrade the test runner",
+                "date": "2026-09-26",
+                "line": "Upgraded."
+              }
+            ]
+          },
+          "chatIds": [
+            "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
+            "3fbce6fc-f22d-44f0-a630-516b16d603c9"
+          ],
+          "status": "idle"
+        }
+      ],
+      "fronts": [
+        {
+          "id": "acme-main",
+          "path": "/home/dev/code/acme-shop",
+          "branch": "main",
+          "ahead": 0,
+          "lastCommit": {
+            "hash": "3f9c2ab",
+            "subject": "Show order status timeline",
+            "ts": "2026-10-02T17:00:00.000Z"
+          },
+          "openspec": null,
+          "chatIds": [
+            "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
+            "8732a63f-a8ca-457e-a6f4-075340d65154",
+            "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+            "8f355f13-d5c6-485a-abeb-dec3de7070d3",
+            "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
+            "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
+            "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
+            "82deffef-f504-460a-af9d-5690e87ad768",
+            "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
+            "a98f62e0-89dc-4009-a78f-63fad5422b31",
+            "3fbce6fc-f22d-44f0-a630-516b16d603c9",
+            "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
+            "28fac6de-3493-4fc8-ade1-a93bf6866e47"
+          ],
+          "estimateUSD": null,
+          "costUSD": 38.05
+        },
+        {
+          "id": "acme-checkout",
+          "path": "/home/dev/code/acme-shop-checkout",
+          "branch": "feat/one-click-checkout",
+          "ahead": 7,
+          "lastCommit": {
+            "hash": "b81d07e",
+            "subject": "Map decline codes to three groups",
+            "ts": "2026-10-08T12:00:00.000Z"
+          },
+          "openspec": {
+            "change": "one-click-checkout",
+            "done": 5,
+            "total": 9,
+            "todo": [
+              "Retry policy for declined cards",
+              "Pay button loading and error states",
+              "Receipt email",
+              "End-to-end test with test cards"
+            ]
+          },
+          "chatIds": [
+            "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
+            "cb9f444b-8c33-42fe-a521-421ab317fa3b",
+            "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+            "a7b85b90-4018-47df-a818-cb376816bc8c"
+          ],
+          "estimateUSD": 30,
+          "costUSD": 22.5
+        },
+        {
+          "id": "acme-search",
+          "path": "/home/dev/code/acme-shop-search",
+          "branch": "feat/typo-search",
+          "ahead": 3,
+          "lastCommit": {
+            "hash": "5e02c4d",
+            "subject": "Add trigram index on product names",
+            "ts": "2026-10-07T12:00:00.000Z"
+          },
+          "openspec": {
+            "change": "typo-tolerant-search",
+            "done": 2,
+            "total": 6,
+            "todo": [
+              "Similarity threshold setting",
+              "Brand field",
+              "Benchmark",
+              "Docs"
+            ]
+          },
+          "chatIds": [
+            "cb361ee4-1b48-425d-a4de-121de0988e28",
+            "694b2b06-89b1-4985-a7cf-d87fcacf6870"
+          ],
+          "estimateUSD": 12,
+          "costUSD": 8.25
+        }
+      ],
+      "chats": [
+        {
+          "sessionId": "7d6a043d-9b77-43c8-ac41-a8129cfebe99",
+          "title": "Sales dashboard charts",
+          "cellId": "admin",
+          "cellSource": "card",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Add a weekly revenue chart to the admin home page.",
+          "lastAssistantText": "Added the weekly revenue chart with a 12-week window and a table fallback for screen readers. Tests pass.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Sales dashboard charts",
+            "cell": "admin",
+            "doing": "Done",
+            "decided": [
+              "Charts render on the server, no client chart library"
+            ]
+          },
+          "costUSD": 5.2,
+          "workflows": [],
+          "startedAt": "2026-09-09T15:00:00.000Z",
+          "updatedAt": "2026-09-09T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "8732a63f-a8ca-457e-a6f4-075340d65154",
+          "title": "Product page image gallery",
+          "cellId": "catalog",
+          "cellSource": "card",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Make the product gallery swipeable on phones.",
+          "lastAssistantText": "The gallery now supports swipe and keyboard arrows. Thumbnails lazy-load below the fold.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.1,
+          "workflows": [],
+          "startedAt": "2026-09-11T15:00:00.000Z",
+          "updatedAt": "2026-09-11T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "c9f9f690-b2e9-47fa-aed5-c0b21c302416",
+          "title": "Password reset emails",
+          "cellId": "accounts",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Reset links should expire after 30 minutes.",
+          "lastAssistantText": "Reset tokens now expire after 30 minutes and are single-use. I added a test for the expired case.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 2.4,
+          "workflows": [],
+          "startedAt": "2026-09-13T15:00:00.000Z",
+          "updatedAt": "2026-09-13T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "8f355f13-d5c6-485a-abeb-dec3de7070d3",
+          "title": "Shipping label export",
+          "cellId": "orders",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Export shipping labels as one PDF per day.",
+          "lastAssistantText": "Daily label export is in place: one PDF per day, sorted by carrier.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 2.9,
+          "workflows": [],
+          "startedAt": "2026-09-15T15:00:00.000Z",
+          "updatedAt": "2026-09-15T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
+          "title": "Plan one-click checkout",
+          "cellId": "checkout",
+          "cellSource": "card",
+          "frontId": "acme-checkout",
+          "frontSource": "card",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Write the proposal for one-click checkout.",
+          "lastAssistantText": "The proposal is in openspec/changes/one-click-checkout with 9 tasks. Saved cards come first, then the button.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Plan one-click checkout",
+            "cell": "checkout",
+            "front": "feat/one-click-checkout",
+            "milestone": "2",
+            "decided": [
+              "Saved cards are tokenized by the payment provider, never stored raw",
+              "One-click only for signed-in customers"
+            ],
+            "estimateUSD": 30
+          },
+          "costUSD": 6.4,
+          "workflows": [],
+          "startedAt": "2026-09-16T15:00:00.000Z",
+          "updatedAt": "2026-09-16T20:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "2dead93c-33e6-4e31-ac79-99ba974fa7c9",
+          "title": "Search result highlighting",
+          "cellId": "search",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Highlight the matched words in search results.",
+          "lastAssistantText": "Matched words are now wrapped in <mark> and the highlight color meets contrast in both themes.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 1.6,
+          "workflows": [],
+          "startedAt": "2026-09-18T15:00:00.000Z",
+          "updatedAt": "2026-09-18T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "1cd0cb7c-bc50-4a8f-a223-a591bd04b70e",
+          "title": "Variant picker for sizes and colors",
+          "cellId": "catalog",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Out-of-stock variants should look disabled but stay readable.",
+          "lastAssistantText": "Unavailable variants are struck through with a tooltip; they stay focusable so screen readers announce them.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 4.8,
+          "workflows": [],
+          "startedAt": "2026-09-20T15:00:00.000Z",
+          "updatedAt": "2026-09-20T21:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "cb9f444b-8c33-42fe-a521-421ab317fa3b",
+          "title": "Saved cards with tokenization",
+          "cellId": "checkout",
+          "cellSource": "card",
+          "frontId": "acme-checkout",
+          "frontSource": "card",
+          "parentId": "f4e2e398-7144-4407-a96f-9e7f5aa4a90e",
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Implement saved cards from the plan.",
+          "lastAssistantText": "Saved cards work end to end with the provider sandbox. Tasks 1 to 4 of the proposal are checked off.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Saved cards with tokenization",
+            "cell": "checkout",
+            "front": "feat/one-click-checkout",
+            "doing": "Done",
+            "decided": [
+              "Customers can remove a saved card from their account page"
+            ]
+          },
+          "costUSD": 9.2,
+          "workflows": [],
+          "startedAt": "2026-09-22T15:00:00.000Z",
+          "updatedAt": "2026-09-22T23:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "cb361ee4-1b48-425d-a4de-121de0988e28",
+          "title": "Typo-tolerant search proposal",
+          "cellId": "search",
+          "cellSource": "card",
+          "frontId": "acme-search",
+          "frontSource": "card",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Plan typo-tolerant search.",
+          "lastAssistantText": "Proposal written: trigram index on product names, 6 tasks, no new service needed.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.3,
+          "workflows": [],
+          "startedAt": "2026-09-24T15:00:00.000Z",
+          "updatedAt": "2026-09-24T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "8cd76f72-58cc-4d73-af50-bee0f053f5bc",
+          "title": "Upgrade the test runner",
+          "cellId": "unsorted",
+          "cellSource": "none",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Upgrade the test runner to the latest major.",
+          "lastAssistantText": "Upgraded. Two snapshot tests needed new baselines; everything else passed unchanged.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 1.1,
+          "workflows": [],
+          "startedAt": "2026-09-26T15:00:00.000Z",
+          "updatedAt": "2026-09-26T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "82deffef-f504-460a-af9d-5690e87ad768",
+          "title": "Order summary redesign",
+          "cellId": "checkout",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "The order summary is too crowded on phones.",
+          "lastAssistantText": "The summary now collapses line items on small screens and keeps the total always visible.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.7,
+          "workflows": [],
+          "startedAt": "2026-09-27T15:00:00.000Z",
+          "updatedAt": "2026-09-27T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "8fe4eab0-7430-44eb-a2f0-8dd4bb4e4962",
+          "title": "Sign in with magic link",
+          "cellId": "accounts",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Add sign in by email link as an option.",
+          "lastAssistantText": "Magic links are live behind a setting. Links expire in 15 minutes and work once.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 4.1,
+          "workflows": [],
+          "startedAt": "2026-09-29T15:00:00.000Z",
+          "updatedAt": "2026-09-29T19:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "a98f62e0-89dc-4009-a78f-63fad5422b31",
+          "title": "Order status timeline",
+          "cellId": "orders",
+          "cellSource": "files",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Show the customer where their order is.",
+          "lastAssistantText": "The order page now shows a status timeline: paid, packed, shipped, delivered.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.4,
+          "workflows": [],
+          "startedAt": "2026-10-02T15:00:00.000Z",
+          "updatedAt": "2026-10-02T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "3fbce6fc-f22d-44f0-a630-516b16d603c9",
+          "title": "Clean up old feature flags",
+          "cellId": "unsorted",
+          "cellSource": "none",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Remove feature flags that have been on for months.",
+          "lastAssistantText": "Removed 6 flags that were fully rolled out and deleted their dead branches.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 0.9,
+          "workflows": [],
+          "startedAt": "2026-10-03T15:00:00.000Z",
+          "updatedAt": "2026-10-03T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "f7b6f024-8c7f-4f55-ac2f-dbc5c9fb2ff8",
+          "title": "Back-in-stock alerts",
+          "cellId": "notifications",
+          "cellSource": "card",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "idle",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Email customers when a product they watch is back.",
+          "lastAssistantText": "Alerts are queued and sent in batches every 15 minutes. I need one decision before turning them on (see the card).",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": [
+              "Pick the sender address for alert emails"
+            ]
+          },
+          "card": {
+            "title": "Back-in-stock alerts",
+            "cell": "notifications",
+            "doing": "Waiting on the sender address",
+            "todo": [
+              "Turn alerts on in production",
+              "Add an unsubscribe link test"
+            ],
+            "waiting": [
+              "Pick the sender address for alert emails"
+            ]
+          },
+          "costUSD": 2.7,
+          "workflows": [],
+          "startedAt": "2026-10-04T15:00:00.000Z",
+          "updatedAt": "2026-10-07T19:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "694b2b06-89b1-4985-a7cf-d87fcacf6870",
+          "title": "Fuzzy matching on product names",
+          "cellId": "search",
+          "cellSource": "files",
+          "frontId": "acme-search",
+          "frontSource": "card",
+          "parentId": null,
+          "status": "idle",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Make \"blu jeens\" find \"blue jeans\".",
+          "lastAssistantText": "Fuzzy matching works on product names with a similarity threshold of 0.3. Want me to also index the brand field, or keep it to names for now?",
+          "waiting": {
+            "strong": false,
+            "weak": true,
+            "items": []
+          },
+          "card": {
+            "title": "Fuzzy matching on product names",
+            "cell": "search",
+            "front": "feat/typo-search",
+            "doing": "Tuning the similarity threshold",
+            "todo": [
+              "Index the brand field?",
+              "Benchmark on the full catalog"
+            ]
+          },
+          "costUSD": 4.95,
+          "workflows": [],
+          "startedAt": "2026-10-05T15:00:00.000Z",
+          "updatedAt": "2026-10-07T13:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "b2cbeb37-65fd-4a78-afbe-34c19803d09c",
+          "title": "Retry failed payments",
+          "cellId": "checkout",
+          "cellSource": "card",
+          "frontId": "acme-checkout",
+          "frontSource": "card",
+          "parentId": null,
+          "status": "idle",
+          "entrypoint": "vscode",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Handle declined cards more gracefully.",
+          "lastAssistantText": "I mapped the decline codes into three groups. Before writing the retry, I asked you one question.",
+          "waiting": {
+            "strong": true,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Retry failed payments",
+            "cell": "checkout",
+            "front": "feat/one-click-checkout",
+            "doing": "Mapping decline codes to messages",
+            "todo": [
+              "Retry policy",
+              "Customer-facing error copy"
+            ]
+          },
+          "costUSD": 5.6,
+          "workflows": [],
+          "startedAt": "2026-10-06T15:00:00.000Z",
+          "updatedAt": "2026-10-08T13:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "28fac6de-3493-4fc8-ade1-a93bf6866e47",
+          "title": "Faster category listing",
+          "cellId": "catalog",
+          "cellSource": "card",
+          "frontId": "acme-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "busy",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Category pages take 2 seconds to load. Find out why.",
+          "lastAssistantText": "The listing query scans every variant. Adding cursor pagination and an index on (category_id, created_at).",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Faster category listing",
+            "cell": "catalog",
+            "doing": "Adding cursor pagination to the category endpoint",
+            "todo": [
+              "Cache the first page",
+              "Update listing tests"
+            ]
+          },
+          "costUSD": 2.15,
+          "workflows": [
+            {
+              "id": "wf_demo01",
+              "name": "listing-perf",
+              "started": 4,
+              "done": 2,
+              "lastLabel": "Measuring query plans",
+              "updatedAt": "2026-10-08T14:56:00.000Z"
+            }
+          ],
+          "startedAt": "2026-10-07T13:00:00.000Z",
+          "updatedAt": "2026-10-08T14:57:00.000Z",
+          "archived": false,
+          "chattable": false
+        },
+        {
+          "sessionId": "a7b85b90-4018-47df-a818-cb376816bc8c",
+          "title": "Checkout button states",
+          "cellId": "checkout",
+          "cellSource": "files",
+          "frontId": "acme-checkout",
+          "frontSource": "guess",
+          "parentId": null,
+          "status": "busy",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Add loading and error states to the pay button.",
+          "lastAssistantText": "Working on it: the button now disables while paying and shows the decline message inline.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 1.3,
+          "workflows": [],
+          "startedAt": "2026-10-08T11:00:00.000Z",
+          "updatedAt": "2026-10-08T14:59:00.000Z",
+          "archived": false,
+          "chattable": false
+        }
+      ],
+      "roadmap": [
+        {
+          "id": "1",
+          "title": "Catalog basics",
+          "branch": "Launch",
+          "status": "done",
+          "frontId": null
+        },
+        {
+          "id": "2",
+          "title": "One-click checkout",
+          "branch": "Launch",
+          "status": "open",
+          "frontId": "acme-checkout"
+        },
+        {
+          "id": "3",
+          "title": "Typo-tolerant search",
+          "branch": "Launch",
+          "status": "open",
+          "frontId": "acme-search"
+        },
+        {
+          "id": "4",
+          "title": "Back-in-stock alerts",
+          "branch": "After launch",
+          "status": "open",
+          "frontId": null
+        }
+      ],
+      "decisions": [],
+      "skills": [
+        {
+          "name": "deploy-preview",
+          "description": "Deploys the current branch to a preview URL and posts the link.",
+          "origin": "project",
+          "plugin": null,
+          "enabled": true,
+          "command": "/deploy-preview"
+        },
+        {
+          "name": "release-notes",
+          "description": "Drafts release notes from merged commits since the last tag.",
+          "origin": "user",
+          "plugin": null,
+          "enabled": true,
+          "command": "/release-notes"
+        },
+        {
+          "name": "map",
+          "description": "Opens the session map for this machine.",
+          "origin": "plugin",
+          "plugin": "session-map",
+          "enabled": true,
+          "command": "/session-map:map"
+        }
+      ],
+      "cost": {
+        "today": 9.05,
+        "d7": 21,
+        "d30": 68.8
+      }
+    },
+    {
+      "id": "notes-app-88910d",
+      "name": "notes-app",
+      "root": "/home/dev/code/notes-app",
+      "cells": [
+        {
+          "id": "editor",
+          "name": "Editor",
+          "paths": [
+            "src/editor/"
+          ],
+          "nucleus": {
+            "state": "Writing feels complete; tables are being added now.",
+            "decided": [
+              "Undo history capped at 200 steps per note"
+            ],
+            "todo": [
+              "Paste tables from spreadsheets"
+            ],
+            "recent": [
+              {
+                "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",
+                "title": "Table editing",
+                "date": "2026-10-08",
+                "line": "Adding row and column controls that appear on hover and on focus for keyboard users."
+              },
+              {
+                "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
+                "title": "Undo history across sessions",
+                "date": "2026-09-28",
+                "line": "Undo history is saved per note, capped at 200 steps."
+              },
+              {
+                "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
+                "title": "Markdown shortcuts",
+                "date": "2026-09-17",
+                "line": "Markdown shortcuts for headings, lists and quotes are in."
+              }
+            ]
+          },
+          "chatIds": [
+            "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
+            "76d24210-7faa-46a5-a0d3-499e901e5508",
+            "a045e45d-84e1-470e-a3e8-94fb7e2e985d"
+          ],
+          "status": "active"
+        },
+        {
+          "id": "sync",
+          "name": "Sync",
+          "paths": [
+            "src/sync/"
+          ],
+          "nucleus": {
+            "state": "Offline edits replay in order; conflicts keep both versions.",
+            "decided": [
+              "Merge by paragraph, never drop text"
+            ],
+            "todo": [
+              "Show who edited what"
+            ],
+            "recent": [
+              {
+                "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
+                "title": "Conflict resolution rules",
+                "date": "2026-10-06",
+                "line": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side."
+              },
+              {
+                "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
+                "title": "Offline queue for edits",
+                "date": "2026-09-21",
+                "line": "Offline edits now go to a local queue and replay in order when the connection returns."
+              }
+            ]
+          },
+          "chatIds": [
+            "93f04f6b-fae1-4642-a92f-17434e88ccfe",
+            "cdf96840-4345-4c47-a456-760099458a24"
+          ],
+          "status": "idle"
+        },
+        {
+          "id": "sharing",
+          "name": "Sharing",
+          "paths": [
+            "src/share/"
+          ],
+          "nucleus": {
+            "state": "Read-only links work and can be revoked.",
+            "decided": [
+              "Links are read-only by default"
+            ],
+            "todo": [
+              "Comment-only links"
+            ],
+            "recent": [
+              {
+                "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
+                "title": "Read-only share links",
+                "date": "2026-09-30",
+                "line": "Share links are read-only by default and can be revoked from the note menu."
+              }
+            ]
+          },
+          "chatIds": [
+            "8c0f5f1c-de23-4452-abb6-8fccb981c5f7"
+          ],
+          "status": "idle"
+        }
+      ],
+      "fronts": [
+        {
+          "id": "notes-main",
+          "path": "/home/dev/code/notes-app",
+          "branch": "main",
+          "ahead": 0,
+          "lastCommit": {
+            "hash": "a17c9e0",
+            "subject": "Keep both versions on paragraph conflicts",
+            "ts": "2026-10-07T09:00:00.000Z"
+          },
+          "openspec": null,
+          "chatIds": [
+            "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
+            "93f04f6b-fae1-4642-a92f-17434e88ccfe",
+            "76d24210-7faa-46a5-a0d3-499e901e5508",
+            "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
+            "cdf96840-4345-4c47-a456-760099458a24",
+            "a045e45d-84e1-470e-a3e8-94fb7e2e985d"
+          ],
+          "estimateUSD": null,
+          "costUSD": 19.65
+        }
+      ],
+      "chats": [
+        {
+          "sessionId": "9bbd1771-b8fe-432a-a31d-b0d11e7763b5",
+          "title": "Markdown shortcuts",
+          "cellId": "editor",
+          "cellSource": "files",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Typing ## should start a heading.",
+          "lastAssistantText": "Markdown shortcuts for headings, lists and quotes are in. Undo reverts the shortcut, not the text.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 2.2,
+          "workflows": [],
+          "startedAt": "2026-09-17T15:00:00.000Z",
+          "updatedAt": "2026-09-17T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "93f04f6b-fae1-4642-a92f-17434e88ccfe",
+          "title": "Offline queue for edits",
+          "cellId": "sync",
+          "cellSource": "files",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Edits made offline get lost.",
+          "lastAssistantText": "Offline edits now go to a local queue and replay in order when the connection returns.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 5.4,
+          "workflows": [],
+          "startedAt": "2026-09-21T15:00:00.000Z",
+          "updatedAt": "2026-09-21T21:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "76d24210-7faa-46a5-a0d3-499e901e5508",
+          "title": "Undo history across sessions",
+          "cellId": "editor",
+          "cellSource": "files",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Keep undo history after reopening a note.",
+          "lastAssistantText": "Undo history is saved per note, capped at 200 steps.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.6,
+          "workflows": [],
+          "startedAt": "2026-09-28T15:00:00.000Z",
+          "updatedAt": "2026-09-28T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "8c0f5f1c-de23-4452-abb6-8fccb981c5f7",
+          "title": "Read-only share links",
+          "cellId": "sharing",
+          "cellSource": "files",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "closed",
+          "entrypoint": "cli",
+          "live": false,
+          "bridgeUrl": null,
+          "lastPrompt": "Let people share a note as read-only.",
+          "lastAssistantText": "Share links are read-only by default and can be revoked from the note menu.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 2.8,
+          "workflows": [],
+          "startedAt": "2026-09-30T15:00:00.000Z",
+          "updatedAt": "2026-09-30T18:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "cdf96840-4345-4c47-a456-760099458a24",
+          "title": "Conflict resolution rules",
+          "cellId": "sync",
+          "cellSource": "files",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "idle",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Two devices edited the same note. What happens?",
+          "lastAssistantText": "Paragraph-level merge is done; when two edits touch the same paragraph, both versions are kept side by side.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": null,
+          "costUSD": 3.9,
+          "workflows": [],
+          "startedAt": "2026-10-06T15:00:00.000Z",
+          "updatedAt": "2026-10-07T09:00:00.000Z",
+          "archived": false,
+          "chattable": true
+        },
+        {
+          "sessionId": "a045e45d-84e1-470e-a3e8-94fb7e2e985d",
+          "title": "Table editing",
+          "cellId": "editor",
+          "cellSource": "card",
+          "frontId": "notes-main",
+          "frontSource": "cwd",
+          "parentId": null,
+          "status": "busy",
+          "entrypoint": "cli",
+          "live": true,
+          "bridgeUrl": null,
+          "lastPrompt": "Tables need add-row and add-column buttons.",
+          "lastAssistantText": "Adding row and column controls that appear on hover and on focus for keyboard users.",
+          "waiting": {
+            "strong": false,
+            "weak": false,
+            "items": []
+          },
+          "card": {
+            "title": "Table editing",
+            "cell": "editor",
+            "doing": "Row and column controls",
+            "todo": [
+              "Paste a table from a spreadsheet"
+            ]
+          },
+          "costUSD": 1.75,
+          "workflows": [],
+          "startedAt": "2026-10-08T10:00:00.000Z",
+          "updatedAt": "2026-10-08T14:58:00.000Z",
+          "archived": false,
+          "chattable": false
+        }
+      ],
+      "roadmap": null,
+      "decisions": [],
+      "skills": [
+        {
+          "name": "map",
+          "description": "Opens the session map for this machine.",
+          "origin": "plugin",
+          "plugin": "session-map",
+          "enabled": true,
+          "command": "/session-map:map"
+        }
+      ],
+      "cost": {
+        "today": 1.75,
+        "d7": 5.65,
+        "d30": 19.65
+      }
+    }
+  ]
+}
