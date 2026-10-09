@@ -32,7 +32,7 @@ flowchart LR
 | Part | In one line |
 |---|---|
 | [Readers](readers.md) | Reads Claude Code's local files, git and the config. |
-| [Architecture map](architecture-map.md) | Reads and writes a project's architecture folder. |
+| [Architecture map](architecture-map.md) | Reads a project's architecture folder; chats write it. |
 | [State builder](state-builder.md) | Joins everything into one state, with the AI's help. |
 | [Page chat](page-chat.md) | Starts and drives Claude chats from the page. |
 | [Server](server.md) | The local HTTP server, its token and its actions. |

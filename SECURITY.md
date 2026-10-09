@@ -10,7 +10,7 @@ Please report it privately through GitHub: [Security advisories](https://github.
 - Every write, and every access from an address other than `127.0.0.1`, needs the token in `~/.claude/session-map/token`. Writes also need a CSRF header.
 - A chat started from the page runs your own `claude` CLI and can edit files and run commands on this PC, in the permission mode you pick. `bypassPermissions` is never used.
 - Files are served read-only, text only, up to 1 MB, never `.git` and never `.env` files.
-- It writes only to `~/.claude/session-map/`, the architecture folder of a project (when you or a chat adds an item), and, if you ask for it on the page, `permissions.defaultMode` in `~/.claude/settings.json` (with a backup).
+- The server writes only to `~/.claude/session-map/` and, if you confirm it on the page, `permissions.defaultMode` in `~/.claude/settings.json` (with a backup); the token also allows that PC-wide change. A project's architecture folder is written by the chats themselves, through your `claude` CLI and in your permission mode, never by the server.
 - It sends data out in two cases only: the AI organisation (your own `claude` CLI) and the Discover tab (GitHub API). See the Privacy section of the README.
 
 ## Out of scope

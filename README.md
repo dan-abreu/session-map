@@ -77,7 +77,9 @@ For chats that run on this PC, turn on **Enable Remote Control for all sessions*
 
 **Permissions.** A page chat runs in the permission mode of your own Claude Code: `permissions.defaultMode` from `~/.claude/settings.json`, then the project's `.claude/settings.json`, then `.claude/settings.local.json` (the more specific file wins, as in Claude Code). With nothing set, that is `default`, which asks before every tool that is not already allowed. The selector in the chat header changes it for that conversation only: **Same as Claude**, **Ask every time** (`default`), **Edits on their own** (`acceptEdits`) or **Automatic** (`auto`); the choice is kept per conversation and switches a running one from its next step. Whatever the mode still asks about appears in the sheet with **Allow** / **Deny** (no answer in 25 s denies it), and **Always in this conversation** is remembered for that conversation, also after a resume. `bypassPermissions` is never used: if your settings say so, the page runs the chat in `auto` and tells you.
 
-> **Security:** a chat started from the page can edit files and run commands on this PC, like any Claude Code session, and in `acceptEdits` or `auto` it does part of that without asking you. Anyone holding your token can drive it, and pick its mode. Keep the token private and the page off the open internet.
+**Every Claude on this PC.** Next to the selector, **Use on this whole PC** makes the chosen mode the default of your own Claude Code. After you confirm it, the server writes `permissions.defaultMode` (`default`, `acceptEdits` or `auto`, never `bypassPermissions`) into `~/.claude/settings.json` and leaves the other keys alone. VS Code and the terminal read that file too, so the mode applies to every new conversation on this PC. Before the first change a copy of the file goes to `settings.json.session-map-bak` next to it, and **Undo the last change** puts back the value from before.
+
+> **Security:** a chat started from the page can edit files and run commands on this PC, like any Claude Code session, and in `acceptEdits` or `auto` it does part of that without asking you. Anyone holding your token can drive it, pick its mode, and switch the mode of every Claude on this PC to `auto`. Keep the token private and the page off the open internet.
 
 ## Costs are estimates
 
@@ -89,7 +91,7 @@ The plugin reads Claude Code's local files (sessions, transcripts, skills). Thos
 
 ## Privacy
 
-The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes only to `~/.claude/session-map/`: token, config, archive, notes and logs. Data leaves your machine in two cases.
+The server reads `~/.claude` (or `CLAUDE_CONFIG_DIR`) and writes to `~/.claude/session-map/` (token, config, archive, notes and logs) and, only when you confirm it on the page, `permissions.defaultMode` in `~/.claude/settings.json`. The architecture folder of a project is written by the chats, through your `claude` CLI and in your permission mode, not by the server. Data leaves your machine in two cases.
 
 **AI organisation, on by default.** The map places the conversations the code could not place with your own `claude` CLI (`claude -p`, model `haiku`), so it goes to Anthropic like any Claude Code prompt. Only conversations that no item code and no edited file could place are shown to the AI, once each. A call sends a digest of one conversation, never the transcript: its title, up to 8 of your prompts cut to 160 characters, up to 30 file paths, up to 10 commit subjects, the branch name, and the name, layer, purpose and folders of each part of the project's architecture. At most 30 calls per hour. Every call counts against your subscription limits or your API spend. To turn it off, put this in `~/.claude/session-map/config.json`:
 

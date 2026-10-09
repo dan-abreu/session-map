@@ -77,7 +77,9 @@ Para conversas que rodam neste PC, ligue **Enable Remote Control for all session
 
 **Permissões.** Uma conversa da página roda no modo de permissão do seu próprio Claude Code: `permissions.defaultMode` de `~/.claude/settings.json`, depois o `.claude/settings.json` do projeto, depois o `.claude/settings.local.json` (o arquivo mais específico vence, como no Claude Code). Sem nada definido, é o `default`, que pergunta antes de toda ferramenta que ainda não esteja liberada. O seletor no cabeçalho da conversa muda isso só para aquela conversa: **Igual ao Claude**, **Perguntar sempre** (`default`), **Só edições automáticas** (`acceptEdits`) ou **Automático** (`auto`); a escolha fica guardada por conversa e vale para uma conversa em andamento a partir do próximo passo. O que o modo ainda perguntar aparece na folha com **Permitir** / **Negar** (sem resposta em 25 s, nega), e **Sempre nesta conversa** fica lembrado para aquela conversa, também depois de retomá-la. O `bypassPermissions` nunca é usado: se as suas configurações disserem isso, a página roda a conversa em `auto` e avisa.
 
-> **Segurança:** uma conversa iniciada pela página pode editar arquivos e rodar comandos neste PC, como qualquer sessão do Claude Code, e em `acceptEdits` ou `auto` faz parte disso sem perguntar. Quem tem o seu token consegue conduzi-la e escolher o modo dela. Mantenha o token privado e a página fora da internet aberta.
+**Todo Claude deste PC.** Ao lado do seletor, **Usar em todo este PC** faz do modo escolhido o padrão do seu próprio Claude Code. Depois que você confirma, o servidor grava `permissions.defaultMode` (`default`, `acceptEdits` ou `auto`, nunca `bypassPermissions`) em `~/.claude/settings.json` e não mexe nas outras chaves. O VS Code e o terminal também leem esse arquivo, então o modo vale para toda conversa nova deste PC. Antes da primeira troca, uma cópia do arquivo fica em `settings.json.session-map-bak`, ao lado dele, e **Desfazer a última troca** devolve o valor de antes.
+
+> **Segurança:** uma conversa iniciada pela página pode editar arquivos e rodar comandos neste PC, como qualquer sessão do Claude Code, e em `acceptEdits` ou `auto` faz parte disso sem perguntar. Quem tem o seu token consegue conduzi-la, escolher o modo dela e trocar para `auto` o modo de todo Claude deste PC. Mantenha o token privado e a página fora da internet aberta.
 
 ## Custos são estimativas
 
@@ -89,7 +91,7 @@ O plugin lê arquivos locais do Claude Code (sessões, transcrições, skills). 
 
 ## Privacidade
 
-O servidor lê `~/.claude` (ou `CLAUDE_CONFIG_DIR`) e grava só em `~/.claude/session-map/`: token, configuração, arquivo morto, notas e logs. Dados saem da sua máquina em dois casos.
+O servidor lê `~/.claude` (ou `CLAUDE_CONFIG_DIR`) e grava em `~/.claude/session-map/` (token, configuração, arquivo morto, notas e logs) e, só quando você confirma na página, `permissions.defaultMode` em `~/.claude/settings.json`. A pasta de arquitetura de um projeto é escrita pelas conversas, pelo seu `claude` CLI e no seu modo de permissão, não pelo servidor. Dados saem da sua máquina em dois casos.
 
 **Organização por IA, ligada por padrão.** O mapa coloca no lugar as conversas que o código não conseguiu colocar com o seu próprio `claude` CLI (`claude -p`, modelo `haiku`), então isso vai para a Anthropic como qualquer prompt do Claude Code. Só as conversas que nenhum código de item e nenhum arquivo editado conseguiu colocar vão para a IA, uma vez cada. Uma chamada envia um resumo de uma conversa, nunca a transcrição: o título, até 8 prompts seus cortados em 160 caracteres, até 30 caminhos de arquivo, até 10 assuntos de commit, o nome do ramo e o nome, a camada, o propósito e as pastas de cada parte da arquitetura do projeto. No máximo 30 chamadas por hora. Toda chamada conta nos limites da sua assinatura ou no seu gasto de API. Para desligar, ponha isto em `~/.claude/session-map/config.json`:
 
