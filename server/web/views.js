@@ -1,4 +1,5 @@
 // Pure view logic for the page: no DOM, no fetch, so node:test can load it.
+import { summaryOf } from './alerts.js';
 import { modelName } from './live.js';
 
 const DAY = 864e5;
@@ -109,7 +110,7 @@ export function chatButtons(chat) {
   return { open, close, archive: chat.archived ? 'unarchive' : 'archive', write, phone };
 }
 
-const EMPTY_LOG = { sessionId: null, running: false, ended: false, mode: null, run: null, costUSD: null, items: [] };
+const EMPTY_LOG = { sessionId: null, running: false, ended: false, interrupted: false, mode: null, run: null, costUSD: null, items: [] };
 
 function closeStreaming(items) {
   const last = items.at(-1);
@@ -125,17 +126,17 @@ export function chatLog(log = EMPTY_LOG, evt) {
   switch (type) {
     case 'history':
       return {
-        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD,
+        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true,
         items: data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false })),
       };
     case 'local-send':
-      return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true }] };
+      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true }] };
     case 'user': {
       // The server echoes every message it takes: the page's own send is already shown, one from elsewhere is not.
       const mine = items.findIndex((i) => i.type === 'user' && i.local && i.text === data.text);
-      if (mine >= 0) return { ...log, running: true, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text } : i)) };
+      if (mine >= 0) return { ...log, running: true, interrupted: false, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text } : i)) };
       // auto: an answer session-map gave for the person ("may reinforce on its own").
-      return { ...log, running: true, items: [...closeStreaming(items), { type: 'user', text: data.text, ...(data.auto ? { auto: data.auto } : {}) }] };
+      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, ...(data.auto ? { auto: data.auto } : {}) }] };
     }
     case 'mode':
       return { ...log, mode: data.mode };
@@ -168,6 +169,20 @@ export function chatLog(log = EMPTY_LOG, evt) {
     default:
       return log;
   }
+}
+
+// The one state a page chat is in (page-chat pc05), so an ended chat never looks stuck: working, waiting for a permission,
+// finished (with its summary), interrupted (a restart or a process that died; resumable once it has an id), error (a
+// message refused), paused (the process ended with no reply to show), new.
+export function chatState(log, { sessionId }) {
+  if (!log) return { kind: 'new' };
+  if (log.running) return { kind: log.items.some((i) => i.type === 'permission' && i.state === 'asked') ? 'permission' : 'working' };
+  const last = log.items.at(-1);
+  if (log.interrupted || (last?.type === 'error' && last.error === 'exited')) return { kind: 'interrupted', resumable: Boolean(sessionId) };
+  if (last?.type === 'error') return { kind: 'error' };
+  if (last?.type === 'assistant') return { kind: 'finished', summary: summaryOf(last.text) };
+  if (log.ended) return { kind: 'paused' };
+  return { kind: log.items.length ? 'idle' : 'new' };
 }
 
 // What the chat header says about how the conversation runs. choice: the run picked (run.mjs shapes); info: the last

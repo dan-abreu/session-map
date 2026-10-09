@@ -46,5 +46,9 @@ export const api = {
   flowDraft: (projectId) => call('GET', `/api/arch/${seg(projectId)}/draft`),
   flowSaveDraft: (projectId, text) => call('PUT', `/api/arch/${seg(projectId)}/draft`, { text }),
   flowDiscard: (projectId) => call('DELETE', `/api/arch/${seg(projectId)}/draft`),
+  alerts: (since) => call('GET', `/api/alerts?since=${Number(since) || 0}`),
+  notifyPrefs: () => call('GET', '/api/settings/notify'),
+  setNotify: (patch) => call('POST', '/api/settings/notify', patch),
+  notifyTest: () => call('POST', '/api/settings/notify/test', {}),
   chatEvents: (key) => new EventSource(`/api/chat/${seg(key)}/events`),
 };

@@ -16,6 +16,7 @@ class El {
     this.scrollHeight = 0;
     this.scrollTop = 0;
     this.clientHeight = 0;
+    this.dataset = {};
   }
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, ...evt }); }
@@ -404,4 +405,27 @@ test('the answer session-map gave for the person shows as its own note, not as t
   const shown = text(part('#chatLog'));
   assert.ok(shown.includes('run.autoAnswered'));
   assert.ok(!shown.includes('OK, you may reinforce.'));
+});
+
+test('a conversation a restart cut off says so, and Continue picks it up with one message; a finished one shows its summary', async () => {
+  const { calls } = server({
+    [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, messages: [{ role: 'user', text: 'Second question' }], interrupted: true }),
+    'POST /api/chat/start': () => ({ chatKey: KEY, mode: 'acceptEdits' }),
+  });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'Second question', start: { sessionId: S1 } });
+  await settle();
+  assert.equal(part('#chatStatus').dataset.state, 'interrupted');
+  assert.equal(part('#chatStatus').textContent, 'chat.state.interrupted');
+  const cont = walk(part('#chatLog')).find((e) => e.attrs['data-chat-act'] === 'continue');
+  assert.ok(cont, 'the cut-off card offers Continue');
+  cont.attrs.onclick();
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.text, 'chat.continueText');
+  assert.equal(part('#chatStatus').dataset.state, 'working');
+
+  server({ [`GET /api/chat/history/${S2}`]: () => ({ ...HISTORY, sessionId: S2 }) });
+  chat.open({ projectId: 'acme-shop', title: 'First', start: { sessionId: S2 } });
+  await settle();
+  assert.equal(part('#chatStatus').textContent, 'chat.state.finished(Here it is.)');
 });

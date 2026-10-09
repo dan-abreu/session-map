@@ -8,6 +8,8 @@ The server compares each session's state from one read to the next and turns the
 
 ## Where in the code
 
+- `server/alerts/`
+- `server/web/alerts.js`
 - `server/collect.mjs`
 - `server/brain/`
 - `server/web/live.js`
@@ -22,15 +24,15 @@ The server compares each session's state from one read to the next and turns the
 
 ### Watching
 
-- [ ] **important:** Watch every session on the PC for changes of state `wa01`
+- [x] **Claude:** Watch every session on the PC for changes of state `wa01`
   - Sessions from VS Code, the terminal and the map, in any project. Detect: finished (busy → idle with a final answer), waiting for you (a pending question or permission), error or interruption, and a new clash between lines of work.
-- [ ] **important:** Alerts in the browser `wa02`
+- [x] **Claude:** Alerts in the browser `wa02`
   - Notification API (permission asked once, with an explanation, works with the tab in the background), an optional short sound, and the tab title changing ("(2) session-map").
-- [ ] **important:** Native desktop toast `wa03`
+- [x] **Claude:** Native desktop toast `wa03`
   - Windows through PowerShell (`Windows.UI.Notifications`), macOS through `osascript`, Linux through `notify-send`; on by default, and a click opens session-map on that chat.
-- [ ] **important:** Phone alert through ntfy (optional) `wa04`
+- [x] **Claude:** Phone alert through ntfy (optional) `wa04`
   - A random topic of the owner's; off until switched on.
-- [ ] **important:** Alert preferences per project, and grouping `wa05`
+- [x] **Claude:** Alert preferences per project, and grouping `wa05`
   - Config `notify: {browser, desktop, ntfy: {enabled, topic}, perProject}`; similar alerts collapse ("3 jobs finished").
 
 ### Signs that explain themselves

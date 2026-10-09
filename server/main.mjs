@@ -6,6 +6,9 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { logAction, runAction } from './actions.mjs';
+import { createDelivery, toastCommand } from './alerts/deliver.mjs';
+import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
+import { createWatcher } from './alerts/watcher.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
@@ -30,10 +33,13 @@ const STATE_SAVE_MS = 60_000;
 // Reading the transcripts holds the event loop for a while: the copy's bytes leave the socket first.
 const COLLECT_AFTER_COPY_MS = 300;
 const SWEEP_MS = 5 * 60_000;
+// How often the watcher looks at every session on the PC, page open or not.
+const WATCH_MS = 10_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
+const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
 const FLOW_TEXT_MAX = 60_000;
 const SKIP_MAX = 500;
@@ -88,13 +94,16 @@ async function serveFile(res, path) {
   res.end(body);
 }
 
-// collectFn, ai and catalog ({token, fetchFn, exec, bin}) are replaceable for tests; addressOf stands in for the socket's remote address.
+// collectFn, ai, catalog ({token, fetchFn, exec, bin}) and deliver (the desktop and phone alerts) are replaceable for tests;
+// addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
-  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir, dir }),
-  catalog = {}, stateTtlMs = STATE_TTL_MS,
+  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
+  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }),
 } = {}) {
+  let watcher = null;
+  const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({ smDir, dir, onAlert: (a) => watcher?.push([a]) });
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
   const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
   let ready = false;
@@ -128,6 +137,12 @@ export function createApp({
     return { ...copy, refreshing: true };
   };
   const fresh = () => { cached = null; };
+  const prefsNow = () => notifyPrefs(readJsonFile(join(smDir, 'config.json'), {}) ?? {});
+  watcher = demo ? null : createWatcher({
+    readState: state, deliver, prefs: prefsNow,
+    skip: () => chat?.drivenIds?.() ?? new Set(),
+    startup: (s) => chat?.interrupted?.(s) ?? [],
+  });
 
   const projectOf = async (projectId) => {
     if (demo) throw new HttpError(403, 'demo');
@@ -206,6 +221,23 @@ export function createApp({
     const result = setReinforcedLimit(smDir, usd);
     const status = result.ok ? 200 : LIMIT_ERRORS[result.error];
     logAction(smDir, { action: 'reinforced-limit', usd: typeof usd === 'number' ? usd : null }, status);
+    return send(res, status, result);
+  }
+
+  // How the person wants to be told (watcher-and-alerts wa05), and a test alert through every way that is on.
+  async function notifyRoute(req, res, path) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (path.endsWith('/test')) {
+      if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+      watcher.push([{ kind: 'finished', reason: 'test', projectId: 'session-map', projectName: 'session-map', sessionId: null, title: '' }]);
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === 'GET') return send(res, 200, { ok: true, notify: prefsNow(), desktopAvailable: toastCommand(process.platform, { title: '', body: '', action: '', url: '' }) !== null });
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const result = setNotifyPrefs(smDir, await readBody(req));
+    const status = result.ok ? 200 : NOTIFY_ERRORS[result.error];
+    logAction(smDir, { action: 'notify' }, status);
     return send(res, status, result);
   }
 
@@ -303,6 +335,11 @@ export function createApp({
     const path = url.pathname;
     const parts = path.split('/').map((p) => decodeURIComponent(p));
     if (req.method === 'GET' && path === '/api/state') return send(res, 200, await firstAnswer());
+    // As open as the state it is made from: titles and summaries, never a token or a file.
+    if (req.method === 'GET' && path === '/api/alerts') {
+      const since = Number.parseInt(url.searchParams.get('since') ?? '0', 10) || 0;
+      return send(res, 200, watcher ? watcher.since(since) : { boot: 'demo', lastId: 0, alerts: [] });
+    }
     // The demo is for screenshots: the real archive stays out of it.
     if (req.method === 'GET' && path === '/api/history') {
       if (demo) return send(res, 200, { results: [] });
@@ -342,11 +379,12 @@ export function createApp({
     if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
+    if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     res.setHeader('x-content-type-options', 'nosniff');
     res.setHeader('x-frame-options', 'DENY');
     // The first link carries ?k=: it must not leak to other sites through the Referer.
@@ -369,6 +407,9 @@ export function createApp({
       if (!res.headersSent) send(res, 500, { ok: false, error: 'internal' });
     }
   });
+  server.watcher = watcher;
+  server.on('close', () => watcher?.stop());
+  return server;
 }
 
 function lanAddress() {
@@ -387,7 +428,7 @@ export function start(argv = process.argv.slice(2)) {
   const dir = values.dir ?? claudeDir();
   const smDir = join(claudeDir(), 'session-map');
   const token = values.demo ? randomBytes(32).toString('hex') : loadToken(smDir);
-  const app = createApp({ dir, smDir, demo: values.demo, token });
+  const app = createApp({ dir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}` });
   const host = values.lan ? '0.0.0.0' : '127.0.0.1';
   app.listen(port, host, () => {
     // The person's own terminal: the links carry the token, the only way a page gets the cookie it needs to write.
@@ -406,6 +447,7 @@ export function start(argv = process.argv.slice(2)) {
     };
     setTimeout(sweep, 10_000).unref();
     setInterval(sweep, SWEEP_MS).unref();
+    app.watcher.start(WATCH_MS);
   }
   return app;
 }

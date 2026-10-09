@@ -1525,3 +1525,93 @@ body.is-empty .convs { display: none; }
   .mm-flow { display: none; }
   .live-dot::after, .lv-dot::after { animation: none; }
 }
+
+/* ---------- alerts: the bell, the cards, the settings dialog (watcher-and-alerts wa02, wa05) ---------- */
+
+.bar-icon { width: 32px; height: 32px; border-radius: 8px; color: var(--ink-2); }
+.bar-icon:hover { color: var(--ink); }
+.bar-icon svg { width: 17px; height: 17px; }
+
+.al-stack {
+  position: fixed; top: 152px; right: 16px; z-index: 11;
+  display: grid; gap: 8px; width: min(380px, calc(100% - 32px));
+  list-style: none; margin: 0; padding: 0; pointer-events: none;
+}
+.al-stack:empty { display: none; }
+.al-card {
+  --tone: var(--active); --tone-fill: var(--active-fill);
+  pointer-events: auto;
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: start; gap: 4px 12px;
+  padding: 12px 8px 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg-2); color: var(--ink);
+  box-shadow: 0 14px 32px -16px rgb(20 35 32 / 0.42), var(--shadow);
+  animation: al-in 320ms var(--ease-out);
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.al-card.tone-waiting { --tone: var(--waiting); --tone-fill: var(--waiting-fill); }
+.al-card.tone-clash { --tone: var(--clash); --tone-fill: var(--clash-fill); }
+.al-card.is-leaving { opacity: 0; transform: translateX(10px); }
+@keyframes al-in { from { opacity: 0.4; transform: translateY(-8px) scale(0.98); } }
+.al-dot { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 4px var(--tone-fill); }
+.al-text { min-width: 0; }
+.al-text p { margin: 0; overflow-wrap: anywhere; }
+.al-title { font-size: 0.875rem; font-weight: 650; line-height: 1.35; }
+.al-body { margin-top: 3px !important; font-size: 0.8125rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.al-todo { margin-top: 4px !important; font-size: 0.75rem; color: var(--ink-2); line-height: 1.4; }
+.al-actions { margin-top: 10px; }
+.al-close {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; margin-top: -4px;
+  border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer;
+}
+.al-close:hover { background: var(--bg-3); color: var(--ink); }
+.al-close-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+
+.al-dialog { width: min(580px, calc(100% - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; padding: 22px 22px 18px; }
+.al-dialog h2 { font-size: 1.125rem; }
+.al-lede { margin: 0; color: var(--ink-2); font-size: 0.875rem; line-height: 1.5; max-width: 62ch; }
+.al-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.al-section h3 { margin: 0 0 6px; font-size: 0.8125rem; font-weight: 650; }
+.al-opt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; padding: 7px 0; }
+.al-opt input { margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--active); }
+.al-opt label { display: grid; gap: 2px; cursor: pointer; }
+.al-opt input:disabled + label { cursor: default; opacity: 0.6; }
+.al-opt-name { font-size: 0.875rem; font-weight: 600; }
+.al-opt-hint { margin: 0; font-size: 0.8125rem; line-height: 1.45; color: var(--ink-2); }
+.al-perm { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.8125rem; color: var(--ink-2); }
+.al-perm.is-granted { color: var(--active-ink); font-weight: 600; }
+.al-perm.is-denied { color: var(--clash-ink); }
+.al-topic { margin: 2px 0 4px 26px; padding: 10px 12px; border-radius: 10px; background: var(--bg-3); }
+.al-topic p { margin: 0 0 8px; font-size: 0.8125rem; line-height: 1.45; }
+.al-topic-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.al-topic code { padding: 4px 8px; border-radius: 7px; background: var(--bg-2); font: 0.8125rem/1.5 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.al-table-wrap { margin-top: 8px; overflow-x: auto; }
+.al-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.al-table th, .al-table td { padding: 8px 6px; border-top: 1px solid var(--line); text-align: center; vertical-align: middle; }
+.al-table thead th { border-top: 0; color: var(--ink-2); font-weight: 600; font-size: 0.75rem; line-height: 1.3; }
+.al-table th:first-child { text-align: left; padding-left: 0; }
+.al-table tbody th { font-weight: 600; overflow-wrap: anywhere; }
+.al-table input { width: 16px; height: 16px; accent-color: var(--active); }
+
+/* a page chat's one state (page-chat pc05) */
+.chat-status[data-state="finished"] { color: var(--active-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-status[data-state="permission"] { color: var(--waiting-ink); }
+.chat-status[data-state="interrupted"], .chat-status[data-state="error"] { color: var(--clash-ink); }
+.chat-status[data-state="paused"], .chat-status[data-state="idle"], .chat-status[data-state="new"] { color: var(--ink-2); }
+.msg-cut { padding: 12px 14px; border-radius: 12px; background: var(--waiting-fill); }
+.msg-cut p { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+.msg-cut p + p { margin-top: 4px; }
+.msg-cut-title { font-weight: 650; color: var(--waiting-ink); }
+.msg-cut .actions { margin-top: 10px; }
+.lr-date.is-cut { color: var(--waiting-ink); font-weight: 600; }
+
+@media (max-width: 719px) {
+  .al-stack { top: auto; bottom: 16px; left: 16px; right: 16px; width: auto; }
+  /* One card at a time: the phone keeps the map in view. */
+  .al-card:nth-child(n + 2) { display: none; }
+  .al-actions .btn { height: 36px; }
+  .al-topic { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-card { animation: none; transition: none; }
+}

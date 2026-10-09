@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { exportMermaid, readDraft, writeDraft } from '../arch/flow.mjs';
@@ -9,7 +9,9 @@ import { cleanEnv, findClaude } from '../ai/runner.mjs';
 import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
+import { waitingFor } from '../parse/waiting.mjs';
 import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
+import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
@@ -28,6 +30,8 @@ const TEXT_MAX = 20_000;
 const TITLE_MAX = 200;
 const EVENTS_MAX = 2000;
 const CHATS_MAX = 6;
+// A restart that cut a chat off is told for a day; older ones still show it when opened.
+const CUT_OFF_ALERT_MS = 24 * 3600_000;
 const RELAY_BODY_MAX = 4 * 1024 * 1024;
 // The docs give the permission tool 30 s; answering first keeps the denial ours, with our message.
 const PERMISSION_TIMEOUT_MS = 25_000;
@@ -55,9 +59,13 @@ const nodeTag = (node) => {
 };
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
-export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner } = {}) {
+// onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
+export function createChatHub({
+  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner, onAlert = () => {},
+} = {}) {
   const chats = new Map();
   const bySession = new Map();
+  const everDriven = new Set();
   let relay = null;
 
   // The conversations the page started or wrote into, by sessionId: where they belong, the person's own words as title,
@@ -80,6 +88,27 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     return chat && !chat.ended ? chat : null;
   };
 
+  const alert = (chat, kind, reason, extra = {}) => {
+    try {
+      onAlert({ kind, reason, projectId: chat.projectId, projectName: chat.projectName, sessionId: chat.sessionId, title: chat.title, origin: 'map', ...extra });
+    } catch (err) { log('warn', 'chat-alert-failed', { error: err.message }); }
+  };
+
+  // A turn that ended on its own: the final answer, a question for the person, or an error. A stop the person asked for,
+  // or a turn session-map answers by itself, is no news.
+  function alertTurnEnd(chat, data, reply, auto) {
+    if (chat.stopRequested) return;
+    if (data.isError) return alert(chat, 'error', 'failed');
+    if (auto || chat.restart) return undefined;
+    const waits = waitingFor({ lastAssistantText: reply, pendingQuestion: false }, null, null);
+    if (waits.strong || waits.weak) return alert(chat, 'waiting', waits.strong ? 'question' : 'asks');
+    return alert(chat, 'finished', 'answer', { summary: summaryOf(reply) });
+  }
+
+  // Cut off: a turn was running when the process went away with the server, and nothing runs the conversation now.
+  const cutOff = (sessionId, page, state) => page?.running === true && !drivenNow(sessionId)
+    && !(state?.projects ?? []).some((p) => (p.conversations ?? []).some((c) => c.sessionId === sessionId && c.live));
+
   const emit = (chat, type, data) => {
     const evt = { id: ++chat.lastId, type, data };
     chat.events.push(evt);
@@ -93,6 +122,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     if (chat.always.has(toolName)) return { behavior: 'allow', updatedInput: input };
     const requestId = randomBytes(8).toString('hex');
     emit(chat, 'permission', { requestId, state: 'asked', toolName, toolUseId: args?.tool_use_id ?? null, input: preview(input) });
+    alert(chat, 'waiting', 'permission', { tool: toolName });
     return new Promise((resolve) => {
       const finish = (state, decision) => {
         clearTimeout(timer);
@@ -159,18 +189,22 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       chat.model = evt.data.model;
       chat.sessionId = evt.data.sessionId;
       bySession.set(chat.sessionId, chat);
+      everDriven.add(chat.sessionId);
       if (chat.parentId && chat.parentId !== chat.sessionId) {
         try { recordLineage(smDir, chat.sessionId, chat.parentId); } catch (err) { log('warn', 'lineage-failed', { error: err.message }); }
       }
       const known = readPageChats()[chat.sessionId];
       savePageChat(chat.sessionId, {
-        projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, updatedAt: now(),
+        projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, running: chat.running, updatedAt: now(),
         ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
       });
       emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
       return emitRun(chat);
     }
-    if (evt.type === 'text' && !evt.data.partial) chat.turnText += `${evt.data.text}\n`;
+    if (evt.type === 'text' && !evt.data.partial) {
+      chat.turnText += `${evt.data.text}\n`;
+      chat.lastText = evt.data.text;
+    }
     if (evt.type === 'text' && chat.flow && !evt.data.partial) chat.flow.reply += `${evt.data.text}
 `;
     if (evt.type === 'turn-end') {
@@ -180,10 +214,13 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
       clearTimeout(chat.idleTimer);
       chat.idleTimer = setTimeout(() => { chat.closing = true; chat.driver.end(); }, idleMs);
       chat.idleTimer.unref?.();
-      if (chat.sessionId) savePageChat(chat.sessionId, { updatedAt: now() });
+      if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now() });
       const { processCostUSD, ...data } = evt.data;
       emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD });
       emitRun(chat);
+      alertTurnEnd(chat, data, chat.lastText, auto);
+      chat.stopRequested = false;
+      chat.lastText = '';
       if (chat.restart) {
         chat.closing = true;
         chat.driver.end();
@@ -252,6 +289,7 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     if (code !== 0 && !chat.closing) {
       log('warn', 'chat-exited', { code, signal });
       emit(chat, 'error', { error: 'exited', code });
+      alert(chat, 'error', 'exited');
     }
     emit(chat, 'session', { sessionId: chat.sessionId, state: 'ended' });
     for (const sink of chat.sinks) sink.end();
@@ -287,6 +325,9 @@ ${prompt}`;
     if (chat.level?.level === 'ask-reinforce') chat.reinforcing = true;
     chat.autoAnswered = Boolean(auto);
     chat.running = true;
+    // On disk at once: a server that dies mid-turn leaves the mark the next one reads as "cut off" (page-chat pc06).
+    // The first message is saved with the rest when claude announces the session.
+    if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });
     emit(chat, 'user', auto ? { text: shown, auto } : { text: shown });
     chat.driver.send(prompt);
   }
@@ -333,7 +374,7 @@ ${prompt}`;
       if (!cwd) return reply(409, { error: 'no-folder' });
       resume = body.sessionId;
       if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
-      if (chat) place = { ...place, title: chat.title };
+      place = { ...place, title: chat?.title ?? saved?.title ?? place.title };
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
       if (body.parentId && !mother) return reply(404, { error: 'unknown-session' });
@@ -367,7 +408,7 @@ ${prompt}`;
     const key = randomBytes(16).toString('hex');
     const chat = {
       key, sessionId: resume, parentId: body.sessionId ? null : body.parentId ?? null, secret: randomBytes(32).toString('hex'),
-      projectId: project.id, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
+      projectId: project.id, projectName: project.name, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
       events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`), flow,
@@ -380,7 +421,10 @@ ${prompt}`;
     mkdirSync(join(smDir, 'chat'), { recursive: true });
     writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
     chats.set(key, chat);
-    if (resume) bySession.set(resume, chat);
+    if (resume) {
+      bySession.set(resume, chat);
+      everDriven.add(resume);
+    }
     chat.driver = startDriver({
       bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run) }), cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
@@ -436,6 +480,7 @@ ${prompt}`;
       return {
         sessionId, title: c.title ?? '', startedAt: c.startedAt ?? null, updatedAt: c.updatedAt ?? c.startedAt ?? null,
         mode: c.mode ?? 'settings', run: parseRun(c.run) ?? { kind: 'settings' }, chatKey: driven?.key ?? null, running: Boolean(driven?.running),
+        interrupted: cutOff(sessionId, c, state),
       };
     }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
     return reply(200, { chats, settings: settingsMode(project.root, dir), mine: settingsRun(project.root, dir), reinforce: reinforceState() });
@@ -467,7 +512,7 @@ ${prompt}`;
     return reply(200, {
       sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, chatKey: driven?.key ?? null,
       run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
-      costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0),
+      costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state),
     });
   }
 
@@ -526,6 +571,7 @@ ${prompt}`;
     const chat = chatOf(key);
     if (!chat) return reply(404, { error: 'unknown-chat' });
     if (!chat.running) return reply(200, { stopped: false });
+    chat.stopRequested = true;
     chat.driver.interrupt();
     return reply(200, { stopped: true });
   }
@@ -558,5 +604,19 @@ ${prompt}`;
     }
   }
 
-  return { start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, close };
+  // The page conversations a restart cut off in the last day, as alerts for the watcher's first look.
+  function interrupted(state) {
+    const recent = Date.now() - CUT_OFF_ALERT_MS;
+    return Object.entries(readPageChats())
+      .filter(([sessionId, c]) => UUID_RE.test(sessionId) && cutOff(sessionId, c, state) && Date.parse(c.updatedAt ?? '') >= recent)
+      .map(([sessionId, c]) => ({
+        kind: 'error', reason: 'restart', projectId: c.projectId,
+        projectName: state?.projects.find((p) => p.id === c.projectId)?.name ?? basename(String(c.root ?? '')),
+        sessionId, title: c.title ?? '', origin: 'map',
+      }));
+  }
+
+  return {
+    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, close, interrupted, drivenIds: () => everDriven,
+  };
 }

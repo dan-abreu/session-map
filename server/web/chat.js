@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { foldReply } from './chatfold.js';
 import { modelName } from './live.js';
-import { chatLog, pcModeOffer, runWords } from './views.js';
+import { chatLog, chatState, pcModeOffer, runWords } from './views.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
@@ -348,12 +348,34 @@ export function createChat({
     ].filter(Boolean) : []));
   }
 
+  // A conversation cut off in the middle: what happened and the one button that picks it up again.
+  function cutCard(state) {
+    const tt = t();
+    return h('li', { class: 'msg msg-cut', role: 'group', 'aria-label': tt('chat.cut.title') },
+      h('p', { class: 'msg-cut-title' }, tt('chat.cut.title')),
+      h('p', {}, tt(state.resumable ? 'chat.cut.body' : 'chat.cut.bodyNew')),
+      state.resumable ? h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn primary', 'data-chat-act': 'continue', onclick: () => { if (!sendBtn.disabled) send(tt('chat.continueText')); } }, tt('chat.cut.continue'))) : null);
+  }
+
+  function statusText(state) {
+    const tt = t();
+    if (state.kind === 'working') return tt('chat.thinking');
+    if (state.kind === 'permission') return tt('chat.state.permission');
+    if (state.kind === 'interrupted') return tt('chat.state.interrupted');
+    if (state.kind === 'finished') return state.summary ? tt('chat.state.finished', { summary: state.summary }) : tt('chat.state.finishedPlain');
+    if (state.kind === 'paused') return sessionId ? tt('chat.paused') : tt('chat.ended');
+    return log?.mode ? tt('chat.modeNow', { mode: modeName(log.mode) }) : '';
+  }
+
   function render() {
     const tt = t();
     renderWhere();
     const items = log?.items ?? [];
+    const state = chatState(log, { sessionId });
     const stick = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
-    logEl.replaceChildren(...(items.length ? items.map(itemView) : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]));
+    logEl.replaceChildren(...(items.length ? items.map(itemView) : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]),
+      ...(state.kind === 'interrupted' ? [cutCard(state)] : []));
     if (stick || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
     const running = Boolean(log?.running);
     // An ended process is only paused: with its id known, the next message resumes the conversation.
@@ -361,11 +383,9 @@ export function createChat({
     stopBtn.hidden = !running;
     sendBtn.disabled = running || stuck;
     input.disabled = stuck;
-    let status = '';
-    if (running) status = tt('chat.thinking');
-    else if (log?.ended) status = sessionId ? tt('chat.paused') : tt('chat.ended');
-    else if (log?.mode) status = tt('chat.modeNow', { mode: modeName(log.mode) });
-    q('status').textContent = status;
+    const statusEl = q('status');
+    statusEl.textContent = statusText(state);
+    statusEl.dataset.state = state.kind;
   }
 
   async function send(text) {
@@ -407,7 +427,7 @@ export function createChat({
       ...chats.map((c) => h('li', {},
         h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle }) },
           h('span', { class: 'lr-title' }, c.title || tt('chat.untitled')),
-          h('span', { class: 'lr-date' }, c.running ? tt('chat.running') : relative(c.updatedAt))))));
+          h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt))))));
     listEl.hidden = false;
   }
 
@@ -424,7 +444,7 @@ export function createChat({
     reinforce = res.reinforce ?? reinforce;
     sessionId = ctx.start.sessionId;
     rememberOpen();
-    log = chatLog(log, { type: 'history', data: { messages: res.messages ?? [], costUSD: res.costUSD } });
+    log = chatLog(log, { type: 'history', data: { messages: res.messages ?? [], costUSD: res.costUSD, interrupted: res.interrupted === true } });
     if (res.chatKey) watch(res.chatKey);
     renderMode();
     renderRun();

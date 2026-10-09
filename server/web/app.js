@@ -13,6 +13,7 @@ import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { createConvList, conversationCounts, listConversations } from './convlist.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
+import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, rangeStart, pcModeOffer } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -117,6 +118,7 @@ function applyStaticText() {
   discover?.relabel();
   chat?.relabel();
   flow?.relabel();
+  alerts?.relabel();
 }
 
 let toastTimer = 0;
@@ -1168,6 +1170,21 @@ let outline = null;
 let flow = null;
 let convs = null;
 let live = null;
+let alerts = null;
+
+// A click on an alert: its project, then its conversation (one alert) or the waiting list (a clash).
+function openFromAlert(group) {
+  const target = state?.projects.find((p) => p.id === group.projectId);
+  if (!target) return;
+  if (view !== 'map') showView('map');
+  if (project?.id !== target.id) setProject(target.id);
+  const [first] = group.alerts;
+  if (group.kind === 'clash') return openWaiting();
+  if (group.alerts.length !== 1 || !first.sessionId) return undefined;
+  const out = listConversations(state, { projectId: target.id, scope: 'all', showArchived: true });
+  const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === first.sessionId);
+  return hit ? openConversation(hit) : toast(t('alert.notFound'));
+}
 
 function wire() {
   $('#project').addEventListener('change', (e) => setProject(e.target.value));
@@ -1218,6 +1235,12 @@ function wire() {
   live = createLivePanel({
     root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,
     state: () => state, project: () => project, onShow: showOnMap, onOpen: openFromLive,
+  });
+  alerts = createAlerts({
+    stack: $('#alertStack'), bell: $('#alertsBtn'), dialog: $('#alertsDialog'), h, t: () => t, lang: () => lang, icon, api, store, toast, errorText,
+    projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name })),
+    onOpen: openFromAlert,
+    onAlerts: () => setTimeout(poll, 400),
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
   flow = createFlowView({
@@ -1278,7 +1301,7 @@ function wire() {
   search.addEventListener('blur', () => setTimeout(() => { if (!$('#searchBox').contains(document.activeElement)) closeResults(); }, 150));
   search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open) return;
+    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open) return;
     if (convs.isDrawerOpen()) convs.closeDrawer();
     else if (!$('#waitingList').hidden || live.isOpen()) closeLists();
     else if (chat.isOpen()) chat.close();
@@ -1295,7 +1318,7 @@ function wire() {
 }
 
 // Deep link for screenshots and sharing a view: ?view=<tab>&project=<id>&open=<ids|all>&select=node:<id> (or chat:, workcell:,
-// link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1&live=1.
+// link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1&live=1&alerts=1.
 function applyDeepLink() {
   const params = new URLSearchParams(location.search);
   if (params.get('project')) setProject(params.get('project'));
@@ -1333,6 +1356,7 @@ function applyDeepLink() {
   if (params.get('convfilter')) setTimeout(() => convs.filterTo(params.get('convfilter')), 60);
   if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
   if (params.get('live') === '1') setTimeout(openLive, 60);
+  if (params.get('alerts') === '1') setTimeout(() => alerts.openSettings(), 200);
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);
@@ -1361,6 +1385,7 @@ async function main() {
   }
   const { ok, status, error, ...first } = res;
   state = first;
+  alerts.start();
   notice.hidden = true;
   renderAll();
   if (state.projects.length) {
