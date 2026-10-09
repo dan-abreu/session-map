@@ -1,11 +1,12 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import { createBrain, neuronKind, isUnsure } from './brain.js';
-import { unitTree, ownerHue, initial, filesByFolder } from './body.js';
+import { unitTree, ownerHue, initial } from './body.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
-import { structureKey, lifeEventsSince, nameAt, visibleProject, chatButtons, bootstrapOf, unitMoves } from './views.js';
+import { createFiles } from './files.js';
+import { structureKey, lifeEventsSince, nameAt, visibleProject, chatButtons, bootstrapOf, unitMoves, waitingEntries, safeTunnel } from './views.js';
 
 const $ = (sel) => document.querySelector(sel);
 const PLAY_MS = 9000;
@@ -219,19 +220,6 @@ function renderSummary() {
   $('#summary').replaceChildren(...joinDots(parts));
 }
 
-function waitingEntries() {
-  const out = [];
-  for (const p of state.projects) {
-    for (const d of p.decisions || []) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
-    for (const c of p.chats) {
-      if (!c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length)) {
-        out.push({ project: p, chat: c, rank: c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3, ts: c.updatedAt });
-      }
-    }
-  }
-  return out.sort((a, b) => a.rank - b.rank || b.ts.localeCompare(a.ts));
-}
-
 function goTo(projectId, sel) {
   closeWaiting();
   if (view !== 'brain') showView('brain');
@@ -242,7 +230,7 @@ function goTo(projectId, sel) {
 function renderWaiting() {
   $('#waitingLabel').textContent = t('waiting.button', { n: state.waitingCount });
   $('#waitingBtn').classList.toggle('is-zero', state.waitingCount === 0);
-  const entries = waitingEntries();
+  const entries = waitingEntries(state);
   const listEl = $('#waitingItems');
   if (!entries.length) {
     listEl.replaceChildren(h('li', { class: 'empty' }, t('waiting.none')));
@@ -486,6 +474,7 @@ function renderUnitPanel(u) {
         h('span', { class: 'lr-title' }, h('span', { class: `level-dot status-${k.status}`, 'aria-hidden': 'true' }), unitName(k)),
         h('span', { class: 'lr-date' }, k.level === 'cell' ? t.count('label.chats', k.work.chats) : t(`level.${k.level}`)),
         h('span', { class: 'lr-line' }, k.purpose))))) : null),
+    filesSection({ unit: u.id }),
     section(t('unit.branches'), branches.length ? h('ul', { class: 'plain rows' }, branches.map((w) => h('li', {},
       h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'workcell', id: w.id }, { zoom: true }) },
         h('span', { class: 'lr-title branch-name' }, w.branch),
@@ -512,6 +501,16 @@ async function runAction(body, okText) {
   if (okText) toast(okText);
   poll();
   return true;
+}
+
+// Files of a unit or a branch, with the buttons that take them out of the page: a terminal here and the phone's VS Code (desenho-2 § 29).
+function filesSection({ unit, workCell, files: list, folder = true }) {
+  const tunnel = safeTunnel(project.tunnelUrl);
+  const terminal = () => runAction({ action: 'new', bare: true, projectId: project.id, ...(workCell ? { frontId: workCell } : {}) }, t('files.openTerminalDone'));
+  const tools = folder || tunnel ? h('div', { class: 'actions secondary' },
+    folder ? button(t('files.openTerminal'), terminal, { title: t('files.fromPhone') }) : null,
+    tunnel ? h('a', { class: 'btn', href: tunnel, target: '_blank', rel: 'noopener noreferrer' }, t('files.phone')) : null) : null;
+  return section(t('files.title'), tools, files.tree({ unit, workCell, files: list }));
 }
 
 function renderWorkCellPanel(w) {
@@ -543,11 +542,7 @@ function renderWorkCellPanel(w) {
         h('span', { style: `width:${Math.round((w.openspec.done / Math.max(1, w.openspec.total)) * 100)}%` })),
       h('p', { class: 'muted small' }, `${w.openspec.change} · ${t('chat.openspec', w.openspec)}`)) : null,
     section(t('wc.todo'), list(w.nucleus.todo)),
-    section(t('wc.files'), h('div', { class: 'organelle-list' }, filesByFolder(w.files).map((g) => h('div', { class: 'folder' },
-      h('span', { class: 'folder-name' }, g.folder || t('wc.root')),
-      h('ul', {}, g.files.map((f) => h('li', { class: `file st-${f.status}` },
-        h('span', { class: 'file-status', 'aria-hidden': 'true' }, f.status),
-        h('span', { class: 'visually-hidden' }, `${t(`wc.status.${f.status}`)}: `), f.name))))))),
+    filesSection({ workCell: w.id, files: w.files, folder: Boolean(!w.remote || w.path) }),
     section(t('wc.chats'), chats.length ? h('ul', { class: 'plain rows' }, chats.map((c) => h('li', {},
       h('button', { type: 'button', class: 'link-row', onclick: () => select({ type: 'chat', id: c.sessionId }, { zoom: true }) },
         h('span', { class: 'lr-title' }, c.title), h('span', { class: 'lr-date num' }, shortDate(Date.parse(c.startedAt))))))) : h('p', { class: 'muted' }, t('wc.noChats'))),
@@ -988,6 +983,7 @@ function refreshView(first = false) {
 
 let discover = null;
 let chat = null;
+let files = null;
 let tabs = null;
 
 function wire() {
@@ -1011,6 +1007,7 @@ function wire() {
     onSession: () => setTimeout(poll, 1200),
     onClose: () => brain.fit(true),
   });
+  files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative },
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
@@ -1028,7 +1025,7 @@ function wire() {
     setTime(tMin + (Number(e.target.value) / 1000) * (tMax - tMin));
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open) return;
+    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open) return;
     if (!$('#waitingList').hidden) closeWaiting();
     else if (chat.isOpen()) chat.close();
     else closePanel();

@@ -5,6 +5,20 @@ const LIFE_KINDS = new Set(['born', 'fused', 'fused-by-meaning', 'grouped', 'ren
 const DAY = 864e5;
 const RANGE_DAYS = { d7: 7, d30: 30 };
 
+// Everything that waits for the person, in the order the list shows it: strong questions first.
+export function waitingEntries(state) {
+  const out = [];
+  for (const p of state.projects) {
+    for (const d of p.decisions || []) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
+    for (const c of p.chats) {
+      if (!c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length)) {
+        out.push({ project: p, chat: c, rank: c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3, ts: c.updatedAt });
+      }
+    }
+  }
+  return out.sort((a, b) => a.rank - b.rank || b.ts.localeCompare(a.ts));
+}
+
 const isWaiting = (c) => c.waiting.strong || c.waiting.weak || c.waiting.items.length > 0;
 
 // What forces the brain to lay itself out again. Status and waiting flags are left out: those repaint in place.
@@ -126,6 +140,14 @@ export function aiSpend(state) {
 export function bootstrapOf(project) {
   const boot = project.ai?.bootstrap;
   return boot && boot.done < boot.total ? boot : null;
+}
+
+// The tunnel link goes into a href: only https passes.
+export const safeTunnel = (url) => (typeof url === 'string' && url.startsWith('https://') ? url : null);
+
+// Ranges {from, to} of changed lines (1-based) as a lookup, plus the first one to scroll to.
+export function changedLines(changes) {
+  return { has: (n) => changes.some((c) => n >= c.from && n <= c.to), first: changes.length ? Math.min(...changes.map((c) => c.from)) : null };
 }
 
 const safeBridge = (url) => (typeof url === 'string' && url.startsWith('https://claude.ai/') ? url : null);

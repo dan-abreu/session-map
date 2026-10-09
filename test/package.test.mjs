@@ -103,3 +103,11 @@ test('both READMEs say the AI is on by default, how to turn it off, what it need
     }
   }
 });
+
+test('package.json exposes the session-map command and the test script finds the files', () => {
+  const pkg = json('package.json');
+  assert.deepEqual(pkg.bin, { 'session-map': 'server/cli.mjs' });
+  assert.ok(existsSync(join(root, pkg.bin['session-map'])));
+  assert.match(read(pkg.bin['session-map']), /^#!\/usr\/bin\/env node\n/);
+  assert.equal(pkg.scripts.test, 'node --test "test/*.test.mjs"');
+});

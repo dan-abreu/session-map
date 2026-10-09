@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   structureKey, lifeEventsSince, nameAt, mapTree, boardColumns, costRows, estimateTone, budgetTone,
-  aiSpend, bootstrapOf, chatButtons, chatLog, visibleProject, unitMoves,
+  aiSpend, bootstrapOf, chatButtons, chatLog, visibleProject, unitMoves, waitingEntries, safeTunnel, changedLines,
 } from '../server/web/views.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
@@ -202,4 +202,30 @@ test('unitMoves offers only higher-level units outside the unit, plus the top le
   assert.deepEqual(unitMoves(units, 'c').map((u) => u?.id ?? null), [null, 'o', 't2']);
   assert.deepEqual(unitMoves(units, 't').map((u) => u?.id ?? null), [null], 'already in its organ; no other organ');
   assert.deepEqual(unitMoves(units, 'o'), [], 'an organ is already top level');
+});
+
+test('waitingEntries ranks strong questions first, then decisions and items, and skips archived chats', () => {
+  const state = clone(DEMO);
+  const entries = waitingEntries(state);
+  assert.equal(entries.length, state.waitingCount);
+  const ranks = entries.map((e) => e.rank);
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+  const archived = clone(DEMO);
+  const waitingChat = archived.projects.flatMap((p) => p.chats).find((c) => c.waiting.strong);
+  waitingChat.archived = true;
+  assert.equal(waitingEntries(archived).length, entries.length - 1);
+});
+
+test('safeTunnel lets only an https link through to a href', () => {
+  assert.equal(safeTunnel('https://vscode.dev/tunnel/my-pc'), 'https://vscode.dev/tunnel/my-pc');
+  for (const bad of ['http://vscode.dev/tunnel/x', 'javascript:alert(1)', ' https://x', 'vscode://file/x', '', null, undefined, 42]) assert.equal(safeTunnel(bad), null, String(bad));
+});
+
+test('changedLines turns ranges into a lookup and finds the first line', () => {
+  const { has, first } = changedLines([{ from: 2, to: 3 }, { from: 7, to: 7 }]);
+  assert.deepEqual([1, 2, 3, 4, 7, 8].map(has), [false, true, true, false, true, false]);
+  assert.equal(first, 2);
+  const none = changedLines([]);
+  assert.equal(none.has(1), false);
+  assert.equal(none.first, null);
 });

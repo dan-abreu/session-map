@@ -354,3 +354,15 @@ test('the merge backfill is skipped when events.jsonl already holds the project'
     rmSync(join(root, '..'), { recursive: true, force: true });
   }
 });
+
+test('tunnelUrl comes from the machine-wide config and only when it is an https link', async () => {
+  const withConfig = async (config) => {
+    const { state } = await twoProjects(({ smDir }) => writeFileSync(join(smDir, 'config.json'), JSON.stringify(config)));
+    return state.projects.map((p) => p.tunnelUrl);
+  };
+  assert.deepEqual(await withConfig({ tunnelUrl: 'https://vscode.dev/tunnel/my-pc' }), ['https://vscode.dev/tunnel/my-pc', 'https://vscode.dev/tunnel/my-pc']);
+  assert.deepEqual(await withConfig({ tunnelUrl: 'http://vscode.dev/tunnel/my-pc' }), [null, null]);
+  assert.deepEqual(await withConfig({ tunnelUrl: 'javascript:alert(1)' }), [null, null]);
+  assert.deepEqual(await withConfig({ tunnelUrl: 42 }), [null, null]);
+  assert.deepEqual(await withConfig({}), [null, null]);
+});

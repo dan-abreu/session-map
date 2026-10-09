@@ -229,6 +229,9 @@ function activityItems(raw, events, units, workCells, items) {
   return [...fromGit, ...fromEvents].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, ACTIVITY_MAX);
 }
 
+// The link of the VS Code tunnel on this PC, for the phone; the page puts it in a href, so only https passes.
+const tunnelOf = (url) => (typeof url === 'string' && url.startsWith('https://') ? url : null);
+
 async function buildProject(ctx, { root, items }) {
   const { dir, smDir, now, nowIso, liveById, archived, prices, userConfig, life } = ctx;
   const projectId = projectIdOf(root);
@@ -360,7 +363,7 @@ async function buildProject(ctx, { root, items }) {
   const name = basename(root.replace(/[\\/]+$/, '')) || root;
   return {
     project: {
-      id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt,
+      id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
       units: outUnits, unitLinks, workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, roadmap: milestones,

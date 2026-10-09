@@ -1,14 +1,17 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { statSync } from 'node:fs';
 import { readJsonFile, writeAtomic } from './brain/cells.mjs';
+import { safeResolve, vscodeUrl } from './files.mjs';
 import { installFromCatalog } from './sources/catalog.mjs';
 import { killProcess, newTerminal, openUrl, processName as processNameDefault, processStart as processStartDefault } from './launch.mjs';
 import { log } from './log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install']);
+const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install', 'open-file']);
 const CLAUDE_PROCESS_RE = /claude|node/i;
 const PID_START_SLACK_MS = 5000;
+const LINE_MAX = 10_000_000;
 
 // The key collect uses to hand the actions what the page must not see (cwd, pid); Symbol.for so neither file imports the other.
 export const INTERNALS = Symbol.for('session-map.internals');
@@ -64,6 +67,22 @@ async function close(chat, info, { dir, processName, processStart, kill }) {
   return (await kill(info.pid)) ? reply(200) : reply(409, { error: 'kill-refused' });
 }
 
+// The path comes from the page, so it is checked like a file read: inside the folder, never .git, a file that exists.
+function openFile(body, state, launchOpts) {
+  if (typeof body.projectId !== 'string' || typeof body.path !== 'string') return reply(400, { error: 'bad-path' });
+  const project = state.projects.find((p) => p.id === body.projectId);
+  if (!project) return reply(404, { error: 'unknown-project' });
+  const line = body.line ?? 1;
+  if (!Number.isInteger(line) || line < 1 || line > LINE_MAX) return reply(400, { error: 'bad-line' });
+  const cell = body.workCell === undefined ? null : project.workCells.find((w) => w.id === body.workCell);
+  if (cell === undefined) return reply(404, { error: 'unknown-front' });
+  const abs = safeResolve(cell?.path ?? project.root, body.path);
+  if (!abs) return reply(400, { error: 'bad-path' });
+  if (!statSync(abs, { throwIfNoEntry: false })?.isFile()) return reply(404, { error: 'not-found' });
+  openUrl(vscodeUrl(abs, line), launchOpts);
+  return reply(200);
+}
+
 async function dispatch(body, deps) {
   const { state, platform, spawner, hasWt } = deps;
   const launchOpts = { platform, spawner, ...(hasWt ? { hasWt } : {}) };
@@ -72,6 +91,18 @@ async function dispatch(body, deps) {
   if (body.action === 'install') {
     const { status, ...rest } = await installFromCatalog(body, deps);
     return reply(status, rest);
+  }
+
+  if (body.action === 'open-file') return openFile(body, state, launchOpts);
+
+  if (body.action === 'new' && body.bare === true) {
+    const project = state.projects.find((p) => p.id === body.projectId);
+    if (typeof body.projectId !== 'string') return reply(400, { error: 'bad-project' });
+    if (!project) return reply(404, { error: 'unknown-project' });
+    const cell = body.frontId === undefined ? null : project.workCells.find((w) => w.id === body.frontId);
+    if (cell === undefined) return reply(404, { error: 'unknown-front' });
+    newTerminal(cell?.path ?? project.root, [], launchOpts);
+    return reply(200);
   }
 
   if (body.action === 'new') {

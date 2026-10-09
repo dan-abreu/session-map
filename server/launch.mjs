@@ -23,17 +23,17 @@ function detach(spawner, cmd, args, cwd) {
   return { cmd, args };
 }
 
-// argv is run as is, never through a shell of ours; values come from the server's own state.
+// argv is run as is, never through a shell of ours; values come from the server's own state. An empty argv is a plain shell.
 export function newTerminal(cwd, argv, { platform = process.platform, spawner = spawn, hasWt = hasWtDefault } = {}) {
   if (platform === 'win32') {
     if (hasWt()) return detach(spawner, 'wt.exe', ['-d', wtArg(cwd), ...argv.map(wtArg)], cwd);
-    return detach(spawner, 'powershell.exe', ['-NoExit', '-Command', `& ${argv.map(psQuote).join(' ')}`], cwd);
+    return detach(spawner, 'powershell.exe', argv.length ? ['-NoExit', '-Command', `& ${argv.map(psQuote).join(' ')}`] : ['-NoExit'], cwd);
   }
   if (platform === 'darwin') {
-    const script = `cd ${shQuote(cwd)} && ${argv.map(shQuote).join(' ')}`;
+    const script = [`cd ${shQuote(cwd)}`, ...(argv.length ? [argv.map(shQuote).join(' ')] : [])].join(' && ');
     return detach(spawner, 'osascript', ['-e', `tell application "Terminal" to do script "${appleString(script)}"`], cwd);
   }
-  return detach(spawner, 'x-terminal-emulator', ['-e', ...argv], cwd);
+  return detach(spawner, 'x-terminal-emulator', argv.length ? ['-e', ...argv] : [], cwd);
 }
 
 // Windows: `start` takes a window title first, so "" goes before the URL.

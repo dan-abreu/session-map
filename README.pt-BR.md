@@ -28,6 +28,12 @@ Os prints vêm do `--demo`, que usa dados inventados.
 
 Sem o plugin: `node server/main.mjs [--lan] [--port 4001]`, ou `--demo` para dados de exemplo.
 
+**Só terminal?** `node server/cli.mjs` (ou `session-map` com o pacote ligado) mostra o corpo em texto: órgãos, tecidos e células com ● trabalhando / ○ quieto / ! esperando / ? ainda sem lugar, depois a lista "Esperando você" e os custos. Ele pergunta ao servidor que estiver rodando e, se não houver, lê o seu histórico direto, com a IA desligada. `--project <nome>` filtra, `--watch` redesenha a cada 5 segundos, `--json` imprime o estado.
+
+## Arquivos
+
+Abra uma unidade ou um ramo e a seção **Arquivos** lista os arquivos, com os novos e alterados marcados. Tocar num deles abre só para leitura (até 1 MB, só texto, nunca `.git`, nunca arquivos `.env`) com as linhas que o ramo mudou em destaque. **Abrir no VS Code** abre o arquivo neste PC, **Abrir terminal nesta pasta** abre um terminal ali, e **VS Code no celular** aparece quando você define `tunnelUrl`. Ler arquivos exige o token, como o chat.
+
 ## No celular
 
 `/session-map:map` mostra um link com `?k=<token>`. Abra uma vez e o navegador guarda o token num cookie. O token fica em `~/.claude/session-map/token`; toda escrita e todo acesso de fora do `127.0.0.1` exige o token, então trate o link de rede como uma senha. A página só escuta em todas as interfaces com `--lan`. Fora de casa, ponha os dois aparelhos no [Tailscale](https://tailscale.com) e use o link `100.x` que ele mostra. Não exponha a porta na internet.
@@ -71,6 +77,7 @@ As configurações da máquina ficam em `~/.claude/session-map/config.json`. Tod
   "ai": { "enabled": true, "model": "haiku", "maxCallsPerHour": 30, "bootstrapLimit": 60 },
   "budget": { "monthlyUSD": 100 },
   "currency": { "code": "BRL", "rate": 5.4 },
+  "tunnelUrl": "https://vscode.dev/tunnel/meu-pc",
   "projects": {
     "c:/dev/loja": { "roadmap": "docs/ROTEIRO.md", "decisions": { "heading": "Decisões", "pendingWhen": "pendente" }, "autoFetchMinutes": 15 }
   }
@@ -80,6 +87,7 @@ As configurações da máquina ficam em `~/.claude/session-map/config.json`. Tod
 - `ai`: a organização por IA (veja Privacidade). `"ai": { "enabled": false }` desliga.
 - `budget.monthlyUSD`: mostra quanto do orçamento mensal o custo estimado já usou.
 - `currency`: mostra os custos em outra moeda, na cotação que você informar (1 USD = `rate`).
+- `tunnelUrl`: o link do seu [VS Code Remote Tunnel](https://code.visualstudio.com/docs/remote/tunnels) (só https); ele cria o botão **VS Code no celular** ao lado dos arquivos.
 - `projects`: configurações por projeto, com a pasta do projeto em minúsculas e com `/` como chave. As mesmas chaves podem ficar em `<projeto>/.claude/session-map.json`; a entrada daqui vence.
   - `roadmap`: um arquivo Markdown, relativo ao projeto, cujas linhas `[x]`/`[ ]` (ou ✅/⬜) viram marcos. `decisions` lê, sob o título chamado `heading`, as linhas que contêm `pendingWhen` como decisões esperando por você.
   - `autoFetchMinutes`: roda `git fetch` nesse intervalo, para os ramos enviados de outras máquinas aparecerem. Desligado por padrão.

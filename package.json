@@ -1,5 +1,8 @@
 {
   "type": "module",
+  "bin": {
+    "session-map": "server/cli.mjs"
+  },
   "engines": {
     "node": ">=20"
   },

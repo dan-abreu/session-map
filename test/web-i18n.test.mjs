@@ -37,7 +37,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
   const dynamic = [
     ...['already-open', 'busy', 'not-running', 'session-changed', 'not-claude', 'kill-refused', 'no-folder', 'live-chat', 'too-many-chats',
       'claude-not-found', 'exited', 'spawn-failed', 'ended', 'unknown-session', 'unknown-unit', 'unknown-front', 'unknown-project',
-      'unknown-chat', 'bad-edit', 'bad-nucleus', 'token-required', 'network', 'demo', 'generic'].map((c) => `err.${c}`),
+      'unknown-chat', 'bad-edit', 'bad-nucleus', 'token-required', 'network', 'demo', 'generic', 'bad-path', 'sensitive', 'not-found', 'too-large', 'binary', 'bad-line', 'bad-project', 'bad-request'].map((c) => `err.${c}`),
     'action.why.already-open', 'action.why.busy', 'action.archive', 'action.unarchive', 'action.archived', 'action.unarchived',
     ...['allowed', 'denied', 'timeout'].map((s) => `chat.perm.${s}`),
     ...['todo', 'doing', 'waiting', 'done'].flatMap((k) => [`board.${k}`, `board.${k}.empty`]),

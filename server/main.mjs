@@ -14,6 +14,7 @@ import { UNSORTED, brainDir, readJsonFile, setOverride, writeUnits } from './bra
 import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { collect } from './collect.mjs';
+import { listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
@@ -28,6 +29,7 @@ const NAME_MAX = 40;
 const LEVEL_RANK = { cell: 0, tissue: 1, organ: 2 };
 const NUCLEUS_ITEMS_MAX = 50;
 const NUCLEUS_TEXT_MAX = 1000;
+const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -197,6 +199,40 @@ export function createApp({
     return send(res, result.status, result.body);
   }
 
+  // Reading project files is as sensitive as the chat: even a local read needs the token.
+  async function filesRoute(req, res, parts, url) {
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    const project = await projectOf(parts[3]);
+    const param = (name) => url.searchParams.get(name);
+    const cell = param('workCell') === null ? null : project.workCells.find((w) => w.id === param('workCell'));
+    if (cell === undefined) throw new HttpError(404, 'unknown-front');
+    if (parts[2] === 'files') {
+      if (param('unit') !== null) {
+        const unit = unitOf(project, param('unit'));
+        const ids = new Set([unit.id]);
+        for (const u of project.units) if (ids.has(u.parentId)) ids.add(u.id);
+        const marks = new Map(project.workCells.filter((w) => ids.has(w.unitId)).flatMap((w) => w.files.map((f) => [f.path, { status: f.status, workCell: w.id }])));
+        const hints = project.units.filter((u) => ids.has(u.id)).flatMap((u) => u.paths ?? []);
+        const paths = [...new Set([...await listFiles(project.root, hints), ...marks.keys()])].sort();
+        return send(res, 200, { ok: true, files: paths.map((path) => ({ path, status: null, ...marks.get(path) })) });
+      }
+      if (!cell) throw new HttpError(400, 'bad-request');
+      return send(res, 200, { ok: true, files: cell.files.map(({ path, status }) => ({ path, status })) });
+    }
+    let root = project.root;
+    let ref;
+    let diffBase = null;
+    if (cell) {
+      ref = cell.remote ? `refs/remotes/origin/${cell.branch}` : `refs/heads/${cell.branch}`;
+      if (project.mainBranch) diffBase = await mergeBaseOf(project.root, project.mainBranch, ref);
+      // A branch checked out in a folder is read from the folder, which holds the uncommitted lines too.
+      if (cell.path) { root = cell.path; ref = undefined; }
+    }
+    const out = await readFileForView(root, param('path'), { diffBase, ref });
+    if (!out.ok) throw new HttpError(FILE_ERRORS[out.error], out.error);
+    return send(res, 200, out);
+  }
+
   // One GitHub round at a time, however many tabs ask.
   let catalogRun = null;
   const loadCatalog = (force) => {
@@ -274,6 +310,7 @@ export function createApp({
       fresh();
       return send(res, result.status, result.body);
     }
+    if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');

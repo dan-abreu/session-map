@@ -719,6 +719,28 @@ input[type="range"]:focus-visible { outline-offset: 4px; }
 .file.st-M .file-status { background: var(--bg-3); color: var(--ink-2); }
 .file.st-D .file-status { color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
 .file.st-D { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.file-open {
+  display: flex; align-items: baseline; gap: 8px; width: calc(100% + 8px); margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 5px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.file-open:hover { background: var(--bg-3); }
+.file-open:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
+.files-tree + .actions, .block > .actions.secondary { margin-bottom: 10px; }
+.file-dialog {
+  width: min(960px, calc(100% - 24px)); height: min(82vh, 900px); max-width: none; max-height: none; padding: 0; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--bg-2); color: var(--ink); box-shadow: var(--shadow);
+}
+.file-dialog[open] { display: flex; flex-direction: column; }
+.file-dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.file-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.file-head h2 { margin: 0; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.file-head .meta { margin: 4px 0 0; }
+.file-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 16px; }
+.file-body > .btn { display: block; margin: 12px auto 0; }
+.code { margin: 0; padding: 0; list-style: none; counter-reset: ln; font: 0.8125rem/1.5 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; tab-size: 4; }
+.ln { position: relative; counter-increment: ln; padding: 0 14px 0 calc(5ch + 16px); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ln::before { content: counter(ln); position: absolute; left: 0; width: 5ch; text-align: right; color: var(--ink-2); user-select: none; }
+.ln.is-changed { background: var(--active-fill); box-shadow: inset 3px 0 0 var(--active); }
 .path { font-size: 0.75rem; overflow-wrap: anywhere; }
 
 .waiting-item.clash .wi-reason { color: var(--clash-ink); }
