@@ -789,6 +789,26 @@ test('"may reinforce on its own" answers the ask while the monthly limit holds, 
   });
 });
 
+test('a reinforced turn counts against the month whatever level it ends on, and session-map answers once per message of the person', async () => {
+  await withHub({ env: { ...process.env, FAKE_RUN: 'ask-reinforce:0.1' } }, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
+    const spent = () => Object.values(JSON.parse(readFileSync(join(smDir, 'reinforced-spend.json'), 'utf8')))[0];
+    const run = { kind: 'auto', selfReinforce: true };
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.1', run }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 2);
+    await pause(150);
+    assert.equal(turnEnds(r), 2, 'a second ask in a row waits for the person');
+    assert.equal(r.count((e) => e.type === 'user' && e.data.auto), 1);
+    assert.equal(spent(), 0.001, 'the turn after the OK counts, though it ended asking again');
+
+    assert.equal(hub.send(res.body.chatKey, { text: 'No, the normal way RUN:direct' }).status, 200);
+    await nthTurnEnd(r, 3);
+    assert.equal(spent(), 0.001, 'a turn that ends working the normal way does not count');
+  });
+});
+
 test('changing the way it runs mid-conversation restarts claude with the new flags and tells it in the next message, which the page never shows', async () => {
   await withClaudeDir(async ({ dir, env }) => {
     const log = fakeLog();

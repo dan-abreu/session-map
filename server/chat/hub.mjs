@@ -211,18 +211,21 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
   }
 
   // The cost and level of the turn that ended. true: answer the maestro's ask to reinforce for the person.
+  // Every turn after an answer to the ask counts against the month until one ends working the normal way: a turn that
+  // did the reinforced work may still end asking for the next phase, and that must not slip past the limit.
   function endTurnRun(chat, processCostUSD) {
     const spent = Number.isFinite(processCostUSD) ? Math.max(0, processCostUSD - chat.processCostUSD) : 0;
     if (Number.isFinite(processCostUSD)) chat.processCostUSD = processCostUSD;
     chat.costUSD = round6(chat.baseCostUSD + chat.processCostUSD);
     const block = readRunBlock(chat.turnText);
     chat.turnText = '';
-    if (!block) return false;
-    chat.level = block;
-    if (block.level === 'reinforced') {
+    if (block) chat.level = block;
+    if (block?.level === 'direct' || block?.level === 'helpers') chat.reinforcing = false;
+    if (block?.level === 'reinforced' || chat.reinforcing) {
       try { addReinforcedSpend(smDir, spent); } catch (err) { log('warn', 'reinforced-spend-failed', { error: err.message }); }
     }
-    if (chat.run.kind !== 'auto' || block.level !== 'ask-reinforce' || chat.restart) return false;
+    // One answer of session-map's per message of the person: a second ask in a row waits for the person's OK.
+    if (chat.run.kind !== 'auto' || block?.level !== 'ask-reinforce' || chat.restart || chat.autoAnswered) return false;
     return mayReinforce({ selfReinforce: chat.run.selfReinforce, limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
   }
 
@@ -280,6 +283,9 @@ ${prompt}`;
       chat.flow.seen = draft ?? chat.flow.seen;
       chat.flow.reply = '';
     }
+    // The answer to an ask is free text in the person's language: whichever it is, the level the next turns end on decides.
+    if (chat.level?.level === 'ask-reinforce') chat.reinforcing = true;
+    chat.autoAnswered = Boolean(auto);
     chat.running = true;
     emit(chat, 'user', auto ? { text: shown, auto } : { text: shown });
     chat.driver.send(prompt);
@@ -366,6 +372,7 @@ ${prompt}`;
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`), flow,
       run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
+      reinforcing: false, autoAnswered: false,
     };
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     // By file, not by argument: a command line is readable by other users of the machine.

@@ -1,7 +1,8 @@
 // Stand-in for the `claude` CLI. One-shot mode (ai runner): logs how it was called to FAKE_LOG and prints FAKE_REPLY
 // (or sleeps FAKE_SLEEP_MS). Chat mode (--input-format stream-json): speaks the lines recorded in .dev/prova/RESULTADO.md.
 //   "PERM:<Tool>" (repeatable) asks our permission MCP once per occurrence; "SLOW" streams until interrupted;
-//   "RUN:<level>[:<estimate>]" ends the reply with a session-map-run block at that level;
+//   "RUN:<level>[:<estimate>]" ends the reply with a session-map-run block at that level (FAKE_RUN: the same for a
+//   message that names none, such as session-map's own answers);
 //   anything else is echoed back as "echo: <text>". set_permission_mode changes the mode the next init reports.
 //   init reports the model of --model (as claude names it); total_cost_usd grows by 0.001 a turn, for the process.
 //   FAKE_TRANSCRIPTS: a folder where each conversation is written as <sessionId>.jsonl, as claude does under ~/.claude/projects.
@@ -115,7 +116,7 @@ function chat() {
       }
       return result({ result: 'numbers' });
     }
-    const level = /RUN:([\w-]+)(?::([\d.]+))?/.exec(text);
+    const level = /RUN:([\w-]+)(?::([\d.]+))?/.exec(process.env.FAKE_RUN && !text.includes('RUN:') ? `RUN:${process.env.FAKE_RUN}` : text);
     const fence = '```';
     const block = level ? `\n\n${fence}session-map-run\n${JSON.stringify({ level: level[1], why: 'touches sign in', ...(level[2] ? { estimateUSD: Number(level[2]) } : {}) })}\n${fence}` : '';
     const reply = `echo: ${text}${block}`;
