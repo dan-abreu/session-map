@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { attachToParts, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
+import { attachToParts, itemByCodes, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { norm } from './arch/parse.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
@@ -264,6 +264,7 @@ async function buildProject(ctx, { root, items }) {
       title: cut(s.title),
       partId: x.partId,
       partSource: x.partSource,
+      itemCode: itemByCodes(s.mentionedCodes, arch, x.partId),
       workCellId: x.workCellId,
       workCellSource: x.workCellSource,
       parentId: parentOf(s.sessionId, lineage, forLineage(x.partId)),
@@ -277,6 +278,7 @@ async function buildProject(ctx, { root, items }) {
       card: x.item.card,
       costUSD: x.costUSD,
       workflows: x.item.workflows,
+      liveSteps: s.liveSteps ?? [],
       startedAt: s.startedAt,
       updatedAt: x.updatedAt,
       archived: archived.has(s.sessionId),

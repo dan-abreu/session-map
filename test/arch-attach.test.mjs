@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachToParts, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
+import { attachToParts, linkParts, partByCodes, itemByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
 
 const item = (code, extra = {}) => ({ code, title: `Item ${code}`, detail: [], status: 'todo', who: null, weight: null, milestone: null, line: 1, ...extra });
 const part = (id, codePaths, items = []) => ({
@@ -134,4 +134,13 @@ test('linkParts ignores unknown parts, self links and a chat in the same part as
   const chats = [chatOn('p1', 'checkout'), chatOn('c2', 'checkout', { parentId: 'p1' }), chatOn('c3', 'ghost', { files: ['apps/api/src/billing/tax.ts'] })];
   const cells = [cellOn('feat/x', 'checkout', { touches: ['checkout', 'nowhere'] })];
   assert.deepEqual(linkParts(SHOP, chats, cells), []);
+});
+
+test('itemByCodes: the item of the chat\'s part it cited last is the tip being worked on', () => {
+  const arch = archOf(part('orders', [], [item('or01'), item('OR02')]), part('payments', [], [item('pa01')]));
+  assert.equal(itemByCodes([{ code: 'or02', n: 3 }, { code: 'or01', n: 1 }, { code: 'pa01', n: 1 }], arch, 'orders'), 'or01');
+  assert.equal(itemByCodes([{ code: 'or02', n: 1 }], arch, 'orders'), 'OR02', 'the code as the file writes it');
+  assert.equal(itemByCodes([{ code: 'pa01', n: 1 }], arch, 'orders'), null, 'a code of another part is not this chat\'s tip');
+  assert.equal(itemByCodes([], arch, 'orders'), null);
+  assert.equal(itemByCodes([{ code: 'or01', n: 1 }], arch, null), null);
 });

@@ -204,6 +204,78 @@ function pushBranchOf(command, output, fallback) {
   return ref ? ref.split(':').at(-1) : fallback;
 }
 
+// ---- live steps: what a conversation is doing right now --------------------------------------
+
+const STEPS_MAX = 5;
+const STEP_MAX = 80;
+const STEP_KIND = {
+  Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Bash: 'run', PowerShell: 'run',
+  Grep: 'search', Glob: 'search', WebFetch: 'web', WebSearch: 'web', Task: 'agent', Agent: 'agent', Workflow: 'agent',
+  TodoWrite: 'plan', Skill: 'skill',
+};
+const SECRET_RES = [
+  [/\b(bearer|basic)\s+[^\s"']+/gi, '$1 …'],
+  [/\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[=:]\s*)[^\s"'&]+/gi, '$1…'],
+  [/(?=[A-Za-z_\-+/]*\d)(?=[\d_\-+/]*[A-Za-z])[A-Za-z0-9_\-+/]{32,}={0,2}/g, '…'],
+];
+
+const cutEnd = (s) => (s.length > STEP_MAX ? `${s.slice(0, STEP_MAX - 1)}…` : s);
+const cutStart = (s) => (s.length > STEP_MAX ? `…${s.slice(s.length - STEP_MAX + 1)}` : s);
+
+function relativeTo(cwd, path) {
+  const p = String(path).replaceAll('\\', '/');
+  const base = String(cwd ?? '').replaceAll('\\', '/').replace(/\/+$/, '');
+  return base && p.toLowerCase().startsWith(`${base.toLowerCase()}/`) ? p.slice(base.length + 1) : p;
+}
+
+// A command's first line, without what looks like a secret: the step is shown on a page other people may see.
+function commandWords(command) {
+  let line = String(command).split('\n')[0].trim();
+  for (const [re, to] of SECRET_RES) line = line.replace(re, to);
+  return line;
+}
+
+function stepOf(tool, cwd, answered) {
+  const input = tool.input ?? {};
+  if (tool.name === 'AskUserQuestion') return answered ? null : { kind: 'ask', target: '' };
+  const kind = STEP_KIND[tool.name] ?? 'tool';
+  if (kind === 'edit' || kind === 'read') return { kind, target: cutStart(relativeTo(cwd, input.file_path ?? input.notebook_path ?? '')) };
+  if (kind === 'run') return { kind, target: cutEnd(typeof input.description === 'string' && input.description.trim() ? input.description.trim() : commandWords(input.command ?? '')) };
+  if (kind === 'search') return { kind, target: cutEnd(String(input.pattern ?? '')) };
+  if (kind === 'web') {
+    let host = '';
+    try { host = new URL(input.url).hostname; } catch { /* a search, not a page */ }
+    return { kind, target: cutEnd(host || String(input.query ?? '')) };
+  }
+  if (kind === 'agent') return { kind, target: cutEnd(String(input.description ?? input.name ?? '')) };
+  if (kind === 'skill') return { kind, target: cutEnd(String(input.skill ?? '')) };
+  if (kind === 'plan') return { kind, target: '' };
+  return { kind, target: cutEnd(String(tool.name).split('__').pop()) };
+}
+
+// The last steps of a transcript tail, in words the page translates: tool steps (never their contents or output), a
+// question still waiting for the person, and "thinking" when the person's prompt is the last thing written.
+export function liveStepsOf(entries, cwd) {
+  const answered = new Set();
+  for (const entry of entries) {
+    if (entry.type === 'user') for (const b of blocksOf(entry)) if (b.type === 'tool_result') answered.add(b.tool_use_id);
+  }
+  const steps = [];
+  let promptLast = null;
+  for (const entry of entries) {
+    if (humanPromptOf(entry)) { promptLast = entry.timestamp ?? null; continue; }
+    if (entry.type !== 'assistant') continue;
+    promptLast = null;
+    for (const b of blocksOf(entry)) {
+      if (b.type !== 'tool_use') continue;
+      const step = stepOf(b, cwd, answered.has(b.id));
+      if (step) steps.push({ ...step, ts: entry.timestamp ?? null });
+    }
+  }
+  if (promptLast !== null) steps.push({ kind: 'think', target: '', ts: promptLast });
+  return steps.slice(-STEPS_MAX);
+}
+
 // ---- transcript summary ----------------------------------------------------
 
 function summarize(entries, sessionId) {
@@ -298,6 +370,7 @@ function summarize(entries, sessionId) {
     userPrompts,
     lastAssistantText,
     pendingQuestion: lastTool?.name === 'AskUserQuestion' && !results.has(lastTool.id),
+    liveSteps: liveStepsOf(entries, cwd),
     editedFiles,
     commits,
     pushes,

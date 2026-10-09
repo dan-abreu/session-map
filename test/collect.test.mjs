@@ -151,6 +151,10 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     const b = p.chats.find((c) => c.sessionId === B);
     assert.equal(b.partId, 'billing', 'the item code beats the files');
     assert.equal(b.partSource, 'code');
+    assert.equal(b.itemCode, 'bi01', 'the item it cites is the tip it works on');
+    assert.equal(a.itemCode, null);
+    assert.ok(Array.isArray(a.liveSteps) && a.liveSteps.every((st) => typeof st.kind === 'string' && 'target' in st), 'every chat carries its live steps');
+    assert.ok(a.liveSteps.some((st) => st.kind === 'edit'), 'the edits of the transcript are steps');
     assert.equal(b.chattable, true);
     assert.deepEqual(b.waiting, { strong: false, weak: true, items: ['approve tax rule'] });
 

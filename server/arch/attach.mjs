@@ -115,6 +115,15 @@ export function partByCodes(mentions, arch) {
   return best?.id ?? null;
 }
 
+// The item of the chat's own part it cited last: the tip of the map the chat is working on.
+export function itemByCodes(mentions, arch, partId) {
+  const part = arch.parts.find((p) => p.id === partId);
+  if (!part) return null;
+  const codes = new Map(part.groups.flatMap((g) => g.items).filter((i) => i.code).map((i) => [key(i.code), i.code]));
+  for (const { code } of [...(mentions ?? [])].reverse()) if (codes.has(key(String(code)))) return codes.get(key(String(code)));
+  return null;
+}
+
 export function attachToParts(arch, chats, workCells) {
   return {
     ...arch,

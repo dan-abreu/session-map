@@ -247,3 +247,55 @@ test('a code with a longer word after the dash (pf-lacuna2) is cited too', () =>
     assert.deepEqual(readTranscript(p).mentionedCodes, [{ code: 'pf-lacuna2', n: 1 }]);
   });
 });
+
+// ---- live steps (what a conversation is doing right now) ------------------------------------
+
+const line = (o) => JSON.stringify({ cwd: '/work/acme-shop', ...o });
+const use = (ts, name, input, id = `t-${ts}`) => line({ type: 'assistant', timestamp: `2026-10-09T10:00:${ts}.000Z`, message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } });
+const result = (ts, id, text) => line({ type: 'user', timestamp: `2026-10-09T10:00:${ts}.000Z`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: text }] } });
+const prompt = (ts, text) => line({ type: 'user', timestamp: `2026-10-09T10:00:${ts}.000Z`, message: { role: 'user', content: text } });
+const steps = (lines) => withTempDir((dir) => {
+  const file = join(dir, `${A}.jsonl`);
+  writeFileSync(file, `${lines.join('\n')}\n`);
+  return readTranscript(file).liveSteps;
+});
+
+test('liveSteps: the last five tool steps in plain words, paths relative to the folder, never contents or output', () => {
+  const got = steps([
+    prompt('01', 'fix the checkout'),
+    use('02', 'Read', { file_path: '/work/acme-shop/docs/architecture/payments.md' }, 'r1'),
+    result('03', 'r1', 'SECRET file body'),
+    use('04', 'Edit', { file_path: '/work/acme-shop/server/x.mjs', old_string: 'SECRET old', new_string: 'SECRET new' }),
+    use('05', 'Bash', { command: 'pnpm test --filter api', description: 'Run the API tests' }, 'b1'),
+    result('06', 'b1', 'SECRET output'),
+    use('07', 'Bash', { command: 'curl -H "Authorization: Bearer abcdefabcdefabcdefabcdefabcdef1234" https://api.example.com/x\necho done' }),
+    use('08', 'Grep', { pattern: 'TODO|FIXME' }),
+    use('09', 'mcp__github__create_issue', { title: 'x' }),
+  ]);
+  assert.deepEqual(got, [
+    { kind: 'edit', target: 'server/x.mjs', ts: '2026-10-09T10:00:04.000Z' },
+    { kind: 'run', target: 'Run the API tests', ts: '2026-10-09T10:00:05.000Z' },
+    { kind: 'run', target: 'curl -H "Authorization: Bearer …" https://api.example.com/x', ts: '2026-10-09T10:00:07.000Z' },
+    { kind: 'search', target: 'TODO|FIXME', ts: '2026-10-09T10:00:08.000Z' },
+    { kind: 'tool', target: 'create_issue', ts: '2026-10-09T10:00:09.000Z' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(got), /SECRET|abcdefabcdef/);
+});
+
+test('liveSteps: a prompt with no answer yet is "thinking", and an unanswered question waits for the person', () => {
+  const thinking = steps([use('01', 'Read', { file_path: '/work/acme-shop/a.md' }), prompt('02', 'now the tests')]);
+  assert.deepEqual(thinking.at(-1), { kind: 'think', target: '', ts: '2026-10-09T10:00:02.000Z' });
+  const asking = steps([prompt('01', 'go'), use('02', 'AskUserQuestion', { questions: [{ question: 'Which one?' }] })]);
+  assert.deepEqual(asking.at(-1), { kind: 'ask', target: '', ts: '2026-10-09T10:00:02.000Z' });
+  const answered = steps([prompt('01', 'go'), use('02', 'AskUserQuestion', { questions: [] }, 'q1'), result('03', 'q1', 'A'), line({ type: 'assistant', timestamp: '2026-10-09T10:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } })]);
+  assert.deepEqual(answered, []);
+});
+
+test('liveSteps: a long target is cut at 80 characters, keeping the end of a path', () => {
+  const deep = `/elsewhere/${'very-long-folder-name/'.repeat(5)}final-file.mjs`;
+  const [edit, run] = steps([use('01', 'Write', { file_path: deep, content: 'x' }), use('02', 'Bash', { command: `echo ${'y'.repeat(120)}` })]);
+  assert.equal(edit.target.length, 80);
+  assert.ok(edit.target.startsWith('…') && edit.target.endsWith('final-file.mjs'));
+  assert.equal(run.target.length, 80);
+  assert.ok(run.target.endsWith('…'));
+});
