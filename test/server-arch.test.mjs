@@ -50,14 +50,17 @@ async function withServer(fn, { demo = false } = {}) {
   }
 }
 
-test('POST /api/arch/create opens the "create the map" chat at the root, only with the token and only when there is no map', async () => {
+const CREATE = { node: { kind: 'create-arch' }, text: 'Create the architecture map.' };
+
+test('the "create the map" chat starts through /api/chat/start at the root, only with the token and only when there is no map; no second route', async () => {
   await withServer(async ({ call, write, smDir }) => {
-    assert.equal((await call('POST', '/api/arch/create', { body: { projectId: 'bare-abc123' } })).status, 403, 'no header, no origin');
-    assert.equal((await call('POST', '/api/arch/create', { headers: { ...write, cookie: '' }, body: { projectId: 'bare-abc123' } })).status, 401);
-    const exists = await call('POST', '/api/arch/create', { headers: write, body: { projectId: 'shop-def456' } });
+    assert.equal((await call('POST', '/api/arch/create', { headers: write, body: { projectId: 'bare-abc123' } })).status, 404, 'one path only: the page uses /api/chat/start');
+    assert.equal((await call('POST', '/api/chat/start', { body: { projectId: 'bare-abc123', ...CREATE } })).status, 403, 'no header, no origin');
+    assert.equal((await call('POST', '/api/chat/start', { headers: { ...write, cookie: '' }, body: { projectId: 'bare-abc123', ...CREATE } })).status, 401);
+    const exists = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', ...CREATE } });
     assert.deepEqual([exists.status, exists.body.error], [409, 'arch-exists']);
-    assert.equal((await call('POST', '/api/arch/create', { headers: write, body: { projectId: 'nope' } })).status, 404);
-    const made = await call('POST', '/api/arch/create', { headers: write, body: { projectId: 'bare-abc123', mode: 'acceptEdits' } });
+    assert.equal((await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'nope', ...CREATE } })).status, 404);
+    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'bare-abc123', ...CREATE, mode: 'acceptEdits' } });
     assert.equal(made.status, 200);
     assert.match(made.body.chatKey, /^[0-9a-f]{32}$/);
     assert.equal(made.body.mode, 'acceptEdits', 'the chat runs in the mode the person picked');

@@ -1,5 +1,5 @@
 // Reads the architecture convention (desenho-3 § 1): a README with layers plus one markdown file per part.
-// Pure: it receives file contents and returns data, so the writer can reuse the line scanner.
+// Pure: it receives file contents and returns data.
 
 export const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 export const key = (s) => norm(s).replace(/[^a-z0-9]/g, '');
@@ -13,10 +13,6 @@ const HEADING_RE = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const FENCE_RE = /^\s*(```|~~~)/;
 
 export const isUserWho = (who) => !!who && key(who) !== 'claude';
-
-export function detectEol(text) {
-  return text.includes('\r\n') ? '\r\n' : '\n';
-}
 
 // Headings outside code fences, with their line index.
 function headingsOf(lines) {
@@ -37,7 +33,7 @@ function headingsOf(lines) {
   return out;
 }
 
-export function parseBold(rest) {
+function parseBold(rest) {
   const m = /^\*\*([^*]+?)(:?)\*\*(:?)\s*(.*)$/.exec(rest);
   if (!m || !(m[2] || m[3])) return null;
   const tokens = m[1].split(/\s*[·|]\s*/).map((t) => t.trim()).filter(Boolean).map(classifyToken);
@@ -45,7 +41,7 @@ export function parseBold(rest) {
   return { tokens, rest: m[4] };
 }
 
-export function classifyToken(raw) {
+function classifyToken(raw) {
   const n = norm(raw);
   if (/^(em andamento|in progress|doing)$/.test(n)) return { raw, kind: 'status', value: 'doing' };
   if (/^(bloqueia|blocks?|blocker)\b/.test(n)) return { raw, kind: 'weight', value: 'blocks' };
@@ -91,8 +87,8 @@ function parseItem(first, checked, subLines, line) {
   return { code, title: rest.trim(), detail, status, who, weight, milestone, line };
 }
 
-// Locates the "O que falta" section and its items by line, so the writer can edit around them untouched.
-export function scanPart(text) {
+// Locates the "O que falta" section and its items by line.
+function scanPart(text) {
   const lines = text.split('\n');
   const heads = headingsOf(lines);
   const fh = heads.find((h) => MISSING_HEADINGS[key(h.text)]);

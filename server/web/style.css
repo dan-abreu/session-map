@@ -702,13 +702,6 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .tools .actions { margin-top: 0; }
 .actions.secondary .btn { height: 32px; font-size: 0.8125rem; font-weight: 550; color: var(--ink-2); }
 .actions.secondary .btn:hover { color: var(--ink); }
-.form-slot:empty { display: none; }
-.inline-form {
-  margin-top: 12px; padding: 14px; display: grid; gap: 10px;
-  border-radius: 10px; background: var(--bg-3);
-  animation: sheet-in 200ms var(--ease-out);
-}
-.inline-form .actions { margin-top: 2px; }
 .field { display: grid; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }
 .field input, .field select, .field textarea, .chat-form textarea {
   width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
@@ -740,7 +733,6 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 }
 .summary-project:hover { text-decoration-color: var(--line); }
 .organizing { display: inline-flex; align-items: center; gap: 7px; color: var(--active-ink); font-weight: 600; }
-.organizing-icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 
 .notice strong { display: block; color: var(--ink); font-size: 1rem; margin-bottom: 4px; }
 body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empty .ol { display: none; }
@@ -773,7 +765,7 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
 .col-doing h3 { color: var(--doing-ink); }
 .col-empty { margin: 4px 2px; color: var(--ink-2); font-size: 0.8125rem; }
 .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.card-btn, .card-static {
+.card-btn {
   display: grid; gap: 4px; width: 100%; padding: 10px 12px; text-align: left;
   border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2);
   box-shadow: 0 1px 2px -1px rgb(20 35 32 / 0.12);
@@ -786,7 +778,6 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
 .card-title { font-weight: 650; overflow-wrap: anywhere; }
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 0.8125rem; color: var(--ink-2); }
 .card-meta .owner { font-weight: 550; font-size: 0.8125rem; }
-.card-detail { font-size: 0.8125rem; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .est { display: grid; gap: 3px; min-width: 0; }
 .est-track { position: relative; height: 6px; border-radius: 6px; background: var(--bg-3); }
@@ -912,7 +903,7 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
 
 @media (prefers-reduced-motion: reduce) {
   .msg-claude.is-streaming p::after, .bx-live::after { animation: none; }
-  .inline-form, .hist-read { animation: none; }
+  .hist-read { animation: none; }
 }
 
 /* ---------- phone ---------- */

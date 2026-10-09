@@ -29,7 +29,6 @@ const SWEEP_MS = 5 * 60_000;
 const BODY_MAX = 64 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
-const CREATE_ARCH_TEXT = 'Create the architecture map of this project.';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -269,14 +268,6 @@ export function createApp({
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
-    // A chat at the root with the request ready: the Claude proposes the parts and writes only after the OK (desenho-3 § 4).
-    if (req.method === 'POST' && path === '/api/arch/create') {
-      if (!chat) throw new HttpError(403, 'demo');
-      const body = await readBody(req);
-      const text = typeof body?.text === 'string' && body.text.trim() ? body.text : CREATE_ARCH_TEXT;
-      const result = await chat.start({ projectId: body?.projectId, mode: body?.mode, text, node: { kind: 'create-arch' } }, await state());
-      return send(res, result.status, result.body);
-    }
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

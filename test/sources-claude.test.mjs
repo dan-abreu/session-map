@@ -146,7 +146,7 @@ test('usage without the cache_creation breakdown counts cache_creation_input_tok
 
 test('a chat started from the page is titled with the person\'s words, not the context block session-map put before them', () => {
   withTempDir((dir) => {
-    const prompt = firstPrompt({ part: { name: 'Auth', about: 'Login works. '.repeat(120) }, text: 'Add the error message' });
+    const prompt = firstPrompt({ sections: [`Part of the architecture: Auth (${'Login works. '.repeat(120)})`], text: 'Add the error message' });
     assert.ok(prompt.length > 1000, 'longer than a stored prompt');
     const p = join(dir, `${A}.jsonl`);
     writeFileSync(p, `${JSON.stringify({ type: 'user', sessionId: A, cwd: '/work/acme', timestamp: '2026-10-09T10:00:00.000Z', message: { role: 'user', content: prompt } })}\n`);

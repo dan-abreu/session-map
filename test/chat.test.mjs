@@ -116,10 +116,12 @@ test('buildArgs passes the chosen permission mode and turns a bypass (or junk) i
   assert.equal(at(buildArgs({ mcpConfigPath: '/tmp/x.json', mode: '--dangerously-skip-permissions' })), 'default');
 });
 
+const partSection = (p) => `Part of the architecture: ${p.name} (${p.about})`;
+
 test('firstPrompt: the part, the mother card, the board hint, then what the person wrote', () => {
   const state = makeState('/x');
   const [project] = state.projects;
-  const text = firstPrompt({ part: project.arch.parts[0], mother: project.chats[2], text: 'Add the error message', board: true });
+  const text = firstPrompt({ sections: [partSection(project.arch.parts[0])], mother: project.chats[2], text: 'Add the error message', board: true });
   for (const piece of ['Auth', 'Sign in and sessions.', 'Login form', 'Wiring the submit button', 'Use fetch', '/session-map:board', 'Add the error message']) {
     assert.ok(text.includes(piece), piece);
   }
@@ -130,7 +132,7 @@ test('firstPrompt: the part, the mother card, the board hint, then what the pers
 test('firstPrompt without the plugin explains the session-map block inline instead of naming /session-map:board', () => {
   const state = makeState('/x');
   const [project] = state.projects;
-  const text = firstPrompt({ part: project.arch.parts[0], text: 'Add the error message', board: false });
+  const text = firstPrompt({ sections: [partSection(project.arch.parts[0])], text: 'Add the error message', board: false });
   assert.ok(!text.includes('/session-map:board'));
   assert.match(text, /```session-map/);
   assert.match(text, /"doing"/);

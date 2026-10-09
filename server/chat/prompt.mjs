@@ -14,10 +14,9 @@ const CARD_HINT = [
 
 // What a new chat reads instead of the whole history (desenho-2 § 21, "Continuar aqui").
 // board: the session-map plugin is installed and on, so its /session-map:board command exists.
-// sections: what the point of the map the chat was opened on says (chat/context.mjs); part is the older, shorter form.
-export function firstPrompt({ part, sections = [], mother, workCell, text, board = false }) {
+// sections: what the point of the map the chat was opened on says (chat/context.mjs).
+export function firstPrompt({ sections = [], mother, workCell, text, board = false }) {
   const parts = [...sections];
-  if (part && !sections.length) parts.push(`Part of the architecture: ${part.name}${part.about ? ` (${part.about})` : ''}`);
   if (workCell) parts.push(`Branch: ${workCell.branch}`);
   const card = mother?.card;
   if (card) {
