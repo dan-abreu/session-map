@@ -1,9 +1,12 @@
 import { CONSOLIDATE_SCHEMA, consolidatePrompt } from './prompts.mjs';
+import { UNSORTED } from '../brain/cells.mjs';
 import { cleanUnitName, sameName } from '../brain/names.mjs';
 import { cleanTags, isEditable, newUnit, normalizeUnit } from './perceive.mjs';
 
 const LEVELS = ['cell', 'tissue', 'organ'];
 const PURPOSE_MAX = 160;
+const REASON_MAX = 80;
+const RELATED_MAX = 10;
 const PERCEPTIONS_PER_PASS = 5;
 const DAY = 24 * 60 * 60 * 1000;
 const AI_AUTHOR = { name: 'AI', email: '' };
@@ -64,11 +67,29 @@ function isValid(units, c) {
   }
 }
 
+// Each pair once, ordered inside; relating changes nothing, so pinned units may take part.
+function relatedOf(units, list) {
+  const known = new Set(units.map((u) => u.id).filter((id) => id !== UNSORTED));
+  const seen = new Set();
+  const out = [];
+  for (const r of Array.isArray(list) ? list : []) {
+    const why = text(r?.why, REASON_MAX);
+    if (!known.has(r?.a) || !known.has(r?.b) || r.a === r.b || !why) continue;
+    const [a, b] = r.a < r.b ? [r.a, r.b] : [r.b, r.a];
+    if (seen.has(`${a}\n${b}`)) continue;
+    seen.add(`${a}\n${b}`);
+    out.push({ a, b, text: why });
+  }
+  return out.slice(0, RELATED_MAX);
+}
+
+// related is null when the AI gave no answer: the pairs saved before stay.
 export async function consolidate(units, recentEvents, ask) {
   const prompt = consolidatePrompt(units, recentEvents);
   const res = await ask({ key: { kind: 'consolidate', prompt }, prompt, schemaHint: CONSOLIDATE_SCHEMA });
-  if (!res.ok || !Array.isArray(res.value.changes)) return [];
-  return res.value.changes.map(shapeOf).filter((c) => c && isValid(units, c));
+  if (!res.ok || !res.value || typeof res.value !== 'object') return { changes: [], related: null };
+  const changes = Array.isArray(res.value.changes) ? res.value.changes.map(shapeOf).filter((c) => c && isValid(units, c)) : [];
+  return { changes, related: relatedOf(units, res.value.related) };
 }
 
 const event = (kind, now, unitIds, subject) => ({ kind, ts: now, branch: null, author: AI_AUTHOR, unitIds, subject });

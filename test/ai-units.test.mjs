@@ -83,7 +83,7 @@ test('applyPerception fits the chat into an existing unit, and a pinned unit kee
 
 test('consolidation groups two similar cells into a tissue and records a grouped event', async () => {
   const { ask, asks } = answering({ changes: [{ kind: 'group', ids: ['checkout', 'coupons'], name: 'Carrinho', purpose: 'Comprar', tags: ['cart'] }] });
-  const changes = await consolidate(seedUnits(), [], ask);
+  const { changes } = await consolidate(seedUnits(), [], ask);
   assert.equal(asks[0].key.kind, 'consolidate');
   const { units, events } = applyChanges(seedUnits(), changes, NOW);
   const tissue = units.find((u) => u.id === 'carrinho');
@@ -122,7 +122,7 @@ test('consolidation never touches pinned units or unsorted, and ignores ids the 
       'nonsense',
     ],
   });
-  const changes = await consolidate(seedUnits(), [], ask);
+  const { changes } = await consolidate(seedUnits(), [], ask);
   assert.deepEqual(changes, [{ kind: 'rename', id: 'coupons', name: 'Cupons', purpose: null }]);
   const { units, events } = applyChanges(seedUnits(), changes, NOW);
   assert.equal(units.find((u) => u.id === 'coupons').name, 'Cupons');
@@ -145,7 +145,7 @@ test('applyChanges re-checks each change against the tree the earlier ones left,
 });
 
 test('consolidate gives no changes when the AI is off', async () => {
-  assert.deepEqual(await consolidate(seedUnits(), [], async () => ({ ok: false, error: 'ai-off' })), []);
+  assert.deepEqual((await consolidate(seedUnits(), [], async () => ({ ok: false, error: 'ai-off' }))).changes, []);
 });
 
 test('shouldConsolidate after 5 new perceptions or a day since the last pass', () => {
@@ -229,7 +229,7 @@ test('cleanUnitName collapses repeated words, keeps 40 characters cut at a word 
 test('perceive and consolidation clean the names the AI gives', async () => {
   const p = await perceive(digest, seedUnits(), answering({ unitId: null, name: 'Pix do Pix do checkout:', purpose: '', tags: [] }).ask);
   assert.equal(p.name, 'Pix do checkout');
-  const changes = await consolidate([unit('a'), unit('b')], [], answering({ changes: [{ kind: 'group', ids: ['a', 'b'], name: 'Tema tema', purpose: '', tags: [] }] }).ask);
+  const { changes } = await consolidate([unit('a'), unit('b')], [], answering({ changes: [{ kind: 'group', ids: ['a', 'b'], name: 'Tema tema', purpose: '', tags: [] }] }).ask);
   assert.equal(changes[0].name, 'Tema');
 });
 
@@ -274,4 +274,26 @@ test('tidyUnits merges units of one level that share a name, keeping the pinned 
   assert.equal(next.find((u) => u.id === 'roteiro').name, 'Roteiro do Chrome');
   assert.equal(next.find((u) => u.id === 'unsorted').name, 'Unsorted');
   assert.deepEqual(tidyUnits(next), next, 'running it again changes nothing');
+});
+
+test('consolidation also returns the related pairs the AI noticed, with a short reason, only between units it may see', async () => {
+  const { ask } = answering({
+    changes: [],
+    related: [
+      { a: 'checkout', b: 'coupons', why: '  coupons change the checkout total  ' },
+      { a: 'coupons', b: 'checkout', why: 'twice' },
+      { a: 'checkout', b: 'ghost', why: 'invented' },
+      { a: 'login', b: 'unsorted', why: 'unsorted is not a unit' },
+      { a: 'login', b: 'login', why: 'itself' },
+      { a: 'login', b: 'checkout', why: 'x'.repeat(200) },
+      'nonsense',
+    ],
+  });
+  const { changes, related } = await consolidate(seedUnits(), [], ask);
+  assert.deepEqual(changes, []);
+  assert.deepEqual(related.map((r) => [r.a, r.b]), [['checkout', 'coupons'], ['checkout', 'login']]);
+  assert.equal(related[0].text, 'coupons change the checkout total');
+  assert.ok(related[1].text.length <= 80);
+  assert.match(consolidatePrompt(seedUnits(), []), /related/);
+  assert.equal((await consolidate(seedUnits(), [], async () => ({ ok: false, error: 'ai-off' }))).related, null, 'no answer, nothing to replace');
 });

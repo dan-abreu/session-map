@@ -185,3 +185,17 @@ export function placeBoxes(candidates, { width, pad = 4 }) {
   }
   return out;
 }
+
+// Greedy by weight: a link is drawn by default while both its units have fewer than `max`; the rest wait for a selection.
+export function strongestLinks(links, max = 3) {
+  const count = new Map();
+  const kept = new Set();
+  const byWeight = links.map((l, i) => [l, i]).sort((p, q) => q[0].weight - p[0].weight || p[1] - q[1]);
+  for (const [l] of byWeight) {
+    if ((count.get(l.a) ?? 0) >= max || (count.get(l.b) ?? 0) >= max) continue;
+    kept.add(l);
+    count.set(l.a, (count.get(l.a) ?? 0) + 1);
+    count.set(l.b, (count.get(l.b) ?? 0) + 1);
+  }
+  return kept;
+}

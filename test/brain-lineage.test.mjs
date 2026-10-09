@@ -53,8 +53,8 @@ test('specRefsOf finds units named in another unit\'s spec.md, never itself, ign
   const root = mkdtempSync(join(tmpdir(), 'sm-spec-'));
   try {
     specs(root, {
-      auth: 'Login needs the Pagamentos limits and its own autenticacao rules.',
-      payments: 'Charges are blocked by auth when the account is locked.',
+      auth: 'Login needs the Pagamentos limits and its own autenticacao rules; Pagamentos decides.',
+      payments: 'Charges are blocked by auth when the account is locked, and auth unlocks them.',
       ui: 'The ui of everything.',
       notes: 'mentions only authentic stuff',
     });
@@ -137,4 +137,79 @@ test('specRefsOf skips units whose id is not a plain slug instead of reading out
     ];
     assert.deepEqual(specRefsOf(root, units).map((r) => `${r.from}>${r.to}`), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('specRefsOf reads every spec.md nested under the unit folder; one passing mention is not a reference', () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-spec-'));
+  try {
+    specs(root, { 'pay/charges': 'A charge asks auth first.', 'pay/refunds': 'A refund asks auth again.', 'auth/login': 'Login shows Pagamentos once.' });
+    const units = [{ id: 'auth', name: 'Auth', paths: [] }, { id: 'pay', name: 'Pagamentos', paths: [] }];
+    assert.deepEqual(specRefsOf(root, units).map((r) => `${r.from}>${r.to}`), ['pay>auth']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('linkUnits: a chat links its own unit to the units its edits fall in, also when it edited a sibling checkout of the repo', () => {
+  const chats = [chat('c1', 'ui', { editedFiles: ['C:/Dev/Proj-feature/packages/pay/b.ts', 'C:/Dev/Other/apps/web/login/a.ts'] })];
+  const links = linkUnits(chats, units, [], [], { root: 'c:/dev/proj' });
+  assert.deepEqual(links.map((l) => [l.a, l.b]), [['pay', 'ui']], 'a folder that is not a checkout of the repo says nothing');
+  assert.deepEqual(links[0].reasons, [{ kind: 'shared-chat', text: 'Title c1', sessionId: 'c1' }]);
+});
+
+test('linkUnits: an OpenSpec spec folder belongs to the unit with its id; a broad path says nothing beside specific ones', () => {
+  const withApi = [...units, { id: 'api', name: 'API', paths: ['apps/api', 'apps/api/src/billing'] }];
+  const edits = ['openspec/changes/fix-login/specs/auth/login/spec.md', 'openspec/specs/pay/spec.md', 'apps/api/src/x.ts'];
+  const links = linkUnits([chat('c1', 'ui', { editedFiles: edits })], withApi, [], []);
+  assert.deepEqual(links.map((l) => `${l.a}|${l.b}`).sort(), ['auth|ui', 'pay|ui']);
+});
+
+test('linkUnits: shared-branch links the unit a branch lives in to the units it touches and to its chats\' units', () => {
+  const workCells = [{ id: 'feature/y', branch: 'feature/y', unitId: 'auth', touches: ['pay'], chatIds: ['c1'], bornAt: '2026-10-01T10:00:00Z' }];
+  const links = linkUnits([chat('c1', 'ui', { workCellId: 'feature/y' })], units, workCells, []);
+  assert.deepEqual(links.map((l) => `${l.a}|${l.b}`).sort(), ['auth|pay', 'auth|ui'], 'touched units are not linked to each other');
+  assert.ok(links.every((l) => l.since === '2026-10-01T10:00:00Z' && l.reasons[0].kind === 'shared-branch' && l.reasons[0].text === 'feature/y'));
+});
+
+test('linkUnits: units sharing a rare tag are linked by meaning; a tag most units carry says nothing', () => {
+  const tagged = [
+    { id: 'a', name: 'A', paths: [], tags: ['stripe', 'docs'], bornAt: '2026-09-01T00:00:00Z' },
+    { id: 'b', name: 'B', paths: [], tags: ['stripe', 'docs'], bornAt: '2026-09-03T00:00:00Z' },
+    { id: 'c', name: 'C', paths: [], tags: ['docs'] },
+    { id: 'd', name: 'D', paths: [], tags: ['docs'] },
+  ];
+  const links = linkUnits([], tagged, [], []);
+  assert.deepEqual(links.map((l) => [l.a, l.b, l.since]), [['a', 'b', '2026-09-03T00:00:00Z']]);
+  assert.deepEqual(links[0].reasons, [{ kind: 'meaning', text: '#stripe' }]);
+});
+
+test('linkUnits: related pairs the AI noticed are meaning reasons; unknown units are ignored', () => {
+  const related = [
+    { a: 'auth', b: 'pay', text: 'login gates checkout', since: '2026-10-02T00:00:00Z' },
+    { a: 'auth', b: 'ghost', text: 'nothing', since: '2026-10-02T00:00:00Z' },
+  ];
+  const links = linkUnits([], units, [], [], { related });
+  assert.deepEqual(links.map((l) => [l.a, l.b, l.since]), [['auth', 'pay', '2026-10-02T00:00:00Z']]);
+  assert.deepEqual(links[0].reasons, [{ kind: 'meaning', text: 'login gates checkout' }]);
+});
+
+test('linkUnits never links a unit to the tissue or organ that holds it', () => {
+  const tree = [
+    { id: 'organ', name: 'Organ', level: 'organ', parentId: null, paths: [], tags: ['money'] },
+    { id: 'tissue', name: 'Tissue', level: 'tissue', parentId: 'organ', paths: ['packages/pay'], tags: ['money'] },
+    { id: 'cell', name: 'Cell', level: 'cell', parentId: 'tissue', paths: [], tags: ['money'] },
+  ];
+  const chats = [chat('c1', 'cell', { editedFiles: ['packages/pay/b.ts'] })];
+  const related = [{ a: 'cell', b: 'organ', text: 'x', since: '2026-10-02T00:00:00Z' }];
+  assert.deepEqual(linkUnits(chats, tree, [], [{ from: 'organ', to: 'cell', since: '2026-10-01T00:00:00Z' }], { related }), []);
+});
+
+test('linkUnits: a chat that swept many units links its own only to the three it edited most', () => {
+  const many = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, name: id.toUpperCase(), paths: [] }));
+  const edits = [
+    ...['1', '2', '3'].map((n) => `openspec/specs/a/${n}/spec.md`),
+    ...['1', '2'].map((n) => `openspec/specs/b/${n}/spec.md`),
+    ...['1', '2'].map((n) => `openspec/specs/c/${n}/spec.md`),
+    'openspec/specs/d/spec.md',
+  ];
+  const links = linkUnits([chat('c1', 'e', { editedFiles: edits })], many, [], []);
+  assert.deepEqual(links.map((l) => `${l.a}|${l.b}`).sort(), ['a|e', 'b|e', 'c|e']);
 });

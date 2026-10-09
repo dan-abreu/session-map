@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, collapseBots, ellipsize, placeBoxes, BOTS_ID, wrapLabel,
+  unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, collapseBots, ellipsize, placeBoxes, BOTS_ID, wrapLabel, strongestLinks,
 } from '../server/web/body.js';
 
 const units = [
@@ -164,4 +164,15 @@ test('placeBoxes also keeps a label off the shapes it is told to avoid', () => {
   ], { width: 390 });
   assert.equal(placed.get('branch'), null);
   assert.deepEqual(placed.get('free'), { dx: 0 });
+});
+
+test('strongestLinks keeps at most three links per unit by default, strongest first, so a hub does not hide the map', () => {
+  const link = (a, b, weight) => ({ a, b, weight });
+  const links = [
+    link('hub', 'a', 4), link('hub', 'b', 3), link('hub', 'c', 2), link('hub', 'd', 1), link('hub', 'e', 1),
+    link('d', 'e', 1), link('a', 'b', 1),
+  ];
+  const kept = strongestLinks(links, 3);
+  assert.deepEqual([...kept].map((l) => `${l.a}|${l.b}`), ['hub|a', 'hub|b', 'hub|c', 'd|e', 'a|b']);
+  assert.equal(strongestLinks([], 3).size, 0);
 });

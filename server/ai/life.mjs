@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { brainDir, readJsonFile, writeAtomic, writeUnits } from '../brain/cells.mjs';
 import { appendEvents, readEvents } from '../brain/events.mjs';
@@ -28,7 +29,7 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     ...('bin' in ai ? { bin: ai.bin } : {}),
     ...(ai.run ? { run: ai.run } : {}),
   });
-  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map(), consolidating: new Set(), writingNuclei: new Set() };
+  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map(), consolidating: new Set(), writingNuclei: new Set(), related: new Set() };
   lives.set(smDir, life);
   return life;
 }
@@ -104,15 +105,43 @@ async function consolidateProject(life, p, uncapped) {
   life.since.set(p.projectId, 0);
   try {
     const ask = (req) => life.queue.ask({ ...req, uncapped, projectId: p.projectId });
-    const changes = await consolidate(unitsNow(p.smDir, p.projectId), readEvents(p.smDir, p.projectId), ask);
+    const { changes, related } = await consolidate(unitsNow(p.smDir, p.projectId), readEvents(p.smDir, p.projectId), ask);
     const before = unitsNow(p.smDir, p.projectId);
-    const { units, events } = applyChanges(before, changes, new Date().toISOString());
+    const now = new Date().toISOString();
+    const { units, events } = applyChanges(before, changes, now);
     saveUnits(p.smDir, p.projectId, before, units);
     appendEvents(p.smDir, p.projectId, events);
+    if (related) saveRelated(p.smDir, p.projectId, related, units, now);
     life.lastPass.set(p.projectId, Date.now());
   } finally {
     life.consolidating.delete(p.projectId);
   }
+}
+
+// The pairs of units the AI sees as related ({a, b, text, since}), replaced on every pass that answers.
+export const relatedFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'related.json');
+
+export function readRelated(smDir, projectId) {
+  const stored = readJsonFile(relatedFile(smDir, projectId), []);
+  return Array.isArray(stored) ? stored.filter((r) => r && typeof r.a === 'string' && typeof r.b === 'string' && typeof r.text === 'string') : [];
+}
+
+// A pair seen before keeps its first date; a pair whose unit was fused away is dropped.
+function saveRelated(smDir, projectId, related, units, now) {
+  const known = new Set(units.map((u) => u.id));
+  const before = new Map(readRelated(smDir, projectId).map((r) => [`${r.a}\n${r.b}`, r.since]));
+  const rows = related.filter((r) => known.has(r.a) && known.has(r.b)).map((r) => ({ ...r, since: before.get(`${r.a}\n${r.b}`) ?? now }));
+  writeAtomic(relatedFile(smDir, projectId), `${JSON.stringify(rows, null, 2)}\n`);
+}
+
+// Projects mapped before the AI was asked for related pairs get one pass; after that the usual passes refresh them.
+export function relateOnce(life, p) {
+  if (life.related.has(p.projectId) || life.consolidating.has(p.projectId) || existsSync(relatedFile(p.smDir, p.projectId))) return;
+  life.related.add(p.projectId);
+  // No answer (cap reached, claude failed): a later collect asks again.
+  track(life, consolidateProject(life, p, false).finally(() => {
+    if (!existsSync(relatedFile(p.smDir, p.projectId))) life.related.delete(p.projectId);
+  }));
 }
 
 export const aiNucleusFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'ai-nucleus.json');

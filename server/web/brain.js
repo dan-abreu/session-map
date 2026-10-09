@@ -1,4 +1,4 @@
-import { hash, unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, ellipsize, placeBoxes, wrapLabel, BOTS_ID } from './body.js';
+import { hash, unitTree, packCircles, ownerHue, initial, workCellPhase, fusionGhosts, filesByFolder, dormantUnits, ellipsize, placeBoxes, wrapLabel, BOTS_ID, strongestLinks } from './body.js';
 
 const d3 = window.d3;
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
@@ -9,6 +9,8 @@ const INSET = { tissue: 12, organ: 20 };
 // Before its tissue or organ forms, a unit sits this much farther out: the group visibly gathers when it is born.
 const SPREAD = 0.45;
 const NEAR_ZOOM = 1.9;
+// Links drawn per unit before anything is selected; selecting a unit shows all of its own.
+const LINKS_PER_UNIT = 3;
 // Screen pixels kept above (organ names) and below (cell names) whatever the fit frames.
 const LABEL_TOP = 50;
 const LABEL_BOTTOM = 40;
@@ -193,6 +195,9 @@ function layout(project, area, labelFor) {
     weight: Math.min(4, Math.max(1, l.weight || 1)), t: Date.parse(l.since),
     bend: (hash(l.a + l.b) - 0.5) * 0.36, shown: 0, target: 0,
   })).filter((l) => l.a && l.b && l.a !== l.b);
+  // A dormant unit is quiet background, and so are its links until one of their units is selected.
+  const primary = strongestLinks(links.filter((l) => !l.a.dormant && !l.b.dormant), LINKS_PER_UNIT);
+  for (const l of links) l.primary = primary.has(l);
 
   const rootOf = (n) => (n.parent ? rootOf(n.parent) : n);
   // Labels are drawn in screen pixels, so the room they need in the world grows as the view zooms out.
@@ -206,6 +211,7 @@ function layout(project, area, labelFor) {
   });
   const rootLinks = [];
   for (const l of links) {
+    if (!l.primary) continue;
     const ra = rootOf(l.a), rb = rootOf(l.b);
     if (ra !== rb && !rootLinks.some((x) => (x.source === ra && x.target === rb) || (x.source === rb && x.target === ra))) {
       rootLinks.push({ source: ra, target: rb, weight: l.weight });
@@ -347,7 +353,7 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     gGhosts.selectAll('path.ghost').data(model.ghosts, (d) => d.id).join('path').attr('class', 'ghost');
 
     const linkG = interactive(gLinks.selectAll('g.unit-link').data(model.links, (d) => d.id).join('g'), (d) => ({ type: 'link', id: d.id }))
-      .attr('class', (d) => `unit-link${d.data.reasons.some((r) => r.kind === 'meaning') ? ' by-meaning' : ''}`)
+      .attr('class', (d) => `unit-link${d.data.reasons.every((r) => r.kind === 'meaning') ? ' by-meaning' : ''}${d.primary ? '' : ' is-extra'}`)
       .attr('aria-label', (d) => linkLabel(d.a.data, d.b.data));
     linkG.append('path').attr('class', 'link-hit');
     linkG.append('path').attr('class', 'link-axon').attr('stroke-width', (d) => 1 + d.weight * 0.75);
@@ -886,9 +892,12 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     const withAncestors = (n) => { for (let p = n; p; p = p.parent) units.add(p.id); };
     const withDescendants = (n) => { units.add(n.id); n.children.forEach(withDescendants); };
     let link = null;
+    // A selected tissue or organ owns the links of the cells inside it too.
+    const own = new Set();
+    const ownTree = (n) => { own.add(n.id); n.children.forEach(ownTree); };
     if (sel?.type === 'unit') {
       const n = model.nodes.get(sel.id);
-      if (n) { withAncestors(n); withDescendants(n); }
+      if (n) { withAncestors(n); withDescendants(n); ownTree(n); }
     } else if (sel?.type === 'chat') {
       const nr = model.neuronById.get(sel.id);
       if (nr) {
@@ -916,17 +925,20 @@ export function createBrain(svgEl, { onSelect, labelFor, labelAt = labelFor, uni
     if (sel?.type === 'unit' || sel?.type === 'link') {
       for (const nr of model.neurons) if (units.has(nr.unit.id)) neurons.add(nr.id);
     }
+    const ownLinks = new Set(model.links.filter((l) => own.has(l.a.id) || own.has(l.b.id)));
+    // The units at the other end stay lit, without their chats or branches.
+    const partners = new Set([...ownLinks].flatMap((l) => [l.a.id, l.b.id]));
     svg.classed('has-selection', !!sel);
     gUnits.selectAll('g.unit')
       .classed('is-selected', (d) => sel?.type === 'unit' && d.id === sel.id)
-      .classed('is-related', (d) => units.has(d.id));
-    gLabels.selectAll('g.label').classed('is-related', (d) => units.has(d.id));
+      .classed('is-related', (d) => units.has(d.id) || partners.has(d.id));
+    gLabels.selectAll('g.label').classed('is-related', (d) => units.has(d.id) || partners.has(d.id));
     gBuds.selectAll('g.bud')
       .classed('is-selected', (d) => sel?.type === 'workcell' && d.id === sel.id)
       .classed('is-related', (d) => buds.has(d.id) || (sel?.type === 'unit' && units.has(d.unit.id)));
     gLinks.selectAll('g.unit-link')
       .classed('is-selected', (l) => l === link)
-      .classed('is-related', (l) => l === link || (sel?.type === 'unit' && (units.has(l.a.id) || units.has(l.b.id)) && (l.a.id === sel.id || l.b.id === sel.id)));
+      .classed('is-related', (l) => l === link || ownLinks.has(l));
     gNeurons.selectAll('g.neuron')
       .classed('is-selected', (n) => sel?.type === 'chat' && n.id === sel.id)
       .classed('is-related', (n) => neurons.has(n.id));

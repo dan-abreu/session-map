@@ -314,6 +314,8 @@ button, select, input { font: inherit; color: inherit; }
 .unit-link:hover .link-axon, .unit-link.is-related .link-axon { stroke: var(--link-strong); stroke-opacity: 1; }
 .unit-link:hover .link-bulb, .unit-link.is-related .link-bulb { fill: var(--link-strong); fill-opacity: 1; }
 .unit-link:focus-visible .link-hit { stroke: color-mix(in srgb, var(--focus) 35%, transparent); }
+/* Beyond the strongest three per unit, or touching a dormant unit, a link waits for one of its units to be selected. */
+.unit-link.is-extra:not(.is-related) { display: none; }
 
 /* Work cells: a branch budding off the unit it mostly changes, coloured by its owner. */
 .bud, .pod, .bud-label { --owner: oklch(var(--owner-l) var(--owner-c) var(--owner-h)); }

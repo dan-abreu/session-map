@@ -3,14 +3,14 @@ import { createHash } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
-import { aiNucleusFile, aiStatus, lifeOf, perceiveChanged, refreshNuclei, startBootstrap, unitsFile } from './ai/life.mjs';
+import { aiNucleusFile, aiStatus, lifeOf, perceiveChanged, readRelated, refreshNuclei, relateOnce, startBootstrap, unitsFile } from './ai/life.mjs';
 import { nucleusInputOf } from './ai/nucleus.mjs';
 import { normalizeUnit, tidyUnits } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { UNSORTED, brainDir, classify, loadUnits, plain, readJsonFile, readOverrides, unitsTouchedBy, writeUnits } from './brain/cells.mjs';
 import { cleanUnitName } from './brain/names.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
-import { linkUnits, parentOf, readLineage, specRefsOf } from './brain/lineage.mjs';
+import { linkUnits, parentOf, readLineage, repoFiles, specRefsOf } from './brain/lineage.mjs';
 import { emptyNucleus, mergeNucleus, readNucleus, seedNucleus, withAiNucleus, writeNucleus } from './brain/nucleus.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
@@ -360,12 +360,15 @@ async function buildProject(ctx, { root, items }) {
     };
   });
 
-  const linkChats = placed.map(({ item: { summary: s }, unitId }) => ({
-    sessionId: s.sessionId, title: s.title, unitId, startedAt: s.startedAt, editedFiles: s.editedFiles, cwd: s.cwd, parentId: parentOf(s.sessionId, lineage, forLineage(unitId)),
-  }));
-  const unitLinks = linkUnits(linkChats, units, workCells, specRefsOf(root, units), { root });
-
   const aiOn = life.queue.enabled && config.ai?.enabled !== false;
+  // Continuing work begun in another unit is what links two units, so a chat's parent is looked for in the whole
+  // project, by the repo files both edited (memory notes and scratch files every chat touches say nothing).
+  const projectChats = placed.map(({ item: { summary: s } }) => ({ sessionId: s.sessionId, startedAt: s.startedAt, editedFiles: repoFiles(s.editedFiles ?? [], root, s.cwd) }));
+  const linkChats = placed.map(({ item: { summary: s }, unitId, workCellId }) => ({
+    sessionId: s.sessionId, title: s.title, unitId, workCellId, startedAt: s.startedAt, editedFiles: s.editedFiles, cwd: s.cwd, parentId: parentOf(s.sessionId, lineage, projectChats),
+  }));
+  const unitLinks = linkUnits(linkChats, outUnits, workCells, specRefsOf(root, units), { root, related: aiOn ? readRelated(smDir, projectId) : [] });
+
   if (aiOn) {
     const workCellOf = (item) => workCells.find((w) => w.id === placed.find((x) => x.item === item)?.workCellId) ?? null;
     // Placed again from units.json as it is when asked: the bootstrap changes it after this collect started.
@@ -388,7 +391,10 @@ async function buildProject(ctx, { root, items }) {
     const boot = life.boot.get(projectId);
     if (!boot || boot.done >= boot.total) {
       perceiveChanged(life, p, placed.filter((x) => x.shown && !archived.has(x.item.summary.sessionId) && x.unitSource !== 'override' && x.unitSource !== 'card').map((x) => x.item));
-      if (!isNew) refreshNuclei(life, p);
+      if (!isNew) {
+        refreshNuclei(life, p);
+        relateOnce(life, p);
+      }
     }
   }
 

@@ -559,3 +559,100 @@ test('clashItems says "your branches" when one person owns both, and names both 
   assert.deepEqual(theirs.owners, ['Ana', 'Rui']);
   assert.equal(theirs.text, 'Ana (feat/a) and Rui (feat/c) touch the same file: src/a.ts');
 });
+
+test('collect links units across their chats: a chat that continued work from another unit, edits in a sibling checkout', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const base = tmp();
+  const root = repo(join(base, 'shop'));
+  try {
+    seedUnitsFile(smDir, root, [
+      { id: 'shop', name: 'Shop', paths: ['src/shop'] },
+      { id: 'billing', name: 'Billing', paths: ['src/billing'] },
+      { id: 'ops', name: 'Ops', paths: ['ops/deploy'] },
+      { id: 'unsorted', name: 'Unsorted', paths: [] },
+    ]);
+    writeChat(dir, { id: A, cwd: root, title: 'Cart page', edits: ['src/shop/cart.ts'], card: { area: 'shop' }, endedAgo: 3 * HOUR });
+    writeChat(dir, { id: B, cwd: root, title: 'Cart tax', edits: ['src/shop/cart.ts'], card: { area: 'billing' }, endedAgo: HOUR });
+    writeChat(dir, { id: C, cwd: root, title: 'Deploy from the worktree', edits: [join('..', 'shop-hotfix', 'src', 'billing', 'tax.ts')], card: { area: 'ops' }, endedAgo: HOUR });
+
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const link = (a, b) => p.unitLinks.find((l) => l.a === a && l.b === b);
+    const billingShop = link('billing', 'shop');
+    assert.ok(billingShop, JSON.stringify(p.unitLinks));
+    assert.deepEqual(billingShop.reasons.map((r) => r.kind).sort(), ['lineage', 'shared-chat']);
+    assert.equal(billingShop.reasons.find((r) => r.kind === 'lineage').sessionId, B);
+    assert.deepEqual(link('billing', 'ops')?.reasons.map((r) => r.kind), ['shared-chat'], 'the sibling checkout counts as the repo');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('a project mapped before related pairs existed gets one consolidation pass; the pairs show as meaning links', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'farm'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    seedUnitsFile(smDir, root, [
+      { id: 'water', name: 'Water', paths: [], bornAt: iso(5 * HOUR) }, { id: 'seeds', name: 'Seeds', paths: [], bornAt: iso(4 * HOUR) }, { id: 'unsorted', name: 'Unsorted', paths: [] },
+    ]);
+    writeChat(dir, { id: A, cwd: root, title: 'Irrigation', prompts: ['water the rows'], card: { area: 'water' } });
+    let passes = 0;
+    const run = async (prompt) => {
+      if (prompt.startsWith('You keep the map')) {
+        passes++;
+        return { ok: true, value: { changes: [], related: [{ a: 'seeds', b: 'water', why: 'seeds need watering' }] }, costUSD: 0.001 };
+      }
+      if (prompt.startsWith('You keep the short memory')) return { ok: true, value: { units: [] }, costUSD: 0.001 };
+      return { ok: true, value: { unitId: 'water', name: 'Water', purpose: '', tags: [] }, costUSD: 0.001 };
+    };
+    const ai = { bin: 'fake-claude', run };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    assert.equal(passes, 1);
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
+    await settleAi(smDir);
+    assert.equal(passes, 1, 'once saved, the pairs are not asked again');
+    const link = p.unitLinks.find((l) => l.a === 'seeds' && l.b === 'water');
+    assert.deepEqual(link?.reasons, [{ kind: 'meaning', text: 'seeds need watering' }]);
+    assert.ok(!Number.isNaN(Date.parse(link.since)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});
+
+test('a related pass that got no answer is tried again on a later collect', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'ranch'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    seedUnitsFile(smDir, root, [{ id: 'water', name: 'Water', paths: [] }, { id: 'seeds', name: 'Seeds', paths: [] }, { id: 'unsorted', name: 'Unsorted', paths: [] }]);
+    writeChat(dir, { id: A, cwd: root, title: 'Irrigation', prompts: ['water the rows'], card: { area: 'water' } });
+    let passes = 0;
+    const run = async (prompt) => {
+      if (prompt.startsWith('You keep the map')) {
+        passes++;
+        return passes === 1 ? { ok: false, error: 'claude-failed' } : { ok: true, value: { changes: [], related: [{ a: 'seeds', b: 'water', why: 'seeds need watering' }] }, costUSD: 0.001 };
+      }
+      return { ok: true, value: { units: [] }, costUSD: 0.001 };
+    };
+    const ai = { bin: 'fake-claude', run };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai });
+    await settleAi(smDir);
+    assert.equal(passes, 2);
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
+    assert.ok(p.unitLinks.some((l) => l.a === 'seeds' && l.b === 'water'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});

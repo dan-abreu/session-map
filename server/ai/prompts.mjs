@@ -25,7 +25,7 @@ export function perceivePrompt(digest, units) {
   ].join('\n');
 }
 
-export const CONSOLIDATE_SCHEMA = '{"changes": [{"kind": "fuse", "ids": ["ids absorbed"], "into": "id kept"} | {"kind": "group", "ids": ["2+ ids of the same level"], "name": "2-4 words", "purpose": "one line", "tags": ["..."]} | {"kind": "rename", "id": "...", "name": "...", "purpose": "one line or null"} | {"kind": "move", "id": "...", "parentId": "id of a higher-level unit or null"}]}';
+export const CONSOLIDATE_SCHEMA = '{"changes": [{"kind": "fuse", "ids": ["ids absorbed"], "into": "id kept"} | {"kind": "group", "ids": ["2+ ids of the same level"], "name": "2-4 words", "purpose": "one line", "tags": ["..."]} | {"kind": "rename", "id": "...", "name": "...", "purpose": "one line or null"} | {"kind": "move", "id": "...", "parentId": "id of a higher-level unit or null"}], "related": [{"a": "id", "b": "id", "why": "up to 8 words"}]}';
 
 export function consolidatePrompt(units, recentEvents) {
   const events = recentEvents.slice(-EVENTS_MAX).map((e) => ({ kind: e.kind, ts: e.ts, unitIds: e.unitIds ?? [], subject: e.subject ?? null }));
@@ -37,6 +37,7 @@ export function consolidatePrompt(units, recentEvents) {
     '- move: put a unit under an existing higher-level unit.',
     '- rename: when a name no longer says what the unit does.',
     'Never change a unit with "pinned": true; the person set it. Use only ids from the tree. Few good changes beat many; an empty list is fine.',
+    'Separately, list in "related" up to 10 pairs of units, in different places of the tree (never a unit and the one holding it), whose work clearly depends on or affects each other, each with a short reason in the language of the names. Leave it empty rather than guess.',
     LANGUAGE,
     '',
     `Tree:\n${JSON.stringify(treeOf(units), null, 1)}`,
