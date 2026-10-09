@@ -9,9 +9,10 @@ import { runAction } from './actions.mjs';
 import { cleanTags, newUnit, normalizeUnit } from './ai/perceive.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { archiveAll, readArchived, readIndex, searchIndex } from './archive.mjs';
-import { authorize, loadToken } from './auth.mjs';
+import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { UNSORTED, brainDir, readJsonFile, setOverride, writeUnits } from './brain/cells.mjs';
 import { emptyNucleus, readNucleus, writeNucleus } from './brain/nucleus.mjs';
+import { createChatHub } from './chat/hub.mjs';
 import { collect } from './collect.mjs';
 import { log } from './log.mjs';
 import { claudeDir } from './sources/claude.mjs';
@@ -126,7 +127,7 @@ async function serveFile(res, path) {
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
-  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress,
+  collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat = demo ? null : createChatHub({ smDir }),
 } = {}) {
   let cached = null;
   const state = () => {
@@ -152,6 +153,37 @@ export function createApp({
     if (!unit) throw new HttpError(404, 'unknown-unit');
     return unit;
   };
+
+  // Runs code on this PC by design: even a local read of a chat needs the token (desenho-2 § 22).
+  async function chatRoute(req, res, parts) {
+    if (!chat) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    const [, , , key, verb] = parts;
+    if (req.method === 'POST' && key === 'start' && parts.length === 4) {
+      const result = await chat.start(await readBody(req), await state());
+      return send(res, result.status, result.body);
+    }
+    if (parts.length !== 5) throw new HttpError(404, 'not-found');
+    if (req.method === 'GET' && verb === 'events') {
+      const lastId = Number.parseInt(req.headers['last-event-id'] ?? '0', 10) || 0;
+      const sink = {
+        write: (evt) => res.write(`id: ${evt.id}\nevent: ${evt.type}\ndata: ${JSON.stringify(evt.data)}\n\n`),
+        end: () => res.end(),
+      };
+      // Headers wait in the response until the first write, so an unknown chat can still become a 404.
+      res.setHeader('content-type', 'text/event-stream; charset=utf-8');
+      res.setHeader('cache-control', 'no-store');
+      const unsubscribe = chat.subscribe(key, sink, lastId);
+      if (!unsubscribe) throw new HttpError(404, 'unknown-chat');
+      res.flushHeaders();
+      req.on('close', unsubscribe);
+      return undefined;
+    }
+    if (req.method !== 'POST' || !['send', 'permission', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
+    return send(res, result.status, result.body);
+  }
 
   async function route(req, res, url) {
     const path = url.pathname;
@@ -210,6 +242,7 @@ export function createApp({
       fresh();
       return send(res, result.status, result.body);
     }
+    if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

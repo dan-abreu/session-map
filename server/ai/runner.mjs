@@ -60,7 +60,7 @@ export function findClaude({ env = process.env, home = homedir(), platform = pro
 }
 
 // Inherited CLAUDE* variables would tag the child as a VS Code conversation of the parent session.
-const cleanEnv = (env) => Object.fromEntries(Object.entries(env).filter(([k]) => !/^(CLAUDE|MCP_CONNECTION_NONBLOCKING$)/i.test(k)));
+export const cleanEnv = (env) => Object.fromEntries(Object.entries(env).filter(([k]) => !/^(CLAUDE|MCP_CONNECTION_NONBLOCKING$)/i.test(k)));
 
 function spawnCapture(bin, args, { cwd, env, input, timeoutMs }) {
   const script = /\.(m?js|cjs)$/i.test(bin);
