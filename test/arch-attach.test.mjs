@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachToParts, partByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
+import { attachToParts, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
 
 const item = (code, extra = {}) => ({ code, title: `Item ${code}`, detail: [], status: 'todo', who: null, weight: null, milestone: null, line: 1, ...extra });
 const part = (id, codePaths, items = []) => ({
@@ -93,4 +93,45 @@ test('partOfFiles: an app\'s own src folder is as broad as the app itself', () =
   const arch = archOf(part('comms', ['apps/backend-api/src']), part('providers', ['apps/backend-api/src/routes/admin']));
   const many = Array.from({ length: 20 }, (_, i) => `apps/backend-api/src/services/s${i}.ts`);
   assert.equal(partOfFiles([...many, 'apps/backend-api/src/routes/admin/a.ts'], arch).partId, 'providers');
+});
+
+const chatOn = (sessionId, partId, extra = {}) => ({ sessionId, partId, parentId: null, title: `Chat ${sessionId}`, startedAt: '2026-10-01T10:00:00Z', files: [], ...extra });
+const cellOn = (id, partId, extra = {}) => ({ id, branch: id, partId, touches: [], chatIds: [], bornAt: '2026-10-02T10:00:00Z', status: 'active', ...extra });
+
+test('linkParts: a chat that edited the files of another part links its own part to it', () => {
+  const chats = [chatOn('c1', 'checkout', { files: ['apps/web/src/checkout/pay.ts', 'apps/api/src/billing/tax.ts', 'apps/api/src/billing/vat.ts'] })];
+  assert.deepEqual(linkParts(SHOP, chats, []), [{
+    a: 'billing', b: 'checkout', weight: 1, since: '2026-10-01T10:00:00Z',
+    reasons: [{ kind: 'shared-chat', text: 'Chat c1', sessionId: 'c1' }],
+  }]);
+});
+
+test('linkParts: a chat placed nowhere links the parts it touched to each other', () => {
+  const chats = [chatOn('c1', null, { files: ['apps/web/src/checkout/pay.ts', 'apps/api/src/billing/tax.ts'] })];
+  assert.deepEqual(linkParts(SHOP, chats, []).map((l) => [l.a, l.b]), [['billing', 'checkout']]);
+});
+
+test('linkParts: branches, lineage and file links add reasons; weight is the count capped at 4, strongest first', () => {
+  const arch = { ...SHOP, parts: SHOP.parts.map((p) => (p.id === 'web' ? { ...p, refs: ['api'] } : { ...p, refs: [] })) };
+  const chats = [
+    chatOn('p1', 'billing'),
+    chatOn('c2', 'checkout', { parentId: 'p1', startedAt: '2026-10-03T10:00:00Z' }),
+  ];
+  const cells = [cellOn('feat/pay', 'checkout', { touches: ['billing'] }), cellOn('feat/tax', 'billing', { chatIds: ['c2'] })];
+  const links = linkParts(arch, chats, cells);
+  const pay = links.find((l) => l.a === 'billing' && l.b === 'checkout');
+  assert.deepEqual(pay.reasons.map((r) => r.kind).sort(), ['lineage', 'shared-branch', 'shared-branch']);
+  assert.equal(pay.weight, 3);
+  assert.equal(pay.since, '2026-10-02T10:00:00Z');
+  assert.equal(links[0], pay, 'the strongest link comes first');
+  const ref = links.find((l) => l.a === 'api' && l.b === 'web');
+  assert.deepEqual(ref, { a: 'api', b: 'web', weight: 1, since: null, reasons: [{ kind: 'file-ref', text: 'Web → Api' }] });
+  const many = Array.from({ length: 6 }, (_, i) => chatOn(`m${i}`, 'checkout', { files: ['apps/api/src/billing/tax.ts'] }));
+  assert.equal(linkParts(SHOP, many, [])[0].weight, 4);
+});
+
+test('linkParts ignores unknown parts, self links and a chat in the same part as its parent', () => {
+  const chats = [chatOn('p1', 'checkout'), chatOn('c2', 'checkout', { parentId: 'p1' }), chatOn('c3', 'ghost', { files: ['apps/api/src/billing/tax.ts'] })];
+  const cells = [cellOn('feat/x', 'checkout', { touches: ['checkout', 'nowhere'] })];
+  assert.deepEqual(linkParts(SHOP, chats, cells), []);
 });

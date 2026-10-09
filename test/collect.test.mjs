@@ -170,6 +170,7 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     assert.equal(p.ai, null, 'no claude: rules only');
     const init = p.activity.find((i) => i.kind === 'commit' && i.subject === 'init');
     assert.ok(init.partIds.includes('shop'), 'commits hang on the parts their files fall in');
+    assert.deepEqual(p.arch.links.map((l) => [l.a, l.b, l.weight, l.reasons.map((r) => [r.kind, r.sessionId])]), [['billing', 'shop', 1, [['shared-chat', B]]]], 'the chat on billing that edited the shop links the two');
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
@@ -247,7 +248,7 @@ test('a project without architecture shows only the project and loose chats, and
     const ai = { bin: 'fake-claude', run: async () => { calls++; return { ok: true, value: { partId: null }, costUSD: 0.001 }; } };
     const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
     await settleAi(smDir);
-    assert.deepEqual(p.arch, { source: 'none', dir: null, lang: 'en', layers: [], parts: [] });
+    assert.deepEqual(p.arch, { source: 'none', dir: null, lang: 'en', layers: [], parts: [], links: [] });
     assert.equal(p.chats[0].partId, null);
     assert.equal(p.chats[0].partSource, 'none');
     assert.equal(calls, 0);

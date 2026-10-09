@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { attachToParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
+import { attachToParts, linkParts, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { norm } from './arch/parse.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
@@ -310,6 +310,7 @@ async function buildProject(ctx, { root, items }) {
     placeChanged(life, { smDir, projectId, arch }, jobs);
   }
 
+  const chatFiles = new Map(placed.filter((x) => x.shown).map((x) => [x.item.summary.sessionId, repoFiles(x.item.summary.editedFiles ?? [], root, x.item.summary.cwd)]));
   const milestones = roadmap?.milestones.map((m) => ({ ...m, workCellId: placed.find((x) => x.workCellId && x.item.card?.milestone === m.id)?.workCellId ?? null })) ?? null;
   const allRows = items.flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
   const cost = windowed(allRows, now, prices);
@@ -317,7 +318,8 @@ async function buildProject(ctx, { root, items }) {
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
-      arch: attachToParts(arch, chats, workCells), workCells,
+      arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }) },
+      workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, roadmap: milestones,
       decisions: [

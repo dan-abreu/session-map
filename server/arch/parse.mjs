@@ -267,5 +267,15 @@ export function parseArch(dir, files, source = 'worktree') {
   const placed = new Set(layers.flatMap((l) => l.partIds));
   const loose = parts.filter((p) => !placed.has(p.id)).map((p) => p.id);
   if (loose.length) layers.push({ id: 'other', name: lang === 'pt' ? 'Outros' : 'Other', partIds: loose });
-  return { source, dir, lang, layers, parts };
+  // A link from one part's file to another's ([Payments](payments.md)) is one of the reasons two parts are related.
+  const withRefs = parts.map((p, i) => {
+    const refs = new Set();
+    for (const m of files[partNames[i]].matchAll(/\]\(([^)\s]+?\.md)(?:#[^)\s]*)?\)/gi)) {
+      if (m[1].includes('://') || m[1].includes('..')) continue;
+      const id = resolveFile(m[1]);
+      if (id && id !== p.id) refs.add(id);
+    }
+    return { ...p, refs: [...refs].sort() };
+  });
+  return { source, dir, lang, layers, parts: withRefs };
 }

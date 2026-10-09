@@ -110,3 +110,16 @@ test('english sections and tokens are understood', () => {
 test('no files at all gives an empty architecture', () => {
   assert.deepEqual(parseArch(null, {}, 'none'), { source: 'none', dir: null, lang: 'en', layers: [], parts: [] });
 });
+
+test('a part lists the other parts its file links to, never itself or a file outside the map', () => {
+  const files = {
+    'README.md': '# Map\n',
+    'checkout.md': '# Checkout\n\nTakes the basket to [Payments](payments.md) and back to [the shop](./storefront.md#top).\nSee [itself](checkout.md), [elsewhere](../other.md) and [a site](https://x.test/a.md).\n',
+    'payments.md': '# Payments\n\nCharges the card.\n',
+    'storefront.md': '# Storefront\n\nShows products. Uses [Payments](payments.md) and [Payments again](payments.md).\n',
+  };
+  const a = parseArch('docs/architecture', files);
+  assert.deepEqual(part(a, 'checkout').refs, ['payments', 'storefront']);
+  assert.deepEqual(part(a, 'payments').refs, []);
+  assert.deepEqual(part(a, 'storefront').refs, ['payments']);
+});
