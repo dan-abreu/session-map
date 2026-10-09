@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.0
+
+The map is now your project's architecture, read from plain markdown in the repository, with every conversation and
+branch hung on its parts.
+
+- New: the architecture map. session-map reads the folder set in the config `architecture`, else the first of
+  `docs/arquitetura`, `docs/architecture`, `docs/arch`, from the working tree or, failing that, from the main branch
+  (from `origin/main` when the local `main` is behind it). The folder's `README.md` gives the layers (a mermaid
+  `subgraph` block or `##` headings); each part file gives its paths ("Where in the code") and its checklist ("What's
+  missing"), in English or Portuguese, with item codes, status, who, weight and roadmap step.
+- New: the mind map page. A horizontal tree of project, layers, parts, groups and items that opens and closes, with
+  zoom, drag, search and the open boxes remembered; an outline on the phone. Each box shows done/total, items with you,
+  items that block, conversations, who has a branch there, a pulsing dot where a chat is working and a red badge when
+  two branches touch the same file.
+- New: "Relations" draws dotted curves between parts that share chats, branches, lineage or file links, with the
+  reason on tap; "What changed" (today, 7 days, 30 days) lights only the boxes with activity.
+- New: the Board lists every item of the map in columns (to do, in progress, done), items that block or wait for a
+  person first.
+- New: "Waiting for you" gathers items with you, roadmap decisions, branch clashes and chats that ended with a
+  question.
+- New: chat on any point of the map. The first message carries that point's context (path on the map, the part's
+  description, the item's text and file) and the rule that keeps the map true: a new request becomes an item, starting
+  marks it in progress, finishing ticks it.
+- New: "New idea" opens a chat on the whole project. It proposes the part (or a new part) and the group, shows the line
+  it would add, and writes it only after your OK.
+- New: projects with no map show a banner to create one: a chat studies the repository, proposes the layers and parts,
+  and writes `docs/architecture/` (or `docs/arquitetura/`) only after your OK.
+- New: the `architecture` skill teaches the convention to every chat, VS Code and the terminal included; the `board`
+  skill cites the item code.
+- New: in the chat, "Use on this whole PC" writes `permissions.defaultMode` (only `default`, `acceptEdits` or `auto`,
+  never a bypass) into `~/.claude/settings.json` after a confirmation, keeps a backup and can undo.
+- Conversations are hung on parts by the item code they cite, then by the files they edited against the parts' paths,
+  then by the AI with the parts as candidates; branches by the files of their diff.
+- Chats run inside a git worktree now belong to the main checkout's project, so a worktree no longer shows as a second
+  project with the same map.
+- Item codes may have a longer word after the dash (`pf-lacuna2`).
+- Removed: the cells view (organs, tissues, cells and nuclei), the timeline bar, units and their consolidation, links
+  and tidying, and the d3-force and d3-quadtree files they used.
+- Repository: contributing guide, security policy, code of conduct, issue and pull request templates, Dependabot for
+  the workflow actions, this repository's own architecture in `docs/architecture/`, and new screenshots.
+
 ## 0.1.3
 
 Conversations started from the page stay, and the page chat runs in your own Claude Code permission mode.
