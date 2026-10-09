@@ -126,11 +126,16 @@ test('toolDetails masks a value by its key, nested ones too', () => {
 });
 
 test('maskSecrets stays linear on long runs that are almost secrets', () => {
-  for (const run of ['a1'.repeat(16_000), 'ab-'.repeat(11_000), `${'k'.repeat(30_000)}=`]) {
+  for (const run of ['a1'.repeat(16_000), '0123456789abcdef'.repeat(2_000), 'ab-'.repeat(11_000), `${'k'.repeat(30_000)}=`]) {
     const started = performance.now();
     maskSecrets(run);
     assert.ok(performance.now() - started < 100, `${run.slice(0, 6)}… took ${Math.round(performance.now() - started)} ms`);
   }
+});
+
+test('maskSecrets masks a giant token whole instead of overflowing the stack (a huge Write goes uncut into its diff)', () => {
+  const giant = 'aB3x'.repeat(2_000_000);
+  for (const prefix of ['', 'AIza', 'ghp_', 'sk-', 'github_pat_', 'xoxb-']) assert.equal(maskSecrets(`${prefix}${giant}`), '…', prefix || 'no prefix');
 });
 
 test('readConversation shows an edit as before and after', () => {
@@ -231,6 +236,34 @@ test('readConversation reports a version that changes when the file grows', () =
     const first = readConversation(path, { prices: PRICES }).version;
     writeFileSync(path, `${JSON.stringify(human(0, 'Hi'))}\n${JSON.stringify(assistant(1, 'm1', [{ type: 'text', text: 'Hello' }]))}\n`);
     assert.notEqual(readConversation(path, { prices: PRICES }).version, first);
+  });
+});
+
+test('an unchanged transcript is not read again: the live mirror asks every 3 s', () => {
+  withTranscript([human(0, 'Hi'), assistant(1, 'm1', [{ type: 'text', text: 'Hello' }])], (path) => {
+    const first = readConversation(path, { prices: PRICES });
+    assert.equal(readConversation(path, { prices: PRICES }).items, first.items, 'same version: the read already made');
+    writeFileSync(path, `${JSON.stringify(human(0, 'Hi'))}\n${JSON.stringify(assistant(1, 'm1', [{ type: 'text', text: 'Hello again' }]))}\n`);
+    const grown = readConversation(path, { prices: PRICES });
+    assert.notEqual(grown.items, first.items);
+    assert.equal(grown.items.at(-1).text, 'Hello again');
+  });
+});
+
+test('a huge step result is cut before it is masked, so reading it stays quick', () => {
+  const huge = `DB_PASSWORD=hunter2 ${'aB3x'.repeat(2_000_000)}`;
+  withTranscript([
+    human(0, 'Dump it'),
+    assistant(1, 'm1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'cat dump' } }]),
+    result(2, 't1', huge),
+  ], (path) => {
+    const started = performance.now();
+    const [tool] = readConversation(path, { prices: PRICES }).items.filter((i) => i.type === 'tool');
+    const ms = performance.now() - started;
+    assert.ok(tool.result.startsWith('DB_PASSWORD=…'), tool.result.slice(0, 40));
+    assert.equal(tool.cut, true);
+    assert.ok(tool.result.length <= 12_001);
+    assert.ok(ms < 250, `took ${Math.round(ms)} ms`);
   });
 });
 

@@ -12,7 +12,7 @@ import { log } from '../log.mjs';
 import { waitingFor } from '../parse/waiting.mjs';
 import { archivedPath } from '../archive.mjs';
 import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
-import { helperPath, maskSecrets, readConversation, readImage, toolDetails } from '../sources/claude-conversation.mjs';
+import { helperPath, maskSecrets, readConversation, readImage, toolDetails, versionOf } from '../sources/claude-conversation.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
@@ -529,11 +529,13 @@ ${prompt}`;
   }
 
   // The whole conversation as the chat screen shows it (mm22). since: the version the page already has.
+  // The version is compared before anything is read: the live mirror asks every 3 s, mostly to hear "nothing new".
   function itemsOf(src, since, keep = () => true) {
-    const read = src.file ? readConversation(src.file, { cwd: src.cwd }) : { items: [], version: '0' };
-    if (since && since === read.version) return { same: true, version: read.version };
-    const items = read.items.filter(keep);
-    for (const i of items) if (i.type === 'user') i.text = personsWords(i.text);
+    const version = src.file ? versionOf(src.file) : '0';
+    if (since && since === version) return { same: true, version };
+    const read = src.file ? readConversation(src.file, { cwd: src.cwd }) : { items: [], version };
+    // The read is shared with the next ask: new objects, never edits to its items.
+    const items = read.items.filter(keep).map((i) => (i.type === 'user' ? { ...i, text: personsWords(i.text) } : i));
     return { items, version: read.version };
   }
 

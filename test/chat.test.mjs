@@ -10,6 +10,7 @@ import { INTERNALS } from '../server/actions.mjs';
 import { buildArgs, translate } from '../server/chat/driver.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
 import { firstPrompt } from '../server/chat/prompt.mjs';
+import { readConversation } from '../server/sources/claude-conversation.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
 import { readLineage } from '../server/brain/lineage.mjs';
@@ -915,6 +916,24 @@ test('history gives every step, image and helper of a conversation, and says whe
       assert.equal(helper.status, 200);
       assert.deepEqual(helper.body.items.map((i) => [i.type, i.text]), [['user', 'Scan it'], ['assistant', 'Scanned.']]);
       assert.equal(hub.helper(VS, '../x', state).status, 404);
+    });
+  });
+});
+
+test('history shows the person\'s words without changing the read it shares with the next ask', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const VS = '88888888-8888-4888-8888-888888888888';
+    const folder = join(dir, 'projects', 'demo');
+    mkdirSync(folder, { recursive: true });
+    const sent = firstPrompt({ sections: ['Part of the architecture: Auth (Sign in.)'], text: 'Look', board: true });
+    const file = join(folder, `${VS}.jsonl`);
+    writeFileSync(file, `${JSON.stringify({ type: 'user', timestamp: '2026-10-01T10:00:00.000Z', message: { role: 'user', content: sent } })}\n`);
+    await withHub({ dir, env }, async ({ hub, state, root }) => {
+      state.projects[0].conversations = [{ sessionId: VS, title: 'Look', origin: 'vscode', partId: null, chattable: false, live: true, status: 'busy', costUSD: 0 }];
+      state[INTERNALS].chats.set(VS, { projectId: 'demo-abc123', root, cwd: root, pid: null });
+      assert.equal(hub.history(VS, state).body.items[0].text, 'Look');
+      assert.equal(readConversation(file, { cwd: root }).items[0].text, sent, 'the shared read keeps the prompt as written');
+      assert.equal(hub.history(VS, state).body.items[0].text, 'Look');
     });
   });
 });

@@ -22,10 +22,11 @@ const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 // A name that holds a secret, however it is prefixed or cased: DB_PASSWORD, apiKey, AWS_SECRET_ACCESS_KEY, x-api-key.
 const SECRET_NAME = /(?:api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|token|secret|password|passwd|pwd)$/i;
 // Every pattern here is linear: a long run is matched whole once (the lookbehind keeps it from restarting inside the
-// run) and judged by a function, never by lookaheads that rescan it from every position.
+// run) and judged by a function, never by lookaheads that rescan it from every position. "{8}x*", never "{8,}": V8
+// overflows its stack on an open count over a run of megabytes.
 const NAME_THEN_SIGN = /(?<![\w-])([\w-]+)(["']?[ \t]*[=:]\s*["']?)/g;
 const VALUE = /[^\s"'&,]+/y;
-const LONG_RUN = /(?<![\w+-])[\w+-]{32,}={0,2}/g;
+const LONG_RUN = /(?<![\w+-])[\w+-]{32}[\w+-]*={0,2}/g;
 const mixesCasesAndDigits = (s) => /[a-z]/.test(s) && /[A-Z]/.test(s) && /\d/.test(s);
 
 // Most specific first: a whole key block, then the shapes a token has, a password in a URL, then anything long that
@@ -34,7 +35,7 @@ const SECRETS = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '…'],
   [/\b(bearer|basic)\s+[^\s"']+/gi, '$1 …'],
   [/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '…'],
-  [/\b(?:sk|pk|rk)-[\w-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|\bxox[abprs]-[\w-]{10,}|\bAKIA[0-9A-Z]{16}\b|\bAIza[\w-]{30,}/g, '…'],
+  [/\b(?:sk|pk|rk)-[\w-]{8}[\w-]*|\bgh[pousr]_[A-Za-z0-9]{20}[A-Za-z0-9]*|\bgithub_pat_\w{20}\w*|\bxox[abprs]-[\w-]{10}[\w-]*|\bAKIA[0-9A-Z]{16}\b|\bAIza[\w-]{30}[\w-]*/g, '…'],
   [/(:\/\/[^\s:/@]+:)[^\s/@]+@/g, '$1…@'],
 ];
 
@@ -60,16 +61,25 @@ export function maskSecrets(text) {
   return out.replace(LONG_RUN, (run) => (mixesCasesAndDigits(run) ? '…' : run));
 }
 
-// A value under a secret's name is masked whole, whatever it looks like; the rest is masked by its shape.
+// What a step shows is cut at a few thousand characters: masking megabytes no one will see only stalls the server. The
+// margin lets a secret that straddles the cut still be recognized whole.
+const CUT_MARGIN = 256;
+const cut = (text, max) => (text.length > max ? { text: `${text.slice(0, max)}…`, cut: true } : { text, cut: false });
+function maskCut(text, max) {
+  const long = text.length > max + CUT_MARGIN;
+  const shown = cut(maskSecrets(long ? text.slice(0, max + CUT_MARGIN) : text), max);
+  return long && !shown.cut ? { text: `${shown.text}…`, cut: true } : shown;
+}
+
+// A value under a secret's name is masked whole, whatever it looks like; the rest is masked by its shape. No string is
+// longer than what the cut input can show.
 const maskDeep = (value, secret = false) => {
-  if (typeof value === 'string') return secret && value ? '…' : maskSecrets(value);
+  if (typeof value === 'string') return secret && value ? '…' : maskSecrets(value.slice(0, INPUT_MAX + CUT_MARGIN));
   if (typeof value === 'number' && secret) return '…';
   if (Array.isArray(value)) return value.map((v) => maskDeep(v, secret));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskDeep(v, secret || SECRET_NAME.test(k))]));
   return value;
 };
-
-const cut = (text, max) => (text.length > max ? { text: `${text.slice(0, max)}…`, cut: true } : { text, cut: false });
 
 // Edits as before and after: one hunk per replaced piece; a new file is all "after".
 function diffOf(name, input, cwd) {
@@ -156,15 +166,41 @@ function usageOf(entry) {
 
 let shippedPrices = null;
 
+// '0' when the file is gone.
+export function versionOf(path) {
+  try {
+    const st = statSync(path);
+    return `${st.size}-${Math.round(st.mtimeMs)}`;
+  } catch {
+    return '0';
+  }
+}
+
+// The last few reads, by file: the live mirror asks every 3 s and the image and helper routes open the same file, so an
+// unchanged one (same size and time) is served from here. Callers never change what they get.
+const READS_KEPT = 4;
+const reads = new Map();
+// Images are numbered the same whatever the prices: a read made only for one uses none.
+const NO_PRICES = {};
+
+function readOnce(path, cwd, prices) {
+  // Before reading: a write during the read then shows up as a new version on the next ask, never as a missed one.
+  const version = versionOf(path);
+  const kept = reads.get(path);
+  if (kept?.version === version && kept.cwd === cwd && kept.prices === prices) return kept;
+  const images = [];
+  const read = { version, cwd, prices, images, ...build(readEntries(path) ?? [], { cwd, prices, keep: images }) };
+  if (version === '0') return read;
+  reads.delete(path);
+  reads.set(path, read);
+  if (reads.size > READS_KEPT) reads.delete(reads.keys().next().value);
+  return read;
+}
+
 // → {items, costUSD, version}; items in the order they were written. A reply's own cost sits on its last message
 // (replyCostUSD); helpers are in the conversation's total, not here.
 export function readConversation(path, { cwd = '', prices } = {}) {
-  const { items, costUSD } = build(readEntries(path) ?? [], { cwd, prices: prices ?? (shippedPrices ??= loadPrices()) });
-  let version = '0';
-  try {
-    const st = statSync(path);
-    version = `${st.size}-${Math.round(st.mtimeMs)}`;
-  } catch { /* gone */ }
+  const { items, costUSD, version } = readOnce(path, cwd, prices ?? (shippedPrices ??= loadPrices()));
   return { items, costUSD, version };
 }
 
@@ -216,7 +252,7 @@ function build(entries, { cwd, prices, keep = null }) {
           if (AGENT_TOOLS.has(b.name)) {
             item.agent = {
               id: null, kind: b.input?.subagent_type ?? null, description: b.input?.description ?? '', model: b.input?.model ?? null, status: null, steps: null,
-              prompt: cut(maskSecrets(b.input?.prompt ?? ''), INPUT_MAX).text,
+              prompt: maskCut(b.input?.prompt ?? '', INPUT_MAX).text,
             };
           }
           items.push(item);
@@ -235,7 +271,7 @@ function build(entries, { cwd, prices, keep = null }) {
         item.answers = meta?.answers && typeof meta.answers === 'object' ? meta.answers : {};
         continue;
       }
-      const shown = cut(maskSecrets(resultText(b.content)), RESULT_MAX);
+      const shown = maskCut(resultText(b.content), RESULT_MAX);
       item.result = shown.text;
       item.isError = Boolean(b.is_error);
       if (shown.cut) item.cut = true;
@@ -253,9 +289,8 @@ function build(entries, { cwd, prices, keep = null }) {
 // The n-th image of a transcript (pasted by the person or returned by a step), in the order readConversation numbered them.
 export function readImage(path, n) {
   if (!Number.isInteger(n) || n < 0) return null;
-  const keep = [];
-  build(readEntries(path) ?? [], { cwd: '', prices: {}, keep });
-  const b = keep[n];
+  const kept = reads.get(path);
+  const b = (kept?.version === versionOf(path) ? kept : readOnce(path, '', NO_PRICES)).images[n];
   return b ? { media: b.source.media_type, data: Buffer.from(b.source.data, 'base64') } : null;
 }
 
