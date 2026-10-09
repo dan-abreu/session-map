@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.2
+
+Every conversation in one place, what is being worked on right now, and a say in which model does the work.
+
+- New: the conversation list, a column on the left of the map (a rail when folded, a drawer on the phone). It lists
+  every conversation of the project from the last 31 days, wherever it ran (map, VS Code, terminal, automation),
+  grouped as Working now (with the latest step), Waiting for you and Recent, each with its place on the map, age, cost
+  and origin. Search, This project / All projects. A click opens the branches down to its box, centers it with a
+  short pulse and opens the conversation beside the map; VS Code and terminal conversations show their history with
+  Open in VS Code / Open in a terminal. The conversations that create the map and the New idea ones are listed too.
+  Each box shows how many conversations it holds, and a click on the number filters the list.
+- New: Live. The Live button counts what is working now in every project and opens Working now: per conversation, its
+  way down the map, its latest steps, its workflows (done/total) with the helper agents still running and their model,
+  Show on map and Open conversation, refreshed every 5 seconds. On the map the way to the box being worked on lights
+  up, with the latest step under it. Workflow agents silent for 30 minutes are left out.
+- New: how a page chat runs. Automatic (the default) has Opus at high size each request: direct for small ones,
+  helper agents with an explicit model and effort for medium ones, and, for large or sensitive ones, a plain-words
+  explanation with a cost estimate and Yes / No buttons before the reinforced way; such a chat waits under Waiting for
+  you. "May reinforce on its own" goes ahead within a monthly limit (`budget.reinforcedMonthlyUSD`). Manual offers
+  Maestro, Ultracode (`--effort ultracode`, after a cost warning), Fixed model (Haiku, Sonnet or Opus at low to max)
+  and Same as my Claude. The chat header shows the way, the model and effort that really run, the conversation's cost
+  and why.
+- New: "Waiting for you" counts the open project, with a toggle for all projects.
+- New: the import preview of the Flow tab lists, on their own line, the relations that become README arrows.
+- Fixed: the chats that make a map or add an idea name a person on an item only when it needs one (a decision, an
+  account, a payment, something physical); they used to put people on code work.
+- Fixed: right after a restart, the Flow tab answers from the saved copy of the state instead of waiting for the
+  first full read of the history.
+- Fixed: workflows show their name (Claude Code keeps it as `workflowName`, and in the script's file name while the run
+  is going) instead of their id.
+- Fixed: "Same as my Claude" reads the effort as Claude Code does: a level saved under the model's full name
+  (`claude-opus-5-5`) applies to its alias (`opus[1m]`), and the user file's top-level `effortLevel`, which Opus 5.5
+  ignores, is no longer shown for it.
+
 ## 0.2.1
 
 The architecture's diagram gets its own tab, and it goes both ways: export it, edit it by hand or with a chat, and
