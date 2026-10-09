@@ -181,3 +181,21 @@ test('hasWt finds wt.exe on the PATH or in WindowsApps, and says no when it is i
     assert.equal(hasWt({ PATH: apps }), true);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test('open reaches a conversation only the list knows (older than the map): VS Code by its link, a terminal one by --resume', async () => {
+  const f = fixture();
+  const OLD_TERM = '12121212-1212-4121-8121-121212121212';
+  const OLD_VS = '13131313-1313-4131-8131-131313131313';
+  try {
+    const project = f.deps.state.projects[0];
+    project.conversations = [
+      { sessionId: OLD_TERM, origin: 'terminal', status: 'closed', live: false, chattable: true, archived: false },
+      { sessionId: OLD_VS, origin: 'vscode', status: 'closed', live: false, chattable: true, archived: false },
+    ];
+    f.deps.state[INTERNALS].chats.set(OLD_TERM, { projectId: 'shop-abc123', root: '/work/shop', cwd: '/work/shop/old', pid: null });
+    assert.equal((await runAction({ action: 'open', sessionId: OLD_TERM }, f.deps)).status, 200);
+    assert.deepEqual(f.spawned[0].args.slice(-3), ['claude', '--resume', OLD_TERM]);
+    assert.equal((await runAction({ action: 'open', sessionId: OLD_VS }, f.deps)).body.opened, 'vscode');
+    assert.equal((await runAction({ action: 'open', sessionId: UNKNOWN }, f.deps)).status, 404);
+  } finally { f.cleanup(); }
+});

@@ -149,7 +149,7 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'history' && parts.length === 5) {
-      const result = chat.history(verb);
+      const result = chat.history(verb, await state());
       return send(res, result.status, result.body);
     }
     if (parts.length !== 5) throw new HttpError(404, 'not-found');

@@ -281,6 +281,7 @@ export function liveStepsOf(entries, cwd) {
 function summarize(entries, sessionId) {
   let cwd = '';
   let gitBranch = '';
+  let entrypoint = '';
   let aiTitle = null;
   let lastPromptLine = null;
   let lastAssistantText = '';
@@ -304,6 +305,7 @@ function summarize(entries, sessionId) {
   entries.forEach((entry, i) => {
     if (typeof entry.cwd === 'string') cwd = entry.cwd;
     if (typeof entry.gitBranch === 'string') gitBranch = entry.gitBranch;
+    if (!entrypoint && typeof entry.entrypoint === 'string') entrypoint = entry.entrypoint;
     if (typeof entry.timestamp === 'string') {
       startedAt ??= entry.timestamp;
       endedAt = entry.timestamp;
@@ -364,6 +366,7 @@ function summarize(entries, sessionId) {
     sessionId,
     cwd,
     gitBranch,
+    entrypoint,
     aiTitle,
     title: aiTitle ?? (userPrompts[0] ?? '').slice(0, TITLE_MAX),
     lastPrompt: lastPromptLine ?? userPrompts.at(-1) ?? '',

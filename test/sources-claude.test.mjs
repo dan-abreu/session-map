@@ -299,3 +299,13 @@ test('liveSteps: a long target is cut at 80 characters, keeping the end of a pat
   assert.equal(run.target.length, 80);
   assert.ok(run.target.endsWith('…'));
 });
+
+test('readTranscript keeps where the conversation runs: the first entrypoint it wrote, empty when none', () => {
+  withTempDir((dir) => {
+    const file = join(dir, `${A}.jsonl`);
+    writeFileSync(file, `${[line({ type: 'user', entrypoint: 'claude-vscode', timestamp: '2026-10-09T10:00:01.000Z', message: { role: 'user', content: 'hi' } }), line({ type: 'assistant', entrypoint: 'cli', timestamp: '2026-10-09T10:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] } })].join('\n')}\n`);
+    assert.equal(readTranscript(file).entrypoint, 'claude-vscode');
+    writeFileSync(file, `${prompt('01', 'hi')}\n`);
+    assert.equal(readTranscript(file).entrypoint, '');
+  });
+});

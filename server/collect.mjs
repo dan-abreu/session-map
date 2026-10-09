@@ -34,6 +34,9 @@ const ACTIVITY_MAX = 300;
 const ACTIVITY_FILES_MAX = 50;
 const PUSH_MATCH_MS = 5 * 60_000;
 const NOBODY = { name: '', email: '' };
+// ponytail: the list gets the newest 300 of a project; page through the server if a month ever holds more.
+const CONVERSATIONS_MAX = 300;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Per-request data the page must not see (cwd, pid) but the actions need; same key as server/actions.mjs.
 const INTERNALS = Symbol.for('session-map.internals');
@@ -220,6 +223,70 @@ function activityItems(raw, events, touched, workCells, items) {
   return [...fromGit, ...fromEvents].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, ACTIVITY_MAX);
 }
 
+function originOf(sessionId, entrypoint, pageChats) {
+  if (pageChats[sessionId]) return 'map';
+  if (entrypoint === 'claude-vscode') return 'vscode';
+  // The Agent SDK: page chats are known above, so these are scripts and workflow agents.
+  if (entrypoint.startsWith('sdk')) return 'sdk';
+  return 'terminal';
+}
+
+// The list of conversations (plano-v02 § v0.2.2 item 0): every conversation of the window, shown on the map or not, plus the
+// page's own older than the window, which stay resumable. Light rows: the map's chats carry the full detail.
+function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived }) {
+  const onMap = new Map(chats.map((c) => [c.sessionId, c]));
+  const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
+  const nodeOf = (page) => (page?.node && typeof page.node.kind === 'string' ? page.node : null);
+  const fromTranscripts = placed.map((x) => {
+    const s = x.item.summary;
+    const live = liveById.get(s.sessionId);
+    const chat = onMap.get(s.sessionId);
+    const page = pageChats[s.sessionId];
+    return {
+      sessionId: s.sessionId,
+      title: cut(s.title || page?.title),
+      origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats),
+      partId: x.partId,
+      itemCode: itemByCodes(s.mentionedCodes, arch, x.partId) ?? nodeOf(page)?.code ?? null,
+      node: nodeOf(page),
+      status: live ? live.status : 'closed',
+      waiting: Boolean(chat && !chat.archived && (chat.waiting.strong || chat.waiting.weak || chat.waiting.items.length)),
+      lastStep: s.liveSteps?.at(-1) ?? null,
+      costUSD: x.costUSD,
+      startedAt: s.startedAt,
+      updatedAt: x.updatedAt,
+      archived: archived.has(s.sessionId),
+      live: Boolean(live),
+      chattable: !live,
+      onMap: Boolean(chat),
+    };
+  });
+  const seen = new Set(fromTranscripts.map((r) => r.sessionId));
+  const fromPage = Object.entries(pageChats)
+    .filter(([id, c]) => UUID_RE.test(id) && !seen.has(id) && c?.projectId === projectId)
+    .map(([sessionId, c]) => ({
+      sessionId,
+      title: cut(c.title),
+      origin: 'map',
+      partId: knownPart(c.partId),
+      itemCode: nodeOf(c)?.code ?? null,
+      node: nodeOf(c),
+      status: 'closed',
+      waiting: false,
+      lastStep: null,
+      costUSD: null,
+      startedAt: c.startedAt ?? null,
+      updatedAt: c.updatedAt ?? c.startedAt ?? null,
+      archived: archived.has(sessionId),
+      live: false,
+      chattable: true,
+      onMap: false,
+    }));
+  return [...fromTranscripts, ...fromPage]
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')) || a.sessionId.localeCompare(b.sessionId))
+    .slice(0, CONVERSATIONS_MAX);
+}
+
 // The link of the VS Code tunnel on this PC, for the phone; the page puts it in a href, so only https passes.
 const tunnelOf = (url) => (typeof url === 'string' && url.startsWith('https://') ? url : null);
 
@@ -285,7 +352,12 @@ async function buildProject(ctx, { root, items }) {
       chattable: !live,
     };
   });
-  for (const chat of chats) ctx.internals.set(chat.sessionId, { projectId, root, cwd: placed.find((x) => x.item.summary.sessionId === chat.sessionId).item.summary.cwd, pid: liveById.get(chat.sessionId)?.pid ?? null });
+  // Every conversation of the window, not only the shown ones: the list opens older ones in a terminal too.
+  for (const x of placed) {
+    const { sessionId, cwd } = x.item.summary;
+    ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null });
+  }
+  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived });
 
   const workCells = memo.workCells.map((w) => {
     const mine = placed.filter((x) => x.shown && x.workCellId === w.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
@@ -323,7 +395,7 @@ async function buildProject(ctx, { root, items }) {
       arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }) },
       workCells,
       ai: aiOn ? aiStatus(life, projectId) : null,
-      activity, chats, roadmap: milestones,
+      activity, chats, conversations, roadmap: milestones,
       decisions: [
         ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),
         ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId),

@@ -10,6 +10,8 @@ import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
 import { projectIdOf } from '../server/paths.mjs';
 
+const INTERNALS = Symbol.for('session-map.internals');
+
 const NOW = new Date('2026-09-10T12:00:00Z');
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -50,9 +52,9 @@ function repo(root, { arch = false } = {}) {
 }
 
 // One conversation file: 2 USD of claude-fake-1 per assistant line (200k input at 5/M + 40k output at 25/M).
-function writeChat(dir, { id, cwd, branch = 'main', title, prompts = ['add the cart'], edits = [], card, endedAgo = HOUR, question = false, mtimeAgo = endedAgo }) {
+function writeChat(dir, { id, cwd, branch = 'main', title, prompts = ['add the cart'], edits = [], card, endedAgo = HOUR, question = false, mtimeAgo = endedAgo, entrypoint }) {
   const ts = iso(endedAgo);
-  const base = { sessionId: id, cwd, gitBranch: branch, timestamp: ts };
+  const base = { sessionId: id, cwd, gitBranch: branch, timestamp: ts, ...(entrypoint ? { entrypoint } : {}) };
   const lines = [];
   if (title) lines.push({ type: 'ai-title', aiTitle: title, sessionId: id });
   for (const text of prompts) lines.push({ ...base, type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'text', text }] } });
@@ -462,4 +464,50 @@ test('clashItems says "your branches" when one person owns both, and names both 
   const theirs = items.find((i) => !i.sameOwner);
   assert.deepEqual(theirs.owners, ['Ana', 'Rui']);
   assert.equal(theirs.text, 'Ana (feat/a) and Rui (feat/c) touch the same file: src/a.ts');
+});
+
+test('conversations lists every conversation of the window, the page ones older than it, where each is and where it came from', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  const E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const F = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Cart page', edits: ['src/shop/cart.ts'], entrypoint: 'cli' });
+    writeChat(dir, { id: B, cwd: root, title: 'Invoices', prompts: ['work on `bi01` now'], question: true, entrypoint: 'claude-vscode' });
+    writeChat(dir, { id: C, cwd: root, title: 'Old idea', endedAgo: 5 * 24 * HOUR, entrypoint: 'cli' });
+    writeChat(dir, { id: D, cwd: join(smDir, 'ai-runner'), title: 'map ai call' });
+    writeChat(dir, { id: E, cwd: root, title: 'Dark mode', endedAgo: 2 * HOUR, entrypoint: 'sdk-cli' });
+    writeSession(dir, { pid: 4242, id: A, cwd: root, status: 'busy' });
+    const projectId = projectIdOf(root);
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
+      [E]: { projectId, root, cwd: root, partId: null, node: { kind: 'idea' }, title: 'Dark mode', startedAt: iso(3 * HOUR), updatedAt: iso(2 * HOUR) },
+      [F]: { projectId, root, cwd: root, partId: 'billing', node: { kind: 'part' }, title: 'Old billing chat', startedAt: iso(41 * 24 * HOUR), updatedAt: iso(40 * 24 * HOUR) },
+      'not-a-uuid': { projectId, title: 'junk' },
+      '99999999-9999-4999-8999-999999999999': { projectId: 'another-project', title: 'elsewhere' },
+    }));
+
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const [p] = state.projects;
+    const rows = p.conversations;
+    assert.deepEqual(rows.map((r) => r.sessionId), [A, B, E, C, F], 'newest first; the ai-runner, junk and other projects left out');
+    const by = Object.fromEntries(rows.map((r) => [r.sessionId, r]));
+    assert.deepEqual(rows.map((r) => r.origin), ['terminal', 'vscode', 'map', 'terminal', 'map']);
+    assert.equal(by[A].status, 'busy');
+    assert.deepEqual({ kind: by[A].lastStep.kind, target: by[A].lastStep.target }, { kind: 'edit', target: 'src/shop/cart.ts' });
+    assert.equal(by[A].partId, 'shop');
+    assert.equal(by[A].onMap, true);
+    assert.equal(by[A].costUSD, 2);
+    assert.equal(by[B].waiting, true, 'it ends with a question');
+    assert.equal(by[B].itemCode, 'bi01');
+    assert.equal(by[B].status, 'closed');
+    assert.equal(by[C].onMap, false, 'five days old: off the map, still in the list');
+    assert.equal(by[C].waiting, false);
+    assert.equal(by[C].chattable, true);
+    assert.deepEqual(by[E].node, { kind: 'idea' });
+    assert.equal(by[E].title, 'Dark mode');
+    assert.deepEqual([by[F].title, by[F].partId, by[F].status, by[F].costUSD, by[F].updatedAt], ['Old billing chat', 'billing', 'closed', null, iso(40 * 24 * HOUR)]);
+    for (const r of rows) assert.equal(r.cwd, undefined, 'the folder stays on the server');
+    assert.equal(state[INTERNALS].chats.get(C).cwd, root, 'an older conversation can still be opened in a terminal');
+  } finally { cleanup(dir, smDir, join(root, '..')); }
 });

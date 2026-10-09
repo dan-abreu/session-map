@@ -18,10 +18,15 @@ export const INTERNALS = Symbol.for('session-map.internals');
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 
+// The map's chats first, then the conversations only the list holds (older than the map's window).
 function findChat(state, sessionId) {
   for (const project of state.projects) {
     const chat = project.chats.find((c) => c.sessionId === sessionId);
     if (chat) return chat;
+  }
+  for (const project of state.projects) {
+    const row = project.conversations?.find((c) => c.sessionId === sessionId);
+    if (row) return { ...row, entrypoint: row.origin === 'vscode' ? 'claude-vscode' : '' };
   }
   return null;
 }

@@ -211,9 +211,11 @@ export function createChatHub({ smDir, dir = claudeDir(), bin, env = process.env
     chat.exited();
   }
 
+  // A chat is one of the map's, or one only the list holds (older than the map's window).
   function find(project, kind, id) {
-    const items = { part: project.arch?.parts, workCell: project.workCells, chat: project.chats }[kind] ?? [];
-    return items.find((x) => (kind === 'chat' ? x.sessionId : x.id) === id) ?? null;
+    if (kind === 'chat') return [...project.chats, ...(project.conversations ?? [])].find((c) => c.sessionId === id) ?? null;
+    const items = { part: project.arch?.parts, workCell: project.workCells }[kind] ?? [];
+    return items.find((x) => x.id === id) ?? null;
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
@@ -357,10 +359,10 @@ ${prompt}`;
 
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
   // holds as events (those arrive by subscribing), with the first prompt as the person wrote it.
-  function history(sessionId) {
+  function history(sessionId, state) {
     if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
     const page = readPageChats()[sessionId];
-    if (!page) return reply(404, { error: 'unknown-session' });
+    if (!page) return listedHistory(sessionId, state);
     const driven = drivenNow(sessionId);
     const file = transcriptOf(sessionId);
     const messages = (file ? readFullTranscript(file) : []).filter((m) => !driven || !m.ts || m.ts < driven.startedAt);
@@ -368,6 +370,17 @@ ${prompt}`;
     if (first) first.text = personsWords(first.text);
     const settings = settingsMode(page.root ?? page.cwd, dir);
     return reply(200, { sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings, messages, chatKey: driven?.key ?? null });
+  }
+
+  // A conversation of the list the page did not start (VS Code, a terminal): read here, written where it lives, unless
+  // the person resumes a closed one, which makes it a page conversation.
+  function listedHistory(sessionId, state) {
+    const project = state?.projects.find((p) => p.conversations?.some((c) => c.sessionId === sessionId));
+    if (!project) return reply(404, { error: 'unknown-session' });
+    const row = project.conversations.find((c) => c.sessionId === sessionId);
+    const file = transcriptOf(sessionId);
+    const messages = file ? readFullTranscript(file) : [];
+    return reply(200, { sessionId, title: row.title ?? '', mode: 'settings', settings: settingsMode(project.root, dir), messages, chatKey: null, readOnly: true });
   }
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);

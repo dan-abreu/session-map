@@ -641,3 +641,41 @@ test('a chat that is not the workshop never writes the draft, whatever its reply
     assert.equal(r.count((e) => e.type === 'draft'), 0);
   });
 });
+
+test('a conversation of the list the page did not start: its history reads read-only, and a closed one resumes with --resume', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const OLD = '55555555-5555-4555-8555-555555555555';
+    const OPEN_VS = '66666666-6666-4666-8666-666666666666';
+    const folder = join(dir, 'projects', 'demo');
+    mkdirSync(folder, { recursive: true });
+    const lines = (id, prompt) => [
+      { type: 'user', sessionId: id, timestamp: '2026-10-01T10:00:00.000Z', message: { role: 'user', content: prompt } },
+      { type: 'assistant', sessionId: id, timestamp: '2026-10-01T10:00:05.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n');
+    writeFileSync(join(folder, `${OLD}.jsonl`), `${lines(OLD, 'Rename the cart store')}\n`);
+    writeFileSync(join(folder, `${OPEN_VS}.jsonl`), `${lines(OPEN_VS, 'Fix the header')}\n`);
+    await withHub({ dir, env }, async ({ hub, state, root }) => {
+      state.projects[0].conversations = [
+        { sessionId: OLD, title: 'Rename the cart store', origin: 'terminal', partId: 'auth', chattable: true, live: false },
+        { sessionId: OPEN_VS, title: 'Fix the header', origin: 'vscode', partId: null, chattable: false, live: true },
+      ];
+      state[INTERNALS].chats.set(OLD, { projectId: 'demo-abc123', root, cwd: root, pid: null });
+      const shown = hub.history(OLD, state);
+      assert.equal(shown.status, 200);
+      assert.equal(shown.body.readOnly, true);
+      assert.equal(shown.body.title, 'Rename the cart store');
+      assert.deepEqual(shown.body.messages.map((m) => [m.role, m.text]), [['user', 'Rename the cart store'], ['assistant', 'Done.']]);
+      assert.equal(hub.history(OPEN_VS, state).body.readOnly, true);
+      assert.equal(hub.history(OLD).status, 404, 'without the state only page conversations are known');
+      assert.equal(hub.history('77777777-7777-4777-8777-777777777777', state).status, 404);
+
+      assert.equal((await hub.start({ projectId: 'demo-abc123', sessionId: OPEN_VS, text: 'x' }, state)).body.error, 'live-chat', 'open in VS Code: never two drivers');
+      const res = await hub.start({ projectId: 'demo-abc123', sessionId: OLD, text: 'And the tests' }, state);
+      assert.equal(res.status, 200);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      await nthTurnEnd(r, 1);
+      assert.equal(r.events.find((e) => e.type === 'session').data.sessionId, OLD);
+    });
+  });
+});
