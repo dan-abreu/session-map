@@ -103,8 +103,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 12:55 — "agora falo, as conversas no claude e conversas no vscode, vão aparecer como lá? tem que ser auto explicativo, saber de onde veio"; 2026-10-09 14:34 — "não to achando esse chat aqui no session"; 2026-10-09 14:36 — "eu quero os chats la identico a esse, todos igual mesmo, com o horario com tudo"; 2026-10-09 14:39 — "não quer completar logo tudo por aqui, porque la, ta faltando muita coisa, não da pra saber quando o chat é o claude ou vs, nao ta seperado os chats, tem muita coisa que precisa ser feita, mas não está acabada, mas pelo menos por la eu consigo acompanhar o que está sendo feito correto?"
   - What it means: every message of every conversation with the same formatting as Claude Code, the time of each message, Claude's steps, questions and answers, images, helpers and costs; each conversation's origin (VS Code, terminal, map, claude.ai) shown with a badge; the same chat screen and composer as Claude Code.
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
-  - Where it went: `mm22`, `mm23`, `mm04`; claude.ai conversations `rd04`.
-  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, is done on main; `mm23` is open; `rd04` waits for the owner's OK).
+  - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
+  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, is done on main; `mm23` is open; the list that shows at a glance where each chat comes from and what it is doing is open in `mm33`; `rd04` waits for the owner's OK).
 - [ ] Show where the work really happens, file by file, even from another chat `id37`
   - Asked: 2026-10-09 14:52 — "acho que as bolhas ficaram muito genericas ou ficam pontuais de mais, tipo não da pra falar que só aquilo é tudo e que aquilo realmente é tudo, ficou complexo, é como se a IA fosse mexer em uma coisa só mas mexe em mais coisas"; 2026-10-09 16:07 — "voce esta trabalhando no session map e eu nao to vendo onde"; 2026-10-09 16:08 — "eu quero isso pega real onde está sendo feito os trabalhos, mesmo em um chat diferente"
   - What it means: a conversation lights every part and project whose files it really edits (its own edits, its helpers' and its workflows'), in proportion, live as it edits; a middle level of components between a part and its items; an item that spans parts shows in each.
@@ -204,18 +204,18 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: pick 3 to 9 of a month: the button reads that range, and What changed, History and Costs show only that period; the range is still there after a reload.
   - Where it went: `mm06`.
   - Status: accepted.
-- [ ] Information separated by kind, and a polished, beautiful program `id55`
+- [ ] **in progress:** Information separated by kind, and a polished, beautiful program `id55`
   - Asked: 2026-10-09 13:39 — "acabamento também colocar mas um pouco separada as conversas iterns e etc para entender o que realmente de onde sao aqueles dados, aparece tudo junto, com uma linha separando, é complexo de mais, certo que pessoas do mundo de code entender na hora que ver mas pessoas que nunca mexeram é muita informação e visulamente não ter algo mais organizado fazendo a pessoa entender que aquilo é aquilo mesmo"; 2026-10-09 13:40 — "em tudo, algo mais poligo e bonito visualmente"
   - What it means: panels split into blocks by kind (tasks, chats, lines of work, what changed, files), each with its color, icon and where its data comes from; one visual system for the whole program written in `DESIGN.md`; screenshots approved by the owner before publishing.
   - How to confirm it is done: a part's panel shows separate blocks with their own title and "comes from"; `DESIGN.md` exists with tokens and components; the owner approved the screenshots of the release.
-  - Where it went: `mm07`, `mm08`.
-  - Status: accepted.
+  - Where it went: `mm07`, `mm08`, `mm33`.
+  - Status: in progress (`mm07` and `mm08` are done on main; the conversation list's obvious divisions are open in `mm33`; the owner has not yet approved the screenshots).
 - [ ] **in progress:** A readable chat: formatting and an input box that grows `id56`
   - Asked: 2026-10-09 16:04 — "nossa chat nao pega formatação nenhuma de nada ta cru, e também a onde escreve ele não vai crescendo de acordo com o que vai digitando ele é grande de mais e acaba que tem muita informação no chat e fica pouca coisa para a parte do dialogo a gente podia reever como melhorar e refinar isso"
   - What it means: replies rendered as markdown like Claude Code (headings, lists, tables, code with copy, links); the input starts at one line and grows to about 40% of the panel; a compact header; controls that fold away, so most of the height is dialogue.
   - How to confirm it is done: a reply with a table and a code block renders both; the empty input is one line high and grows while typing, then scrolls; the header takes one line.
-  - Where it went: `mm08`, `mm22`.
-  - Status: in progress (markdown replies are done on main with `mm22`; the growing input box, compact header and folding controls are open in `mm08`).
+  - Where it went: `mm08`, `mm22`, `mm23`.
+  - Status: in progress (markdown replies, the growing input box and the folding controls are done on main with `mm22` and `mm08`; the header shipped as two short lines, and the one-line header is open in `mm23`).
 
 ### Reading every detail
 
