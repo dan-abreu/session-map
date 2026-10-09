@@ -401,3 +401,35 @@ test('collect ties commits to the chat by subject when no hash was printed, incl
     rmSync(join(root, '..'), { recursive: true, force: true });
   }
 });
+
+// On a real machine a restart re-perceived every chat from the cache at once, and each finished chat started its
+// own consolidation pass: 18 passes applied the same cached "group" and left 17 empty tissues behind.
+test('chats perceived together start one consolidation pass at a time, so a group is made once', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'orchard'));
+  try {
+    seedUnitsFile(smDir, root, [
+      { id: 'water', name: 'Water', paths: [] }, { id: 'seeds', name: 'Seeds', paths: [] }, { id: 'unsorted', name: 'Unsorted', paths: [] },
+    ]);
+    const ids = Array.from({ length: 8 }, (_, i) => `eeeeeeee-eeee-4eee-8eee-${String(i).padStart(12, '0')}`);
+    ids.forEach((id, i) => writeChat(dir, { id, cwd: root, title: `Chat ${i}`, prompts: [`task ${i}`], endedAgo: HOUR + i * 60_000 }));
+    let passes = 0;
+    const run = async (prompt) => {
+      if (prompt.startsWith('You keep the map')) {
+        passes++;
+        return { ok: true, value: { changes: [{ kind: 'group', ids: ['water', 'seeds'], name: 'Care', purpose: '', tags: [] }] }, costUSD: 0.001 };
+      }
+      return { ok: true, value: { unitId: 'water', name: 'Water', purpose: '', tags: [] }, costUSD: 0.001 };
+    };
+    await collect({ dir, smDir, now: NOW, isAlive: alive, ai: { bin: 'fake-claude', run } });
+    await settleAi(smDir);
+    const units = JSON.parse(readFileSync(join(smDir, 'brain', projectIdOf(root), 'units.json'), 'utf8'));
+    assert.equal(units.filter((u) => u.name === 'Care').length, 1);
+    assert.ok(passes <= 2, `${passes} passes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(smDir, { recursive: true, force: true });
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  }
+});

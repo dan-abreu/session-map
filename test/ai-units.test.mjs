@@ -185,3 +185,26 @@ test('applyPerception learns the folders of the chat files as path hints, so bra
   assert.equal(applyPerception(seedUnits(), { sessionId: S1, files: many }, { unitId: 'coupons', name: 'Cupons', purpose: '', tags: [] }, NOW)
     .find((u) => u.id === 'coupons').paths.length, 20);
 });
+
+test('applyChanges drops groups the AI made that hold nothing, keeping pinned and hand-made ones', () => {
+  const units = [
+    ...seedUnits(),
+    unit('empty-ai', { level: 'tissue', name: 'Vazio' }),
+    unit('empty-pinned', { level: 'tissue', name: 'Fixado', pinned: true }),
+    unit('empty-user', { level: 'organ', name: 'Meu', origin: 'user' }),
+    unit('holder', { level: 'tissue', name: 'Com filho' }),
+  ];
+  units.find((u) => u.id === 'coupons').parentId = 'holder';
+  const ids = applyChanges(units, [], NOW).units.map((u) => u.id);
+  assert.ok(!ids.includes('empty-ai'));
+  for (const id of ['empty-pinned', 'empty-user', 'holder', 'checkout', 'unsorted']) assert.ok(ids.includes(id), id);
+});
+
+test('group into a name that already names a free unit of that level reuses it instead of making a twin', () => {
+  const units = [...seedUnits(), unit('carrinho', { level: 'tissue', name: 'Carrinho' }), unit('extra', { name: 'Extra' })];
+  units.find((u) => u.id === 'checkout').parentId = 'carrinho';
+  const { units: next } = applyChanges(units, [{ kind: 'group', ids: ['coupons', 'extra'], name: 'carrinho', purpose: '', tags: [] }], NOW);
+  assert.equal(next.filter((u) => u.level === 'tissue').length, 1);
+  assert.equal(next.find((u) => u.id === 'coupons').parentId, 'carrinho');
+  assert.equal(next.find((u) => u.id === 'extra').parentId, 'carrinho');
+});

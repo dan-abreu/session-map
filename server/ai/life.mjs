@@ -27,7 +27,7 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     ...('bin' in ai ? { bin: ai.bin } : {}),
     ...(ai.run ? { run: ai.run } : {}),
   });
-  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map() };
+  const life = { queue, bootstrapLimit: cfg.bootstrapLimit, pending: new Set(), perceived: new Map(), inFlight: new Set(), boot: new Map(), since: new Map(), lastPass: new Map(), consolidating: new Set() };
   lives.set(smDir, life);
   return life;
 }
@@ -69,15 +69,23 @@ async function perceiveChat(life, p, item, workCell, uncapped) {
   return answer?.costUSD ?? 0;
 }
 
+// One pass per project at a time: chats answered from the cache finish together, and each would start its own pass
+// on the same cached answer, applying the same "group" again and again.
 async function consolidateProject(life, p, uncapped) {
-  const ask = (req) => life.queue.ask({ ...req, uncapped, projectId: p.projectId });
-  const changes = await consolidate(unitsNow(p.smDir, p.projectId), readEvents(p.smDir, p.projectId), ask);
-  const before = unitsNow(p.smDir, p.projectId);
-  const { units, events } = applyChanges(before, changes, new Date().toISOString());
-  saveUnits(p.smDir, p.projectId, before, units);
-  appendEvents(p.smDir, p.projectId, events);
+  if (life.consolidating.has(p.projectId)) return;
+  life.consolidating.add(p.projectId);
   life.since.set(p.projectId, 0);
-  life.lastPass.set(p.projectId, Date.now());
+  try {
+    const ask = (req) => life.queue.ask({ ...req, uncapped, projectId: p.projectId });
+    const changes = await consolidate(unitsNow(p.smDir, p.projectId), readEvents(p.smDir, p.projectId), ask);
+    const before = unitsNow(p.smDir, p.projectId);
+    const { units, events } = applyChanges(before, changes, new Date().toISOString());
+    saveUnits(p.smDir, p.projectId, before, units);
+    appendEvents(p.smDir, p.projectId, events);
+    life.lastPass.set(p.projectId, Date.now());
+  } finally {
+    life.consolidating.delete(p.projectId);
+  }
 }
 
 // A new project: the most recent conversations are perceived right away, outside the hourly cap, then tidied once.

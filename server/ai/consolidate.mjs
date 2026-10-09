@@ -96,9 +96,10 @@ export function applyChanges(units, changes, now = new Date().toISOString()) {
       const level = rank(children[0]) + 1;
       const shared = parents.size === 1 ? byId.get(children[0].parentId) : null;
       const parentId = shared && rank(shared) > level ? shared.id : null;
-      const parent = newUnit(next, { ...c, level: LEVELS[level], parentId }, now);
+      const sameName = (u) => u.level === LEVELS[level] && plainName(u.name) === plainName(c.name) && isEditable(u);
+      const parent = next.find(sameName) ?? newUnit(next, { ...c, level: LEVELS[level], parentId }, now);
       for (const child of children) child.parentId = parent.id;
-      next.push(parent);
+      if (!next.includes(parent)) next.push(parent);
       events.push(event('grouped', now, [parent.id, ...c.ids], parent.name));
     } else if (c.kind === 'rename') {
       const u = byId.get(c.id);
@@ -112,5 +113,17 @@ export function applyChanges(units, changes, now = new Date().toISOString()) {
       events.push(event('grouped', now, c.parentId ? [c.parentId, u.id] : [u.id], u.name));
     }
   }
-  return { units: next, events };
+  return { units: withoutEmptyGroups(next), events };
+}
+
+const plainName = (name) => String(name).toLowerCase().replace(/s+/g, ' ').trim();
+
+// A tissue or organ the AI made is only its members; once they all left, it is noise on the map.
+function withoutEmptyGroups(units) {
+  let next = units;
+  for (;;) {
+    const kept = next.filter((u) => u.level === 'cell' || u.pinned || u.origin !== 'ai' || u.chatIds.length || next.some((c) => c.parentId === u.id));
+    if (kept.length === next.length) return next;
+    next = kept;
+  }
 }
