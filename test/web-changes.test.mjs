@@ -78,3 +78,8 @@ test('a change by a helper of a team says the helper and its team, and keeps the
   assert.equal(whoWords(t, { ...base, model: 'claude-opus-5-5' }), 'Checkout · Opus 5.5');
   assert.equal(whoWords(t, { sessionId: null }), 'changes.who.outside');
 });
+
+test('a removed file whose content was not kept says so in plain words, in both languages', async () => {
+  const { LANGS } = await import('../server/web/i18n.js');
+  for (const lang of ['en', 'pt-BR']) assert.ok(LANGS[lang]['err.not-kept'], `${lang} err.not-kept`);
+});

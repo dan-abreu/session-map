@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collect } from '../server/collect.mjs';
 import { changeDetailOf, changesOf } from '../server/changes-state.mjs';
 import { projectIdOf } from '../server/paths.mjs';
+import { keepSnapshots, readSnapshot } from '../server/snapshots.mjs';
 
 const NOW = new Date('2026-10-09T12:00:00Z');
 const A = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -98,6 +99,150 @@ test('collect turns every step that touched a file into a change of the right pr
     const hand = await changeDetailOf(state, project.id, byPath['notes.txt'].id);
     assert.deepEqual(hand.hunks[0].lines, ['+by hand']);
     assert.equal(await changeDetailOf(state, project.id, 'nope'), null);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// A token shaped like a real key, built in pieces so no scanner mistakes the test for a leak.
+const TOKEN = ['sk', 'ant', 'api03', 'Zq8Xw2Lm4Np6Rt0Yv'].join('-');
+
+async function shopWith(files) {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-kept-')));
+  const dir = join(base, 'claude');
+  const smDir = join(base, 'sm');
+  mkdirSync(smDir);
+  const shop = repo(join(base, 'shop'), { ...ARCH, ...files });
+  const projDir = join(dir, 'projects', 'shop');
+  mkdirSync(join(projDir, A), { recursive: true });
+  const file = join(projDir, `${A}.jsonl`);
+  const lines = [
+    { type: 'ai-title', aiTitle: 'Kept content', sessionId: A },
+    { sessionId: A, cwd: shop, timestamp: iso(30 * MIN), type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'text', text: 'tidy up' }] } },
+  ];
+  const t = (NOW.getTime() - MIN) / 1000;
+  const write = (more = []) => {
+    lines.push(...more);
+    writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    utimesSync(file, t, t);
+  };
+  write();
+  const pass = async () => {
+    const state = await collect({ dir, smDir, now: NOW, isAlive: () => true, ai: { bin: null } });
+    const project = state.projects.find((p) => p.id === projectIdOf(shop));
+    const rows = changesOf(state, project.id);
+    return { state, project, byPath: (path) => rows.find((r) => r.path === path) };
+  };
+  // Files written now get a time a few minutes before NOW, as they would have been written before the pass.
+  const put = (rel, text) => {
+    mkdirSync(join(shop, rel, '..'), { recursive: true });
+    writeFileSync(join(shop, rel), text);
+    const at = (NOW.getTime() - 3 * MIN) / 1000;
+    utimesSync(join(shop, rel), at, at);
+  };
+  const filesUnder = (root) => readdirSync(root, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => readFileSync(join(e.parentPath, e.name), 'utf8'));
+  return { base, smDir, shop, write, pass, put, filesUnder, done: () => rmSync(base, { recursive: true, force: true }) };
+}
+
+test('the before and after never shows a key: not in a file not saved yet, not in a removed saved file', async () => {
+  const s = await shopWith({ 'src/shop/cfg.js': 'const a = 1;\n', 'src/billing/old.js': `const key = "${TOKEN}";\n` });
+  try {
+    s.put('src/shop/cfg.js', `const a = 1;\nconst key = "${TOKEN}";\n`);
+    unlinkSync(join(s.shop, 'src', 'billing', 'old.js'));
+    s.write(pair(s.shop, 2 * MIN, 'Bash', { command: 'git rm -q src/billing/old.js' }, { stdout: '' }));
+    const { state, project, byPath } = await s.pass();
+    const edited = await changeDetailOf(state, project.id, byPath('src/shop/cfg.js').id);
+    assert.deepEqual(edited.hunks[0].lines.filter((l) => l.startsWith('+')), ['+const key = "…";']);
+    const gone = await changeDetailOf(state, project.id, byPath('src/billing/old.js').id);
+    assert.equal(gone.before, 'const key = "…";\n');
+  } finally {
+    s.done();
+  }
+});
+
+test('a file written, edited and removed keeps the content it had last, not the one it was written with', async () => {
+  const s = await shopWith({});
+  try {
+    const abs = join(s.shop, 'src', 'shop', 'new.js');
+    s.write(pair(s.shop, 10 * MIN, 'Write', { file_path: abs, content: 'v1\n' }, { type: 'create', filePath: abs, content: 'v1\n', structuredPatch: [] }));
+    s.write(pair(s.shop, 8 * MIN, 'Edit', { file_path: abs, old_string: 'v1', new_string: 'v2 latest' }, { filePath: abs, structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-v1', '+v2 latest'] }] }));
+    s.put('src/shop/new.js', 'v2 latest\n');
+    await s.pass();
+    unlinkSync(abs);
+    s.write(pair(s.shop, 2 * MIN, 'Bash', { command: 'rm src/shop/new.js' }, { stdout: '' }));
+    const { state, project, byPath } = await s.pass();
+    const gone = await changeDetailOf(state, project.id, byPath('src/shop/new.js').id);
+    assert.equal(gone.before, 'v2 latest\n');
+    assert.ok(!existsSync(join(s.shop, '.session-map')) && s.filesUnder(s.smDir).some((t) => t === 'v2 latest\n'), 'the copy lives in the session-map folder, never in the project');
+  } finally {
+    s.done();
+  }
+});
+
+test('a file written then edited and removed before any pass saw it says its content was not kept, never the first version', async () => {
+  const s = await shopWith({});
+  try {
+    const abs = join(s.shop, 'src', 'shop', 'new.js');
+    s.write([
+      ...pair(s.shop, 10 * MIN, 'Write', { file_path: abs, content: 'v1\n' }, { type: 'create', filePath: abs, content: 'v1\n', structuredPatch: [] }),
+      ...pair(s.shop, 8 * MIN, 'Edit', { file_path: abs, old_string: 'v1', new_string: 'v2 latest' }, { filePath: abs, structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-v1', '+v2 latest'] }] }),
+      ...pair(s.shop, 2 * MIN, 'Bash', { command: 'rm src/shop/new.js' }, { stdout: '' }),
+    ]);
+    const { state, project, byPath } = await s.pass();
+    const gone = await changeDetailOf(state, project.id, byPath('src/shop/new.js').id);
+    assert.deepEqual(gone, { hunks: [], error: 'not-kept' });
+  } finally {
+    s.done();
+  }
+});
+
+test('a file made and removed by hand, never saved, shows as removed with what it had; a secrets file is never copied', async () => {
+  const s = await shopWith({});
+  try {
+    s.put('notes.txt', `by hand\nkey ${TOKEN}\n`);
+    s.put('.env', `API_KEY=${TOKEN}\n`);
+    await s.pass();
+    assert.ok(s.filesUnder(s.smDir).every((t) => !t.includes(TOKEN)), 'nothing kept in the session-map folder holds the key');
+    unlinkSync(join(s.shop, 'notes.txt'));
+    const { state, project, byPath } = await s.pass();
+    const gone = byPath('notes.txt');
+    assert.deepEqual([gone.kind, gone.sessionId, gone.removed, gone.state], ['delete', null, 2, 'pending']);
+    assert.equal((await changeDetailOf(state, project.id, gone.id)).before, 'by hand\nkey …\n');
+  } finally {
+    s.done();
+  }
+});
+
+test('a changed file that is saved again drops its copy: the version history holds it', async () => {
+  const s = await shopWith({ 'src/shop/cart.js': 'a\n' });
+  try {
+    s.put('src/shop/cart.js', 'a\nb\n');
+    await s.pass();
+    assert.ok(s.filesUnder(s.smDir).includes('a\nb\n'));
+    git(s.shop, 'commit', '-q', '-am', 'save');
+    await s.pass();
+    assert.ok(!s.filesUnder(s.smDir).includes('a\nb\n'));
+  } finally {
+    s.done();
+  }
+});
+
+test('a copy of a removed file goes a month after the file was last seen', async () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-keep-')));
+  try {
+    const root = join(base, 'p');
+    const dir = join(base, 'kept');
+    mkdirSync(root);
+    writeFileSync(join(root, 'a.txt'), 'one\n');
+    const day = 24 * 60 * MIN;
+    const t0 = NOW.getTime();
+    keepSnapshots(dir, root, [{ path: 'a.txt', kind: 'create' }], t0, 30 * day);
+    unlinkSync(join(root, 'a.txt'));
+    assert.deepEqual(keepSnapshots(dir, root, [], t0 + day, 30 * day).map((g) => [g.path, g.removed]), [['a.txt', 1]]);
+    assert.equal(readSnapshot(dir, 'a.txt', t0 + day), 'one\n');
+    assert.deepEqual(keepSnapshots(dir, root, [], t0 + 32 * day, 30 * day), []);
+    assert.equal(readSnapshot(dir, 'a.txt', t0 + 32 * day), null);
+    assert.deepEqual(readdirSync(dir), ['index.json']);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

@@ -11,7 +11,9 @@ import { changeDetail, changeRows, freshOf, readChanges } from './changes.mjs';
 import { isSecretsFile, readFileForView, worktreeDiff } from './files.mjs';
 import { placer } from './footprint.mjs';
 import { normalizePath } from './paths.mjs';
+import { keepSnapshots, readSnapshot, snapshotDir } from './snapshots.mjs';
 import { helperAgents } from './sources/claude.mjs';
+import { maskSecrets } from './sources/claude-conversation.mjs';
 import { firstTagWith, workingTree } from './sources/git.mjs';
 
 const INTERNALS = Symbol.for('session-map.internals');
@@ -106,13 +108,16 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById }, bui
   const store = new Map();
   for (const b of built) {
     const root = b.project.root;
-    const worktree = (await workingTree(root)).map((w) => ({ ...w, ts: w.kind === 'delete' ? null : mtimeIso(root, w.path) }));
+    const snapDir = snapshotDir(smDir, b.project.id);
+    const tree = await workingTree(root);
+    const gone = keepSnapshots(snapDir, root, tree, nowMs, windowMs);
+    const worktree = [...tree.map((w) => ({ ...w, ts: w.kind === 'delete' ? null : mtimeIso(root, w.path) })), ...gone];
     const base = { events: events.get(b.key), worktree, commits: b.commits ?? [], ownersOf: b.ownersOf, nowIso: now.toISOString() };
     const draft = changeRows(base);
     const hashes = [...new Set(draft.filter((r) => r.hash).map((r) => r.hash))].slice(0, TAGGED_MAX);
     const rows = changeRows({ ...base, tagOf: await tagsFor(root, hashes, nowMs) }).slice(0, ROWS_MAX);
     for (const r of rows) if (r.id.startsWith('wt:')) refs.get(b.key).set(r.id, { wt: r.path });
-    store.set(b.project.id, { root, rows, refs: refs.get(b.key) });
+    store.set(b.project.id, { root, snapDir, rows, refs: refs.get(b.key) });
     b.project.fresh = freshOf(rows, nowMs);
   }
   return store;
@@ -122,8 +127,11 @@ const entryOf = (state, projectId) => state?.[INTERNALS]?.changes?.get(projectId
 
 export const changesOf = (state, projectId) => entryOf(state, projectId)?.rows ?? [];
 
-// The before and after of one change: {hunks, cut} for an edit or a new file; {hunks: [], before} for a removed one, its
-// previous content from the version before it was removed (or the text a conversation wrote when it never was saved);
+const maskLine = (l) => l.slice(0, 1) + maskSecrets(l.slice(1));
+
+// The before and after of one change, secrets masked: {hunks, cut} for an edit or a new file; {hunks: [], before} for a
+// removed one, its previous content: the last copy a pass kept (snapshots.mjs), else the version before it was removed,
+// else the text a conversation wrote when no step changed it after; {error: 'not-kept'} when none of them holds it;
 // {error} for a secrets file. null for an unknown change.
 export async function changeDetailOf(state, projectId, id) {
   const entry = entryOf(state, projectId);
@@ -131,16 +139,24 @@ export async function changeDetailOf(state, projectId, id) {
   const row = ref && entry.rows.find((r) => r.id === id);
   if (!row) return null;
   if (isSecretsFile(row.path) || (row.from && isSecretsFile(row.from))) return { hunks: [], error: 'sensitive' };
+  if (row.kind === 'delete') {
+    const kept = entry.snapDir ? readSnapshot(entry.snapDir, row.path, Date.parse(row.ts)) : null;
+    if (kept !== null) return { hunks: [], before: kept };
+  }
   if (ref.wt) {
     const d = await worktreeDiff(entry.root, ref.wt);
-    return d.ok ? { hunks: d.hunks, cut: d.cut } : { hunks: [], error: d.error };
+    if (d.ok) return { hunks: d.hunks.map((h) => ({ ...h, lines: h.lines.map(maskLine) })), cut: d.cut };
+    return { hunks: [], error: d.error === 'not-found' && row.kind === 'delete' ? 'not-kept' : d.error };
   }
   if (row.kind === 'delete') {
     const prev = await readFileForView(entry.root, row.path, { ref: row.hash ? `${row.hash}^` : 'HEAD' });
-    if (prev.ok) return { hunks: [], before: prev.text };
+    if (prev.ok) return { hunks: [], before: maskSecrets(prev.text) };
     const made = entry.rows.find((r) => r.path === row.path && r.kind === 'create' && r.ts <= row.ts && entry.refs.get(r.id)?.file);
-    const d = made && changeDetail(entry.refs.get(made.id).file, entry.refs.get(made.id).change);
-    return d ? { hunks: [], before: d.hunks.flatMap((h) => h.lines.map((l) => l.slice(1))).join('\n') } : { hunks: [], error: prev.error };
+    // A step that changed it after it was written makes that text stale: better say it was not kept than show it.
+    const changedSince = made && entry.rows.some((r) => r !== made && r !== row && r.path === row.path && r.ts >= made.ts && r.ts <= row.ts);
+    const d = made && !changedSince && changeDetail(entry.refs.get(made.id).file, entry.refs.get(made.id).change);
+    if (d) return { hunks: [], before: d.hunks.flatMap((h) => h.lines.map((l) => l.slice(1))).join('\n') };
+    return { hunks: [], error: prev.error === 'not-found' ? 'not-kept' : prev.error };
   }
   if (row.kind === 'rename') return { hunks: [] };
   return changeDetail(ref.file, ref.change) ?? { hunks: [], error: 'not-found' };

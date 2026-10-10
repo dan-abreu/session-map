@@ -244,7 +244,7 @@ Nothing here is code. The closed registry is this file, read by the map like eve
 - [x] See where the work is happening: what is being created, edited and deleted `id68`
   - Asked: 2026-10-09 16:46 — "quero ver onde eles estão mexendo o que estão criando, o que estão apagando, quero isso, saber tudo mesmo do programa"
   - What it means: a live Changes tab with every file touched (created, edited, deleted, renamed), who touched it, where in the map, lines added and removed, the before/after diff, and whether it is saved, committed or released.
-  - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content; see `mm30`.
+  - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content (the last version a pass of the server saw, masked); see `mm30`.
   - Where it went: `mm30`; what is left in `mm35`.
   - Status: done (on main): the Changes tab lists every file created, edited, removed or renamed by the conversations, their helpers and workflow agents, and what the folder holds not saved yet, with who, where, lines, before and after, and saved → released; the boxes light with "+N files +M lines now". Edits made by a command (a script, a formatter) still read "outside the conversations": `mm35`.
 - [x] See where each workflow is working and which request started it, several places at once `id69`
