@@ -1,4 +1,4 @@
-// The two shapes the panels share (wa06, mm07): a sign that explains itself, and a block of one kind of information.
+// The shapes the panels share (wa06, mm07): a sign that explains itself, and a block of one kind of information.
 // ctx: h, icon(name, cls) (may be missing), t (the translator of the moment). The words come from signals.js and kinds.js.
 import { signalWords } from './signals.js';
 import { KIND_LOOK, kindWords } from './kinds.js';
@@ -40,3 +40,18 @@ export function kindBlock(ctx, kind, { title, vars, empty, from } = {}, ...conte
 
 // The small mark of a kind (icon in its colour), for lists and rows that only need to say "this is a conversation".
 export const kindMark = (ctx, kind) => ctx.h('span', { class: `kind-mark kind-${kind}`, 'aria-hidden': 'true' }, mark(ctx, KIND_LOOK[kind].icon, 'kind-icon'));
+
+const TAB_KIND = { tasks: 'tasks', chats: 'chats', changes: 'changes', files: 'files' };
+
+// The strip at the top of a box's sheet (mm07): one tab per kind of information, then the chat, as one tablist with one
+// tab stop (the arrows move inside). labels: words a tab takes on this sheet instead of its own ({chats: 'Project chats'}).
+export function pointStrip(ctx, tabs, active, onPick, labels = {}) {
+  const { h, t } = ctx;
+  const plainMark = (name) => h('span', { class: 'kind-mark kind-neutral', 'aria-hidden': 'true' }, mark(ctx, name, 'kind-icon'));
+  const markOf = (tab) => (TAB_KIND[tab] ? kindMark(ctx, TAB_KIND[tab]) : plainMark(tab === 'chat' ? 'send' : 'compass'));
+  return h('div', { class: 'seg ptabs', role: 'tablist', 'aria-label': t('ptab.label') }, tabs.map((tab) => h('button', {
+    type: 'button', role: 'tab', id: `ptab-${tab}`, 'data-ptab': tab, class: TAB_KIND[tab] ? `kind-${TAB_KIND[tab]}` : tab === 'chat' ? 'is-talk' : '',
+    'aria-selected': String(tab === active), tabindex: tab === active ? '0' : '-1', 'aria-controls': tab === 'chat' ? 'chatPane' : 'pointDetails',
+    onclick: () => onPick(tab),
+  }, markOf(tab), labels[tab] ?? t(`ptab.${tab}`))));
+}

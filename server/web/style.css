@@ -522,9 +522,20 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .ol-box { flex: 1; min-width: 0; padding: 8px 12px; }
 .ol-item.k-item > .ol-row .ol-box { padding: 8px 10px; }
 
-/* ---------- point sheet: chat beside the map, details in a tab ---------- */
+/* ---------- point sheet: a box's information in tabs by kind, its chat as the last tab (mm07) ---------- */
 
-.point-tabs { margin: 10px 20px 0; align-self: flex-start; }
+.point-tabs { flex: none; margin: 10px 16px 0; }
+.point-tabs .ptabs { margin: 0; }
+/* The Summary and the chat are not kinds of information: neutral marks, the chat set a little apart by a hairline. */
+.ptabs .is-talk { position: relative; }
+.ptabs .is-talk::before { content: ""; position: absolute; left: -2px; top: 8px; bottom: 8px; border-left: 1px solid var(--line); }
+.kind-neutral { --k-fill: var(--bg-3); --k-ink: var(--ink); }
+.point-details { padding-top: 14px; }
+.no-files { display: flex; align-items: center; gap: 6px; }
+/* In the project Summary a waiting row is one line of reason, title and place; the full sign is one click away. */
+.wait-rows { gap: 0; margin: 0 -12px; }
+.wait-rows .wi-detail, .wait-rows .wi-do, .wait-rows .wi-go, .wait-rows .wi-actions { display: none; }
+.wait-rows .waiting-item { padding: 8px 12px; }
 .point-tabs[hidden] { display: none; }
 .chat-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .chat-pane[hidden], .point-details[hidden] { display: none; }
@@ -1440,7 +1451,8 @@ body.is-resizing .sheet { animation: none; }
     margin-left: -18px; border-radius: var(--r-xs); background: var(--line);
   }
   .panel-body { padding: 4px 16px 20px; }
-  .point-tabs { margin: 10px 16px 0; }
+  .point-tabs { margin: 8px 12px 0; }
+  .point-tabs .ptabs button { font-size: var(--fs-2xs); }
   .btn { height: 40px; }
 }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0.4; } }
@@ -2437,6 +2449,12 @@ body:not(.is-tech) .bx-code, body:not(.is-tech) .code-chip { display: none; }
 .bx-size { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: var(--fs-2xs); font-weight: 550; color: color-mix(in srgb, var(--lv-ink) 70%, var(--lv-bg)); }
 .bx-size-count { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .bx-share { padding: 0 6px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--lv-ink) 9%, transparent); color: var(--lv-ink); font-weight: 650; white-space: nowrap; }
+/* No file linked yet: a quiet sentence and a small "?" mark (the reason is in the title). */
+.bx-size.is-none { flex-wrap: nowrap; align-items: flex-start; font-weight: 500; font-style: italic; white-space: normal; }
+.bx-q {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: var(--r-pill);
+  font-size: var(--fs-2xs); font-style: normal; font-weight: 700; line-height: 1;
+}
 .bx-size .sep { color: color-mix(in srgb, var(--lv-ink) 35%, var(--lv-bg)); }
 .bx-size-icon, .bx-foot-icon, .cv-work-icon, .now-work-icon { flex: none; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .bx-chip.is-unowned { justify-self: start; width: fit-content; background: var(--clash-fill); color: var(--clash-ink); }

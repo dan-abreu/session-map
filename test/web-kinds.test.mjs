@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { INFO_KINDS, KIND_LOOK, POINT_TABS, TAB_OF, kindWords, pointTabs, kindDigest } from '../server/web/kinds.js';
+import { INFO_KINDS, KIND_LOOK, POINT_TABS, TAB_OF, kindWords, pointTabs, projectTabs, openingTab, kindDigest } from '../server/web/kinds.js';
 import { translator } from '../server/web/i18n.js';
 
 const WEB = new URL('../server/web/', import.meta.url);
@@ -41,10 +41,29 @@ test('one colour and one icon per kind, defined for light and dark, so every scr
   assert.equal(new Set(INFO_KINDS.map((k) => KIND_LOOK[k].icon)).size, 5, 'no two kinds share an icon');
 });
 
-test('pointTabs shows the Summary and only the tabs that have something, in the canonical order', () => {
-  assert.deepEqual(pointTabs({}), ['summary']);
-  assert.deepEqual(pointTabs({ files: true, tasks: true }), ['summary', 'tasks', 'files']);
-  assert.deepEqual(pointTabs({ tasks: true, chats: true, changes: true, files: true }), POINT_TABS);
+test('pointTabs shows the Summary, only the tabs that have something, and the chat last: the chat never stands alone', () => {
+  assert.deepEqual(pointTabs({}), ['summary', 'chat']);
+  assert.deepEqual(pointTabs({ files: true, tasks: true }), ['summary', 'tasks', 'files', 'chat']);
+  assert.deepEqual(pointTabs({ tasks: true, chats: true, changes: true, files: true }), [...POINT_TABS, 'chat']);
+});
+
+test('the root box holds the whole project: its Summary, its own chats always, what changed and its files, then the chat', () => {
+  assert.deepEqual(projectTabs({}), ['summary', 'chats', 'chat']);
+  assert.deepEqual(projectTabs({ changes: true, files: true }), ['summary', 'chats', 'changes', 'files', 'chat']);
+});
+
+test('a click on a box opens its information first; the chat only when it is asked for by name', () => {
+  assert.equal(openingTab(), 'summary');
+  assert.equal(openingTab('details'), 'summary', 'the old "Details" link lands on the Summary');
+  assert.equal(openingTab('nonsense'), 'summary');
+  assert.equal(openingTab('files'), 'files');
+  assert.equal(openingTab('chat'), 'chat');
+});
+
+test('the chat tab and the project chats tab have their words in both languages', () => {
+  for (const t of Object.values(LANGS)) for (const key of ['ptab.chat', 'ptab.projectChats']) assert.ok(!/^ptab./.test(t(key)), key);
+  assert.equal(LANGS.pt('ptab.chat'), 'Conversar');
+  assert.equal(LANGS.pt('ptab.projectChats'), 'Chats do projeto');
 });
 
 test('the summary digest of a kind says how many there are, and says so when there are none', () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { signalCard, kindBlock } from '../server/web/blocks.js';
+import { signalCard, kindBlock, pointStrip } from '../server/web/blocks.js';
 import { translator } from '../server/web/i18n.js';
 
 // A DOM-free h: every element is {tag, attrs, children}.
@@ -47,4 +47,26 @@ test('a kind block says its title and where its data comes from, and is left out
   assert.equal(kindBlock(ctx, 'chats', {}, null, false), null);
   assert.ok(textOf(kindBlock(ctx, 'chats', { empty: 'Nothing here yet.' })).includes('Nothing here yet.'));
   assert.ok(textOf(kindBlock(ctx, 'files', { from: 'Comes from git: the files this line of work changes.' }, h('p', {}, 'f'))).includes('this line of work'));
+});
+
+test('the strip of a box sheet: one tab per kind of information first, then the chat, in one tablist', () => {
+  const picked = [];
+  const strip = pointStrip(ctx, ['summary', 'tasks', 'files', 'chat'], 'summary', (tab) => picked.push(tab));
+  assert.equal(strip.attrs.role, 'tablist');
+  const tabs = walk(strip).filter((n) => n.tag === 'button');
+  assert.deepEqual(tabs.map((b) => b.attrs['data-ptab']), ['summary', 'tasks', 'files', 'chat']);
+  assert.deepEqual(tabs.map((b) => b.attrs.role), ['tab', 'tab', 'tab', 'tab']);
+  assert.deepEqual(tabs.map((b) => b.attrs['aria-selected']), ['true', 'false', 'false', 'false']);
+  assert.deepEqual(tabs.map((b) => b.attrs.tabindex), ['0', '-1', '-1', '-1'], 'one tab stop, the arrows move inside');
+  assert.deepEqual(tabs.map((b) => b.attrs['aria-controls']), ['pointDetails', 'pointDetails', 'pointDetails', 'chatPane']);
+  assert.equal(tabs[3].attrs.id, 'ptab-chat');
+  assert.ok(textOf(strip).includes('Summary') && textOf(strip).includes('Chat'));
+  tabs[3].attrs.onclick();
+  assert.deepEqual(picked, ['chat']);
+});
+
+test('the strip words a tab its own way when asked (the root box calls its chats "Project chats")', () => {
+  const strip = pointStrip(ctx, ['summary', 'chats', 'chat'], 'chat', () => {}, { chats: 'Project chats' });
+  assert.ok(textOf(strip).includes('Project chats') && !textOf(strip).includes('Conversations'));
+  assert.equal(walk(strip).filter((n) => n.tag === 'button').at(-1).attrs['aria-selected'], 'true');
 });

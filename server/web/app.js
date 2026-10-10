@@ -1,7 +1,7 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
   archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, clashChip, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
-  sizeOf, shareText, chatPointOf,
+  sizeOf, shareText, chatPointOf, noFiles,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -21,12 +21,12 @@ import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
-import { signalCard, kindBlock, kindMark } from './blocks.js';
+import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
 import { emptyState } from './empty.js';
 import { createTour, tourWanted } from './tour.js';
 import { createHelp } from './help.js';
 import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
-import { INFO_KINDS, pointTabs, kindDigest } from './kinds.js';
+import { INFO_KINDS, CHAT_TAB, pointTabs, projectTabs, openingTab, kindDigest } from './kinds.js';
 import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
 import {
   declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, serializeIgnored, sortRelations, splitIgnored, strengthOf,
@@ -292,6 +292,11 @@ const plural = (key, n) => t(`${key}.${n === 1 ? 'one' : 'other'}`, { n: numText
 function sizeLine(node) {
   const size = sizeOf(project.arch?.sizes, node);
   if (!size) return null;
+  // The box is a button, so its "?" is a mark with the reason in the title and for screen readers; the sheet has the real one.
+  if (noFiles(project.arch.sizes, node)) {
+    return h('span', { class: 'bx-size is-none', title: t('help.nofiles') }, icon('file', 'bx-size-icon'), h('span', {}, t(`size.none.${node.kind}`)),
+      h('span', { class: 'bx-q', 'aria-hidden': 'true' }, '?'), h('span', { class: 'visually-hidden' }, t('help.nofiles')));
+  }
   const files = plural('size.files', size.files);
   const lines = plural('size.lines', size.lines);
   const share = shareText(size.share);
@@ -726,34 +731,38 @@ function filesSection({ part, workCell, files: fileList, folder = true }) {
   return kblock('files', workCell ? { from: t('kind.files.fromBranch') } : {}, tools, files.tree({ part, workCell, files: fileList }));
 }
 
-// ---- a point of the map: the chat beside it and its details ------------------------------
-
-function setPointTab(tab) {
-  const details = tab === 'details';
-  $('#ptab-chat').setAttribute('aria-selected', String(!details));
-  $('#ptab-details').setAttribute('aria-selected', String(details));
-  $('#chatPane').hidden = details;
-  $('#pointDetails').hidden = !details;
-  $('#chat').dataset.tab = tab;
-}
+// ---- a point of the map: its information in tabs by kind, and the chat about it as one more tab (mm07) -----------------
 
 let pointNode = null;
-let pointSub = 'summary'; // the tab of the details: Summary, Tasks, Conversations, Changes or Files (mm07)
+let pointTab = 'summary'; // Summary, Tasks, Conversations, Changes, Files, or the chat
 
-function openPoint(node, { tab = 'chat' } = {}) {
-  const point = chatPointOf(node);
-  if (point.kind === 'project') return openProjectChat();
+function setPointTab(tab) {
+  pointTab = tab;
+  renderPointDetails();
+}
+
+// The box's sheet shows its tabs; the chat pane is hidden first when it opens elsewhere, so the chat's own focus on its
+// box does not land on a pane about to hide.
+function showPoint(node, tab) {
+  pointNode = node.id;
+  pointTab = tab;
+  $('#pointTabs').hidden = false;
+  renderPointDetails();
+}
+
+// A click on a box: its information first (the Summary), the chat one tab away in the same sheet. The root box holds the
+// whole project and its project chats (orchestration or01).
+function openPoint(node, { tab } = {}) {
+  const first = openingTab(tab);
   closePanel(false);
   closeLists();
   selection = { type: 'node', id: node.id };
-  chat.open({
-    projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: point },
-  });
-  if (pointNode !== node.id) pointSub = 'summary';
-  pointNode = node.id;
-  $('#pointTabs').hidden = false;
-  setPointTab(tab);
-  renderPointDetails();
+  $('#chatPane').hidden = first !== CHAT_TAB;
+  chat.open(node.kind === 'project'
+    ? { projectId: project.id, title: project.name, intro: t('projchat.intro'), start: { node: { kind: 'project' } }, ...projectChatOf() }
+    : { projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: chatPointOf(node) } });
+  showPoint(node, first);
+  if (first !== CHAT_TAB) $(`#ptab-${first}`)?.focus({ preventScroll: true });
   revealNode(node.id, { center: true });
 }
 
@@ -762,25 +771,25 @@ const openPartPoint = (partId, opts) => {
   if (node) openPoint(node, opts);
 };
 
+// A chat that belongs to no box (an idea, the map's creation, a clash): the sheet is only that chat.
 function plainPoint() {
   pointNode = null;
   $('#pointTabs').hidden = true;
-  setPointTab('chat');
+  $('#pointTabs').replaceChildren();
+  $('#chatPane').hidden = false;
+  $('#pointDetails').hidden = true;
+  $('#chat').dataset.tab = CHAT_TAB;
 }
 
-// The chats about the whole project (orchestration or01, first step), like a project's chats in Claude: a new one, with
-// the earlier ones listed above the box to reopen. The root bubble, the list and the map tools all open it.
-const projectChatOf = () => ({ title: t('projchat.title'), listTitle: t('projchat.list'), newChat: openProjectChat });
+// The chats about the whole project, like a project's chats in Claude: the list and "New project chat" in the root box's
+// tabs, and the chat itself on its Chat tab. The root box, the list and the map tools all open it.
+const projectChatOf = () => ({ listTitle: t('projchat.list'), newChat: openProjectChat });
 
 function openProjectChat() {
-  if (!project) return;
-  closePanel(false);
-  closeLists();
+  if (!project || !tree) return;
   convs.closeDrawer();
   if (view !== 'map') showView('map');
-  selection = tree ? { type: 'node', id: tree.id } : null;
-  chat.open({ projectId: project.id, subtitle: project.name, intro: t('projchat.intro'), start: { node: { kind: 'project' } }, ...projectChatOf() });
-  plainPoint();
+  openPoint(tree, { tab: 'chat' });
   renderMap();
 }
 
@@ -827,19 +836,14 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   const node = nodeById(tree, nodeId) ?? tree;
   selection = { type: 'node', id: node.id };
   const subtitle = [project.name, ...(place.special ? [t(`convs.place.${place.special}`)] : place.path)].join(' › ');
+  $('#chatPane').hidden = false;
   chat.open({
     projectId: home?.id ?? project.id, mapProjectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
     where: row.origin === 'map' ? null : () => whereOf(row),
-    ...(row.node?.kind === 'project' ? { newChat: openProjectChat, listTitle: t('projchat.list') } : {}),
+    ...(row.node?.kind === 'project' ? projectChatOf() : {}),
   });
-  if (node.kind === 'project') plainPoint();
-  else {
-    if (pointNode !== node.id) pointSub = 'summary';
-    pointNode = node.id;
-    $('#pointTabs').hidden = false;
-    setPointTab('chat');
-    renderPointDetails();
-  }
+  // The conversation opens on the Chat tab of its box, with the box's information one tab away.
+  showPoint(node, 'chat');
   revealNode(node.id, { center: true });
   requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(node.id)));
   convs.render();
@@ -1012,29 +1016,29 @@ function itemSign(i, part) {
 }
 
 function workOnPoint() {
-  setPointTab('chat');
+  setPointTab(CHAT_TAB);
   $('#chatInput')?.focus();
 }
 
-const setPointSub = (tab) => {
-  pointSub = tab;
-  renderPointDetails();
-};
-
-// The strip Summary · Tasks · Conversations · Changes · Files (only the tabs with something in them).
-function pointTabStrip(tabs) {
-  if (!tabs.includes(pointSub)) pointSub = 'summary';
-  const kindOf = { tasks: 'tasks', chats: 'chats', changes: 'changes', files: 'files' };
-  return h('div', { class: 'seg ptabs', role: 'tablist', 'aria-label': t('ptab.label') }, tabs.map((tab) => h('button', {
-    type: 'button', role: 'tab', 'data-ptab': tab, class: kindOf[tab] ? `kind-${kindOf[tab]}` : '', 'aria-selected': String(pointSub === tab), onclick: () => setPointSub(tab),
-  }, kindOf[tab] ? kmark(kindOf[tab]) : null, t(`ptab.${tab}`))));
-}
-
 // A row of the Summary: one kind, how much of it there is, and a click that opens its tab.
-function digestRow(kind, counts, tab) {
-  return h('li', {}, h('button', { type: 'button', class: `kind-row kind-${kind}`, onclick: () => setPointSub(tab) },
-    kmark(kind), h('span', { class: 'kr-title' }, t(`kind.${kind}.title`)), h('span', { class: 'kr-digest' }, kindDigest(t, kind, counts)), icon('next', 'kr-next')));
+function digestRow(kind, counts, tab, title = t(`kind.${kind}.title`)) {
+  return h('li', {}, h('button', { type: 'button', class: `kind-row kind-${kind}`, onclick: () => setPointTab(tab) },
+    kmark(kind), h('span', { class: 'kr-title' }, title), h('span', { class: 'kr-digest' }, kindDigest(t, kind, counts)), icon('next', 'kr-next')));
 }
+
+// How much of the program a part or a layer holds, or, with no file linked yet, that sentence and a "?" that says why.
+function sizeFacts(node) {
+  const size = sizeOf(project.arch?.sizes, node);
+  if (!size) return null;
+  if (noFiles(project.arch.sizes, node)) return h('p', { class: 'note no-files' }, h('span', { 'data-help': 'nofiles' }, t(`size.none.${node.kind}`)));
+  return h('p', { class: 'meta num' }, joinDots([plural('size.files', size.files), plural('size.lines', size.lines), t('size.share', { share: shareText(size.share) })].map((x) => h('span', {}, x))));
+}
+
+// The boxes under a layer or the project: each with what is open in it and one line about it.
+const childRows = (children) => (children.length ? h('ul', { class: 'plain rows' }, children.map((c) => h('li', {},
+  h('button', { type: 'button', class: 'link-row', onclick: () => openPoint(c) },
+    h('span', { class: 'lr-title' }, c.label), h('span', { class: 'lr-date num' }, countText(c.counts)),
+    c.part?.about ? h('span', { class: 'lr-line' }, c.part.about) : null)))) : null);
 
 function partDetails(node) {
   const part = node.part;
@@ -1046,19 +1050,18 @@ function partDetails(node) {
   const range = activeRange();
   const changes = project.activity.filter((a) => (a.partIds ?? []).includes(part.id) && inRange(Date.parse(a.ts), range));
   const tabs = pointTabs({ tasks: items.length > 0, chats: chats.length > 0 || cells.length > 0, changes: changes.length > 0 || Boolean(range), files: true });
-  const strip = pointTabStrip(tabs);
-  let body;
-  if (pointSub === 'tasks') body = [kblock('tasks', { vars: { file: part.file } }, itemList(node.children))];
-  else if (pointSub === 'chats') {
-    body = [kblock('chats', { empty: t('kind.empty') }, chatRows(chats)), kblock('branches', {}, branchRows(cells))];
-  } else if (pointSub === 'changes') body = [activitySection(project.activity.filter((a) => (a.partIds ?? []).includes(part.id)))];
-  else if (pointSub === 'files') {
-    body = [filesSection({ part: part.id }),
-      part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null];
-  } else {
-    body = [
+  const body = () => {
+    if (pointTab === 'tasks') return [kblock('tasks', { vars: { file: part.file } }, itemList(node.children))];
+    if (pointTab === 'chats') return [kblock('chats', { empty: t('kind.empty') }, chatRows(chats)), kblock('branches', {}, branchRows(cells))];
+    if (pointTab === 'changes') return [activitySection(project.activity.filter((a) => (a.partIds ?? []).includes(part.id)))];
+    if (pointTab === 'files') {
+      return [sizeFacts(node), filesSection({ part: part.id }),
+        part.codePaths.length ? section(t('point.where'), h('ul', { class: 'plain code-paths' }, part.codePaths.map((p) => h('li', {}, h('code', {}, p))))) : null];
+    }
+    return [
       part.about ? h('p', { class: 'lead' }, part.about) : null,
       h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), linkTo(part.file, () => files.open(part.file), 'meta-link path')),
+      sizeFacts(node),
       mainBranchNote(),
       ...partSigns(part, items),
       h('ul', { class: 'plain rows kind-rows' },
@@ -1069,53 +1072,122 @@ function partDetails(node) {
         digestRow('files', { n: part.codePaths.length }, 'files')),
       section(t('point.related'), linkRows(part.id)),
     ];
-  }
-  return [strip, ...body];
+  };
+  return { tabs, body };
 }
 
 function itemDetails(node) {
   const i = node.item;
   const part = partById(node.partId);
   const tabs = pointTabs({ tasks: i.detail.length > 0, files: true });
-  const strip = pointTabStrip(tabs);
-  if (pointSub === 'tasks') return [strip, kblock('tasks', { vars: { file: part.file } }, list(i.detail))];
-  if (pointSub === 'files') return [strip, filesSection({ part: part.id })];
-  const person = isPerson(i.who) && i.status !== 'done' && !blocksSignal(i, part.name);
-  const withYou = person ? sigCard(waitingSignal({ decision: { kind: 'item', text: node.label, who: i.who, code: i.code } }), { 'open-item': () => files.open(part.file, null, { line: i.line }) }) : null;
-  return [
-    strip,
-    h('p', { class: 'meta' },
-      pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)),
-      i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
-      i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
-      i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,
-      i.code ? h('code', { class: 'bx-code' }, i.code) : null),
-    itemSign(i, part),
-    withYou,
-    i.detail.length ? kblock('tasks', { vars: { file: part.file } }, list(i.detail)) : null,
-    h('div', { class: 'actions secondary' },
-      button(t('point.openLine', { n: i.line }), () => files.open(part.file, null, { line: i.line })),
-      button(t('point.openPart', { name: part.name }), () => openPartPoint(part.id, { tab: 'details' }))),
-    mainBranchNote(),
-    h('p', { class: 'note' }, t('point.itemRule')),
-  ];
+  const body = () => {
+    if (pointTab === 'tasks') return [kblock('tasks', { vars: { file: part.file } }, list(i.detail))];
+    if (pointTab === 'files') return [filesSection({ part: part.id })];
+    const person = isPerson(i.who) && i.status !== 'done' && !blocksSignal(i, part.name);
+    const withYou = person ? sigCard(waitingSignal({ decision: { kind: 'item', text: node.label, who: i.who, code: i.code } }), { 'open-item': () => files.open(part.file, null, { line: i.line }) }) : null;
+    return [
+      h('p', { class: 'meta' },
+        pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)),
+        i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
+        i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
+        i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,
+        i.code ? h('code', { class: 'bx-code' }, i.code) : null),
+      itemSign(i, part),
+      withYou,
+      i.detail.length ? kblock('tasks', { vars: { file: part.file } }, list(i.detail)) : null,
+      h('div', { class: 'actions secondary' },
+        button(t('point.openLine', { n: i.line }), () => files.open(part.file, null, { line: i.line })),
+        button(t('point.openPart', { name: part.name }), () => openPartPoint(part.id))),
+      mainBranchNote(),
+      h('p', { class: 'note' }, t('point.itemRule')),
+    ];
+  };
+  return { tabs, body };
 }
 
+// The chats about the whole project, newest first, as the list shows them (so a click opens them the same way).
+function projectChatEntries() {
+  const out = listConversations(state, { projectId: project.id });
+  return [...out.working, ...out.waiting, ...out.recent].filter((e) => e.row.node?.kind === 'project')
+    .sort((a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.row.updatedAt ?? '')));
+}
+
+const projectChatRows = (entries) => (entries.length ? h('ul', { class: 'plain rows' }, entries.map((e) => h('li', {},
+  h('button', { type: 'button', class: 'link-row', onclick: () => openConversation(e) },
+    h('span', { class: 'lr-title' }, h('span', { class: `dot-mini kind-${e.row.waiting ? 'waiting' : e.row.status}`, 'aria-hidden': 'true' }), e.row.title || t('chat.untitled')),
+    h('span', { class: 'lr-date' }, e.row.status === 'busy' ? t('chat.running') : relative(e.row.updatedAt)),
+    e.row.costUSD != null ? h('span', { class: 'lr-cost num' }, money(e.row.costUSD)) : null)))) : null);
+
+const liveRows = (entries) => (entries.length ? h('ul', { class: 'plain rows' }, entries.map((e) => h('li', {},
+  h('button', { type: 'button', class: 'link-row', onclick: () => openFromLive(e) },
+    h('span', { class: 'lr-title' }, h('span', { class: 'dot-mini kind-busy', 'aria-hidden': 'true' }), e.chat.title || t('chat.untitled')),
+    h('span', { class: 'lr-date' }, relative(e.lastStep?.ts ?? e.chat.updatedAt)),
+    h('span', { class: 'lr-line' }, stepWords(t, e.lastStep) || placeWords(t, e.place)))))) : null);
+
+const WAITING_SHOWN = 3;
+
+// The root box: the whole project at a glance (what is open, how big it is, the files no box owns, what waits for the
+// person, what works now, what changed), its chats about the whole project with "New project chat", and the chat.
+function projectDetails(node) {
+  const p = project;
+  const sizes = p.arch?.sizes;
+  const range = activeRange();
+  const changes = p.activity.filter((a) => inRange(Date.parse(a.ts), range));
+  const chats = projectChatEntries();
+  const tabs = projectTabs({ changes: changes.length > 0 || Boolean(range), files: Boolean(sizes?.total) });
+  const newChat = () => h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn primary', onclick: openProjectChat }, icon('plus', 'btn-icon'), t('projchat.newLong')));
+  const body = () => {
+    if (pointTab === 'chats') return [newChat(), kblock('chats', { title: t('ptab.projectChats'), empty: t('projchat.none') }, projectChatRows(chats))];
+    if (pointTab === 'changes') return [activitySection(p.activity)];
+    if (pointTab === 'files') return [programFiles(sizes)];
+    const waiting = waitingEntries(state, p.id, ignoredClash);
+    const unowned = sizes?.unowned?.files ?? 0;
+    return [
+      h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
+      sizes?.total ? h('p', { class: 'meta num' }, joinDots([h('span', {}, plural('size.files', sizes.total.files)), h('span', {}, plural('size.lines', sizes.total.lines))]),
+        unowned ? linkTo(plural('size.unowned', unowned), () => setPointTab('files'), 'meta-link is-unowned') : null) : null,
+      newChat(),
+      waiting.length ? section(t('waiting.title'),
+        h('ul', { class: 'plain rows wait-rows' }, waiting.slice(0, WAITING_SHOWN).map((e) => waitingRow(e, { where: (_, partId) => partById(partId)?.name ?? '' }))),
+        waiting.length > WAITING_SHOWN ? linkTo(`${t('kind.seeAll')} (${waiting.length})`, openWaiting) : null) : null,
+      section(t('live.title'), liveRows(liveEntries)),
+      h('ul', { class: 'plain rows kind-rows' },
+        digestRow('chats', { n: chats.length, waiting: chats.filter((e) => e.row.waiting).length }, 'chats', t('ptab.projectChats')),
+        digestRow('changes', { n: changes.length }, 'changes'),
+        sizes?.total ? digestRow('files', { n: sizes.total.files }, 'files') : null),
+      section(t('point.layers'), childRows(node.children)),
+      h('p', { class: 'meta' }, linkTo(t('project.open'), () => select({ type: 'project' }))),
+    ];
+  };
+  return { tabs, labels: { chats: t('ptab.projectChats') }, body };
+}
+
+function detailsOf(node) {
+  if (node.kind === 'project') return projectDetails(node);
+  if (node.kind === 'part') return partDetails(node);
+  if (node.kind === 'item') return itemDetails(node);
+  const head = () => [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts))];
+  if (node.kind === 'group') return { tabs: pointTabs({}), body: () => [...head(), kblock('tasks', {}, itemList(node.children))] };
+  return { tabs: pointTabs({}), body: () => [...head(), sizeFacts(node), section(t('point.parts'), childRows(node.children))] };
+}
+
+// Draws the strip and the open tab: the information, or the chat (whose pane chat.js draws). A strip that held the focus
+// gets it back on the tab now open, so the arrows keep walking it.
 function renderPointDetails() {
   const node = pointNode && nodeById(tree, pointNode);
   if (!node) return;
-  let body;
-  if (node.kind === 'part') body = partDetails(node);
-  else if (node.kind === 'item') body = itemDetails(node);
-  else if (node.kind === 'group') body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)), kblock('tasks', {}, itemList(node.children))];
-  else {
-    body = [h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
-      section(t('point.parts'), h('ul', { class: 'plain rows' }, node.children.map((p) => h('li', {},
-        h('button', { type: 'button', class: 'link-row', onclick: () => openPoint(p, { tab: 'details' }) },
-          h('span', { class: 'lr-title' }, p.label), h('span', { class: 'lr-date num' }, countText(p.counts)),
-          p.part.about ? h('span', { class: 'lr-line' }, p.part.about) : null)))))];
-  }
-  $('#pointDetails').replaceChildren(...body.flat().filter(Boolean));
+  const { tabs, labels, body } = detailsOf(node);
+  if (!tabs.includes(pointTab)) pointTab = 'summary';
+  const talk = pointTab === CHAT_TAB;
+  const strip = $('#pointTabs');
+  const focused = strip.contains(document.activeElement);
+  strip.replaceChildren(pointStrip({ h, icon, t }, tabs, pointTab, setPointTab, labels));
+  if (focused) $(`#ptab-${pointTab}`)?.focus();
+  $('#chatPane').hidden = !talk;
+  $('#pointDetails').hidden = talk;
+  $('#pointDetails').setAttribute('aria-labelledby', `ptab-${pointTab}`);
+  $('#chat').dataset.tab = talk ? CHAT_TAB : 'details';
+  if (!talk) $('#pointDetails').replaceChildren(...body().flat().filter(Boolean));
 }
 
 // ---- the side panel: project, conversation, branch, relation -------------------------------
@@ -1899,14 +1971,14 @@ function wire() {
   for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"], [data-close="rel"]')) {
     b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
   }
-  $('#ptab-chat').addEventListener('click', () => setPointTab('chat'));
-  $('#ptab-details').addEventListener('click', () => { setPointTab('details'); renderPointDetails(); });
+  // The box's strip is one tablist: the arrows, Home and End move along it and show the tab they land on.
   $('#pointTabs').addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    const next = $('#chat').dataset.tab === 'details' ? 'chat' : 'details';
-    setPointTab(next);
-    if (next === 'details') renderPointDetails();
-    $(`#ptab-${next}`).focus();
+    const tabs = [...$('#pointTabs').querySelectorAll('[role="tab"]')];
+    const at = tabs.indexOf(document.activeElement);
+    const to = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (at < 0 || to === undefined) return;
+    e.preventDefault();
+    setPointTab(tabs[(to + tabs.length) % tabs.length].dataset.ptab);
   });
   $('#fit').addEventListener('click', () => mindmap.fit(true));
   $('#newIdea').addEventListener('click', openIdea);
@@ -1990,7 +2062,7 @@ function applyDeepLink() {
     const type = pick.slice(0, cut), id = pick.slice(cut + 1);
     if (type === 'node') {
       const node = nodeById(tree, id);
-      if (node) setTimeout(() => openPoint(node, { tab: params.get('tab') === 'details' ? 'details' : 'chat' }), 60);
+      if (node) setTimeout(() => openPoint(node, { tab: params.get('tab') ?? undefined }), 60);
     } else setTimeout(() => select({ type, id }), 60);
   }
   if (params.get('idea') === '1') setTimeout(openIdea, 60);

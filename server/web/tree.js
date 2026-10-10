@@ -262,6 +262,9 @@ export function sizeOf(sizes, node) {
   return { files, lines, share: sizes.total.lines ? round3(lines / sizes.total.lines) : 0 };
 }
 
+// A part or a layer that no file is linked to yet: it says so instead of "0 files · 0 lines · 0%".
+export const noFiles = (sizes, node) => node.kind !== 'project' && sizeOf(sizes, node)?.files === 0;
+
 // A share as a whole percent; a box with something in it never reads 0%.
 export const shareText = (share) => (share > 0 && share < 0.005 ? '<1%' : `${Math.round(share * 100)}%`);
 

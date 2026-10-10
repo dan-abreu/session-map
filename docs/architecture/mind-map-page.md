@@ -57,6 +57,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Panels separated by kind of information `mm07`
   - Distinct blocks with their own color, icon and plain title: Tasks, Chats, Lines of work (branches), What changed, Files. Each block says where its data comes from.
   - Tabs in the panel (Summary, Tasks, Chats, Changes, Files); the Summary shows only the essentials. The same colors and icons for each kind everywhere: map, lists, Now strip, alerts.
+  - A click on any box opens these tabs on the Summary (an item on its own detail), with "Chat" as the last tab of the same sheet: the chat never replaces the information. A part or a layer with no file linked says "no file linked to this part yet" with a "?" instead of zeros.
 - [x] **Claude:** Visual polish of the whole program, written down in `DESIGN.md` `mm08`
   - One visual system: type scale, spacing grid, semantic palette (light and dark, AA contrast), one icon set, identical components with every state, short purposeful motion that respects reduced motion.
   - Empty screens with a simple illustration and a sentence, skeletons while loading, nothing cut off or overlapping on desktop and phone.

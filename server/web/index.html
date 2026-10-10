@@ -241,10 +241,8 @@
           <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
       </div>
-      <div class="seg point-tabs" id="pointTabs" role="tablist" hidden>
-        <button type="button" role="tab" id="ptab-chat" aria-selected="true" aria-controls="chatPane" data-i18n="point.chat"></button>
-        <button type="button" role="tab" id="ptab-details" aria-selected="false" aria-controls="pointDetails" data-i18n="point.details"></button>
-      </div>
+      <!-- A box's tabs: its information by kind, then the chat about it (mm07); app.js draws them. -->
+      <div class="point-tabs" id="pointTabs" hidden></div>
       <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
         <div class="chat-where" data-chat="where" hidden></div>
@@ -279,7 +277,7 @@
           <p class="chat-keys" data-i18n="chat.keys"></p>
         </form>
       </div>
-      <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-details" hidden></div>
+      <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-summary" hidden></div>
     </aside>
 
     <section id="view-flow" class="view flow" aria-labelledby="tab-flow" data-mode="view" hidden>

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, branchMarks, clashMarks, changedNodes,
-  boardItems, relationLinks, nodeById, ownerHue, initial, countLabel, listsDone, clashChip, chatPointOf,
+  boardItems, relationLinks, nodeById, ownerHue, initial, countLabel, listsDone, clashChip, chatPointOf, noFiles,
 } from '../server/web/tree.js';
 import { translator } from '../server/web/i18n.js';
 
@@ -187,4 +187,17 @@ test('a part with several clashes shows one chip with the count, and every pair 
   assert.equal(three.label, '3 choques');
   assert.equal(three.title.split(String.fromCharCode(10)).length, 3);
   assert.equal(clashChip([['a', 'b'], ['a', 'c']], translator('en')).label, '2 clashes');
+});
+
+test('a part or a layer with no file linked says so instead of showing zeros; the project and unknown sizes never do', () => {
+  const sizes = { total: { files: 10, lines: 100 }, parts: { shop: { files: 3, lines: 30 } }, layers: {} };
+  const t = archTree(project());
+  const shop = nodeById(t, 'pt:shop');
+  const pay = nodeById(t, 'pt:pay');
+  const front = nodeById(t, 'l:front');
+  assert.equal(noFiles(sizes, shop), false);
+  assert.equal(noFiles(sizes, pay), true);
+  assert.equal(noFiles(sizes, front), true);
+  assert.equal(noFiles(sizes, t), false, 'the project box always shows the whole program');
+  assert.equal(noFiles(null, pay), false, 'with no count at all, nothing is said');
 });
