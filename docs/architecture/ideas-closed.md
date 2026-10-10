@@ -141,7 +141,7 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - What it means: closing the sheet or switching project never stops a running chat; a server restart does not kill it either, or it offers to continue.
   - How to confirm it is done: start a long task, switch project and come back: it went on; restart the server mid-task: it continues, or says it was cut off and offers Continue.
   - Where it went: `pc06`.
-  - Status: done (switching and closing since v0.1.2; surviving a restart on main, ships in the release after v0.2.2).
+  - Status: done (switching and closing since v0.1.2; surviving a restart released in v0.2.3).
 
 ### The model, the orchestration and other AIs
 
@@ -177,43 +177,43 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - What it means: a conversation list beside the map, grouped by project like the project folders of Claude or ChatGPT, every row with its project, place on the map, age, cost and origin; a click opens the map down to its box and opens the conversation; a wrongly placed conversation can be moved and renamed.
   - How to confirm it is done: in "All projects" no row lacks its project; a click on a row centers its box with a pulse and opens the chat; moving a conversation to another part keeps it there after the next read.
   - Where it went: `mm28`, `mm04`, `mm21`.
-  - Status: done (the list released in v0.2.2; grouping by project, move and rename on main, ship in the release after v0.2.2).
+  - Status: done (the list released in v0.2.2; grouping by project, move and rename released in v0.2.3).
 - [x] Know when the AI is working, finished or stopped `id34`
   - Asked: 2026-10-09 12:18 — "parou de fazer as coisas?"; 2026-10-09 12:28 — "já fez tudo?"; 2026-10-09 12:35 — [I asked for the map of one of my projects and it seemed to stop halfway]; 2026-10-09 12:35 — "não da pra saber quando a IA ta trabalhando ou não, se eu quero trabalhar em varios projetos ao mesmo tempo"
   - What it means: every page chat shows one clear state (working, finished with its final summary, interrupted, waiting for permission), with a notice when it finishes; a finished chat never looks stuck.
   - How to confirm it is done: a chat that ends shows "finished" and its summary, and a notice appears; killing its process shows "interrupted" with Continue.
   - Where it went: `pc05`, `pc06`.
-  - Status: done (on main, ships in the release after v0.2.2).
+  - Status: done (released in v0.2.3).
 - [x] Notifications for work running at the same time in different repositories `id35`
   - Asked: 2026-10-09 12:36 — "precisamos de notificação dos trabalhos sendo feitos aos mesmo tempo que pode ser de repositorios diferentes"
   - What it means: every Claude session on the PC watched, whatever the project or tool; finished, waiting for you, error and branch clash become browser notifications, a desktop toast and, if switched on, a phone alert; preferences per project; similar alerts grouped.
   - How to confirm it is done: a VS Code chat in another repository finishes and a desktop toast names its project; a click opens session-map on it; turning a project's alerts off silences only that project.
   - Where it went: `wa01`, `wa02`, `wa03`, `wa04`, `wa05`.
-  - Status: done (on main, ships in the release after v0.2.2).
+  - Status: done (released in v0.2.3).
 - [x] A fixed strip on top with what is being done and where, across repositories `id36`
   - Asked: 2026-10-09 12:37 — "pode ter um painel acima metindo o que está sendo feito e onde está sendo feito"; 2026-10-09 12:38 — "mas é no topo fixo, mesmo que mude o repositorio ela acompanha os outros repositorios"
   - What it means: a "Now" strip fixed on top of every tab, never filtered by the chosen project, with one card per running job in any repository (where, last step, how long, model, helpers) and waiting ones first; badges per project in the picker.
   - How to confirm it is done: the strip's content is the same whichever project is selected; a card's click switches project and opens the point and its chat; the picker shows a pulsing dot on a project with work running.
   - Where it went: `mm09`, `mm10`.
-  - Status: done (on main, ships in the release after v0.2.2).
+  - Status: done (released in v0.2.3).
 - [x] Show where the work really happens, file by file, even from another chat `id37`
   - Asked: 2026-10-09 14:52 — "acho que as bolhas ficaram muito genericas ou ficam pontuais de mais, tipo não da pra falar que só aquilo é tudo e que aquilo realmente é tudo, ficou complexo, é como se a IA fosse mexer em uma coisa só mas mexe em mais coisas"; 2026-10-09 16:07 — "voce esta trabalhando no session map e eu nao to vendo onde"; 2026-10-09 16:08 — "eu quero isso pega real onde está sendo feito os trabalhos, mesmo em um chat diferente"
   - What it means: a conversation lights every part and project whose files it really edits (its own edits, its helpers' and its workflows'), in proportion, live as it edits; a middle level of components between a part and its items; an item that spans parts shows in each.
   - How to confirm it is done: a chat opened in project A that edits files of project B appears in both ("born in A · working in B"), and the parts it edited light in proportion to the files edited; Live lights the part of the file in its last step.
   - Where it went: `mm24`; what is left in `mm34`.
-  - Status: done (on main): listed in every project it edits, "born in A · working in B", its parts with their share, Live on the part of its latest file. "Will touch" and the middle level go on in `mm34`.
+  - Status: done (released in v0.2.3): listed in every project it edits, "born in A · working in B", its parts with their share, Live on the part of its latest file. "Will touch" and the middle level go on in `mm34`.
 - [x] Files, lines and share of the program in every box `id38`
   - Asked: 2026-10-09 16:15 — "era bom para cada balão que é colocado, ter a quatidade de arquivos que é daquele balão, quantidade de linhas, as contagens que já estamos fazendo para o programa mais colocando nos blões assim fica facil saber porque aquele balao é aquilo mesmo na arquitetura"
   - What it means: each box shows its number of files, lines and its share of the whole program, summed up the tree; a Files panel lists them by folder; the root shows how many files have no box.
   - How to confirm it is done: the root's file count equals the census total; each layer's count equals the sum of its parts; the "files with no box" number matches the census list of unowned files.
   - Where it went: `mm25`; what changed in the period in `mm34`; exact numbers from `fd01`.
-  - Status: done (on main): files, lines and share in every box, summed upward, and the files with no box on the root, counted by session-map itself; the census (`fd01`) refines the numbers.
+  - Status: done (released in v0.2.3): files, lines and share in every box, summed upward, and the files with no box on the root, counted by session-map itself; the census (`fd01`) refines the numbers.
 - [x] Walk through the files of a box `id39`
   - Asked: 2026-10-09 16:17 — "e tem como percorrer nos arquivos? seria muito bom"
   - What it means: a file tree per box like VS Code's explorer, the code colored with line numbers and search, jumps to the files it uses and that use it, and Open in VS Code at the line.
   - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
   - Where it went: `mm26`; what is left in `mm36`; files as dots in a part `mm15`.
-  - Status: done (on main): a folder tree per box like the editor's, the code in colors with line numbers, search in the file, the files it uses and that use it (JavaScript, TypeScript, CSS and HTML), and Open in VS Code at the picked line. Other languages in the graph go on in `mm36`.
+  - Status: done (released in v0.2.3): a folder tree per box like the editor's, the code in colors with line numbers, search in the file, the files it uses and that use it (JavaScript, TypeScript, CSS and HTML), and Open in VS Code at the picked line. Other languages in the graph go on in `mm36`.
 
 ### Files, terminal and the first use of a repository
 
@@ -246,10 +246,10 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - What it means: a live Changes tab with every file touched (created, edited, deleted, renamed), who touched it, where in the map, lines added and removed, the before/after diff, and whether it is saved, committed or released.
   - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content (the last version a pass of the server saw, masked); see `mm30`.
   - Where it went: `mm30`; what is left in `mm35`.
-  - Status: done (on main): the Changes tab lists every file created, edited, removed or renamed by the conversations, their helpers and workflow agents, and what the folder holds not saved yet, with who, where, lines, before and after, and saved → released; the boxes light with "+N files +M lines now". Edits made by a command (a script, a formatter) still read "outside the conversations": `mm35`.
+  - Status: done (released in v0.2.3): the Changes tab lists every file created, edited, removed or renamed by the conversations, their helpers and workflow agents, and what the folder holds not saved yet, with who, where, lines, before and after, and saved → released; the boxes light with "+N files +M lines now". Edits made by a command (a script, a formatter) still read "outside the conversations": `mm35`.
 - [x] See where each workflow is working and which request started it, several places at once `id69`
   - Asked: 2026-10-09 16:47 — "quero ver onde os workflow estão trabalhando onde pedi, porque sei que pode ser em varios locais ao mesmo tempo"
   - What it means: a tree request → workflow → agents → live footprint, one colour per workflow with a dot per active agent on the boxes it touches (several projects at once), and tracing both ways between a request and the files, commits and release it produced.
   - How to confirm it is done: with a workflow running, every active agent shows as a dot on the right box with its last step, and clicking a changed file shows the request that caused it; see `mm31`.
   - Where it went: `mm31`; what is left in `mm37`.
-  - Status: done (on main): each team of helpers shows as a tree from what was asked to every helper with its state, model and place; each team has its own colour with a dot per helper at work on the boxes it touches, in any project; the conversation's panel lists the files, saved changes and version of each helper, and a changed file in Changes shows the request that led to it. A page chat's map point as the request, single helpers and team colours on the Now cards go on in `mm37`.
+  - Status: done (released in v0.2.3): each team of helpers shows as a tree from what was asked to every helper with its state, model and place; each team has its own colour with a dot per helper at work on the boxes it touches, in any project; the conversation's panel lists the files, saved changes and version of each helper, and a changed file in Changes shows the request that led to it. A page chat's map point as the request, single helpers and team colours on the Now cards go on in `mm37`.

@@ -87,7 +87,7 @@ English and Portuguese section names both work. The `architecture` skill teaches
 
 The **Flow** tab draws the folder README's mermaid diagram with a pinned copy of mermaid shipped with the plugin (no CDN, strict security level). Each box that is a part takes the color of its situation (a chat working there, in progress, still to do, all done), with marks for blockers and items waiting on a person, and a click opens that part's chat beside the drawing. When the README has no arrows of its own, the relations session-map found fill in as dotted arrows.
 
-- **Export:** Copy or Download `.mmd`.
+- **Export:** Copy, or save the drawing as an SVG or PNG image, as a Markdown page with the drawing inside, or as `.mmd` text.
 - **Import:** paste a drawing or pick a file, see what it changes (new parts and the file each gets, layers, moves, parts left out, arrows), then confirm. Only the README's mermaid block and a skeleton file per new part are written; nothing is deleted, and each apply goes to `actions.log`. A map read from the main branch can be previewed but not applied.
 - **Workshop:** a shared draft per project. A side chat redraws it with every reply, and the tools add boxes, arrows and layers, rename, move and remove, with a text editor and undo/redo. Nothing reaches the project until you apply it through the import preview.
 
@@ -104,6 +104,10 @@ The column on the left of the map lists every conversation of the open project f
 ### Live
 
 The **Live** button on the map counts the conversations working now, in every project, and opens **Working now**: one card per conversation, grouped by project, with its way down the map, its latest steps (the newest first), its workflows with done/total and the helper agents still running with their model, and **Show on map** / **Open conversation**. It updates every 5 seconds. On the map itself the way from the project to the box being worked on lights up in green, and a caption under that box names the latest step. A workflow agent that has not moved for 30 minutes is left out, so an interrupted run does not stay "working" for ever.
+
+### Changes tab
+
+The **Changes** tab lists, as it happens, every file your conversations and their helpers created, edited, removed or renamed, in this project or in all of them. Filter by part, by who did it (a conversation, a helper of a team, or outside the conversations) and by kind, or pick a day. Each change says whether it is not saved yet, saved or released, and a click shows its before and after, what you asked that led to it, and **Open the file** / **Open the conversation**. Files that hold passwords or keys never show their content.
 
 ### Commands
 

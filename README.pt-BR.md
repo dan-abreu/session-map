@@ -87,7 +87,7 @@ Os nomes de seção em português e em inglês funcionam. A skill `architecture`
 
 A aba **Fluxo** desenha o diagrama mermaid do README da pasta com uma cópia fixa do mermaid que vem no plugin (sem CDN, nível de segurança estrito). Cada caixa que é uma parte ganha a cor da situação dela (conversa trabalhando ali, em andamento, falta fazer, tudo feito), com marcas para o que trava algo e o que espera uma pessoa, e um clique abre o chat da parte ao lado do desenho. Quando o README não tem setas próprias, as relações que o session-map encontrou entram como setas tracejadas.
 
-- **Exportar:** Copiar ou Baixar `.mmd`.
+- **Exportar:** Copiar, ou salvar o desenho como imagem SVG ou PNG, como página Markdown com o desenho dentro, ou como texto `.mmd`.
 - **Importar:** cole um desenho ou escolha um arquivo, veja o que muda (partes novas e o arquivo de cada uma, camadas, mudanças de camada, partes fora do desenho, setas) e confirme. Só o bloco mermaid do README e um arquivo-esqueleto por parte nova são gravados; nada é apagado, e cada aplicação vai para o `actions.log`. Um mapa lido do ramo principal mostra a prévia, mas não aplica.
 - **Ateliê:** um rascunho compartilhado por projeto. Um chat ao lado redesenha a cada resposta, e as ferramentas criam caixas, setas e camadas, renomeiam, movem e tiram, com editor de texto e desfazer/refazer. Nada chega ao projeto até você aplicar pela prévia da importação.
 
@@ -104,6 +104,10 @@ A coluna à esquerda do mapa lista toda conversa do projeto aberto dos últimos 
 ### Ao vivo
 
 O botão **Ao vivo** do mapa conta as conversas trabalhando agora, em todos os projetos, e abre **Trabalhando agora**: um cartão por conversa, agrupado por projeto, com o caminho dela no mapa, os últimos passos (o mais novo primeiro), os workflows com feitos/total e os agentes ajudantes ainda trabalhando com o modelo de cada um, e **Mostrar no mapa** / **Abrir conversa**. Ele se atualiza a cada 5 segundos. No próprio mapa, o caminho do projeto até a caixa em que se trabalha acende em verde, e uma legenda embaixo dessa caixa diz o último passo. Um agente de workflow parado há 30 minutos sai da lista, para um trabalho interrompido não ficar "trabalhando" para sempre.
+
+### Aba Mudanças
+
+A aba **Mudanças** lista, na hora, cada arquivo que as suas conversas e os ajudantes delas criaram, editaram, apagaram ou renomearam, neste projeto ou em todos. Filtre por parte, por quem fez (uma conversa, um ajudante de uma equipe ou fora das conversas) e por tipo, ou escolha um dia. Cada mudança diz se ainda não foi salva, se foi salva ou publicada, e um clique mostra o antes e o depois, o que você pediu e levou a ela, e **Abrir o arquivo** / **Abrir a conversa**. Arquivos que guardam senhas ou chaves nunca mostram o conteúdo.
 
 ### Comandos
 

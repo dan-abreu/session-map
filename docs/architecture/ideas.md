@@ -104,7 +104,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: every message of every conversation with the same formatting as Claude Code, the time of each message, Claude's steps, questions and answers, images, helpers and costs; each conversation's origin (VS Code, terminal, map, claude.ai) shown with a badge; the same chat screen and composer as Claude Code.
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
-  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, and `mm33`, the list that shows at a glance where each chat comes from and what it is doing, are done on main; `mm23` is open; `rd04` waits for the owner's OK).
+  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, and `mm33`, the list that shows at a glance where each chat comes from and what it is doing, are released in v0.2.3; `mm23` is open; `rd04` waits for the owner's OK).
 
 ### Files, terminal and the first use of a repository
 
@@ -191,13 +191,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: panels split into blocks by kind (tasks, chats, lines of work, what changed, files), each with its color, icon and where its data comes from; one visual system for the whole program written in `DESIGN.md`; screenshots approved by the owner before publishing.
   - How to confirm it is done: a part's panel shows separate blocks with their own title and "comes from"; `DESIGN.md` exists with tokens and components; the owner approved the screenshots of the release.
   - Where it went: `mm07`, `mm08`, `mm33`.
-  - Status: in progress (`mm07`, `mm08` and the conversation list's obvious divisions `mm33` are done on main; the owner has not yet approved the screenshots).
+  - Status: in progress (`mm07`, `mm08` and the conversation list's obvious divisions `mm33` are released in v0.2.3, with the screenshots approved by the owner).
 - [ ] **in progress:** A readable chat: formatting and an input box that grows `id56`
   - Asked: 2026-10-09 16:04 — "nossa chat nao pega formatação nenhuma de nada ta cru, e também a onde escreve ele não vai crescendo de acordo com o que vai digitando ele é grande de mais e acaba que tem muita informação no chat e fica pouca coisa para a parte do dialogo a gente podia reever como melhorar e refinar isso"
   - What it means: replies rendered as markdown like Claude Code (headings, lists, tables, code with copy, links); the input starts at one line and grows to about 40% of the panel; a compact header; controls that fold away, so most of the height is dialogue.
   - How to confirm it is done: a reply with a table and a code block renders both; the empty input is one line high and grows while typing, then scrolls; the header takes one line.
   - Where it went: `mm08`, `mm22`, `mm23`.
-  - Status: in progress (markdown replies, the growing input box and the folding controls are done on main with `mm22` and `mm08`; the header shipped as two short lines, and the one-line header is open in `mm23`).
+  - Status: in progress (markdown replies, the growing input box and the folding controls are released in v0.2.3 with `mm22` and `mm08`; the header shipped as two short lines, and the one-line header is open in `mm23`).
 
 ### Reading every detail
 

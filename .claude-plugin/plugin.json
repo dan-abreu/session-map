@@ -1,6 +1,6 @@
 {
   "name": "session-map",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A living mind map of your project architecture, with every Claude Code conversation and branch hung on its parts: work in progress, costs, history and chat, in the browser.",
   "author": { "name": "Daniel Abreu" },
   "homepage": "https://github.com/dan-abreu/session-map",

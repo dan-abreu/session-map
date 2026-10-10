@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.2.3
+
+session-map now keeps an eye on every conversation for you, shows exactly what each one changed, and reads in plain
+words from the first visit.
+
+- New: alerts. The server looks at every conversation on the PC every 10 seconds, page open or not, and tells you
+  when one finishes, waits for you (a question, a permission), stops in the middle or fails, or when two lines of
+  work start to clash. They arrive as a desktop notification (on by default, a click opens the conversation), in
+  the page with a bell to pick what you want (browser, sound, phone through ntfy, per project), and in the tab title.
+  A page chat always shows one clear state: working, waiting for permission, finished, interrupted or error.
+- New: the conversation list reads like project folders. "All projects" shows one folder per project, with the
+  orchestration chat on top, then Working now, Waiting for you, Today, Yesterday, Last 7 days and Older. Every row
+  has a state chip, a badge for where it runs (VS Code, terminal, the Claude desktop app, phone through Remote
+  Control) and its place on the map. A "..." button moves or renames a conversation, and your choice wins over the
+  automatic one. The project picker shows each project's color, what works there and what waits.
+- New: the Now strip, fixed under the top bar on every tab, with one card per job across all projects: waiting for
+  you first, then working, then finished and not seen yet.
+- New: every conversation reads like Claude Code: messages with their time, thinking, each step with what went in and
+  came out, edits as before and after, the task list, questions and answers, images and helper agents. Search, a jump
+  list by day, and a live mirror of a conversation still running elsewhere. The composer takes images, `@` files,
+  `/` skills, Esc to stop and arrow up to recall the last message.
+- New: the Flow tab opens on this PC without the key, shows an automatic draft when the README has no diagram (with
+  Improve with the AI and Save to project), and exports the drawing as SVG, PNG, Markdown or `.mmd`.
+- New: relations you can read: zoom, a list sorted by strength, and a panel with every reason and its evidence.
+- New: one period for What changed, History, Costs and the activity lists, like a bank statement: Today, 7 to 90
+  days, this month, last month or your own dates on a calendar.
+- New: signs that explain themselves. Every sign says what it is, why it is happening and what to do now, with the
+  button that does it (a clash between two lines of work can be resolved with the AI, which joins nothing before your
+  OK). A part's details are split into Summary, Tasks, Conversations, Changes and Files, each with its own color.
+- New: a welcome tour of five steps, a "?" next to every area, a help menu with a glossary and a "Show technical
+  words" switch; plain words by default in English and Portuguese; friendly empty screens; and DESIGN.md, the visual
+  system the page follows.
+- New: the real footprint of each conversation. It shows on every project and part whose files it edited, its helpers
+  included ("born in X, working in Y"). Every box counts its files and lines, the project lists the files with no box,
+  and the Files tab is a folder tree whose files open with colors, line numbers, search and the files they use.
+- New: the Changes tab. Every file created, edited, removed or renamed by your conversations and their helpers shows
+  up within seconds, with who did it, where, and whether it is not saved yet, saved or released; filters, a
+  day-by-day line and the before and after of each change. A removed file keeps what it had.
+- New: teams of helpers you can follow: what you asked, the team, each helper with its state and model, and where it
+  worked, in Live and in the conversation's panel, with a dot on every box a helper is touching.
+- Security: secrets are masked in more places: keys with a prefix in `.env` files (`DB_PASSWORD`, `JWT_SECRET`...),
+  values under a secret's name, passwords inside links, and every before and after in the Changes tab. Reading an
+  archived conversation now needs the key. A path written like a network share is never looked up, so Windows never
+  sends your sign-in to another machine.
+- Fixed: after a restart the page opens at once (it waited about a minute), and a long conversation no longer slows
+  the whole server down.
+- Fixed: a search or filter with no results no longer freezes the page's refresh.
+- Fixed: chats started from the map always read "Map", even when their page record is gone.
+
 ## 0.2.2
 
 Every conversation in one place, what is being worked on right now, and a say in which model does the work.
