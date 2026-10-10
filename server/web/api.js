@@ -19,6 +19,29 @@ async function call(method, path, body) {
 
 const seg = encodeURIComponent;
 
+// The foundation answers bare JSON (null before a file exists, arrays for logs), so it comes back as data, never spread.
+async function fdCall(method, path, body) {
+  let res;
+  try {
+    res = await fetch(path, method === 'GET'
+      ? { method, headers: { accept: 'application/json' } }
+      : { method, headers: WRITE_HEADERS, body: JSON.stringify(body ?? {}) });
+  } catch {
+    return { ok: false, status: 0, data: null, error: 'network' };
+  }
+  const data = await res.json().catch(() => null);
+  if (res.status === 401) return { ok: false, status: 401, data: null, error: 'token-required' };
+  if (!res.ok) return { ok: false, status: res.status, data: null, error: data?.error ?? `http-${res.status}` };
+  return { ok: true, status: res.status, data };
+}
+
+// what: 'census', 'census/log', 'op/<id>/undo'... A null project reaches a route outside any project: fd(null, 'library').
+function fdPath(projectId, what, params) {
+  const query = new URLSearchParams(Object.entries(params ?? {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString();
+  const where = String(what).split('/').map(seg).join('/');
+  return `/api/${projectId == null ? '' : `foundation/${seg(projectId)}/`}${where}${query ? `?${query}` : ''}`;
+}
+
 export const api = {
   state: () => call('GET', '/api/state'),
   history: (q, project, range) => call('GET', `/api/history?${new URLSearchParams({ q, ...(project ? { project } : {}), ...(range ? { from: String(range.from), to: String(range.to) } : {}) })}`),
@@ -54,5 +77,8 @@ export const api = {
   notifyPrefs: () => call('GET', '/api/settings/notify'),
   setNotify: (patch) => call('POST', '/api/settings/notify', patch),
   notifyTest: () => call('POST', '/api/settings/notify/test', {}),
+  // The foundation, for every block's screens (index § 3): one read, and one write (POST unless told PUT).
+  fd: (projectId, what, params) => fdCall('GET', fdPath(projectId, what, params)),
+  fdWrite: (projectId, what, body, method = 'POST') => fdCall(method, fdPath(projectId, what), body),
   chatEvents: (key) => new EventSource(`/api/chat/${seg(key)}/events`),
 };

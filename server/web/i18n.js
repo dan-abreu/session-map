@@ -1,3 +1,11 @@
+import fdBadges from './i18n-fd/badges.js';
+import fdRead from './i18n-fd/read.js';
+import fdModel from './i18n-fd/model.js';
+import fdCare from './i18n-fd/care.js';
+import fdHealth from './i18n-fd/health.js';
+import fdGuide from './i18n-fd/guide.js';
+import fdScreens from './i18n-fd/screens.js';
+
 const en = {
   'app.name': 'session-map',
   'project.label': 'Project',
@@ -2950,6 +2958,15 @@ export const TECH = {
     'flow.auto.tag': 'Rascunho automático',
   },
 };
+
+// The foundation's texts live one file per block (i18n-fd/), so parallel blocks never edit this file; a key there must
+// not repeat one here (test web-fd-hooks).
+for (const part of [fdBadges, fdRead, fdModel, fdCare, fdHealth, fdGuide, fdScreens]) {
+  for (const lang of ['en', 'pt-BR']) {
+    Object.assign(LANGS[lang], part[lang]);
+    Object.assign(TECH[lang], part.tech?.[lang]);
+  }
+}
 
 export function translator(lang, { tech = false } = {}) {
   const dict = tech ? { ...(LANGS[lang] || en), ...(TECH[lang] || TECH.en) } : LANGS[lang] || en;

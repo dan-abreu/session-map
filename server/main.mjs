@@ -22,6 +22,8 @@ import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run
 import { collect } from './collect.mjs';
 import { loadConfig } from './config.mjs';
 import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
+import { createFoundationRoute } from './foundation/http/index.mjs';
+import { refreshFoundation } from './foundation/refresh.mjs';
 import { linksOf } from './imports.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
@@ -146,6 +148,7 @@ export function createApp({
     return { ...copy, refreshing: true };
   };
   const fresh = () => { cached = null; };
+  const foundationRoute = createFoundationRoute({ smDir, demo, token, projects: async () => (await firstAnswer()).projects, fresh });
   const prefsNow = () => notifyPrefs(readJsonFile(join(smDir, 'config.json'), {}) ?? {});
   watcher = demo ? null : createWatcher({
     readState: state, deliver, prefs: prefsNow,
@@ -470,6 +473,7 @@ export function createApp({
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'changes' || (parts[2] === 'change' && parts[3] !== '*')) && parts.length === 4) return changesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
+    if (parts[1] === 'api' && (parts[2] === 'foundation' || (parts[2] === 'library' && parts.length === 3))) return foundationRoute(req, res, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
@@ -501,6 +505,15 @@ export function createApp({
     }
   });
   server.watcher = watcher;
+  // The 5-minute sweep reads every project's code again (one round at a time per project); the demo reads nothing.
+  server.refreshFoundations = async () => {
+    if (demo) return;
+    try {
+      for (const project of (await state()).projects) await refreshFoundation(project, smDir);
+    } catch (err) {
+      log('warn', 'foundation-sweep-failed', { error: err.message });
+    }
+  };
   server.on('close', () => watcher?.stop());
   return server;
 }
@@ -537,6 +550,7 @@ export function start(argv = process.argv.slice(2)) {
       } catch (err) {
         log('warn', 'archive-sweep-failed', { error: err.message });
       }
+      app.refreshFoundations();
     };
     setTimeout(sweep, 10_000).unref();
     setInterval(sweep, SWEEP_MS).unref();

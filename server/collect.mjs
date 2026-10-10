@@ -17,6 +17,7 @@ import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
 import { attachChanges } from './changes-state.mjs';
 import { footprintOf, touchesOf } from './footprint.mjs';
+import { foundationSummary } from './foundation/summary.mjs';
 import { hangWorkflows } from './workflows.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
@@ -496,6 +497,8 @@ async function buildProject(ctx, { root, items }) {
       workCells,
       // The words of a registry of requests kept translated in session-map's folder, by language and code (id76).
       requestWords: readJsonFile(join(smDir, 'projects', projectId, 'requests-words.json'), null),
+      // What the foundation last read of the code (contract § 12): only its files are read here, nothing recomputed.
+      foundation: foundationSummary(smDir, projectId),
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [
