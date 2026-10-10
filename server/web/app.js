@@ -531,8 +531,32 @@ function renderSummary() {
   const busy = shown.chats.filter((c) => c.status === 'busy').length;
   if (busy) parts.push(h('span', { class: 'tone-active' }, t('summary.working', { n: busy })));
   parts.push(h('span', { class: 'num' }, t('summary.cost', { v: money(project.cost.d30) })));
+  parts.push(...backgroundBits(project));
   if (state.refreshing) parts.push(h('span', { class: 'organizing', role: 'status' }, t('state.refreshing')));
   $('#summary').replaceChildren(...joinDots(parts));
+}
+
+// The map's own work (the AI placing conversations, the count of the files) runs only where someone works now, or on a
+// project the person keeps always up to date: "paused" says why nothing moves, the switch lets them choose.
+function backgroundBits(p) {
+  const bg = p.background;
+  if (!bg) return [];
+  const out = [];
+  if (!bg.on) out.push(h('span', { class: 'bg-paused', title: t('background.paused.hint') }, t('background.paused')));
+  out.push(h('button', {
+    type: 'button', class: 'bg-switch', 'aria-pressed': String(bg.always),
+    title: t(bg.always ? 'background.always.hint' : 'background.keep.hint'),
+    onclick: (e) => setBackground(p, !bg.always, e.currentTarget),
+  }, t(bg.always ? 'background.always' : 'background.keep')));
+  return out;
+}
+
+async function setBackground(p, always, btn) {
+  btn.disabled = true;
+  const res = await api.setProjectBackground(p.id, always);
+  if (!res.ok) { btn.disabled = false; return toast(errorText(res.error)); }
+  toast(t(always ? 'background.saved.always' : 'background.saved.auto'));
+  await poll();
 }
 
 // ---- Now: every job on the PC, the picker's marks, the tab title ---------------------------------

@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
+import { alwaysOn, backgroundOf, isWorking } from './background.mjs';
 import { attachToParts, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { withLocalParts } from './arch/local.mjs';
@@ -421,7 +422,9 @@ async function buildProject(ctx, { root, items }) {
   const lineage = readLineage(smDir);
   const openspec = readOpenSpec(root);
   const roadmap = config.roadmap ? readRoadmap(join(root, config.roadmap), { decisions: config.decisions }) : null;
-  const aiOn = life.queue.enabled && config.ai?.enabled !== false;
+  // The AI spends tokens: only on a project worked on now, or one the person keeps always up to date.
+  const background = backgroundOf({ always: alwaysOn(userConfig, root), working: isWorking({ items, liveById, driving: ctx.cut.driving, nowMs: now.getTime() }) });
+  const aiOn = life.queue.enabled && config.ai?.enabled !== false && background.on;
   const aiAnswers = aiPlacements(life, smDir, projectId);
   const pageChats = readJsonFile(join(smDir, 'page-chats.json'), {}) ?? {};
   const { placements } = ctx;
@@ -532,6 +535,7 @@ async function buildProject(ctx, { root, items }) {
       // What the foundation last read of the code (contract § 12): only its files are read here, nothing recomputed.
       foundation: foundationSummary(smDir, projectId),
       ai: aiOn ? aiStatus(life, projectId) : null,
+      background,
       activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [
         ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),
@@ -594,6 +598,13 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });
     return null;
   })))).filter(Boolean);
+  // A conversation of one project at work in another one's files makes that one worked on too.
+  for (const b of built) {
+    if (b.project.background.working) continue;
+    const workedHere = groups.some((g) => g.items.some((i) => (new Map(touches.get(i.summary.sessionId)?.touch ?? []).get(b.key)?.edited.length ?? 0) > 0
+      && isWorking({ items: [i], liveById: ctx.liveById, driving, nowMs: now.getTime() })));
+    if (workedHere) b.project.background = backgroundOf({ always: b.project.background.always, working: true });
+  }
   try {
     await hangWorkflows(built, groups, { skip: [dir, smDir], nowMs: now.getTime() });
   } catch (err) {

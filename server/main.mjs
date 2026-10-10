@@ -18,6 +18,7 @@ import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDr
 import { readArch } from './arch/detect.mjs';
 import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
+import { setBackground, sweepable } from './background.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
@@ -53,6 +54,7 @@ const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-la
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
+const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
@@ -295,6 +297,21 @@ export function createApp({
     const result = setReinforcedLimit(smDir, usd);
     const status = result.ok ? 200 : LIMIT_ERRORS[result.error];
     logAction(smDir, { action: 'reinforced-limit', usd: typeof usd === 'number' ? usd : null }, status);
+    return send(res, status, result);
+  }
+
+  // A project kept always up to date: the map's work (and the AI's tokens) goes on there though nobody works in it.
+  async function backgroundRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    const project = (await state()).projects.find((p) => p.id === body?.projectId);
+    if (!project) throw new HttpError(404, 'unknown-project');
+    const result = setBackground(smDir, project.root, body.always);
+    const status = result.ok ? 200 : BACKGROUND_ERRORS[result.error];
+    if (result.ok) cached = null;
+    logAction(smDir, { action: 'project-background', projectId: project.id, always: result.ok ? result.always : null }, status);
     return send(res, status, result);
   }
 
@@ -557,6 +574,7 @@ export function createApp({
     if (parts[1] === 'api' && (parts[2] === 'foundation' || (parts[2] === 'library' && parts.length === 3))) return foundationRoute(req, res, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
+    if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
@@ -591,7 +609,8 @@ export function createApp({
   server.refreshFoundations = async () => {
     if (demo) return;
     try {
-      for (const project of (await state()).projects) await refreshFoundation(project, smDir);
+      // Only where the person works now, or where they asked for it: a project nobody touches is left alone.
+      for (const project of sweepable((await state()).projects)) await refreshFoundation(project, smDir);
     } catch (err) {
       log('warn', 'foundation-sweep-failed', { error: err.message });
     }

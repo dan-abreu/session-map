@@ -8,7 +8,7 @@ import { clashItems, collect, settleAi, topLevelOf } from '../server/collect.mjs
 import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
-import { projectIdOf } from '../server/paths.mjs';
+import { normalizePath, projectIdOf } from '../server/paths.mjs';
 import { isoDay } from '../server/web/range.js';
 
 const INTERNALS = Symbol.for('session-map.internals');
@@ -279,7 +279,7 @@ test('a chat no code or file places is shown to the AI with the parts as candida
   const root = repo(join(tmp(), 'garden'), { arch: true });
   try {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
-    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'] });
+    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'], mtimeAgo: 10 * 60_000 });
     writeChat(dir, { id: B, cwd: root, title: 'Cart page', edits: ['src/shop/cart.ts'] });
     const prompts = [];
     const run = async (prompt) => { prompts.push(prompt); return { ok: true, value: { partId: 'billing' }, costUSD: 0.002 }; };
@@ -322,6 +322,90 @@ test('with ai.enabled false collect stays on the rules and never calls claude', 
   } finally {
     forgetLife(smDir);
     cleanup(dir, smDir, join(root, '..'));
+  }
+});
+
+// ---- the background work only where the person works (or where they allowed it) --------------------------------------------
+
+async function quietProject(config, fn, { chat = {}, sessions = [], driving, projectFile } = {}) {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'orchard'), { arch: true });
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify(typeof config === 'function' ? config(root) : config));
+    if (projectFile) {
+      mkdirSync(join(root, '.claude'), { recursive: true });
+      writeFileSync(join(root, '.claude', 'session-map.json'), JSON.stringify(projectFile));
+    }
+    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'], mtimeAgo: 2 * HOUR, ...chat });
+    for (const s of sessions) writeSession(dir, { cwd: root, ...s });
+    const prompts = [];
+    const run = async (prompt) => { prompts.push(prompt); return { ok: true, value: { partId: 'billing' }, costUSD: 0.002 }; };
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: { bin: 'fake-claude', run }, ...(driving ? { driving } : {}) });
+    await settleAi(smDir);
+    await fn({ project: state.projects[0], prompts, root });
+  } finally {
+    forgetLife(smDir);
+    cleanup(dir, smDir, join(root, '..'));
+  }
+}
+
+const AI_ON = { ai: { enabled: true, maxCallsPerHour: 30 } };
+
+test('a project nobody works on spends no tokens: its conversations are never shown to the AI, and it says it is paused', async () => {
+  await quietProject(AI_ON, ({ project, prompts }) => {
+    assert.equal(prompts.length, 0);
+    assert.deepEqual(project.background, { always: false, working: false, on: false });
+    assert.equal(project.chats[0].partSource, 'none');
+  });
+});
+
+test('a conversation running now makes the project worked on, though its file moved hours ago', async () => {
+  await quietProject(AI_ON, ({ project, prompts }) => {
+    assert.deepEqual(project.background, { always: false, working: true, on: true });
+    assert.equal(prompts.length, 1);
+  }, { sessions: [{ pid: 4242, id: A, status: 'busy' }] });
+});
+
+test('a page chat the hub drives now makes the project worked on', async () => {
+  await quietProject(AI_ON, ({ project }) => {
+    assert.equal(project.background.working, true);
+  }, { driving: new Set([A]) });
+});
+
+test('a project the person keeps always up to date is worked on in the background though nobody works there', async () => {
+  const config = (root) => ({ ...AI_ON, projects: { [normalizePath(root)]: { background: 'always' } } });
+  await quietProject(config, ({ project, prompts }) => {
+    assert.deepEqual(project.background, { always: true, working: false, on: true });
+    assert.equal(prompts.length, 1);
+  });
+});
+
+test('a file inside the project cannot keep it always up to date: only the person\'s own settings can', async () => {
+  await quietProject(AI_ON, ({ project, prompts }) => {
+    assert.equal(project.background.on, false);
+    assert.equal(prompts.length, 0);
+  }, { projectFile: { background: 'always' } });
+});
+
+test('a conversation at work in another repository\'s files makes that one worked on too; hours later it does not', async () => {
+  for (const [mtimeAgo, working] of [[5 * 60_000, true], [2 * HOUR, false]]) {
+    const dir = tmp();
+    const smDir = tmp();
+    const base = tmp();
+    const home = repo(join(base, 'home'));
+    const other = repo(join(base, 'other'));
+    try {
+      writeFileSync(join(smDir, 'config.json'), JSON.stringify(AI_ON));
+      writeChat(dir, { id: A, cwd: home, title: 'Shared cart', edits: ['../other/src/shop/cart.ts'], mtimeAgo });
+      const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+      const p = state.projects.find((x) => normalizePath(x.root) === normalizePath(other));
+      assert.ok(p, 'the edited repository shows as a project');
+      assert.equal(p.background.working, working, `edited ${mtimeAgo / 60_000} minutes ago`);
+    } finally {
+      forgetLife(smDir);
+      cleanup(dir, smDir, base);
+    }
   }
 });
 
@@ -631,7 +715,7 @@ test('the owner\'s moves teach the AI: its prompt lists them as examples', async
   const root = repo(join(tmp(), 'garden'), { arch: true });
   try {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
-    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'] });
+    writeChat(dir, { id: A, cwd: root, title: 'Tax rounding', prompts: ['round the taxes like the accountant asked'], mtimeAgo: 10 * 60_000 });
     writeChat(dir, { id: B, cwd: root, title: 'VAT question', prompts: ['what about VAT'] });
     writeFileSync(join(smDir, 'placements.json'), JSON.stringify({ [B]: { root, partId: 'billing', title: 'VAT for invoices' } }));
     const prompts = [];

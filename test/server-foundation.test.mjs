@@ -161,14 +161,20 @@ test('main.mjs hands /api/foundation/* to the dispatcher, with its gates', async
   });
 });
 
-test('the 5-minute sweep refreshes every project, never in --demo', async () => {
+test('the 5-minute sweep refreshes only the projects worked on now or kept always up to date, never in --demo', async () => {
   const seen = [];
   const step = { name: 'probe', run: (ctx) => { seen.push(ctx.project.id); } };
+  const project = (id, background) => ({ id, name: id, root: `/work/${id}`, arch: { parts: [] }, workCells: [], chats: [], background });
+  const mixed = () => ({ generatedAt: '', waitingCount: 0, projects: [
+    project(ID, { always: false, working: true, on: true }),
+    project('quiet-000001', { always: false, working: false, on: false }),
+    project('kept-000002', { always: true, working: false, on: true }),
+  ] });
   STEPS.push(step);
   try {
-    await withApp({}, async ({ app }) => { await app.refreshFoundations(); });
-    assert.deepEqual(seen, [ID]);
-    await withApp({ demo: true, token: TOKEN }, async ({ app }) => { await app.refreshFoundations(); });
-    assert.deepEqual(seen, [ID]);
+    await withApp({ collectFn: mixed }, async ({ app }) => { await app.refreshFoundations(); });
+    assert.deepEqual(seen, [ID, 'kept-000002'], 'the quiet project is left alone');
+    await withApp({ demo: true, token: TOKEN, collectFn: mixed }, async ({ app }) => { await app.refreshFoundations(); });
+    assert.deepEqual(seen, [ID, 'kept-000002']);
   } finally { STEPS.splice(STEPS.indexOf(step), 1); }
 });

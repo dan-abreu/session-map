@@ -251,6 +251,15 @@ body.is-tech .nav-root::-webkit-scrollbar { display: none; }
 .tone-active { color: var(--active-ink); }
 .tone-waiting { color: var(--waiting-ink); }
 .summary .tone-active { font-weight: 600; }
+.bg-paused { color: var(--ink-2); font-style: italic; }
+.bg-switch {
+  font: inherit; font-size: var(--fs-xs); color: var(--ink-2); cursor: pointer;
+  padding: 1px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: transparent;
+}
+.bg-switch:hover { color: var(--ink); border-color: var(--ink-2); }
+.bg-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.bg-switch[aria-pressed='true'] { color: var(--active-ink); border-color: currentColor; font-weight: 600; }
+.bg-switch:disabled { opacity: 0.6; cursor: progress; }
 .mm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .summary-row { display: flex; align-items: center; min-width: 0; }
 .now > .help-dot { align-self: center; margin-left: 0; }
