@@ -227,7 +227,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: after the polish package, new features freeze and the foundation comes first: exact facts from the code by deterministic extractors, the AI only explaining and grouping, coverage measured; then the maps are redone and measured; only then the orchestration chat.
   - How to confirm it is done: the Foundation part's items are ticked and the redone maps show their measured coverage before `or01` starts.
   - Where it went: `fd01`, `fd02`, `fd03`, `fd04`, `fd05`, `fd06`, `fd07`, `fd08`, `fd09`, `fd10`, `fd11`, `fd12`, `fd13`, `fd14`, `fd15`, `op02` (the whole foundation in one delivery, not in pieces).
-  - Status: accepted.
+  - Status: in progress (the whole foundation approved by the owner on 2026-10-10 as one delivery, with the project box showing the whole repository, id77).
 - [ ] A census letter by letter, number by number `id60`
   - Asked: 2026-10-09 15:01 — "o que deve ser feito é se nao tiver documentação para tal coisa e ele enxergar e criar a documentação, mas sim fazer um vasculho completo, letra por letra, numero por numero de cada arquivo, computar isso e deixar isso organizado, programa tem 1000 letras, 100 linhas, 10 arquivos, 2 pastas, assim vamos ter certeza que ele não deixou passar nada,"
   - What it means: a count without AI of characters, words and lines of every file, summed per folder, part and total; the AI's reading checked against the same counts; every file with an owner; missing documentation written from the code.
