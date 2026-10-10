@@ -52,9 +52,11 @@ function stateOf(statusText, itemStatus) {
   return itemStatus === 'doing' ? 'doing' : 'planned';
 }
 
-// project: a project of the state; its parts carry the items. → {list, counts}.
-export function requestsOf(project) {
+// project: a project of the state; its parts carry the items. lang: the page's language, for the words a registry
+// written in another language keeps translated in session-map's folder (project.requestWords[lang][code]). → {list, counts}.
+export function requestsOf(project, { lang = null } = {}) {
   const parts = project?.arch?.parts ?? [];
+  const words = (lang && project?.requestWords?.[lang]) || {};
   const items = new Map();
   // The work a request points at is an item of the map, never another request: a registry may reuse a map item's code.
   const isRequest = (it) => (it.detail ?? []).some((d) => LABELS.asked.test(d));
@@ -72,20 +74,26 @@ export function requestsOf(project) {
         if (lines.asked === undefined) continue;
         const went = [...new Set([...(lines.went ?? '').matchAll(CODE_IN_TICKS)].map((m) => m[1]))].map((code) => {
           const target = items.get(code);
-          return { code, status: target?.status ?? null, title: target?.title ?? null, partId: target?.partId ?? null, who: target?.who ?? null };
+          const title = words[code]?.title ?? target?.title?.replace(/\*\*|__/g, '') ?? null;
+          return { code, status: target?.status ?? null, title: target ? title : null, partId: target?.partId ?? null, who: target?.who ?? null };
         });
         const onMap = went.filter((w) => w.status);
         let state = stateOf(lines.status, it.status);
-        // The items move before the registry is written again: work started on them means the request is being done.
-        if (state === 'planned' && onMap.some((w) => w.status !== 'todo')) state = 'doing';
+        // The items move before the registry is written again: work started on them means the request is being done, and
+        // all of them done means it is done, until someone confirms it in the registry.
+        const allDone = onMap.length > 0 && onMap.length === went.length && onMap.every((w) => w.status === 'done');
+        const unconfirmed = (state === 'planned' || state === 'doing') && allDone;
+        if (unconfirmed) state = 'done';
+        else if (state === 'planned' && onMap.some((w) => w.status !== 'todo')) state = 'doing';
         const status = lines.status ?? '';
+        const own = words[it.code] ?? {};
         list.push({
-          code: it.code, title: it.title, partId: part.id, group: g.name, state,
-          asked: askedOf(lines.asked), meaning: lines.meaning ?? null, confirm: lines.confirm ?? null,
+          code: it.code, title: own.title ?? it.title, partId: part.id, group: g.name, state, unconfirmed,
+          asked: askedOf(lines.asked), meaning: own.meaning ?? lines.meaning ?? null, confirm: own.confirm ?? lines.confirm ?? null,
           went, progress: { done: onMap.filter((w) => w.status === 'done').length, total: onMap.length },
           version: /\b(?:released in|publicad[oa] na)\s+(v\d+(?:\.\d+)*)/i.exec(status)?.[1] ?? null,
           unreleased: /\b(on main|na main|not released|ainda não publicad)/i.test(status),
-          note: noteOf(status), statusText: status || null,
+          note: own.note ?? noteOf(status), statusText: status || null,
           // Open work with the owner's name on it waits for him; an open request with no item yet was never turned into work.
           waiting: onMap.some((w) => w.status !== 'done' && isPerson(w.who)),
           noActivity: (state === 'planned' || state === 'doing') && !went.length,

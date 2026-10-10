@@ -131,3 +131,27 @@ test('the page has the Requests tab, second after the map, wired to its view', a
   assert.match(app, /requestsView\.render\(\$\('#view-requests'\)\)/);
   assert.match(app, /openItem: openRequestItem/);
 });
+
+test('every item of a request done means the request is done, marked as still to be confirmed in the registry', () => {
+  const finished = { ...flow, groups: [{ name: '', items: [item('fl15', 'Draw mode', [], 'done'), item('fl07', 'One model', [], 'done')] }] };
+  const r = requestsOf(project([registry, finished])).list[0];
+  assert.equal(r.state, 'done');
+  assert.equal(r.unconfirmed, true);
+  const half = { ...flow, groups: [{ name: '', items: [item('fl15', 'Draw mode', [], 'done')] }] };
+  assert.equal(requestsOf(project([registry, half])).list[0].state, 'doing', 'an item not on the map yet keeps it open');
+  assert.equal(requestsOf(project([registry, flow])).list.find((x) => x.code === 'id46').unconfirmed, false);
+});
+
+test('a registry written in another language shows the words kept translated for the page\'s language', () => {
+  const proj = { ...project([registry, flow]), requestWords: { 'pt-BR': { id45: { title: 'Um Fluxo desenhado à mão', meaning: 'arrastar caixas.', note: 'x' } } } };
+  const pt = requestsOf(proj, { lang: 'pt-BR' }).list[0];
+  assert.deepEqual([pt.title, pt.meaning, pt.confirm], ['Um Fluxo desenhado à mão', 'arrastar caixas.', 'drag a box and the map follows.']);
+  assert.equal(requestsOf(proj, { lang: 'en' }).list[0].title, 'A Flow you can draw by hand');
+  assert.equal(requestsOf(proj).list[0].title, 'A Flow you can draw by hand');
+});
+
+test('an activity shows its translated title when one is kept, and never the markdown marks of its line', () => {
+  const marked = { ...flow, groups: [{ name: '', items: [item('fl15', '**Level 2**, inside a part', [], 'todo'), item('fl07', 'One model', [], 'todo')] }] };
+  const proj = { ...project([registry, marked]), requestWords: { 'pt-BR': { fl07: { title: 'Um modelo só' } } } };
+  assert.deepEqual(requestsOf(proj, { lang: 'pt-BR' }).list[0].went.map((w) => w.title), ['Level 2, inside a part', 'Um modelo só']);
+});

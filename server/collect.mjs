@@ -494,6 +494,8 @@ async function buildProject(ctx, { root, items }) {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
       arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }), sizes },
       workCells,
+      // The words of a registry of requests kept translated in session-map's folder, by language and code (id76).
+      requestWords: readJsonFile(join(smDir, 'projects', projectId, 'requests-words.json'), null),
       ai: aiOn ? aiStatus(life, projectId) : null,
       activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [

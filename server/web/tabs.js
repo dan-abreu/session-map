@@ -50,7 +50,7 @@ export function createTabs(ctx) {
     for (const p of projects) {
       const cols = boardItems(p);
       const origin = new Map();
-      for (const r of requestsOf(p).list) for (const w of r.went) if (!origin.has(w.code)) origin.set(w.code, r);
+      for (const r of requestsOf(p, { lang: ctx.lang() }).list) for (const w of r.went) if (!origin.has(w.code)) origin.set(w.code, r);
       for (const k of Object.keys(columns)) columns[k].push(...cols[k].map((entry) => ({ p, entry, origin: origin.get(entry.item.code) ?? null })));
     }
     const noMap = projects.filter((p) => !p.arch.parts.length);

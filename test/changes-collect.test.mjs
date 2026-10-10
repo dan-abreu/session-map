@@ -236,6 +236,8 @@ test('a copy of a removed file goes a month after the file was last seen', async
     writeFileSync(join(root, 'a.txt'), 'one\n');
     const day = 24 * 60 * MIN;
     const t0 = NOW.getTime();
+    // The copy is dated by the file's own time: pin it to the test's clock, or the test fails once the real day passes NOW.
+    utimesSync(join(root, 'a.txt'), new Date(t0), new Date(t0));
     keepSnapshots(dir, root, [{ path: 'a.txt', kind: 'create' }], t0, 30 * day);
     unlinkSync(join(root, 'a.txt'));
     assert.deepEqual(keepSnapshots(dir, root, [], t0 + day, 30 * day).map((g) => [g.path, g.removed]), [['a.txt', 1]]);

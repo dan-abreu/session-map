@@ -12,6 +12,8 @@ export function filterRequests(list, f = {}) {
 }
 
 // ctx: h, t (translator getter), icon, lang(), state(), project(), openItem(projectId, code).
+const QUOTE_SHORT = 160;
+
 export function createRequestsView(ctx) {
   const { h } = ctx;
   const t = () => ctx.t();
@@ -34,10 +36,22 @@ export function createRequestsView(ctx) {
       : h('span', { class: 'req-act is-missing' }, label));
   }
 
+  // The owner's words, two lines at first: a long quote opens with "Show more".
+  function quote(words) {
+    const box = h('blockquote', { class: 'req-quote' }, words);
+    if (words.length <= QUOTE_SHORT) return box;
+    const more = h('button', { type: 'button', class: 'req-quote-more', 'aria-expanded': 'false', onclick: () => {
+      const open = box.classList.toggle('is-open');
+      more.setAttribute('aria-expanded', String(open));
+      more.hidden = open;
+    } }, t()('requests.more'));
+    return h('div', { class: 'req-quote-wrap' }, box, more);
+  }
+
   function card(p, r, showProject) {
     const tt = t();
     const [first, ...more] = r.asked;
-    const outcome = r.version ? tt('requests.version', { v: r.version }) : r.unreleased ? tt('requests.unreleased') : null;
+    const outcome = r.version ? tt('requests.version', { v: r.version.replace(/^v/, '') }) : r.unreleased ? tt('requests.unreleased') : r.unconfirmed ? tt('requests.unconfirmed') : null;
     return h('li', { class: `req-card st-${r.state}${r.noActivity ? ' is-bare' : ''}` },
       h('div', { class: 'req-top' },
         h('span', { class: `req-state st-${r.state}` }, tt(`requests.state.${r.state}`)),
@@ -47,9 +61,9 @@ export function createRequestsView(ctx) {
       h('h3', { class: 'req-title' }, r.title),
       first ? h('div', { class: 'req-asked' },
         h('span', { class: 'req-when' }, tt('requests.asked', { when: when(first) })),
-        h('blockquote', {}, first.words),
+        quote(first.words),
         more.length ? h('details', { class: 'req-more' }, h('summary', {}, t().count('requests.askedMore', more.length)),
-          more.map((a) => h('div', { class: 'req-asked' }, h('span', { class: 'req-when' }, when(a)), h('blockquote', {}, a.words)))) : null) : null,
+          more.map((a) => h('div', { class: 'req-asked' }, h('span', { class: 'req-when' }, when(a)), quote(a.words)))) : null) : null,
       r.meaning ? h('p', { class: 'req-meaning' }, r.meaning) : null,
       r.went.length
         ? h('div', { class: 'req-work' },
@@ -69,7 +83,7 @@ export function createRequestsView(ctx) {
     const state = ctx.state();
     const chosen = pick.scope ?? ctx.project().id;
     const projects = chosen === '*' ? state.projects : state.projects.filter((p) => p.id === chosen);
-    const all = projects.flatMap((p) => requestsOf(p).list.map((r) => ({ p, r })));
+    const all = projects.flatMap((p) => requestsOf(p, { lang: ctx.lang() }).list.map((r) => ({ p, r })));
     const list = all.map((x) => x.r);
     const counts = {
       all: list.length, ...Object.fromEntries(REQUEST_STATES.map((s) => [s, list.filter((r) => r.state === s).length])),
@@ -106,6 +120,7 @@ export function createRequestsView(ctx) {
     root.replaceChildren(h('div', { class: 'view-wrap wide' },
       h('div', { class: 'view-head' }, h('h2', {}, tt('requests.title')), scope),
       h('p', { class: 'view-lede' }, tt('requests.lede')),
+      h('p', { class: 'view-note req-outside' }, tt('requests.outside')),
       list.length ? h('div', { class: 'req-tools' }, chips, search) : null,
       body));
   }
