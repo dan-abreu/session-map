@@ -69,7 +69,7 @@ export function createNavbar(ctx) {
     const items = [];
     const list = h('div', { class: 'nav-menu', role: 'menu', 'aria-label': tt('nav.more') });
     moreIds.forEach((id, i) => {
-      const item = tabButton(id, tt('tab.' + id), ICONS[id], {
+      const item = tabButton(id, tt(`tab.${id}`), ICONS[id], {
         role: 'menuitem', tabindex: -1,
         onclick: () => { closeMenu(false); ctx.onPick?.(id); },
         onkeydown: (e) => itemKey(items, i)(e),
@@ -93,7 +93,7 @@ export function createNavbar(ctx) {
     const tabStop = onBar.includes(current) ? current : moreCurrent && hasMore ? 'more' : onBar[0];
 
     const bar = (id) => {
-      const el = tabButton(id, tt('tab.' + id), ICONS[id], { tabindex: id === tabStop ? 0 : -1, onclick: () => ctx.onPick?.(id) });
+      const el = tabButton(id, tt(`tab.${id}`), ICONS[id], { tabindex: id === tabStop ? 0 : -1, onclick: () => ctx.onPick?.(id) });
       barButtons.push(el);
       return el;
     };
