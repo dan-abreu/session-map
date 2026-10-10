@@ -30,7 +30,8 @@ export const runningWorkflows = (chat, nowMs) => (chat.workflows ?? []).flatMap(
 export function workingIn(project, tree, nowMs = Date.now(), { visitors = false } = {}) {
   const points = new Map((project.conversations ?? []).map((r) => [r.sessionId, r.node ?? null]));
   return [...project.chats, ...(visitors ? visitorsOf(project) : [])]
-    .filter((c) => c.status === 'busy' && !c.archived)
+    // A conversation whose team of helpers still works after its own turn ended is working too (mm31).
+    .filter((c) => !c.archived && (c.status === 'busy' || runningWorkflows(c, nowMs).some((w) => w.running.length)))
     .map((chat) => {
       const moved = Boolean(chat.stepPartId) && chat.stepPartId !== chat.partId;
       const row = moved
@@ -100,7 +101,7 @@ export function modelName(model) {
 
 // ---- the panel ----------------------------------------------------------------------------------
 
-const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'skill', 'plan', 'ask', 'think', 'tool']);
+const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
 
 // The words of one step, in the page's language; a kind this page does not know yet says nothing rather than a raw name.
 export const stepWords = (t, step) => (step && STEP_KINDS.has(step.kind) ? t(`live.step.${step.kind}`, { target: step.target }) : '');
@@ -109,7 +110,8 @@ export const stepWords = (t, step) => (step && STEP_KINDS.has(step.kind) ? t(`li
 export const placeWords = (t, place) => (place.special ? t(`convs.place.${place.special}`) : place.path.join(' › '));
 
 // ctx: root (the sheet), button (the toolbar button), h, t (translator getter), icon(name, cls), relative(iso), state(),
-// project(), onShow(entry), onOpen(entry). The page decides when it opens and closes; render() keeps both up to date.
+// project(), onShow(entry), onOpen(entry), ctx.workflowView(workflow, opts) (workflows.js, with the page words) and
+// onTeam(entry) (the whole trace). The page decides when it opens and closes; render() keeps both up to date.
 export function createLivePanel(ctx) {
   const { root, button, h, icon } = ctx;
   const body = root.querySelector('[data-live="body"]');
@@ -127,6 +129,11 @@ export function createLivePanel(ctx) {
 
   function agentsView(entry) {
     if (!entry.workflows.length) return null;
+    // The traced tree (mm31): what was asked, the team and its phase, each helper at work and where. A server older than
+    // the trace sends no agents: the plain list below.
+    if (ctx.workflowView && entry.workflows.every((w) => Array.isArray(w.agents))) {
+      return h('div', { class: 'lv-agents' }, entry.workflows.map((w) => ctx.workflowView(w, { compact: true, onDetails: ctx.onTeam ? () => ctx.onTeam(entry) : null })));
+    }
     const tt = ctx.t();
     return h('div', { class: 'lv-agents' }, entry.workflows.map((w) => h('div', { class: 'lv-wf' },
       h('p', { class: 'lv-wf-head' }, icon('auto', 'lv-wf-icon'), h('span', { class: 'lv-wf-name' }, w.name),

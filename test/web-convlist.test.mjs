@@ -215,30 +215,105 @@ test('the column draws the "nothing matches" screen for a search with no result,
   }
 });
 
-test('the project badge on a row is never cut: it keeps its size and only a very long name ends in "…"', async () => {
+// ---- a list whose divisions show at a glance (mm33) ----
+
+const walkAll = (el, out = []) => { out.push(el); el.children?.forEach((c) => walkAll(c, out)); return out; };
+const withClass = (root, cls) => walkAll(root).filter((el) => new RegExp(`(^| )${cls}( |$)`).test(el.attrs?.class ?? ''));
+
+// Draws the column for a state and returns the list element. t answers "key" or "key:var|var".
+async function drawList(state, { scope = 'project', unseen = new Set() } = {}) {
   const { createConvList } = await import('../server/web/convlist.js');
   const els = new Map();
   const realDocument = globalThis.document;
   globalThis.document = { activeElement: null, getElementById: (id) => els.get(id) ?? els.set(id, new El('div', id)).get(id) };
   try {
-    const state = shop([row('a')]);
+    const t = Object.assign((key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key), { count: (key, n) => `${key}:${n}` });
     createConvList({
-      root: new El('aside'), h: fakeH, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
-      t: () => (key) => key, relative: () => '1h', money: (v) => `$${v}`, phone: { matches: false },
-      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null,
+      root: new El('aside'), h: fakeH, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: (k) => (k === 'sm.convs.scope' ? scope : null), set() {} },
+      t: () => t, relative: () => '1h', money: (v) => `$${v}`, list: (xs) => xs.join(', '), phone: { matches: false },
+      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null, unseen: () => unseen,
       onOpen() {}, onMove() {}, onFilter() {},
     }).render();
-    const found = [];
-    const walk = (el) => { if (/\bcv-proj\b/.test(el.attrs?.class ?? '')) found.push(el); el.children?.forEach(walk); };
-    walk(els.get('convsList'));
-    assert.ok(found.length, 'the row shows its project');
-    const name = found[0].children.find((c) => c.attrs?.class === 'cv-proj-name');
-    assert.equal(name?.text, state.projects[0].name, 'the name sits in its own element, so it can end in "…"');
+    return els.get('convsList');
   } finally {
     globalThis.document = realDocument;
   }
+}
+
+test('every row says its state in a word: working, waiting for you, finished, closed, and finished not seen yet stands out', async () => {
+  const state = shop([
+    row('busy', { status: 'busy', live: true }),
+    row('asks', { waiting: true, live: true, status: 'idle' }),
+    row('idle', { status: 'idle', live: true }),
+    row('gone'),
+    row('fresh', { status: 'idle', live: true }),
+  ]);
+  const list = await drawList(state, { unseen: new Set(['fresh']) });
+  const rows = withClass(list, 'cv-row');
+  assert.equal(rows.length, 5);
+  const word = (r) => withClass(r, 'cv-state')[0]?.text.trim();
+  for (const r of rows) assert.ok(word(r), `${r.attrs['data-session']} has no state word`);
+  const bySession = Object.fromEntries(rows.map((r) => [r.attrs['data-session'], r]));
+  assert.deepEqual(Object.fromEntries(rows.map((r) => [r.attrs['data-session'], word(r)])), {
+    busy: 'convs.state.busy', asks: 'convs.state.waiting', idle: 'convs.state.idle', gone: 'convs.state.closed', fresh: 'convs.state.unseen',
+  });
+  assert.match(bySession.fresh.attrs.class, /\bis-unseen\b/, 'finished and not opened yet is highlighted');
+  assert.doesNotMatch(bySession.idle.attrs.class, /\bis-unseen\b/);
+});
+
+test('a row puts its place on the map on a line of its own, the origin in icon and word, and time and cost on the right', async () => {
+  const state = shop([row('a', { partId: 'orders', origin: 'vscode', costUSD: 2 })]);
+  const list = await drawList(state);
+  const [r] = withClass(list, 'cv-row');
+  const place = withClass(r, 'cv-place')[0];
+  assert.match(place.text, /What makes it work › Orders and cart/);
+  assert.equal(withClass(place, 'cv-origin-badge').length, 0, 'nothing else shares the place line');
+  const origin = withClass(r, 'cv-origin-badge')[0];
+  assert.match(origin.text, /convs\.origin\.vscode/);
+  assert.ok(walkAll(origin).some((el) => el.attrs?.['data-icon']), 'the origin has its icon');
+  const side = withClass(r, 'cv-side')[0];
+  assert.ok(side, 'a right column');
+  assert.equal(withClass(side, 'cv-when').length + withClass(side, 'cv-cost').length, 2, 'time and cost stand on the right');
+});
+
+test('each project is a card with its colour band and name, in "This project" too, and its rows do not repeat it', async () => {
+  for (const scope of ['project', 'all']) {
+    const state = shop([row('a'), row('b', { status: 'busy', live: true })]);
+    const list = await drawList(state, { scope });
+    const cards = withClass(list, 'cv-folder');
+    assert.ok(cards.length >= 1, `${scope}: one card per project`);
+    const card = cards.find((c) => c.attrs['data-project'] === state.projects[0].id);
+    assert.match(card.attrs.style, /--p-h:\d+/, `${scope}: the card carries the project colour`);
+    assert.equal(withClass(card, 'cv-folder-name')[0].text, state.projects[0].name);
+    assert.equal(withClass(card, 'cv-proj').length, 0, `${scope}: no row repeats the project inside its own card`);
+  }
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
-  const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\.')} \{([^}]*)\}`))?.[1] ?? '';
-  assert.match(rule('.cv-proj'), /flex: none/, 'the badge does not shrink when the place beside it is long');
-  assert.match(rule('.cv-proj-name'), /text-overflow: ellipsis/);
+  const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1] ?? '';
+  assert.match(rule('.cv-folder-name'), /text-overflow: ellipsis/, 'a very long name ends in "…" instead of pushing the counts out');
+  assert.match(rule('.cv-proj'), /flex: none/, 'the badge of the Now cards keeps its size');
+});
+
+test('the groups are titled sections with an icon, a colour, a count and a title that stays on top while its rows scroll', async () => {
+  const state = shop([row('w', { status: 'busy', live: true }), row('q', { waiting: true }), row('t', { updatedAt: ago(10) })]);
+  const list = await drawList(state);
+  const heads = withClass(list, 'cv-group-head');
+  assert.equal(heads.length, 3);
+  for (const head of heads) {
+    assert.ok(walkAll(head).some((el) => el.attrs?.['data-icon']), `${head.text}: has an icon`);
+    assert.equal(withClass(head, 'cv-group-n')[0]?.text, '1', `${head.text}: has its count`);
+  }
+  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]), ['working', 'waiting', 'today']);
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1] ?? '';
+  assert.match(rule('.cv-group-head'), /position: sticky/, 'the group title stays on top');
+});
+
+test('on a computer the conversation sheet takes the whole height of the stage, beside the map tools', () => {
+  const html = readFileSync(new URL('../server/web/index.html', import.meta.url), 'utf8');
+  const between = html.slice(html.indexOf('id="notice"'), html.indexOf('<aside id="chat"'));
+  assert.ok(between.includes('</div>'), 'the box under the map tools closes before the chat sheet: the sheet is not boxed in it');
+  const stage = html.slice(html.indexOf('<main class="stage"'), html.indexOf('</main>'));
+  assert.ok(stage.includes('<aside id="chat"'), 'it still lives in the stage');
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.stage:has\(\.chat:not\(\[hidden\]\)\) \.mm-tools \{[^}]*padding-right: calc\(var\(--chat-w/, 'the map tools make room beside it');
 });

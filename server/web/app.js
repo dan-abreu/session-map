@@ -16,7 +16,8 @@ import { createFlowView } from './flowview.js';
 import { createConvList, conversationCounts, listConversations, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createProjectPicker } from './picker.js';
-import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords } from './live.js';
+import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
+import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
@@ -87,6 +88,9 @@ let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
 let convCounts = new Map();
 let liveEntries = []; // the conversations working now in the open project (live.js workingIn)
+// The helpers of every team at work on a box of the open project (workflows.js agentDots), and where the map shows them.
+let agentMarks = new Map();
+let dotsShown = new Map();
 // Conversations that finished since the person last looked at them (mm10): kept across reloads until opened.
 const UNSEEN_KEY = 'sm.unseen';
 const UNSEEN_MAX = 200;
@@ -352,19 +356,34 @@ function freshChip(node) {
   return h('span', { class: 'bx-chip is-fresh', title: t('box.nowTitle', { files, lines }) }, h('span', { class: 'bx-fresh-dot', 'aria-hidden': 'true' }), words);
 }
 
+// One dot per helper at work on the box, in its team's colour (mm31); the tooltip says who, which team and its last step.
+function agentDotsView(node) {
+  const dots = dotsShown.get(node.id);
+  if (!dots?.length) return null;
+  const words = dots.map((d) => t('wf.dotTitle', { label: d.label || t('live.agentUnnamed'), team: d.workflowName, step: stepWords(t, d.step) || t('chat.busy') }));
+  return h('span', { class: 'bx-agents', title: words.join('\n') },
+    dots.slice(0, AGENT_DOTS_MAX).map((d) => h('span', { class: 'bx-agent', style: `--wf-h:${d.hue}`, 'aria-hidden': 'true' })),
+    h('span', { class: 'bx-agents-n num', 'aria-hidden': 'true' }, t.count('wf.dotsShort', dots.length)),
+    h('span', { class: 'visually-hidden' }, `${t.count('wf.dotsAria', dots.length)}: ${words.join('; ')}`));
+}
+const AGENT_DOTS_MAX = 6;
+const dotsSig = (node) => (dotsShown.get(node.id) ?? []).map((d) => `${d.agentId}:${d.hue}:${d.step?.target ?? ''}`).join(',');
+
 function boxContent(node) {
   const live = marks.live.has(node.id) ? liveDot() : null;
-  if (node.kind === 'item') return [...itemBody(node), live].filter(Boolean);
+  const agents = agentDotsView(node);
+  if (node.kind === 'item') return [...itemBody(node), agents, live].filter(Boolean);
   const c = node.counts;
   if (node.kind === 'project') {
     const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
-    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), freshChip(node), hasMap() ? progress(c) : null, live].filter(Boolean);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), freshChip(node), agents, hasMap() ? progress(c) : null, live].filter(Boolean);
   }
   return [
     h('span', { class: 'bx-title' }, node.label),
     h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), ...(node.kind === 'part' ? partBadges(node) : []), footChip(node)),
     sizeLine(node),
     freshChip(node),
+    agents,
     c.total ? progress(c) : null,
     live,
   ].filter(Boolean);
@@ -374,7 +393,7 @@ function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
     part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length,
-    sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node)]);
+    sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node), dotsSig(node)]);
 }
 
 const toggleLabel = (node, isOpen) => t(isOpen ? 'map.collapse' : 'map.expand', { name: node.label });
@@ -424,6 +443,7 @@ function liveCaptions() {
 }
 
 function mapView() {
+  dotsShown = dotsAt((nodeId) => open.has(nodeId), agentMarks, tree);
   const range = activeRange();
   const lit = range ? changedNodes(shown, tree, range.from, range.to) : null;
   const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
@@ -507,6 +527,7 @@ function markSeen(sessionId) {
   if (!unseen.delete(sessionId)) return;
   saveUnseen();
   renderNow();
+  convs?.render();
 }
 
 function renderNow() {
@@ -1325,6 +1346,23 @@ function chatTools(c) {
   return h('div', { class: 'tools' }, h('div', { class: 'actions' }, actions), notes.length ? h('p', { class: 'muted small' }, notes.join(' ')) : null);
 }
 
+// What the tree of a team needs from the page (mm31): words, places by name, and where its links lead.
+function placeName(p) {
+  const proj = state.projects.find((x) => x.id === p.projectId);
+  const part = proj?.arch.parts.find((x) => x.id === p.partId);
+  return [proj?.name ?? p.name, part?.name].filter(Boolean).join(' › ');
+}
+const wfCtx = () => ({
+  h, t, icon, relative, modelName, list: listText, nowMs: Date.parse(state.generatedAt), placeWords: placeName,
+  stepWords: (step) => stepWords(t, step),
+  onItem: (item) => goTo(item.projectId, { type: 'node', id: `i:${item.partId}:${item.code}` }),
+  onFile: (f) => {
+    if (f.projectId !== project.id) goTo(f.projectId);
+    files.open(f.path);
+  },
+});
+const newestWorkflow = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
+
 function renderChatPanel(c) {
   const part = partById(c.partId);
   const wc = c.workCellId && workCellById(c.workCellId);
@@ -1339,7 +1377,6 @@ function renderChatPanel(c) {
     [t('chat.placed'), t(`chat.placedBy.${c.partSource}`)],
     [t('chat.started'), shortDate(Date.parse(c.startedAt))],
     [t('chat.updated'), relative(c.updatedAt)],
-    ...c.workflows.map((w) => [t('chat.workflow'), `${w.name} · ${t('chat.workflowSteps', { done: w.done, started: w.started, label: w.lastLabel })}`]),
     parent ? [t('chat.from'), chatLink(parent)] : null,
   ].filter(Boolean);
   $('#panelBody').replaceChildren(...[
@@ -1348,6 +1385,7 @@ function renderChatPanel(c) {
     chatTools(c),
     section(t('chat.doing'), card.doing ? h('p', { class: 'lead' }, card.doing) : null),
     kblock('tasks', { from: t('kind.tasks.fromChat') }, list(card.todo)),
+    c.workflows?.length ? section(t('wf.title'), h('div', { class: 'wf-list' }, [...c.workflows].sort(newestWorkflow).map((w) => workflowView(wfCtx(), w)))) : null,
     section(t('chat.lastPrompt'), c.lastPrompt ? h('p', { class: 'quote' }, c.lastPrompt) : null),
     section(t('chat.lastReply'), c.lastAssistantText ? h('p', {}, c.lastAssistantText) : null),
     kblock('changes', { title: t('chat.commits') }, activityList(project.activity.filter((a) => isWork(a) && a.sessionId === c.sessionId).sort(newestFirst), { showChat: false })),
@@ -1499,6 +1537,8 @@ async function pcMode(mode) {
 
 function refreshMarks() {
   liveEntries = workingIn(shown, tree, Date.parse(state.generatedAt), { visitors: true });
+  useTeamHues(state);
+  agentMarks = agentDots(state, project, tree, Date.parse(state.generatedAt));
   marks = { live: livePaths(liveEntries).nodes, branches: branchMarks(shown), clashes: clashMarks(shown, ignoredClash) };
   convCounts = conversationCounts(project, tree, { showArchived });
 }
@@ -1763,7 +1803,7 @@ function wire() {
   });
   convs = createConvList({
     root: $('#convs'), h, t: () => t, icon, relative, money, list: listText, phone: PHONE, store,
-    state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(),
+    state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(), unseen: () => unseen,
     nodeLabel: (id) => (tree ? nodeById(tree, id)?.label ?? null : null),
     onOpen: openConversation,
     // A visitor (mm24) is moved and renamed from the project it was born in.
@@ -1781,6 +1821,8 @@ function wire() {
   live = createLivePanel({
     root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,
     state: () => state, project: () => project, onShow: showOnMap, onOpen: openFromLive,
+    workflowView: (w, opts) => workflowView(wfCtx(), w, opts),
+    onTeam: (entry) => { live.close(); goTo(entry.project.id, { type: 'chat', id: entry.chat.sessionId }); },
   });
   alerts = createAlerts({
     stack: $('#alertStack'), bell: $('#alertsBtn'), dialog: $('#alertsDialog'), h, t: () => t, lang: () => lang, icon, api, store, toast, errorText,
@@ -1804,7 +1846,7 @@ function wire() {
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
   changesView = createChangesView({
     h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
-    dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText,
+    dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,

@@ -2,7 +2,7 @@
 // (the whole conversation as the chat screen shows it).
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { CONTEXT_HEAD, personsWords } from '../chat/prompt.mjs';
 import { log } from '../log.mjs';
@@ -22,6 +22,9 @@ const MENTIONED_LINES = 200;
 // The shape of an item code of the architecture convention (wa04, pa-x12, pf-lacuna2); only codes the map knows count later.
 const ITEM_CODE_RE = /(?<![\w-])([a-z]{1,4}(?:-[a-z]{1,8})?\d{1,4})(?![\w-])/gi;
 const CODES_MAX = 100;
+// The owner's words kept for the request that launched a workflow (mm31).
+const REQUEST_MAX = 400;
+const RUN_ID_RE = /^wf_[\w-]+$/;
 
 export function claudeDir() {
   return process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
@@ -133,6 +136,19 @@ function humanPromptOf(entry) {
   return parts.length ? parts.join('\n') : null;
 }
 
+// The run a Workflow call launched: Claude Code answers the launch with the run's id (later status checks answer in text).
+function launchOf(entry) {
+  const r = entry.type === 'user' ? entry.toolUseResult : null;
+  return r && typeof r === 'object' && typeof r.runId === 'string' && RUN_ID_RE.test(r.runId) ? r.runId : null;
+}
+
+// What the owner asked right before a workflow started: their words, when, and the item codes they named.
+function requestOf(prompt) {
+  const text = personsWords(prompt.text).slice(0, REQUEST_MAX);
+  const codes = [...new Set([...text.matchAll(ITEM_CODE_RE)].map((m) => m[1].toLowerCase()))];
+  return { text, ts: prompt.ts, codes };
+}
+
 function usageRowOf(entry, fallbackId) {
   const msg = entry.message;
   const u = msg?.usage;
@@ -218,7 +234,7 @@ const STEPS_MAX = 5;
 const STEP_MAX = 80;
 const STEP_KIND = {
   Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Bash: 'run', PowerShell: 'run',
-  Grep: 'search', Glob: 'search', WebFetch: 'web', WebSearch: 'web', Task: 'agent', Agent: 'agent', Workflow: 'agent',
+  Grep: 'search', Glob: 'search', WebFetch: 'web', WebSearch: 'web', Task: 'agent', Agent: 'agent', Workflow: 'team',
   TodoWrite: 'plan', Skill: 'skill',
 };
 const SECRET_RES = [
@@ -267,6 +283,12 @@ export function stepOf(tool, cwd, answered) {
     return { kind, target: cutEnd(host || String(input.query ?? '')) };
   }
   if (kind === 'agent') return { kind, target: cutEnd(String(input.description ?? input.name ?? '')) };
+  // A team of helpers (mm31): its name from the script's meta block, or from the script's file ("<name>-wf_<id>.js").
+  if (kind === 'team') {
+    const named = /\bname\s*:\s*(['"`])((?:(?!\1).)+)\1/.exec(String(input.script ?? ''))?.[2]
+      ?? /([^\\/]+?)-wf_[\w-]+\.js$/.exec(String(input.scriptPath ?? ''))?.[1] ?? '';
+    return { kind, target: cutEnd(named) };
+  }
   if (kind === 'skill') return { kind, target: cutEnd(String(input.skill ?? '')) };
   if (kind === 'plan') return { kind, target: '' };
   return { kind, target: cutEnd(String(tool.name).split('__').pop()) };
@@ -309,6 +331,8 @@ function summarize(entries, sessionId) {
   let endedAt = null;
   let turnStartedAt = null;
   const userPrompts = [];
+  const launches = {};
+  let lastHuman = null;
   let fromPage = false;
   const usageById = new Map();
   const toolUses = [];
@@ -341,7 +365,10 @@ function summarize(entries, sessionId) {
       turnStartedAt = entry.timestamp ?? turnStartedAt;
       userPrompts.push(personsWords(prompt).slice(0, PROMPT_MAX));
       noteCodes(prompt);
+      lastHuman = { text: prompt, ts: entry.timestamp ?? null };
     }
+    const run = launchOf(entry);
+    if (run && lastHuman && !launches[run]) launches[run] = requestOf(lastHuman);
 
     if (entry.type === 'assistant') {
       const row = usageRowOf(entry, `line-${i}`);
@@ -404,6 +431,7 @@ function summarize(entries, sessionId) {
     lastFile,
     commits,
     pushes,
+    launches,
     mentionedPaths: pathsMentioned(entries.slice(-MENTIONED_LINES)),
     mentionedCodes: [...codes].slice(-CODES_MAX).map(([code, n]) => ({ code, n })),
     startedAt,
@@ -454,17 +482,24 @@ function fullScan(path, st) {
   const edited = new Set();
   let lastCardText = null;
   let aiTitle = null;
+  const launches = {};
+  let lastHuman = null;
   forEachLine(path, (line, i) => {
-    if (!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
+    const maybeHuman = line.includes('"type":"user"') && !line.includes('"tool_result"');
+    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
+    const prompt = maybeHuman ? humanPromptOf(entry) : null;
+    if (prompt) lastHuman = { text: prompt, ts: entry.timestamp ?? null };
+    const run = launchOf(entry);
+    if (run && lastHuman && !launches[run]) launches[run] = requestOf(lastHuman);
     const row = usageRowOf(entry, `line-${i}`);
     if (row) addUsage(usageById, row);
     for (const card of cardsIn(entry)) lastCardText = card;
     if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') aiTitle = entry.aiTitle;
     for (const file of editsIn(entry)) edited.add(file);
   });
-  const value = { usage: [...usageById.values()], lastCardText, aiTitle, editedFiles: [...edited] };
+  const value = { usage: [...usageById.values()], lastCardText, aiTitle, editedFiles: [...edited], launches };
   fullScanCache.set(path, { key, value });
   return value;
 }
@@ -483,6 +518,7 @@ export function readTranscript(path, { tailBytes = 2_000_000 } = {}) {
       const head = summarize(parseLines(readSlice(path, 0, HEAD_BYTES).replace(/\n[^\n]*$/, '')), summary.sessionId);
       summary.usage = full.usage;
       summary.editedFiles = [...new Set([...full.editedFiles, ...summary.editedFiles])];
+      summary.launches = { ...full.launches, ...summary.launches };
       summary.lastCardText ??= full.lastCardText;
       summary.startedAt = head.startedAt ?? summary.startedAt;
       summary.aiTitle ??= full.aiTitle;
@@ -523,7 +559,9 @@ export function helperAgents(sessionDir) {
     let meta = null;
     try { meta = JSON.parse(readText(file.replace(/\.jsonl$/, '.meta.json'))); } catch { /* no meta file */ }
     const label = labels.get(id) ?? (typeof meta?.description === 'string' ? meta.description : '');
-    return { file, label: label.slice(0, STEP_MAX), model: typeof meta?.model === 'string' ? meta.model : null };
+    // A workflow agent names its workflow (mm31), so a change it made leads back to the request that launched it.
+    const workflowId = basename(dirname(dirname(file))) === 'workflows' ? basename(dirname(file)) : null;
+    return { file, label: label.slice(0, STEP_MAX), model: typeof meta?.model === 'string' ? meta.model : null, workflowId };
   });
 }
 
@@ -544,22 +582,30 @@ export function readHelperUsage(sessionDir) {
 // A live conversation's agents are read on every pass, so each agent's transcript is read again only when it changed.
 // last: the file of the newest step among the agents that name one, with when that agent last wrote.
 const helperMemo = new Map();
+// What one agent transcript did: its commits, the files it edited, the file and the step it is on. null when missing.
+function agentWork(file) {
+  const st = statSync(file, { throwIfNoEntry: false });
+  if (!st) return null;
+  const sig = `${st.mtimeMs}:${st.size}`;
+  let hit = helperMemo.get(file);
+  if (hit?.sig !== sig) {
+    const text = readText(file);
+    if (text === null) return null;
+    const s = summarize(parseLines(text), basename(file, '.jsonl'));
+    const step = s.liveSteps.filter((x) => x.kind !== 'think').at(-1) ?? null;
+    hit = { sig, commits: s.commits, editedFiles: s.editedFiles, lastFile: s.lastFile, step, at: st.mtimeMs };
+    helperMemo.set(file, hit);
+  }
+  return hit;
+}
+
 export function readHelperWork(sessionDir) {
   const commits = [];
   const edited = new Set();
   let last = null;
   for (const file of helperFiles(sessionDir)) {
-    const st = statSync(file, { throwIfNoEntry: false });
-    if (!st) continue;
-    const sig = `${st.mtimeMs}:${st.size}`;
-    let hit = helperMemo.get(file);
-    if (hit?.sig !== sig) {
-      const text = readText(file);
-      if (text === null) continue;
-      const s = summarize(parseLines(text), basename(file, '.jsonl'));
-      hit = { sig, commits: s.commits, editedFiles: s.editedFiles, lastFile: s.lastFile, at: st.mtimeMs };
-      helperMemo.set(file, hit);
-    }
+    const hit = agentWork(file);
+    if (!hit) continue;
     commits.push(...hit.commits);
     for (const f of hit.editedFiles) edited.add(f);
     if (hit.lastFile && (!last || hit.at > last.at)) last = { file: hit.lastFile, at: hit.at };
@@ -569,7 +615,6 @@ export function readHelperWork(sessionDir) {
 
 // The model a workflow agent runs on, from its meta file ('opus', 'sonnet'...); none when it inherits the conversation's.
 function agentModel(dir, agentId) {
-  if (typeof agentId !== 'string' || !/^[\w-]+$/.test(agentId)) return null;
   try {
     const meta = JSON.parse(readText(join(dir, `agent-${agentId}.meta.json`)));
     return typeof meta?.model === 'string' && meta.model ? meta.model : null;
@@ -578,47 +623,88 @@ function agentModel(dir, agentId) {
   }
 }
 
-// When a workflow agent last wrote to its own transcript: a killed workflow leaves agents with no result behind forever.
-function agentMovedAt(dir, agentId) {
-  if (typeof agentId !== 'string' || !/^[\w-]+$/.test(agentId)) return null;
-  try {
-    return statSync(join(dir, `agent-${agentId}.jsonl`)).mtimeMs;
-  } catch {
-    return null;
-  }
+// The phase titles a running workflow's script declares in its meta block ("phases: [{ title: 'Look' }, ...]"), so the
+// phases still to come show before their first agent starts. [] when the script names none.
+function scriptPhases(path) {
+  const block = /phases\s*:\s*\[([\s\S]*?)\]\s*[,}]/.exec(readText(path) ?? '')?.[1] ?? '';
+  return [...block.matchAll(/title\s*:\s*(['"`])((?:(?!\1).)*)\1/g)].map((m) => m[2]);
 }
 
+const AGENT_ID_RE = /^[\w-]+$/;
+// ponytail: a run with more agents keeps its newest 60 on the page (the ones at work); the counts stay whole.
+const AGENTS_MAX = 60;
+
+// Each workflow of a conversation (mm31): its name, state and phases, and every agent with its state ('running', 'done'
+// or 'failed'), phase, model, last step and the files and commits it made. An agent's activeAt is when it last wrote to
+// its own transcript (a killed workflow leaves agents with no result behind forever). running keeps the older shape.
 export function readWorkflows(sessionDir) {
   const workflows = [];
   const scripts = listDir(join(sessionDir, 'workflows', 'scripts')).map((f) => f.name);
   for (const wf of listDir(join(sessionDir, 'subagents', 'workflows'))) {
     if (!wf.isDirectory()) continue;
-    const journalPath = join(sessionDir, 'subagents', 'workflows', wf.name, 'journal.jsonl');
+    const dir = join(sessionDir, 'subagents', 'workflows', wf.name);
+    const journalPath = join(dir, 'journal.jsonl');
     const text = readText(journalPath);
     if (text === null) continue;
     let mtimeMs;
     try { mtimeMs = statSync(journalPath).mtimeMs; } catch { continue; }
-    const events = parseLines(text);
-    const started = events.filter((e) => e.type === 'started');
     // The meta file is written when the run ends; while it runs, the script's file name ("<name>-<id>.js") holds the name.
     const suffix = `-${wf.name}.js`;
-    let name = scripts.find((f) => f.endsWith(suffix))?.slice(0, -suffix.length) || wf.name;
-    try {
-      const meta = JSON.parse(readText(join(sessionDir, 'workflows', `${wf.name}.json`)));
-      const named = [meta?.workflowName, meta?.name].find((n) => typeof n === 'string' && n);
-      if (named) name = named;
-    } catch { /* no meta file yet */ }
-    const answered = new Set(events.filter((e) => e.type === 'result').map((e) => e.agentId));
+    const script = scripts.find((f) => f.endsWith(suffix));
+    let name = script?.slice(0, -suffix.length) || wf.name;
+    let meta = null;
+    try { meta = JSON.parse(readText(join(sessionDir, 'workflows', `${wf.name}.json`))); } catch { /* no meta file yet */ }
+    const named = [meta?.workflowName, meta?.name].find((n) => typeof n === 'string' && n);
+    if (named) name = named;
+
+    const agents = new Map();
+    let lastLabel = null;
+    for (const e of parseLines(text)) {
+      if (typeof e.agentId !== 'string' || !AGENT_ID_RE.test(e.agentId)) continue;
+      if (e.type === 'started') {
+        lastLabel = e.label ?? null;
+        if (!agents.has(e.agentId)) {
+          agents.set(e.agentId, { id: e.agentId, label: typeof e.label === 'string' ? e.label.slice(0, STEP_MAX) : null, phase: typeof e.phase === 'string' ? e.phase : null, state: 'running' });
+        }
+      } else if ((e.type === 'result' || e.type === 'failed') && agents.has(e.agentId)) {
+        agents.get(e.agentId).state = e.type === 'result' ? 'done' : 'failed';
+      }
+    }
+    const list = [...agents.values()].map((a) => {
+      const work = agentWork(join(dir, `agent-${a.id}.jsonl`));
+      return {
+        ...a,
+        model: agentModel(dir, a.id),
+        activeAt: new Date(work?.at ?? mtimeMs).toISOString(),
+        step: work?.step ?? null,
+        lastFile: work?.lastFile ?? null,
+        editedFiles: work?.editedFiles ?? [],
+        commits: work?.commits ?? [],
+      };
+    });
+    const declared = Array.isArray(meta?.phases)
+      ? meta.phases.map((p) => p?.title).filter((t) => typeof t === 'string')
+      : script ? scriptPhases(join(sessionDir, 'workflows', 'scripts', script)) : [];
+    const titles = [...new Set([...declared, ...list.map((a) => a.phase).filter(Boolean)])];
+    const count = (where) => list.filter(where).length;
     workflows.push({
       id: wf.name,
       name,
-      started: new Set(started.map((e) => e.agentId)).size,
-      done: answered.size,
-      lastLabel: started.at(-1)?.label ?? null,
-      running: started.filter((e) => !answered.has(e.agentId)).map((e) => {
-        const dir = join(sessionDir, 'subagents', 'workflows', wf.name);
-        return { label: e.label ?? null, model: agentModel(dir, e.agentId), activeAt: new Date(agentMovedAt(dir, e.agentId) ?? mtimeMs).toISOString() };
-      }),
+      status: typeof meta?.status === 'string' && meta.status ? meta.status : 'running',
+      started: list.length,
+      done: count((a) => a.state === 'done'),
+      failed: count((a) => a.state === 'failed'),
+      total: Math.max(list.length, Number.isInteger(meta?.agentCount) ? meta.agentCount : 0),
+      lastLabel,
+      phases: titles.map((title) => ({
+        title,
+        total: count((a) => a.phase === title),
+        done: count((a) => a.phase === title && a.state === 'done'),
+        failed: count((a) => a.phase === title && a.state === 'failed'),
+        running: count((a) => a.phase === title && a.state === 'running'),
+      })),
+      agents: list.slice(-AGENTS_MAX),
+      running: list.filter((a) => a.state === 'running').map((a) => ({ label: a.label, model: a.model, activeAt: a.activeAt })),
       updatedAt: new Date(mtimeMs).toISOString(),
     });
   }

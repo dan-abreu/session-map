@@ -171,14 +171,19 @@ export function conversationCounts(project, tree, { showArchived = false } = {})
 // Every origin has its own drawn icon and word, so a row never leaves "where does this run?" open.
 const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto' };
 export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
-const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'skill', 'plan', 'ask', 'think', 'tool']);
+const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
 const DATED = new Set(DATE_GROUPS);
 
 const toneOf = (row) => (row.status === 'busy' ? 'busy' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
+// The word on every row (mm33): its state, and "finished, not seen yet" until the person opens it.
+export const stateOf = (row, unseen) => (row.status !== 'busy' && !row.waiting && unseen?.has(row.sessionId) ? 'unseen' : toneOf(row));
+// Each group's own icon; its colour comes from the g-<name> class.
+const GROUP_ICON = { pinned: 'compass', working: 'auto', waiting: 'bell', visiting: 'connect', today: 'clock', yesterday: 'clock', week: 'clock', older: 'calendar' };
 
 // ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), list(names) (joined in the
 // page's language), phone (media query), state(),
-// project(), showArchived(), current() (the conversation the chat sheet shows), nodeLabel(id), onOpen(entry), onMove(entry)
+// project(), showArchived(), current() (the conversation the chat sheet shows), unseen() (the ids finished and not seen yet),
+// nodeLabel(id), onOpen(entry), onMove(entry)
 // (move or rename it), onFilter() (the box filter changed: the map redraws its pressed numbers), store {get, set}.
 export function createConvList(ctx) {
   const { root, h, icon, store } = ctx;
@@ -206,19 +211,19 @@ export function createConvList(ctx) {
   const stepText = (step) => (STEP_KINDS.has(step.kind) ? ctx.t()(`live.step.${step.kind}`, { target: step.target }) : '');
   const workText = (work) => (work ? ctx.t()('convs.work', { born: work.born, where: ctx.list(work.working) }) : '');
 
-  const projectBadge = (project) => h('span', { class: 'cv-proj', style: `--p-h:${projectHue(project)}` },
-    h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, project.name));
-
   function originBadge(origin) {
     const tt = ctx.t();
     const word = tt(`convs.origin.${origin}`);
     return h('span', { class: `cv-origin-badge o-${origin}`, title: tt('convs.origin.title', { origin: word }) }, icon(originIcon(origin), 'cv-origin'), word);
   }
 
+  // Title and time on top, then the state in a word and where it runs (cost on the right), then its place on the map on a
+  // line of its own. The project is the card the row sits in, so the row does not repeat it.
   function rowView(e) {
     const tt = ctx.t();
     const { row } = e;
     const tone = toneOf(row);
+    const state = stateOf(row, ctx.unseen?.());
     const current = ctx.current() === row.sessionId;
     const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
     const title = row.title || tt('chat.untitled');
@@ -226,18 +231,19 @@ export function createConvList(ctx) {
     const work = workText(workWords(row, e.project));
     return h('li', { class: `cv-item${e.home ? ' is-visitor' : ''}` },
       h('button', {
-        type: 'button', class: `cv-row tone-${tone}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
+        type: 'button', class: `cv-row tone-${tone}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
         title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
       },
-      h('span', { class: 'cv-dot', title: tt(`convs.dot.${tone}`) }, h('span', { class: 'visually-hidden' }, `${tt(`convs.dot.${tone}`)}: `)),
       h('span', { class: 'cv-title' }, title),
-      h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
+      h('span', { class: 'cv-side' },
+        h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
+        row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null),
+      h('span', { class: 'cv-badges' },
+        h('span', { class: `cv-state s-${state}` }, h('span', { class: 'cv-state-dot', 'aria-hidden': 'true' }), tt(`convs.state.${state}`)),
+        originBadge(row.origin)),
       step ? h('span', { class: 'cv-step' }, step) : null,
-      h('span', { class: `cv-where${e.place.special ? ` is-${e.place.special}` : ''}` }, projectBadge(e.project), where ? h('span', { class: 'cv-path' }, where) : null),
-      work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null,
-      h('span', { class: 'cv-meta' },
-        originBadge(row.origin),
-        row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null)),
+      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon(e.place.special === 'idea' ? 'idea' : 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
+      work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null),
       h('button', {
         type: 'button', class: 'cv-move', 'aria-label': tt('convs.moveAria', { title }), title: tt('convs.move'), 'aria-haspopup': 'dialog',
         onclick: () => ctx.onMove(e),
@@ -254,8 +260,8 @@ export function createConvList(ctx) {
     const id = `cv-g-${sec.project.id}-${name}`;
     return h('section', { class: `cv-group g-${name}`, 'aria-labelledby': id },
       h(heading, { id, class: 'cv-group-head' },
-        name === 'pinned' ? icon('compass', 'cv-group-icon') : name === 'visiting' ? icon('connect', 'cv-group-icon') : h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }),
-        tt(`convs.group.${name}`), h('span', { class: 'cv-group-n num' }, String(entries.length))),
+        h('span', { class: 'cv-group-mark', 'aria-hidden': 'true' }, icon(GROUP_ICON[name], 'cv-group-icon')),
+        h('span', { class: 'cv-group-name' }, tt(`convs.group.${name}`)), h('span', { class: 'cv-group-n num' }, String(entries.length))),
       h('ul', { class: 'cv-rows' }, shown.map(rowView)),
       rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll.add(key); render(); } }, tt('convs.more', { n: rest })) : null);
   }
@@ -265,14 +271,21 @@ export function createConvList(ctx) {
   // Open unless the person closed it; a project with work going on, the open one and a search show open by default.
   const isFolderOpen = (sec, openId) => (query.trim() ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.waiting > 0));
 
-  function folderView(sec, openId) {
+  function folderView(sec, openId, { collapsible = true } = {}) {
     const tt = ctx.t();
-    const opened = isFolderOpen(sec, openId);
+    const opened = !collapsible || isFolderOpen(sec, openId);
     const bodyId = `cv-p-${sec.project.id}`;
     const counters = [
       sec.counts.working ? h('span', { class: 'cv-pc is-working num', title: tt('convs.projectWorking', { n: sec.counts.working }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.working), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWorking', { n: sec.counts.working })}`)) : null,
       sec.counts.waiting ? h('span', { class: 'cv-pc is-waiting num', title: tt('convs.projectWaiting', { n: sec.counts.waiting }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.waiting), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWaiting', { n: sec.counts.waiting })}`)) : null,
     ];
+    const inside = [h('span', { class: 'cv-proj-dot cv-folder-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-folder-name' }, sec.project.name),
+      h('span', { class: 'cv-folder-counts' }, counters, h('span', { class: 'cv-folder-n num' }, String(sec.counts.total)))];
+    if (!collapsible) {
+      return h('section', { class: 'cv-folder is-open is-fixed', style: `--p-h:${sec.hue}`, 'data-project': sec.project.id, 'aria-labelledby': `${bodyId}-name` },
+        h('h3', { class: 'cv-folder-head', id: `${bodyId}-name` }, h('span', { class: 'cv-folder-btn' }, inside)),
+        h('div', { class: 'cv-folder-body', id: bodyId }, groupsOf(sec, 'h4')));
+    }
     return h('section', { class: `cv-folder${opened ? ' is-open' : ''}`, style: `--p-h:${sec.hue}`, 'data-project': sec.project.id },
       h('h3', { class: 'cv-folder-head' }, h('button', {
         type: 'button', class: 'cv-folder-btn', 'aria-expanded': String(opened), 'aria-controls': bodyId, title: tt('convs.projectToggle', { name: sec.project.name }),
@@ -281,8 +294,7 @@ export function createConvList(ctx) {
           store.set('sm.convs.folders', JSON.stringify(folders));
           render();
         },
-      }, icon('chevron', 'cv-folder-chevron'), h('span', { class: 'cv-proj-dot cv-folder-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-folder-name' }, sec.project.name),
-      h('span', { class: 'cv-folder-counts' }, counters, h('span', { class: 'cv-folder-n num' }, String(sec.counts.total))))),
+      }, icon('chevron', 'cv-folder-chevron'), inside)),
       h('div', { class: 'cv-folder-body', id: bodyId, hidden: !opened }, opened ? groupsOf(sec, 'h4') : null));
   }
 
@@ -314,7 +326,7 @@ export function createConvList(ctx) {
     const focused = list.contains(document.activeElement) ? document.activeElement : null;
     const keep = focused ? { session: focused.closest('[data-session]')?.dataset.session ?? focused.closest('.cv-item')?.querySelector('[data-session]')?.dataset.session, move: focused.classList.contains('cv-move'), project: focused.closest('.cv-folder-btn') ? focused.closest('[data-project]')?.dataset.project : null } : null;
     const top = list.scrollTop;
-    let body = scope === 'all' ? out.sections.map((sec) => folderView(sec, p.id)) : out.sections.flatMap((sec) => groupsOf(sec, 'h3'));
+    let body = out.sections.map((sec) => folderView(sec, p.id, { collapsible: scope === 'all' }));
     if (!body.length) {
       let empty = { art: 'chat', title: tt('convs.emptyTitle'), text: scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty') };
       if (filter) empty = { art: 'map', title: tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) }), text: tt('convs.filterEmptyText') };

@@ -146,3 +146,15 @@ test('the live panel card grids clamp their column, so a long step ellipsizes in
     assert.ok(rules.some(([, , body]) => /grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(body)), `.${cls} has grid-template-columns: minmax(0, 1fr)`);
   }
 });
+
+test('workingIn: a conversation that finished its turn while its team of helpers still works is working too (mm31)', () => {
+  const team = (activeAt) => [{ id: 'w', name: 'team', started: 1, done: 0, running: [{ label: 'Build', model: 'sonnet', activeAt }] }];
+  const state = shop([
+    chat('busy'),
+    chat('team', { status: 'idle', workflows: team(ago(2)) }),
+    chat('stale', { status: 'idle', workflows: team(ago(90)) }),
+    chat('quiet', { status: 'idle' }),
+  ]);
+  const p = state.projects[0];
+  assert.deepEqual(workingIn(p, archTree(p), Date.parse(NOW)).map((e) => e.chat.sessionId).sort(), ['busy', 'team']);
+});

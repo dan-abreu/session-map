@@ -16,6 +16,7 @@ import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
 import { attachChanges } from './changes-state.mjs';
 import { footprintOf, touchesOf } from './footprint.mjs';
+import { hangWorkflows } from './workflows.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
@@ -547,6 +548,11 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });
     return null;
   })))).filter(Boolean);
+  try {
+    await hangWorkflows(built, groups, { skip: [dir, smDir], nowMs: now.getTime() });
+  } catch (err) {
+    log('warn', 'workflows-failed', { error: err.message });
+  }
   hangFootprints(built, touches);
   let changes = new Map();
   try {

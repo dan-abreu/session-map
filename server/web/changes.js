@@ -4,6 +4,7 @@ import { emptyState } from './empty.js';
 import { modelName } from './live.js';
 import { inRange } from './range.js';
 import { dayName, localDay, timeOf } from './transcript.js';
+import { workflowHue } from './workflows.js';
 
 // The Changes tab (mind-map-page mm30): every file the conversations and their helpers created, edited, removed or renamed,
 // live, with who did it, where it sits on the map, its lines, whether it is saved and released, and its before and after.
@@ -50,6 +51,17 @@ export function changeGroups(rows) {
 }
 
 // What lights a box: the project's recent changes ({files, lines, parts}) for a part, a layer (its parts added up) or the project.
+// Who made a change, in words: the conversation, or its helper (and the helper's team, mm31), and the model.
+export function whoWords(tt, row) {
+  if (!row.sessionId) return tt('changes.who.outside');
+  const title = row.title || tt('chat.untitled');
+  const model = modelName(row.agent?.model ?? row.model);
+  if (!row.agent) return [title, model].filter(Boolean).join(' · ');
+  const label = row.agent.label || tt('changes.who.helperUnnamed');
+  const who = row.agent.workflow ? tt('changes.who.team', { label, team: row.agent.workflow.name }) : tt('changes.who.helper', { label });
+  return [who, title, model].filter(Boolean).join(' · ');
+}
+
 export function freshFor(fresh, node) {
   if (!fresh) return null;
   if (node.kind === 'project') return { files: fresh.files, lines: fresh.lines };
@@ -102,15 +114,6 @@ export function createChangesView(ctx) {
     return h('span', { class: `chg-state cs-${row.state}`, title: row.hash ? tt('changes.state.hashTitle', { hash: row.hash.slice(0, 7) }) : null }, words);
   }
 
-  function whoWords(row) {
-    const tt = t();
-    if (!row.sessionId) return tt('changes.who.outside');
-    const title = row.title || tt('chat.untitled');
-    const model = modelName(row.agent?.model ?? row.model);
-    if (row.agent) return [tt('changes.who.helper', { label: row.agent.label || tt('changes.who.helperUnnamed') }), title, model].filter(Boolean).join(' · ');
-    return [title, model].filter(Boolean).join(' · ');
-  }
-
   function linesChip(row) {
     if (row.kind === 'rename' && !row.added && !row.removed) return null;
     return h('span', { class: 'chg-lines num', 'aria-label': t()('changes.linesAria', { added: row.added, removed: row.removed }) },
@@ -131,7 +134,7 @@ export function createChangesView(ctx) {
       linesChip(row),
       h('span', { class: 'chg-meta' },
         h('span', { class: 'chg-where' }, where),
-        h('span', { class: 'chg-who' }, whoWords(row)),
+        h('span', { class: 'chg-who' }, whoWords(t(), row)),
         h('span', { class: 'chg-time num' }, timeOf(ctx.lang(), row.ts))),
       stateChip(row)));
   }
@@ -286,7 +289,7 @@ export function createChangesView(ctx) {
       h('div', { class: 'file-title' },
         h('p', { class: 'chg-dialog-kind' }, kindChip(row.kind), stateChip(row)),
         h('h2', { id: 'fileTitle' }, h('code', {}, row.path)),
-        h('p', { class: 'meta' }, [whoWords(row), `${dayName(tt, ctx.lang(), localDay(row.ts))} ${timeOf(ctx.lang(), row.ts)}`, partName(row)].filter(Boolean).join(' · '))),
+        h('p', { class: 'meta' }, [whoWords(t(), row), `${dayName(tt, ctx.lang(), localDay(row.ts))} ${timeOf(ctx.lang(), row.ts)}`, partName(row)].filter(Boolean).join(' · '))),
       h('div', { class: 'actions' },
         row.kind !== 'delete' && row.projectId === ctx.project().id ? h('button', { type: 'button', class: 'btn primary', onclick: () => ctx.files.open(row.path) }, tt('changes.openFile')) : null,
         row.sessionId ? h('button', { type: 'button', class: 'btn', onclick: () => { dialog.close(); ctx.go(row.projectId, { type: 'chat', id: row.sessionId }); } }, tt('changes.openChat')) : null,
@@ -298,6 +301,14 @@ export function createChangesView(ctx) {
     const res = await api.change(row.projectId, row.id);
     if (!res.ok) return body.replaceChildren(h('p', { class: 'view-note' }, ctx.errorText(res.error)));
     const parts = [];
+    // The way back from a changed file to what the owner asked (mm31).
+    const ask = row.agent?.request;
+    if (ask?.text) {
+      parts.push(h('div', { class: 'chg-ask', style: `--wf-h:${workflowHue(row.agent.workflow.id)}` },
+        h('p', { class: 'chg-ask-head' }, ctx.icon('chat', 'chg-ask-icon'), tt('changes.asked'), ask.ts ? h('span', { class: 'chg-ask-when num' }, ctx.relative(ask.ts)) : null),
+        h('p', { class: 'chg-ask-text' }, ask.text),
+        h('p', { class: 'chg-ask-by' }, h('span', { class: 'chg-ask-swatch', 'aria-hidden': 'true' }), tt('changes.askedBy', { team: row.agent.workflow.name, label: row.agent.label || tt('changes.who.helperUnnamed') }))));
+    }
     if (row.from) parts.push(h('p', { class: 'chg-note' }, tt('changes.renamedFrom', { from: row.from })));
     if (res.error === 'sensitive') parts.push(h('p', { class: 'chg-note' }, tt('changes.sensitive')));
     else if (typeof res.before === 'string') {

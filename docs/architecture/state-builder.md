@@ -17,6 +17,7 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/placements.mjs`
 - `server/footprint.mjs`
 - `server/changes-state.mjs`
+- `server/workflows.mjs`
 - `server/store.mjs`
 
 ## Rules that must not break

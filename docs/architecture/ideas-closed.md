@@ -10,7 +10,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - Following the work live: id29, id31, id32, id34, id35, id36, id37, id38, id39
 - Files, terminal and the first use of a repository: id40
 - The Flow: id43, id44
-- This registry: id68
+- This registry: id68, id69
 
 ## How it works
 
@@ -247,3 +247,9 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content; see `mm30`.
   - Where it went: `mm30`; what is left in `mm35`.
   - Status: done (on main): the Changes tab lists every file created, edited, removed or renamed by the conversations, their helpers and workflow agents, and what the folder holds not saved yet, with who, where, lines, before and after, and saved → released; the boxes light with "+N files +M lines now". Edits made by a command (a script, a formatter) still read "outside the conversations": `mm35`.
+- [x] See where each workflow is working and which request started it, several places at once `id69`
+  - Asked: 2026-10-09 16:47 — "quero ver onde os workflow estão trabalhando onde pedi, porque sei que pode ser em varios locais ao mesmo tempo"
+  - What it means: a tree request → workflow → agents → live footprint, one colour per workflow with a dot per active agent on the boxes it touches (several projects at once), and tracing both ways between a request and the files, commits and release it produced.
+  - How to confirm it is done: with a workflow running, every active agent shows as a dot on the right box with its last step, and clicking a changed file shows the request that caused it; see `mm31`.
+  - Where it went: `mm31`; what is left in `mm37`.
+  - Status: done (on main): each team of helpers shows as a tree from what was asked to every helper with its state, model and place; each team has its own colour with a dot per helper at work on the boxes it touches, in any project; the conversation's panel lists the files, saved changes and version of each helper, and a changed file in Changes shows the request that led to it. A page chat's map point as the request, single helpers and team colours on the Now cards go on in `mm37`.

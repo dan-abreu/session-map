@@ -32,7 +32,7 @@ function tagsSignature(root) {
     execFile('git', ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/tags'], { cwd: root, timeout: 5000, windowsHide: true }, (err, out) => resolve(err ? '' : out));
   });
 }
-async function tagsFor(root, hashes, nowMs) {
+export async function tagsFor(root, hashes, nowMs) {
   let memo = tagMemo.get(root);
   if (!memo || nowMs - memo.at > TAGS_TTL_MS) {
     const sig = await tagsSignature(root);
@@ -55,6 +55,16 @@ function agentsOf(item, live) {
   const agents = helperAgents(sessionDir);
   agentMemo.set(sessionDir, { sig, agents });
   return agents;
+}
+
+// Who made a change: the helper, and for a workflow agent its workflow and the request that launched it (mm31), so a
+// changed file leads back to what the owner asked.
+function agentOf(agent, change, item) {
+  const who = { label: agent.label, model: change.model ?? agent.model };
+  if (!agent.workflowId) return who;
+  const name = item.workflows?.find((w) => w.id === agent.workflowId)?.name ?? agent.workflowId;
+  const launch = item.summary.launches?.[agent.workflowId];
+  return { ...who, workflow: { id: agent.workflowId, name }, request: launch ? { text: launch.text, ts: launch.ts } : null };
 }
 
 const mtimeIso = (root, rel) => {
@@ -87,7 +97,7 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById }, bui
         events.get(key).push({
           id, ts: change.ts, kind: change.kind, path: hit.rel, ...(from ? { from: from.rel } : {}), added: change.added, removed: change.removed,
           sessionId: s.sessionId, title: titles.get(s.sessionId) ?? s.title ?? '', model: change.model,
-          agent: src.agent ? { label: src.agent.label, model: change.model ?? src.agent.model } : null,
+          agent: src.agent ? agentOf(src.agent, change, item) : null,
         });
         refs.get(key).set(id, { file: src.file, change });
       }

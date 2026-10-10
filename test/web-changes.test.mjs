@@ -67,3 +67,14 @@ test('each line of a before and after carries its number in the old file and in 
   ]);
   assert.deepEqual(hunkRows({ oldStart: 0, newStart: 0, lines: ['-x', '+y'] }).map((r) => [r.old, r.new]), [[null, null], [null, null]], 'replaced pieces with no place in the file have no numbers');
 });
+
+test('a change by a helper of a team says the helper and its team, and keeps the request that led to it (mm31)', async () => {
+  const { whoWords } = await import('../server/web/changes.js');
+  const t = (key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key);
+  const base = { sessionId: 's1', title: 'Checkout', model: null };
+  assert.equal(whoWords(t, { ...base, agent: { label: 'Write the tests', model: 'claude-haiku-4-5', workflow: { id: 'wf_a', name: 'trace' }, request: { text: 'do it', ts: null } } }),
+    'changes.who.team:Write the tests|trace · Checkout · Haiku 4.5');
+  assert.equal(whoWords(t, { ...base, agent: { label: 'Write the tests', model: 'haiku' } }), 'changes.who.helper:Write the tests · Checkout · Haiku');
+  assert.equal(whoWords(t, { ...base, model: 'claude-opus-5-5' }), 'Checkout · Opus 5.5');
+  assert.equal(whoWords(t, { sessionId: null }), 'changes.who.outside');
+});

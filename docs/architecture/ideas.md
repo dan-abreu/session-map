@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id51, id52, id53, id54, id55, id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72
-- This registry: id65, id66, id67, id69
+- This registry: id65, id66, id67
 
 ## How it works
 
@@ -104,7 +104,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: every message of every conversation with the same formatting as Claude Code, the time of each message, Claude's steps, questions and answers, images, helpers and costs; each conversation's origin (VS Code, terminal, map, claude.ai) shown with a badge; the same chat screen and composer as Claude Code.
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
-  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, is done on main; `mm23` is open; the list that shows at a glance where each chat comes from and what it is doing is open in `mm33`; `rd04` waits for the owner's OK).
+  - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, and `mm33`, the list that shows at a glance where each chat comes from and what it is doing, are done on main; `mm23` is open; `rd04` waits for the owner's OK).
 
 ### Files, terminal and the first use of a repository
 
@@ -191,7 +191,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: panels split into blocks by kind (tasks, chats, lines of work, what changed, files), each with its color, icon and where its data comes from; one visual system for the whole program written in `DESIGN.md`; screenshots approved by the owner before publishing.
   - How to confirm it is done: a part's panel shows separate blocks with their own title and "comes from"; `DESIGN.md` exists with tokens and components; the owner approved the screenshots of the release.
   - Where it went: `mm07`, `mm08`, `mm33`.
-  - Status: in progress (`mm07` and `mm08` are done on main; the conversation list's obvious divisions are open in `mm33`; the owner has not yet approved the screenshots).
+  - Status: in progress (`mm07`, `mm08` and the conversation list's obvious divisions `mm33` are done on main; the owner has not yet approved the screenshots).
 - [ ] **in progress:** A readable chat: formatting and an input box that grows `id56`
   - Asked: 2026-10-09 16:04 — "nossa chat nao pega formatação nenhuma de nada ta cru, e também a onde escreve ele não vai crescendo de acordo com o que vai digitando ele é grande de mais e acaba que tem muita informação no chat e fica pouca coisa para a parte do dialogo a gente podia reever como melhorar e refinar isso"
   - What it means: replies rendered as markdown like Claude Code (headings, lists, tables, code with copy, links); the input starts at one line and grows to about 40% of the panel; a compact header; controls that fold away, so most of the height is dialogue.
@@ -290,10 +290,4 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the model comes from the code files (census, extractors, import graph); the architecture markdown becomes an output generated and checked against the code, with file:line evidence.
   - How to confirm it is done: every box lists the code files it owns; a doc sentence without evidence in the code is flagged; see `fd12`.
   - Where it went: `fd12`.
-  - Status: accepted.
-- [ ] See where each workflow is working and which request started it, several places at once `id69`
-  - Asked: 2026-10-09 16:47 — "quero ver onde os workflow estão trabalhando onde pedi, porque sei que pode ser em varios locais ao mesmo tempo"
-  - What it means: a tree request → workflow → agents → live footprint, one colour per workflow with a dot per active agent on the boxes it touches (several projects at once), and tracing both ways between a request and the files, commits and release it produced.
-  - How to confirm it is done: with a workflow running, every active agent shows as a dot on the right box with its last step, and clicking a changed file shows the request that caused it; see `mm31`.
-  - Where it went: `mm31`.
   - Status: accepted.
