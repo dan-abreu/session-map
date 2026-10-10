@@ -79,3 +79,14 @@ test('a call refused by the hourly cap is not remembered, so a later collect ask
     rmSync(smDir, { recursive: true, force: true });
   }
 });
+
+test('placeByAi hands the queue a check that accepts only the listed part ids or null', async () => {
+  let seen;
+  await placeByAi(DIGEST, ARCH, async (req) => { seen = req; return { ok: true, value: { partId: 'orders' } }; });
+  assert.equal(typeof seen.valid, 'function');
+  assert.equal(seen.valid({ partId: 'orders' }), true);
+  assert.equal(seen.valid({ partId: null }), true);
+  assert.equal(seen.valid({ partId: 'Orders' }), false);
+  assert.equal(seen.valid({}), false);
+  assert.equal(seen.valid(null), false);
+});

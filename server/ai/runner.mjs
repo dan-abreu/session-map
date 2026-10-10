@@ -6,6 +6,7 @@ import { delimiter, join } from 'node:path';
 import { readJsonFile, writeAtomic } from '../store.mjs';
 import { log } from '../log.mjs';
 import { normalizePath } from '../paths.mjs';
+import { HELPER_KINDS, emptyHelperState, helperStatus, pausedFor, recordReview, resumeHelper, reviewPicks, sameAnswer } from './review.mjs';
 
 const TIMEOUT_MS = 90_000;
 const OUTPUT_MAX = 1_000_000;
@@ -96,8 +97,8 @@ function parseEnvelope(stdout) {
   return null;
 }
 
-// Models wrap JSON in prose or code fences despite being told not to.
-function extractJSON(text) {
+// Models wrap JSON in prose or code fences despite being told not to. The helper providers reuse it.
+export function extractJSON(text) {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text)?.[1];
   for (const candidate of [fenced, text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)]) {
     if (!candidate) continue;
@@ -138,8 +139,13 @@ const localDay = (ms) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const hashOf = (key) => createHash('sha1').update(JSON.stringify(key)).digest('hex');
+// What a call is cached and sampled for review by; tests use it to pick asks Claude will or will not review.
+export const aiKeyHash = hashOf;
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
 
 // Background calls to the user's own claude: one at a time, capped per hour, cached by content in smDir/ai-cache.json.
+// helper: () => {provider, model, enabled, dailyUSD}, read on every call; with apiRun and keyOf it lets a cheaper AI
+// take the bulk kinds (sb07). Whatever goes wrong there, the call falls back to Claude.
 export class AiQueue {
   #smDir;
   #run;
@@ -149,8 +155,17 @@ export class AiQueue {
   #state;
   #tail = Promise.resolve();
   #pending = 0;
+  #helper;
+  #apiRun;
+  #keyOf;
 
-  constructor({ smDir, enabled = true, model = 'haiku', maxCallsPerHour = 30, bin = findClaude(), run = runClaudeJSON, now = Date.now }) {
+  constructor({
+    smDir, enabled = true, model = 'haiku', maxCallsPerHour = 30, bin = findClaude(), run = runClaudeJSON, now = Date.now,
+    helper = null, apiRun = null, keyOf = null,
+  }) {
+    this.#helper = helper;
+    this.#apiRun = apiRun;
+    this.#keyOf = keyOf;
     this.#smDir = smDir;
     this.#run = run;
     this.#now = now;
@@ -163,6 +178,7 @@ export class AiQueue {
       cache: stored?.cache && typeof stored.cache === 'object' ? stored.cache : {},
       spent: stored?.spent ?? { day: '', usd: 0 },
       calls: Array.isArray(stored?.calls) ? stored.calls : [],
+      helper: emptyHelperState(stored?.helper),
     };
   }
 
@@ -180,7 +196,74 @@ export class AiQueue {
     return hit ? { ok: true, value: hit.value, costUSD: 0, cached: true } : null;
   }
 
-  async #call(hash, prompt, schemaHint, uncapped, projectId) {
+  #spend(now, projectId, provider, costUSD = 0) {
+    const day = localDay(now);
+    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0, byProject: {}, byProvider: {} };
+    const spent = this.#state.spent;
+    spent.usd += costUSD;
+    spent.byProvider ??= {};
+    spent.byProvider[provider] = (spent.byProvider[provider] ?? 0) + costUSD;
+    if (projectId) {
+      spent.byProject ??= {};
+      spent.byProject[projectId] = (spent.byProject[projectId] ?? 0) + costUSD;
+    }
+  }
+
+  #spentToday(provider, now) {
+    const { day, byProvider } = this.#state.spent;
+    return day === localDay(now) ? byProvider?.[provider] ?? 0 : 0;
+  }
+
+  async #askClaude(prompt, schemaHint, now, projectId) {
+    const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
+    this.#spend(now, projectId, 'claude', res.costUSD);
+    return res;
+  }
+
+  // The helper to use for this call, with its key, or null: off, not this kind of work, paused, over its cap, no key.
+  async #helperFor(kind, now) {
+    if (!this.#helper || !this.#apiRun || !this.#keyOf || !HELPER_KINDS.has(kind)) return null;
+    const settings = this.#helper();
+    if (!settings?.enabled || !settings.provider || pausedFor(this.#state.helper, settings.provider, kind)) return null;
+    if (this.#spentToday(settings.provider, now) >= settings.dailyUSD) return null;
+    const key = await Promise.resolve(this.#keyOf(settings.provider)).catch(() => null);
+    return key ? { ...settings, key } : null;
+  }
+
+  // A thrown error is not logged: its message could quote the request, key included.
+  async #askHelper(helper, prompt, schemaHint) {
+    try {
+      return await this.#apiRun(prompt, { provider: helper.provider, model: helper.model, key: helper.key, schemaHint });
+    } catch {
+      return { ok: false, error: 'helper-threw' };
+    }
+  }
+
+  // Claude conducts: it answers when the helper cannot, and re-asks a sample of the helper's answers, having the last word.
+  // valid: the caller's check of an answer (place: a listed part id or null). A helper answer that fails it is a wrong
+  // answer, not a success: Claude answers instead and the miss counts against the helper.
+  async #answer(hash, kind, prompt, schemaHint, now, projectId, valid) {
+    const helper = await this.#helperFor(kind, now);
+    if (!helper) return this.#askClaude(prompt, schemaHint, now, projectId);
+    const fromHelper = await this.#askHelper(helper, prompt, schemaHint);
+    const paid = fromHelper.costUSD ?? 0;
+    this.#spend(now, projectId, helper.provider, paid);
+    const invalid = fromHelper.ok && typeof valid === 'function' && !valid(fromHelper.value);
+    if (fromHelper.ok && !invalid && !reviewPicks(hash)) return fromHelper;
+    if (!fromHelper.ok) log('warn', 'ai-helper-fallback', { provider: helper.provider, error: fromHelper.error });
+    if (invalid) {
+      log('warn', 'ai-helper-fallback', { provider: helper.provider, error: 'invalid-answer' });
+      recordReview(this.#state.helper, helper.provider, kind, false, now);
+    }
+    const fromClaude = await this.#askClaude(prompt, schemaHint, now, projectId);
+    const costUSD = round6(paid + (fromClaude.costUSD ?? 0));
+    if (!fromHelper.ok || invalid) return { ...fromClaude, costUSD };
+    if (!fromClaude.ok) return { ...fromHelper, costUSD };
+    recordReview(this.#state.helper, helper.provider, kind, sameAnswer(fromHelper.value, fromClaude.value, kind), now);
+    return { ...fromClaude, costUSD, reviewed: true };
+  }
+
+  async #call(hash, kind, prompt, schemaHint, uncapped, projectId, valid) {
     const hit = this.#cached(hash);
     if (hit) return hit;
     const now = this.#now();
@@ -189,37 +272,51 @@ export class AiQueue {
       if (this.#state.calls.length >= this.#max) return { ok: false, error: 'rate-limited' };
       this.#state.calls.push(now);
     }
-    const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
-    const day = localDay(now);
-    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0, byProject: {} };
-    const spent = this.#state.spent;
-    spent.usd += res.costUSD ?? 0;
-    if (projectId) {
-      spent.byProject ??= {};
-      spent.byProject[projectId] = (spent.byProject[projectId] ?? 0) + (res.costUSD ?? 0);
-    }
+    const res = await this.#answer(hash, kind, prompt, schemaHint, now, projectId, valid);
     if (res.ok) this.#state.cache[hash] = { value: res.value, at: now };
     this.#save();
     return res;
   }
 
   // uncapped: the one-time bootstrap of a new project, which the hourly cap would stretch over hours.
-  ask({ key, prompt, schemaHint, uncapped = false, projectId = null }) {
+  ask({ key, prompt, schemaHint, uncapped = false, projectId = null, valid = null }) {
     if (!this.enabled) return Promise.resolve({ ok: false, error: 'ai-off' });
     const hash = hashOf(key);
     const hit = this.#cached(hash);
     if (hit) return Promise.resolve(hit);
     this.#pending++;
-    const job = this.#tail.then(() => this.#call(hash, prompt, schemaHint, uncapped, projectId)).finally(() => { this.#pending--; });
+    const job = this.#tail.then(() => this.#call(hash, key?.kind, prompt, schemaHint, uncapped, projectId, valid)).finally(() => { this.#pending--; });
     this.#tail = job.catch(() => {});
     return job;
   }
 
-  // With a projectId, what the map spent on that project only; the page adds the projects up.
+  // The owner turned a paused helper back on.
+  resumeHelper(provider) {
+    resumeHelper(this.#state.helper, provider);
+    this.#save();
+  }
+
+  // A paid call made outside the queue (the page's Test button): it counts in the day's spend and the helper's cap.
+  recordSpend(provider, costUSD) {
+    if (!Number.isFinite(costUSD) || costUSD <= 0) return;
+    this.#spend(this.#now(), null, provider, costUSD);
+    this.#save();
+  }
+
+  spentToday(provider) {
+    return round6(this.#spentToday(provider, this.#now()));
+  }
+
+  // With a projectId, what the map spent on that project only; the page adds the projects up. With a helper wired, also
+  // today's spend per provider and the helper's state: both machine-wide, the same for every project.
   status(projectId) {
-    const { day, usd, byProject } = this.#state.spent;
+    const { day, usd, byProject, byProvider } = this.#state.spent;
+    const today = day === localDay(this.#now());
     const amount = projectId === undefined ? usd : byProject?.[projectId] ?? 0;
-    const spentUSDToday = day === localDay(this.#now()) ? Math.round(amount * 1e6) / 1e6 : 0;
-    return { enabled: this.enabled, model: this.model, spentUSDToday, queue: this.#pending };
+    const base = { enabled: this.enabled, model: this.model, spentUSDToday: today ? round6(amount) : 0, queue: this.#pending };
+    if (!this.#helper) return base;
+    const settings = this.#helper();
+    const spentByProviderToday = today ? Object.fromEntries(Object.entries(byProvider ?? {}).map(([k, v]) => [k, round6(v)])) : {};
+    return { ...base, spentByProviderToday, helper: helperStatus(this.#state.helper, settings, spentByProviderToday[settings.provider] ?? 0) };
   }
 }

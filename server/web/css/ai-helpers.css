@@ -1,0 +1,23 @@
+/* The "Other AIs" dialog (sb07). It sits on the alerts dialog's look (.al-dialog, .al-section, .dv-field, .btn); only
+   what those do not give is here. */
+.ah-dialog .ah-provider h3 { font-size: var(--fs-md); }
+.ah-link { margin: 6px 0 0; font-size: var(--fs-sm); }
+.ah-link a { color: var(--focus); text-underline-offset: 2px; }
+.ah-privacy { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--r-md); background: var(--bg-3); font-size: var(--fs-sm); line-height: 1.45; color: var(--ink-2); }
+.ah-privacy strong { color: var(--ink); font-weight: 650; }
+.ah-field { margin-top: 10px; }
+.ah-field input { width: min(360px, 100%); }
+.ah-field input.num { width: 110px; }
+.ah-key-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ah-saved { font: var(--fs-sm)/1.4 var(--mono); color: var(--active-ink); font-weight: 600; white-space: nowrap; }
+.ah-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ah-note { margin: 6px 0 0; min-height: 1.4em; font-size: var(--fs-sm); line-height: 1.4; color: var(--ink-2); }
+.ah-note.is-ok { color: var(--active-ink); font-weight: 600; }
+.ah-note.is-error { color: var(--clash-ink); font-weight: 600; }
+.ah-today { margin-top: 8px; }
+.ah-redact { margin: 10px 0 0; }
+.ai-providers h4 { margin: 16px 0 2px; font-size: var(--fs-sm); font-weight: 650; color: var(--ink-2); }
+.ai-providers p { margin: 10px 0 0; }
+@media (max-width: 719px) {
+  .ah-buttons .btn { height: 36px; }
+}

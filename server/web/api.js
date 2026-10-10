@@ -77,6 +77,12 @@ export const api = {
   notifyPrefs: () => call('GET', '/api/settings/notify'),
   setNotify: (patch) => call('POST', '/api/settings/notify', patch),
   notifyTest: () => call('POST', '/api/settings/notify/test', {}),
+  // The other AIs (sb07). The key goes out once, in setAiKey, and never comes back.
+  aiHelpers: () => call('GET', '/api/settings/ai-helpers'),
+  setAiKey: (provider, key) => call('POST', '/api/settings/ai-helpers', { provider, key }),
+  setAiHelper: (body) => call('POST', '/api/settings/ai-helpers', body),
+  removeAiKey: (provider) => call('DELETE', `/api/settings/ai-helpers?provider=${seg(provider)}`),
+  testAiKey: (provider) => call('POST', '/api/settings/ai-helpers/test', { provider }),
   // The foundation, for every block's screens (index § 3): one read, and one write (POST unless told PUT).
   fd: (projectId, what, params) => fdCall('GET', fdPath(projectId, what, params)),
   fdWrite: (projectId, what, body, method = 'POST') => fdCall(method, fdPath(projectId, what), body),

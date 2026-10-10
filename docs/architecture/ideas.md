@@ -58,13 +58,13 @@ Nothing here is code. The registry is this file, read by the map like every part
 ### The model, the orchestration and other AIs
 
 - [ ] Other AIs through their APIs, with Claude as conductor (the Arsenal) `id22`
-  - Asked: 2026-10-09 08:27 — "tem como colocar para colocar APIs de outras IA, assim voce fica como orquestrador e usa outras IAs naquilo que elas são boas, assim o projeto acaba ficando mais barato"; 2026-10-09 08:31 — "porque tem IA´s que são boas com videos, outras com outras coisas assim por diante, o programa com o arsenal completo, e com os repositorios corretos e skills corretas, teriamos um negocio legal para ajudar a fazer um projeto e rodar uma empresa"; 2026-10-09 08:44 — "sim"
+  - Asked: 2026-10-09 08:27 — "tem como colocar para colocar APIs de outras IA, assim voce fica como orquestrador e usa outras IAs naquilo que elas são boas, assim o projeto acaba ficando mais barato"; 2026-10-09 08:31 — "porque tem IA´s que são boas com videos, outras com outras coisas assim por diante, o programa com o arsenal completo, e com os repositorios corretos e skills corretas, teriamos um negocio legal para ajudar a fazer um projeto e rodar uma empresa"; 2026-10-09 08:44 — "sim"; 2026-10-10 — "quero que faça agora com urgencia, a questão de colocar as API de outras IA de deixar bem organizado, como falamos no plano"
   - What it means: Claude conducts and calls the AI that is best for each job (video, image, voice, bulk text, code) with the right repositories and skills already chosen; session-map is the panel showing each business area, what is being done, by which AI and at what cost.
   - How to confirm it is done: with a second provider's key set, a bulk task is sent to it, its cost shows next to the Claude cost, and the result is reviewed by Claude before it is accepted.
-  - Where it went: `or11`, `or12`, `sb07`, `mm19`.
-  - Status: later (a strategy talk was agreed for after v0.2).
+  - Where it went: `or11`, `or12`, `sb07`, `mm19`; the routing research in `or05`.
+  - Status: in progress (first slice `sb07` built on 2026-10-10: keys, providers, cost and Claude's review; waiting for a test with a real key).
 - [ ] A detailed, categorized list of AIs `id23`
-  - Asked: 2026-10-09 11:45 — "faz uma lista minunciosa de IAs e categoriza"; 2026-10-09 11:55 — "é bom"
+  - Asked: 2026-10-09 11:45 — "faz uma lista minunciosa de IAs e categoriza"; 2026-10-09 11:55 — "é bom"; 2026-10-10 — "voce pode da uma pesquisada a qualidade de cada IA e colocar elas no lugar certo mesmo, assim voce faz com mais certeza"
   - What it means: every relevant AI by category (text and code, image, video, voice, transcription, web search, document reading, vector search, browser automation, workflows, gateways), with what it is good for, price, API, open weights and privacy notes, from official price pages where possible.
   - How to confirm it is done: the "Which AI for each task" section in the tool lists each category with at least one choice, its price, the source and the date the price was checked.
   - Where it went: `mm19` (the research itself was done on 2026-10-09 and kept in the maintainers' notes).
@@ -76,7 +76,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `mm20`, `mm18`, `mm17`.
   - Status: later.
 - [ ] An impeccable senior conductor, not a cheap one `id25`
-  - Asked: 2026-10-09 13:53 — "agora ele tem que ser um orquestrador impecavel, para nao gastar atoa, colocar as IAs no lugar certo no nivel certo, assim nenhum projeto vai estourar limites de tokens porque está trabalhando com sseion mao"; 2026-10-09 13:54 — "nao economico, mas sim impecavel, senior, orquestrador, inteligente"
+  - Asked: 2026-10-09 13:53 — "agora ele tem que ser um orquestrador impecavel, para nao gastar atoa, colocar as IAs no lugar certo no nivel certo, assim nenhum projeto vai estourar limites de tokens porque está trabalhando com sseion mao"; 2026-10-09 13:54 — "nao economico, mas sim impecavel, senior, orquestrador, inteligente"; 2026-10-10 — "eu quero que essa engenharia seja perfeita mesmo, para da alta qualidade e economia, para não ser algo que vá atrapalhar mais do que ajudar, então a engenharia do session-map tem que ser perfeita para isso, para fazer os projetos até de alta complexidade, com qualidade altissa nivel industrial e profissional e uma economia no bolso máxima, assim vou conseguir garantir um produto de qualidade e baixo custo"
   - What it means: quality first and saving as a consequence: understand, look at the architecture and Flow, break down and order the work, pick the model the task needs, ask for a second opinion, call nothing done without proof, learn from mistakes per kind of task, route by kind, keep context lean, a monthly budget, a priority queue, and watch the plan's weekly limit.
   - How to confirm it is done: a test request shows the plan, the model picked per step with its reason, a review step and the proof before "done"; a project past 80% of its budget gets an alert; a weekly-limit warning in a history holds the non-urgent work.
   - Where it went: `or04`, `or05`, `or06`, `or07`, `or08`, `wa09`.

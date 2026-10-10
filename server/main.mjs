@@ -9,6 +9,7 @@ import { logAction, runAction } from './actions.mjs';
 import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
+import { createHelperRoutes } from './ai/helperroute.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
 import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
@@ -105,13 +106,14 @@ async function serveFile(res, path) {
   res.end(body);
 }
 
+// helpers ({backend, apiRun}): the lock for the other AIs' keys and their call, replaceable for tests.
 // collectFn, ai, catalog ({token, fetchFn, exec, bin}) and deliver (the desktop and phone alerts) are replaceable for tests;
 // addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
-  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }),
+  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {},
 } = {}) {
   let watcher = null;
   const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({ smDir, dir, onAlert: (a) => watcher?.push([a]) });
@@ -302,6 +304,32 @@ export function createApp({
     return send(res, status, result);
   }
 
+  // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
+  const helperRoutes = demo || !smDir ? null : createHelperRoutes({ smDir, ai, ...helpers });
+  async function helpersRoute(req, res, path, url) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    let action;
+    let result;
+    if (path.endsWith('/test')) {
+      if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+      const provider = (await readBody(req))?.provider;
+      action = 'test';
+      result = await helperRoutes.test(provider);
+    } else if (req.method === 'GET') {
+      return send(res, 200, helperRoutes.view());
+    } else if (req.method === 'POST') {
+      const body = await readBody(req);
+      action = body?.key === undefined ? 'choice' : 'key-save';
+      result = await helperRoutes.save(body);
+    } else if (req.method === 'DELETE') {
+      action = 'key-remove';
+      result = helperRoutes.remove(url.searchParams.get('provider'));
+    } else throw new HttpError(404, 'not-found');
+    logAction(smDir, { action: 'ai-helpers', mode: action }, result.status);
+    return send(res, result.status, result.body);
+  }
+
   // Reading project files is as sensitive as the chat: even a local read needs the token.
   async function filesRoute(req, res, parts, url) {
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -485,6 +513,7 @@ export function createApp({
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
+    if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }

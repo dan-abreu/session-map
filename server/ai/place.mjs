@@ -25,7 +25,10 @@ export function placePrompt(digest, arch, examples = []) {
 
 // A part id, null when none fits (or the call failed for good), undefined when the hourly cap refused it: ask later.
 export async function placeByAi(digest, arch, ask, examples = []) {
-  const res = await ask({ key: { kind: 'place', digest, parts: arch.parts.map((p) => [p.id, p.name, p.about]) }, prompt: placePrompt(digest, arch, examples), schemaHint: PLACE_SCHEMA });
+  const partIds = new Set(arch.parts.map((p) => p.id));
+  // An answer naming no listed part (a made-up id, a part's name) is wrong, not "none fits": the queue asks Claude instead.
+  const valid = (v) => Boolean(v) && typeof v === 'object' && (v.partId === null || partIds.has(v.partId));
+  const res = await ask({ key: { kind: 'place', digest, parts: arch.parts.map((p) => [p.id, p.name, p.about]) }, prompt: placePrompt(digest, arch, examples), schemaHint: PLACE_SCHEMA, valid });
   if (res.error === 'rate-limited') return undefined;
   const id = res.ok ? res.value?.partId : null;
   return arch.parts.some((p) => p.id === id) ? id : null;

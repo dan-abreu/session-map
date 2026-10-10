@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { log } from '../log.mjs';
 import { brainDir, readJsonFile, writeAtomic } from '../store.mjs';
+import { helperSettings } from './helper.mjs';
+import { getKey } from './keys.mjs';
 import { placeByAi } from './place.mjs';
+import { runApiJSON } from './providers.mjs';
 import { AiQueue } from './runner.mjs';
 
 // The map's background AI, driven from collect: conversations no item code or file placed are shown to the AI once.
@@ -11,6 +14,7 @@ const lives = new Map();
 
 const hashOf = (v) => createHash('sha1').update(JSON.stringify(v)).digest('hex');
 
+// ai: {bin, run} replace claude (tests); {apiRun, keyOf} replace the helper AI's call and its key store.
 export function lifeOf(smDir, userConfig, ai = {}) {
   if (lives.has(smDir)) return lives.get(smDir);
   const cfg = { ...AI_DEFAULTS, ...(userConfig.ai ?? {}) };
@@ -21,6 +25,10 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     maxCallsPerHour: cfg.maxCallsPerHour,
     ...('bin' in ai ? { bin: ai.bin } : {}),
     ...(ai.run ? { run: ai.run } : {}),
+    // Read on every call, so a helper switched on or off from the page applies without a restart.
+    helper: () => helperSettings((readJsonFile(join(smDir, 'config.json'), {}) ?? {}).ai),
+    apiRun: ai.apiRun ?? runApiJSON,
+    keyOf: ai.keyOf ?? ((provider) => getKey(smDir, provider)),
   });
   const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set() };
   lives.set(smDir, life);

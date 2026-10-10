@@ -7,6 +7,7 @@ import { signalCard } from './blocks.js';
 import { costSignal } from './signals.js';
 import { emptyState } from './empty.js';
 import { requestsOf } from './requests.js';
+import { providerSpend, usdText } from './aihelpers.js';
 
 const HISTORY_DEBOUNCE_MS = 250;
 
@@ -217,7 +218,7 @@ export function createTabs(ctx) {
           h('span', { class: 'br-name' }, p.name),
           h('span', { class: 'br-value num' }, fmt.money(spent(p))),
           h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((spent(p) / maxProject) * 100).toFixed(1)}%` })))))),
-      h('section', { class: 'tree-block', id: 'aiCosts' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList),
+      h('section', { class: 'tree-block', id: 'aiCosts' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList, providerList(tt)),
       estimates.length ? h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.estimates')),
         h('ul', { class: 'plain rows' }, estimates.map(({ p, w }) => h('li', {},
           h('button', { type: 'button', class: 'est-row', onclick: () => ctx.go(p.id, { type: 'workcell', id: w.id }) },
@@ -229,6 +230,29 @@ export function createTabs(ctx) {
             h('span', { class: 'lr-date num strong' }, fmt.money(chat.costUSD)),
             h('span', { class: 'lr-line' }, [project.name, partName(project, chat.partId), fmt.relative(chat.updatedAt)].filter(Boolean).join(' · '))))))
           : empty('chat', tt('costs.none'), tt('costs.noneText')))));
+  }
+
+  // One row per AI that did the map's own work today (sb07): Claude, and the other AI when one takes the bulk work.
+  // The numbers are machine-wide, so they are read once and never added up across projects.
+  function providerList(tt) {
+    const { rows } = providerSpend(ctx.state());
+    if (!rows.length) return null;
+    const lang = ctx.lang();
+    const sub = (row) => {
+      const s = row.isHelper;
+      if (!s) return null;
+      return [
+        s.reviewed ? tt('costs.helperReviewed', { n: s.reviewed, m: s.agreed }) : null,
+        s.paused ? tt('costs.helperPaused', { disagreed: s.pausedWhy?.disagreed ?? 0, of: s.pausedWhy?.of ?? 0 }) : null,
+        s.enabled && s.capReached ? tt('costs.helperCap', { cap: usdText(s.capUSD, lang) }) : null,
+      ].filter(Boolean).join(' · ') || null;
+    };
+    return h('div', { class: 'ai-providers' }, h('h4', {}, tt('costs.byAi')),
+      h('ul', { class: 'plain rows bars' }, rows.map((row) => h('li', { class: 'bar-row', 'data-ai-row': row.id },
+        h('span', { class: 'br-name' }, row.name),
+        h('span', { class: 'br-value num' }, usdText(row.usd, lang)),
+        sub(row) ? h('span', { class: 'br-sub' }, sub(row)) : null))),
+      ctx.openAiHelpers ? h('p', {}, h('button', { type: 'button', class: 'btn small-btn', onclick: () => ctx.openAiHelpers() }, tt('costs.otherAis'))) : null);
   }
 
   // The helpers' monthly budget nearly used is a sign: why, what to do, and the button that takes you to what they spent.

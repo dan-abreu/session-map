@@ -21,6 +21,7 @@ import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
+import { createAiHelpers } from './aihelpers.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
@@ -178,6 +179,7 @@ function applyStaticText() {
   chat?.relabel();
   flow?.relabel();
   alerts?.relabel();
+  aiHelpers?.relabel();
   picker?.relabel();
 }
 
@@ -1907,6 +1909,7 @@ let flow = null;
 let convs = null;
 let live = null;
 let alerts = null;
+let aiHelpers = null;
 let now = null;
 let picker = null;
 
@@ -2030,8 +2033,9 @@ function wire() {
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
   requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
+  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, openers: [$('#aiHelpersOpen')] });
   tabs = createTabs({
-    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,
+    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
     prefs: { archived: () => showArchived, setArchived },
     range: () => activeRange(), rangeButton: () => rangePicker.button(),
@@ -2096,7 +2100,7 @@ function wire() {
   search.addEventListener('blur', () => setTimeout(() => { if (!$('#searchBox').contains(document.activeElement)) closeResults(); }, 150));
   search.addEventListener('focus', () => { if (query) renderResults(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open || $('#placeDialog').open) return;
+    if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open || $('#aiHelpersDialog').open || $('#placeDialog').open) return;
     if (picker.isOpen()) picker.close();
     else if (now.isOpen()) now.close();
     else if (convs.isDrawerOpen()) convs.closeDrawer();

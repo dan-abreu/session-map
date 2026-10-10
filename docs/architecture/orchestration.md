@@ -45,6 +45,7 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Learn from mistakes by kind of task: go up a model where the light one erred.
 - [ ] **Route by kind of task** `or05`
   - Bulk reading and inventory → Haiku low; ordinary analysis and code → Sonnet medium; decisions, security, review and second checks → Opus; huge manual work → a cheap outside AI when one is set up (`or11`).
+  - Research of 2026-10-10 (official price pages and independent leaderboards): Haiku 5.5 costs the same as the cheapest outside models (US$ 0.10 / 0.50 per million tokens), so an outside AI earns its place by diversity, not price: GPT-6.1 Sol as the reviewer from another family when Claude wrote the code, DeepSeek V4 Pro as a cheap try on public code only, Gemini Flash for fast reading of long pieces. Personal or client data, keys and `.env` never go to DeepSeek (stored in China, trains by default); Gemini only on a paid key. Portuguese, code review and bulk accuracy have no independent comparison yet: measure them in our own trial (`or12`) before trusting any routing, and keep the routing configurable.
 - [ ] **Lean context for activity chats** `or06`
   - Each gets only its part's context; long chats are summarized automatically.
 - [ ] **Monthly budget per project** `or07`
@@ -66,5 +67,6 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - A studio where Claude is the conductor and calls the right AI for video, image, voice, bulk text and code, with the right repositories and skills already chosen; session-map is the panel: each business area, what is being done, by which AI, at what cost. The board in `or09` is its central piece.
   - Seeds that exist: the Discover tab, the architecture map, costs per chat. First natural piece: Discover for every AI plus "which AI for each task" (`mm18`, `mm19`).
   - Risks: platform competition, quality of cheap AIs, privacy (data going to other providers), safety of third-party tools. Next step agreed: a strategy talk after v0.2 (audience, first slice, how it earns, separate product or evolution).
-- [ ] **detail:** Trial a cheap outside AI as a helper for bulk work `or12`
+- [ ] **in progress · detail:** Trial a cheap outside AI as a helper for bulk work `or12`
+  - 2026-10-10: a measuring bench with session-map's real tasks (classify, write code against tests, find planted bugs, plain Portuguese), run on each Claude level and each outside AI with a key; reports accuracy and cost per correct answer.
   - Audit first; measure cost against quality before trusting it.
