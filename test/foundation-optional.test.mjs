@@ -264,7 +264,11 @@ test('runTool: a non-zero exit with JSON on stdout (depcruise rule violations) s
 test('crossCheckImports: a library import or one whose target is not a project file is never onlyOurs', () => {
   const lib = { ...imp('src/a.js', 'lodash'), attrs: { library: true } };
   const outside = imp('src/a.js', 'react');
-  const facts = { files: { 'src/a.js': {}, 'src/b.js': {} }, facts: [lib, outside, imp('src/a.js', 'src/b.js')] };
+  // A library fact whose target is a project file: only the library flag keeps it out.
+  const libInside = { ...imp('src/a.js', 'src/c.js'), attrs: { library: true } };
+  // The shape B1-T14 really writes for a project import: library false, still compared.
+  const own = { ...imp('src/a.js', 'src/b.js'), attrs: { spec: './b', library: false } };
+  const facts = { files: { 'src/a.js': {}, 'src/b.js': {}, 'src/c.js': {} }, facts: [lib, outside, libInside, own] };
   const r = crossCheckImports(facts, [], new Set(['src/a.js']));
   assert.deepEqual(r.onlyOurs, [{ from: 'src/a.js', to: 'src/b.js' }]);
 });
