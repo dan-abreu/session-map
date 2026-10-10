@@ -121,7 +121,8 @@ export function chatLog(log = EMPTY_LOG, evt) {
   switch (type) {
     case 'history':
       return {
-        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true,
+        // running: a turn still under way whose message the history shows, so no replayed message says so (pc13).
+        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true, running: data.running === true,
         items: Array.isArray(data.items)
           ? data.items.filter((i) => HISTORY_TYPES.has(i?.type)).map((i) => (i.type === 'assistant' ? { ...i, streaming: false } : i))
           : data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),

@@ -432,6 +432,125 @@ test('reopening an ended conversation shows its history without the context bloc
   });
 });
 
+test('a page that reconnects replays each finished text once, without the pieces it streamed in (pc13)', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const { body } = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'first' }, state);
+    const live = recorder();
+    hub.subscribe(body.chatKey, live.sink);
+    await nthTurnEnd(live, 1);
+    assert.ok(live.count((e) => e.type === 'text' && e.data.partial) > 0, 'a page watching live still gets the pieces');
+    const later = recorder();
+    hub.subscribe(body.chatKey, later.sink);
+    assert.equal(later.count((e) => e.type === 'text' && e.data.partial), 0);
+    assert.deepEqual(later.events.filter((e) => e.type === 'text').map((e) => e.data.text), ['echo: first']);
+    assert.ok(later.events.some((e) => e.type === 'thinking'), 'only the pieces go');
+  });
+});
+
+test('a long chat whose first turns fell out of the replay still shows them, from the transcript, once (pc13)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await withHub({ dir, env, eventsMax: 8 }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      for (const [n, text] of [[2, 'second'], [3, 'third']]) {
+        // A person's next message never leaves in the millisecond the reply was written.
+        await pause(20);
+        assert.equal(hub.send(res.body.chatKey, { text }).status, 200);
+        await nthTurnEnd(r, n);
+      }
+      const shown = hub.history(sessionId, state).body;
+      assert.deepEqual(shown.items.filter((i) => i.type === 'user').map((i) => i.text), ['Add the error message', 'second']);
+      assert.equal(shown.chatKey, res.body.chatKey);
+      const replay = recorder();
+      hub.subscribe(res.body.chatKey, replay.sink, shown.fromEventId);
+      assert.deepEqual(replay.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['third'], 'the turns of the history are not replayed');
+      assert.deepEqual(replay.events.filter((e) => e.type === 'text').map((e) => e.data.text), ['echo: third']);
+    });
+  });
+});
+
+test('a reply streaming past the limit pushes out its own pieces first, never the message it answers (pc13)', async () => {
+  await withHub({ eventsMax: 8 }, async ({ hub, state }) => {
+    const { body } = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'first' }, state);
+    const r = recorder();
+    hub.subscribe(body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    hub.send(body.chatKey, { text: 'SLOW' });
+    await r.until(() => r.count((e) => e.type === 'text' && e.data.partial) > 20);
+    const later = recorder();
+    hub.subscribe(body.chatKey, later.sink);
+    assert.ok(later.events.some((e) => e.type === 'user' && e.data.text === 'SLOW'));
+    hub.stop(body.chatKey);
+    await nthTurnEnd(r, 2);
+  });
+});
+
+test('a turn longer than the events it keeps: its prompt and the reply before it come from the transcript (pc13)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await withHub({ dir, env, eventsMax: 3 }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      await pause(20);
+      hub.send(res.body.chatKey, { text: 'second' });
+      await nthTurnEnd(r, 2);
+      const shown = hub.history(sessionId, state).body;
+      const replay = recorder();
+      hub.subscribe(res.body.chatKey, replay.sink, shown.fromEventId);
+      assert.deepEqual(shown.items.filter((i) => i.type === 'user').map((i) => i.text), ['Add the error message', 'second'], 'the prompt whose event went is not lost');
+      const replies = [...shown.items.filter((i) => i.type === 'assistant').map((i) => i.text), ...replay.events.filter((e) => e.type === 'text').map((e) => e.data.text)];
+      assert.ok(replies.some((t) => t.startsWith('echo: Context')) && replies.includes('echo: second'), 'every reply shows');
+      assert.equal(shown.running, false);
+    });
+  });
+});
+
+test('the history ends at the message the events start with, whatever time the reply before it carries (pc13)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await withHub({ dir, env, eventsMax: 8 }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      for (const [n, text] of [[2, 'second'], [3, 'third']]) {
+        await pause(20);
+        hub.send(res.body.chatKey, { text });
+        await nthTurnEnd(r, n);
+      }
+      // A reply written in the millisecond the next message left (an automatic answer), or later still: its time says
+      // nothing about which turn it belongs to, its place in the transcript does.
+      const file = join(dir, 'projects', 'demo', `${sessionId}.jsonl`);
+      const late = new Date(Date.now() + 60_000).toISOString();
+      const lines = readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+      writeFileSync(file, `${lines.map((l, i) => JSON.stringify(i === 1 ? { ...l, timestamp: late } : l)).join('\n')}\n`);
+      const shown = hub.history(sessionId, state).body;
+      assert.deepEqual(shown.items.filter((i) => i.type === 'assistant').map((i) => i.text.slice(0, 13)), ['echo: Context', 'echo: second']);
+      assert.deepEqual(shown.messages.filter((m) => m.role === 'assistant').map((m) => m.text.slice(0, 13)), ['echo: Context', 'echo: second']);
+    });
+  });
+});
+
+test('a chat whose events all fit shows only the turns before it from the transcript, and replays the rest (pc13)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await withHub({ dir, env }, async ({ hub, state }) => {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      const shown = hub.history(sessionId, state).body;
+      assert.deepEqual(shown.items, []);
+      assert.equal(shown.fromEventId, 0);
+    });
+  });
+});
+
 test('"always in this conversation" survives the process: a resumed chat does not ask again', async () => {
   await withClaudeDir(async ({ dir, env }) => {
     const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
@@ -521,7 +640,8 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     assert.deepEqual([...new Set(all.events.map((e) => e.type))], ['user', 'session', 'run', 'text', 'thinking', 'turn-end']);
     assert.ok(all.events.every((e, i) => i === 0 || e.id > all.events[i - 1].id));
     const tail = await readEvents(chatKey, { cookie: `sm_token=${token}`, 'last-event-id': String(all.events[0].id) });
-    assert.deepEqual(tail.events.map((e) => e.id), all.events.slice(1).map((e) => e.id));
+    // The pieces streamed in went away once the whole text arrived (pc13).
+    assert.deepEqual(tail.events.map((e) => e.id), all.events.slice(1).filter((e) => !(e.type === 'text' && e.data.partial)).map((e) => e.id));
     assert.equal((await call('POST', `/api/chat/${chatKey}/send`, { headers: writeHeaders, body: { text: 'again' } })).status, 200);
     assert.equal((await call('POST', `/api/chat/${chatKey}/stop`, { headers: writeHeaders, body: {} })).status, 200);
     assert.equal((await call('POST', `/api/chat/${chatKey}/permission`, { headers: writeHeaders, body: { requestId: 'abc', allow: true } })).status, 404);

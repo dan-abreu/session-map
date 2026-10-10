@@ -35,6 +35,14 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - An on-screen notice when a chat finishes.
 - [x] **Claude:** A server restart must not kill a running chat `pc06`
   - Either the process runs detached, or the chat resumes automatically with "the chat was interrupted by the restart, continue?".
+- [ ] **in progress:** A quiet chat with a team of helpers still working is never closed for being idle `pc12`
+  - Today the hub ends a page chat 30 minutes after its last turn (`IDLE_MS` in `server/chat/hub.mjs`), which kills a workflow or background helpers still running inside it.
+  - Before closing, look at the session's helper files (`<session>/subagents/`): anything written within the idle window postpones the close.
+- [x] **Claude:** Reopening a running chat is quick and never shows it empty or cut `pc13`
+  - Before, the history left out every turn of the running process (they should come as events), but the hub keeps only the last 2000 events and each streamed piece of text was one: a long chat reopened empty or cut. The page also drew the whole chat again for every replayed event, so reopening one froze for a while.
+  - Now the pieces go once their whole text arrives (and go first when the events are full), the history ends at the first message the events still hold (by its place in the transcript, or by time for a turn longer than the events) and tells the page where to replay from, and the page draws once per frame.
+  - How to confirm it is done: in a page chat with several long replies, reload the page: the whole dialogue shows at once, from the first message.
+  - Fixed in the code on 2026-10-10; it reaches the page with the next version.
 
 ### How it runs
 

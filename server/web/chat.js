@@ -7,6 +7,8 @@ import { signalCard } from './blocks.js';
 import { errorSignal } from './signals.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
+// What the header shows (the way it runs, the mode, the session), as opposed to the turns the transcript also holds.
+const HEADER_EVENTS = new Set(['session', 'mode', 'run']);
 // How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
 const DEFAULT_RUN = { kind: 'auto', selfReinforce: false };
 const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
@@ -43,7 +45,8 @@ const browserStorage = () => {
 // a reload; savedKey null keeps nothing), relative (a date as "5 min ago"), money (a cost in the person's currency). The flow workshop adds onDraft(text) (the AI
 // redrew the shared draft), beforeSend() (awaited before a message leaves) and showText(text) (what a reply shows).
 // mm22 adds lang() (for times and dates), icon(name, cls), commands() (the "/" list: [{name, description}]), and for tests
-// schedule/cancel (the live mirror's timer), readImage(file) and debounceMs.
+// schedule/cancel (the live mirror's timer), readImage(file) and debounceMs. frame(fn): when the events that arrived are
+// drawn (the next animation frame; at once where there is none).
 // more(sessionId): what the header's ⋯ menu offers for a conversation with an id, [{label, icon?, run()}]; without it
 // the sheet has no ⋯.
 // The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own; the
@@ -53,6 +56,7 @@ export function createChat({
   root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), savedKey = SAVED, relative = () => '',
   money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [], more = null,
   schedule = (fn, ms) => setTimeout(fn, ms), cancel = (id) => clearTimeout(id), readImage = readAsBase64, debounceMs = 150,
+  frame = globalThis.requestAnimationFrame ? (fn) => globalThis.requestAnimationFrame(fn) : (fn) => fn(),
 }) {
   const q = (role) => root.querySelector(`[data-chat="${role}"]`);
   const logEl = q('log');
@@ -115,6 +119,9 @@ export function createChat({
   let findCount = null;
   let jumpSel = null;
   let liveBadge = null;
+  let drawing = false;
+  // A message arrived since the last drawing: the next one follows it down, whatever came after it in the same frame.
+  let toNewest = false;
 
   const time = (ts) => timeOf(lang(), ts);
   const dayLabel = (dayKey) => dayName(t(), lang(), dayKey);
@@ -156,6 +163,7 @@ export function createChat({
   function apply(evt) {
     if (evt.type === 'draft') return onDraft?.(evt.data.text);
     log = chatLog(log, { ...evt, at: new Date().toISOString() });
+    if (evt.type === 'user') toNewest = true;
     if (['run', 'turn-end', 'session'].includes(evt.type)) renderRun();
     if (evt.type === 'session' && evt.data.state === 'started') {
       const isNew = sessionId !== evt.data.sessionId;
@@ -163,7 +171,17 @@ export function createChat({
       rememberOpen();
       if (isNew) onSession?.(sessionId);
     }
-    render();
+    renderSoon();
+  }
+
+  // A reopened chat replays its events in a burst and a reply streams in many pieces: one drawing per frame, not per event (pc13).
+  function renderSoon() {
+    if (drawing) return;
+    drawing = true;
+    frame(() => {
+      drawing = false;
+      render();
+    });
   }
 
   function listen() {
@@ -174,8 +192,9 @@ export function createChat({
         // The transport's own 'error' (a dropped connection) carries no data; EventSource reconnects by itself.
         if (!('data' in e) || e.data === undefined) return;
         const id = Number(e.lastEventId) || 0;
-        if (id && id <= lastEventId) return;
-        lastEventId = id || lastEventId;
+        // Before the history's end only the header's state still counts: the turns are in the history (pc13).
+        if (id && id <= lastEventId && !HEADER_EVENTS.has(type)) return;
+        lastEventId = Math.max(lastEventId, id);
         let data;
         try { data = JSON.parse(e.data); } catch { return; }
         apply({ type, data });
@@ -183,10 +202,10 @@ export function createChat({
     }
   }
 
-  // A new process numbers its events from 1 again.
-  function watch(chatKey) {
+  // A new process numbers its events from 1 again. from: the last event whose turn the history already shows.
+  function watch(chatKey, from = 0) {
     key = chatKey;
-    lastEventId = 0;
+    lastEventId = from;
     listen();
   }
 
@@ -619,7 +638,8 @@ export function createChat({
       ...(state.kind === 'interrupted' ? [cutCard(state)] : []));
     // An empty conversation reads from its intro down; one with messages follows the newest.
     if (!items.length) logEl.scrollTop = 0;
-    else if (stick || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
+    else if (stick || toNewest || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
+    toNewest = false;
     if (findEl) findEl.hidden = !items.length;
     if (liveBadge) {
       liveBadge.hidden = !mirror;
@@ -798,7 +818,7 @@ export function createChat({
     listEl.hidden = false;
   }
 
-  const historyData = (res) => ({ messages: res.messages ?? [], items: res.items, costUSD: res.costUSD, interrupted: res.interrupted === true });
+  const historyData = (res) => ({ messages: res.messages ?? [], items: res.items, costUSD: res.costUSD, interrupted: res.interrupted === true, running: res.running === true });
 
   // A conversation still running in VS Code or a terminal: asked again every few seconds with the version the page has,
   // so an unchanged one costs a short answer; it stops when the conversation ends or the sheet shows something else.
@@ -842,7 +862,7 @@ export function createChat({
     sessionId = ctx.start.sessionId;
     rememberOpen();
     log = chatLog(log, { type: 'history', data: historyData(res) });
-    if (res.chatKey) watch(res.chatKey);
+    if (res.chatKey) watch(res.chatKey, Number(res.fromEventId) || 0);
     else if (res.readOnly && res.live) startMirror(ctx, res.version);
     renderMode();
     renderRun();

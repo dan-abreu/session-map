@@ -174,6 +174,58 @@ test('a running conversation is watched again and the header selector switches i
   assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/mode`).body, { mode: 'default' });
 });
 
+test('a reopened running conversation replays only the events after its history, so no turn shows twice (pc13)', async () => {
+  const live = { ...HISTORY, chatKey: KEY, fromEventId: 5 };
+  const { streams } = server({ [`GET /api/chat/history/${S1}`]: () => live });
+  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
+  const { chat, part } = makeChat({ storage });
+  chat.restore('acme-shop');
+  await settle();
+  sse(streams.at(-1), 'user', { text: 'Second question' }, 5);
+  sse(streams.at(-1), 'user', { text: 'Third question' }, 6);
+  const shown = text(part('#chatLog'));
+  assert.equal(shown.split('Second question').length - 1, 1, 'the turn the history holds is not replayed');
+  assert.ok(shown.includes('Third question'));
+});
+
+test('a reopened running conversation still takes the header events from before its history, and shows it is working (pc13)', async () => {
+  const live = { ...HISTORY, chatKey: KEY, fromEventId: 5, running: true, run: { kind: 'auto', selfReinforce: false } };
+  const { streams } = server({ [`GET /api/chat/history/${S1}`]: () => live });
+  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
+  const { chat, part } = makeChat({ storage });
+  chat.restore('acme-shop');
+  await settle();
+  assert.equal(part('#chatStop').hidden, false, 'its turn is still running, though its message is in the history');
+  assert.ok(!text(part('#chatRun')).includes('Sonnet 5.5'));
+  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-sonnet-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 3);
+  assert.ok(text(part('#chatRun')).includes('Sonnet 5.5'), 'the model claude reported, from before the history\'s end');
+});
+
+test('events that arrive together are drawn once, on the next frame (pc13)', async () => {
+  const frames = [];
+  const { streams } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat({ frame: (fn) => frames.push(fn) });
+  chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  part('#chatInput').value = 'Hello';
+  part('#chatForm').fire('submit');
+  await settle();
+  frames.splice(0).forEach((fn) => fn());
+  for (const [n, piece] of ['One ', 'two ', 'three'].entries()) sse(streams.at(-1), 'text', { text: piece, partial: true }, n + 2);
+  assert.ok(!text(part('#chatLog')).includes('One'), 'nothing drawn before the frame');
+  assert.equal(frames.length, 1, 'one drawing for the three pieces');
+  frames.splice(0).forEach((fn) => fn());
+  assert.ok(text(part('#chatLog')).includes('One two three'));
+
+  // A message that arrives in the same frame as the events after it still brings the view down to it.
+  const logEl = part('#chatLog');
+  Object.assign(logEl, { scrollHeight: 1000, clientHeight: 100, scrollTop: 0 });
+  sse(streams.at(-1), 'user', { text: 'An answer for the person', auto: 'reinforce' }, 5);
+  sse(streams.at(-1), 'text', { text: 'More', partial: true }, 6);
+  frames.splice(0).forEach((fn) => fn());
+  assert.equal(logEl.scrollTop, 1000);
+});
+
 test('a bypassPermissions setting shows the note that the page runs it as auto', async () => {
   server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'auto', downgraded: true } }) });
   const { chat, part } = makeChat();

@@ -108,6 +108,18 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: opening the look-only link shows the map and Live, while every write and chat button is absent and a write request with that key is refused.
   - Where it went: `sv04`.
   - Status: later.
+- [ ] **in progress:** The AIs must not stop in the middle of the work `id78`
+  - Asked: 2026-10-10 — "é impressão minha ou parece que as IA param de trabalhar?"; 2026-10-10 12:23 — "está trabalhando ou está parado?"; 2026-10-10 12:24 — "qual o problema porque fica parando?"; 2026-10-10 — "os agentes ficam parando, porque isso acontece?"
+  - What it means: a chat opened from the page keeps running while its team of helpers is still working, instead of being closed 30 minutes after its last reply.
+  - How to confirm it is done: start a long background team from a page chat, leave it quiet for more than 30 minutes: the team is still working and the chat reports when it finishes.
+  - Where it went: `pc12`.
+  - Status: in progress.
+- [ ] **in progress:** A page chat reopens whole and quickly `id79`
+  - Asked: 2026-10-10 — "e as conversas nao estão ficando salvas? essa conversa aqui apagou o dialogo todo agora"; 2026-10-10 — "eu não entendi bem, mas isso vai fazer os chats que vou abrindo ficarem salvos?"; 2026-10-10 — "parece que ta demorando carregar o chat"; 2026-10-10 — "sim, pode fazer"
+  - What it means: the conversations were always saved on disk; the page showed a chat it reopened empty or cut and took a while to draw it. Reopening a chat shows the whole dialogue at once.
+  - How to confirm it is done: in a page chat with several long replies, reload the page: the whole dialogue shows at once, from the first message.
+  - Where it went: `pc13`.
+  - Status: in progress (fixed and saved on main on 2026-10-10; waiting for the next version).
 - [ ] **in progress:** Every conversation exactly as Claude Code shows it, with times, and its origin clear `id33`
   - Asked: 2026-10-09 12:55 — "agora falo, as conversas no claude e conversas no vscode, vão aparecer como lá? tem que ser auto explicativo, saber de onde veio"; 2026-10-09 14:34 — "não to achando esse chat aqui no session"; 2026-10-09 14:36 — "eu quero os chats la identico a esse, todos igual mesmo, com o horario com tudo"; 2026-10-09 14:39 — "não quer completar logo tudo por aqui, porque la, ta faltando muita coisa, não da pra saber quando o chat é o claude ou vs, nao ta seperado os chats, tem muita coisa que precisa ser feita, mas não está acabada, mas pelo menos por la eu consigo acompanhar o que está sendo feito correto?"
   - What it means: every message of every conversation with the same formatting as Claude Code, the time of each message, Claude's steps, questions and answers, images, helpers and costs; each conversation's origin (VS Code, terminal, map, claude.ai) shown with a badge; the same chat screen and composer as Claude Code.

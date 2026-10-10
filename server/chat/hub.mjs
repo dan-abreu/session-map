@@ -48,6 +48,14 @@ const HELPER_WALK_MAX = 5000;
 const HELPER_DEPTH_MAX = 8;
 // An ended chat keeps its events a while, so a page that reconnects still sees how it ended.
 const LINGER_MS = 5 * 60_000;
+// A piece of a streamed text, and the events that end the run of pieces a whole text replaces (page-chat pc13).
+const isPiece = (evt) => evt.type === 'text' && evt.data?.partial === true;
+const PIECE_BOUNDS = new Set(['user', 'text', 'tool', 'turn-end']);
+// Everything of a transcript (its items or its messages, in order) before the person's first message sent at or after `at`.
+const beforeMessage = (at) => {
+  let past = false;
+  return (m) => !(past ||= (m.type === 'user' || m.role === 'user') && Boolean(m.ts) && m.ts >= at);
+};
 const DENIED = 'Denied by the person in session-map.';
 const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
 // Sent for the person when they let Automatic reinforce on its own and the month's allowance still covers the estimate.
@@ -77,9 +85,11 @@ const nodeTag = (node) => {
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
 // helperWrite(sessionId): when (ms) the conversation's background helpers last wrote, 0 for never; tests inject it.
+// eventsMax: how many events a chat keeps for a page that reconnects; tests make it small.
 // onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
 export function createChatHub({
-  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, spawner, onAlert = () => {},
+  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, eventsMax = EVENTS_MAX,
+  spawner, onAlert = () => {},
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -127,12 +137,37 @@ export function createChatHub({
   const cutOff = (sessionId, page, state) => page?.running === true && !drivenNow(sessionId)
     && !(state?.projects ?? []).some((p) => (p.conversations ?? []).some((c) => c.sessionId === sessionId && c.live));
 
+  // at: when the hub took it, where the history stops for a turn whose own message no longer fits (replayFrom).
   const emit = (chat, type, data) => {
-    const evt = { id: ++chat.lastId, type, data };
+    const evt = { id: ++chat.lastId, type, data, at: now() };
     chat.events.push(evt);
-    if (chat.events.length > EVENTS_MAX) chat.events.shift();
+    if (chat.events.length > eventsMax) {
+      // A long reply pushes out its own oldest piece first: its whole text replaces the pieces, a message has nothing to.
+      const piece = chat.events.findIndex(isPiece);
+      chat.events.splice(Math.max(piece, 0), 1);
+    }
     for (const sink of chat.sinks) sink.write(evt);
   };
+
+  // The pieces a text streamed in are worth nothing once the whole text arrives: a page that reconnects gets it once, and a
+  // long reply no longer pushes the start of the conversation out of the events (page-chat pc13).
+  function dropPieces(chat) {
+    let start = chat.events.length;
+    while (start > 0 && (isPiece(chat.events[start - 1]) || !PIECE_BOUNDS.has(chat.events[start - 1].type))) start--;
+    if (start < chat.events.length) chat.events.splice(start, Infinity, ...chat.events.slice(start).filter((evt) => !isPiece(evt)));
+  }
+
+  // Where the history stops and the events take over (pc13). Normally at the message of the first turn the events still
+  // hold, found by its place in the transcript, not its time: an automatic answer leaves in the millisecond the reply was
+  // written. A turn so long that its own message went: at the oldest event kept, by time; a step on that line may show
+  // twice, never not at all. Messages are never dropped as pieces, so a turn's mark is kept while its message is.
+  function replayFrom(chat) {
+    const oldest = chat.events[0];
+    const kept = chat.turns.find((turn) => turn.eventId >= (oldest?.id ?? Infinity));
+    if (kept) return { fromEventId: kept.eventId - 1, keep: () => beforeMessage(kept.at) };
+    if (oldest && chat.turns.length) return { fromEventId: oldest.id - 1, keep: () => (m) => !m.ts || m.ts < oldest.at };
+    return { fromEventId: 0, keep: () => beforeMessage(chat.startedAt) };
+  }
 
   function ask(chat, args) {
     const toolName = String(args?.tool_name ?? '');
@@ -222,6 +257,7 @@ export function createChatHub({
       return emitRun(chat);
     }
     if (evt.type === 'text' && !evt.data.partial) {
+      dropPieces(chat);
       chat.turnText += `${evt.data.text}\n`;
       chat.lastText = evt.data.text;
     }
@@ -380,6 +416,9 @@ ${prompt}`;
     // The first message is saved with the rest when claude announces the session.
     if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });
     emit(chat, 'user', auto ? { text: shown, auto } : { text: shown, ...(images.length ? { images: images.length } : {}) });
+    // Only the marks whose message the events still hold matter, and the newest (replayFrom).
+    chat.turns = chat.turns.filter((turn) => turn.eventId >= chat.events[0].id);
+    chat.turns.push({ eventId: chat.lastId, at: now() });
     chat.driver.send(prompt, images);
   }
 
@@ -462,7 +501,7 @@ ${prompt}`;
     const chat = {
       key, sessionId: resume, parentId: body.sessionId ? null : body.parentId ?? null, secret: randomBytes(32).toString('hex'),
       projectId: project.id, projectName: project.name, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
-      events: [], lastId: 0, sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
+      events: [], lastId: 0, turns: [], sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`), flow,
       run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
@@ -578,22 +617,23 @@ ${prompt}`;
   }
 
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
-  // holds as events (those arrive by subscribing), with the first prompt as the person wrote it.
+  // holds as events (those arrive by subscribing, after fromEventId), with the first prompt as the person wrote it.
   function history(sessionId, state, { since } = {}) {
     if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
     const page = readPageChats()[sessionId];
     if (!page) return listedHistory(sessionId, state, since);
     const driven = drivenNow(sessionId);
+    const { fromEventId, keep } = driven ? replayFrom(driven) : { fromEventId: 0, keep: () => () => true };
     const src = sourceOf(sessionId, state);
-    const before = (m) => !driven || !m.ts || m.ts < driven.startedAt;
-    const rich = itemsOf(src, since, before);
+    const rich = itemsOf(src, since, keep());
     if (rich.same) return reply(200, rich);
-    const messages = (src.file ? readFullTranscript(src.file) : []).filter(before);
+    const messages = (src.file ? readFullTranscript(src.file) : []).filter(keep());
     for (const m of messages) if (m.role === 'user') m.text = personsWords(m.text);
     const folder = page.root ?? page.cwd;
     const row = state?.projects.find((p) => p.id === page.projectId)?.conversations?.find((c) => c.sessionId === sessionId);
     return reply(200, {
       sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, ...rich, chatKey: driven?.key ?? null,
+      fromEventId, running: Boolean(driven?.running),
       run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
       costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state), live: false,
     });
