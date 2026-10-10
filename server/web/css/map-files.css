@@ -23,6 +23,20 @@
 .k-file:has(.st-A) > .mm-box { border-color: color-mix(in srgb, var(--active) 55%, var(--lv-line)); }
 .bx-chip.rs-changed { background: var(--active-fill); color: var(--active-ink); }
 
+/* A file no part of the map counts (mm42): a dotted border, its colour kept (a new file stays green), unlike the dashed
+   "+N more"; a small dotted ring beside the count of a folder that holds some. */
+.mm-node.is-loose > .mm-box { border-style: dotted; border-width: 2px; }
+.mm-node.is-loose:not(:has(.st-A)) > .mm-box { border-color: color-mix(in srgb, var(--ink-2) 55%, var(--lv-line)); }
+.rs-loose-dot { display: inline-block; flex: none; width: 8px; height: 8px; border: 1px dotted var(--ink-2); border-radius: 50%; }
+
+/* Work going on (mm41) wins over the marks above, as on the map's own boxes. A part picked lights its files in the parts'
+   own green (mm40), apart from the light of a period. */
+.mm-node.is-left.is-live > .mm-box { border-color: color-mix(in srgb, var(--active) 50%, var(--lv-line)); }
+.mm-node.is-left.is-part > .mm-box { border-color: color-mix(in srgb, var(--lv2-ink) 45%, var(--lv2-line)); box-shadow: 0 0 0 3px var(--lv2-bg), var(--shadow-xs); }
+
+/* Boxes fade in and out of a light instead of flashing (is-dim, mm40). */
+.mm-node { transition: opacity var(--dur-fast) var(--ease-out); }
+
 /* The phone shows the outline, which has no files side. */
 @media (max-width: 719px) {
   .mm-files-btn { display: none; }

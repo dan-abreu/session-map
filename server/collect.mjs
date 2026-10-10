@@ -125,8 +125,9 @@ async function groupByRoot(items, placements) {
   return [...groups.values()];
 }
 
-// The repo's top-level folders tell a code path written from the root ("apps/site") from one written inside an app.
-function topLevelOf(root) {
+// The repo's top-level folders and files tell a code path written from the root ("apps/site", "./README.md") from one
+// written inside an app.
+export function topLevelOf(root) {
   try {
     return new Set(readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name.toLowerCase()));
   } catch {

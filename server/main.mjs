@@ -20,7 +20,8 @@ import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
-import { collect } from './collect.mjs';
+import { collect, topLevelOf } from './collect.mjs';
+import { fileOwners } from './arch/fileowners.mjs';
 import { loadConfig } from './config.mjs';
 import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { createFoundationRoute } from './foundation/http/index.mjs';
@@ -342,7 +343,9 @@ export function createApp({
       // The whole program as the count sees it (no dependencies, generated or binary files, never a secret).
       if (param('all') === '1') {
         const files = (await countRepo(project.root)).files.filter((f) => !isSecretsFile(f.path));
-        return send(res, 200, { ok: true, files: files.map((f) => ({ path: f.path, status: null, lines: f.lines, kind: f.kind })) });
+        // Each file's parts as the boxes' counts read them (mm40): none means one of the files with no box (mm42).
+        const owners = fileOwners(files.map((f) => f.path), project.arch, { topLevel: topLevelOf(project.root) });
+        return send(res, 200, { ok: true, files: files.map((f, i) => ({ path: f.path, status: null, lines: f.lines, kind: f.kind, owners: owners[i] })) });
       }
       if (param('part') !== null) {
         const part = project.arch.parts.find((p) => p.id === param('part'));

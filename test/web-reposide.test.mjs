@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutTree, edgePath, joinSides } from '../server/web/tree.js';
-import { withStatus, repoNodes } from '../server/web/reposide.js';
+import { withStatus, repoNodes, ownerIndex, partsOf, reach, editTargets, matchPaths } from '../server/web/reposide.js';
+import { settledOpacity } from '../server/web/mindmap.js';
 
 const pending = (path, kind, extra = {}) => ({ id: `x:${path}:${kind}`, path, kind, state: 'pending', inFolder: true, added: 0, removed: 0, ts: '2026-10-10T10:00:00Z', ...extra });
 
@@ -134,4 +135,76 @@ test('repoNodes shows at most 40 boxes in a folder, folders and marked files fir
   assert.ok(!ids.includes('rf:big/f47.js'));
   const [all] = repoNodes(files, { expanded: new Set(['rm:big']) });
   assert.equal(all.children.length, 53, 'a folder asked whole shows everything');
+});
+
+// ---- the two sides together (mm40), work going on (mm41), files with no box (mm42) ----
+
+const sample = () => repoNodes(withStatus([
+  { path: 'server/web/app.js', lines: 10 }, { path: 'server/web/tree.js', lines: 5 }, { path: 'server/main.mjs', lines: 9 },
+  { path: 'docs/a/b.md', lines: 2 }, { path: 'README.md', lines: 3 },
+], []));
+
+test('ownerIndex and partsOf: a file belongs to the parts the server read for it; a folder to the parts of every file inside', () => {
+  const index = ownerIndex([
+    { path: 'server/web/app.js', owners: ['web'] }, { path: 'server/web/tree.js', owners: ['web', 'map'] }, { path: 'server/main.mjs', owners: ['srv'] },
+    { path: 'misc/x.js', owners: [] }, { path: 'new.js', status: 'A' },
+  ]);
+  assert.deepEqual(partsOf({ kind: 'file', path: 'server/web/tree.js' }, index), ['web', 'map']);
+  assert.deepEqual(partsOf({ kind: 'folder', path: 'server' }, index).sort(), ['map', 'srv', 'web']);
+  assert.deepEqual(partsOf({ kind: 'folder', path: 'serv' }, index), [], 'a folder is a whole name, not a beginning');
+  assert.deepEqual(partsOf({ kind: 'file', path: 'new.js' }, index), []);
+  assert.deepEqual(partsOf({ kind: 'more', path: 'server' }, index), []);
+  assert.deepEqual(index.parts.get('web'), ['server/web/app.js', 'server/web/tree.js']);
+});
+
+test('reach: the boxes on the way to some files, the folders to open and the "+N more" boxes that hide them', () => {
+  const out = reach(sample(), ['server/web/tree.js', 'README.md']);
+  assert.deepEqual([...out.lit].sort(), ['rd:server', 'rd:server/web', 'rf:README.md', 'rf:server/web/tree.js']);
+  assert.deepEqual([...out.open].sort(), ['rd:server', 'rd:server/web']);
+  assert.deepEqual([...out.more], []);
+  const files = Array.from({ length: 45 }, (_, i) => ({ path: `big/f${String(i).padStart(2, '0')}.js`, lines: 1 }));
+  const hidden = reach(repoNodes(files), ['big/f44.js']);
+  assert.deepEqual([...hidden.more], ['rm:big'], 'a file folded into "+N more" names that box');
+  assert.ok(hidden.lit.has('rm:big') && hidden.lit.has('rd:big'));
+  assert.deepEqual([...reach(repoNodes(files, { expanded: hidden.more }), ['big/f44.js']).more], [], 'once shown whole the file is reached');
+});
+
+test('editTargets: what each conversation at work does now, when it is editing a file; its running helpers the same way', () => {
+  const now = Date.parse('2026-10-10T12:00:00Z');
+  const entries = [
+    { steps: [{ kind: 'think', target: '' }, { kind: 'edit', target: 'server/web/app.js' }, { kind: 'edit', target: 'old.js' }], workflows: [] },
+    { steps: [{ kind: 'run', target: 'npm test' }, { kind: 'edit', target: 'before.js' }], workflows: [] },
+    { steps: [], workflows: [{ agents: [
+      { state: 'running', activeAt: '2026-10-10T11:59:00Z', step: { kind: 'edit', target: '…/web/tree.js' }, place: { projectId: 'p1', path: 'server/web/tree.js' } },
+      { state: 'running', activeAt: '2026-10-10T11:59:00Z', step: { kind: 'edit', target: 'elsewhere.js' }, place: { projectId: 'other', path: 'elsewhere.js' } },
+      { state: 'running', activeAt: '2026-10-10T11:59:00Z', step: { kind: 'read', target: 'x.js' }, place: { projectId: 'p1', path: 'x.js' } },
+      { state: 'done', step: { kind: 'edit', target: 'done.js' }, place: { projectId: 'p1', path: 'done.js' } },
+    ] }] },
+  ];
+  assert.deepEqual(editTargets(entries, { projectId: 'p1', nowMs: now }), ['server/web/app.js', 'server/web/tree.js', 'elsewhere.js']);
+});
+
+test('matchPaths: a step\'s path in the project, cut at its start or written from a folder inside it; only at a whole name, only when one fits', () => {
+  const paths = ['server/web/app.js', 'server/web/tree.js', 'docs/tree.js', 'README.md'];
+  const found = (targets) => [...matchPaths(targets, paths)].sort();
+  assert.deepEqual(found(['server/web/app.js']), ['server/web/app.js']);
+  assert.deepEqual(found(['…/web/tree.js']), ['server/web/tree.js']);
+  assert.deepEqual(found(['…eb/app.js']), ['server/web/app.js'], 'a name cut in the middle is dropped, the rest must fit at a whole name');
+  assert.deepEqual(found(['web/app.js']), ['server/web/app.js'], 'a conversation working inside server/ names web/app.js');
+  assert.deepEqual(found(['pp.js', 'tree.js', '…eb/tree.js', 'nowhere.js', 'C:/dev/other/README.md', '/abs/README.md']), []);
+});
+
+test('repoNodes marks the files no part of the map counts (owners read and empty), and how many each folder holds', () => {
+  const nodes = repoNodes(withStatus([
+    { path: 'test/a.test.mjs', lines: 1, owners: [] }, { path: 'test/b.test.mjs', lines: 1, owners: ['t'] }, { path: 'README.md', lines: 1, owners: [] },
+  ], [{ id: 'wt:test/new.mjs', path: 'test/new.mjs', kind: 'create', state: 'pending', inFolder: true, added: 2, removed: 0, ts: '' }]));
+  const [test, readme] = nodes;
+  assert.equal(readme.loose, true);
+  assert.equal(test.loose, 1, 'a file too new for the count is not one of its files with no box');
+  assert.deepEqual(test.children.map((c) => [c.id, c.loose]), [['rf:test/a.test.mjs', true], ['rf:test/b.test.mjs', false], ['rf:test/new.mjs', false]]);
+});
+
+test('a box that settled leaves its opacity to the stylesheet, so a dimmed box can fade; one growing in keeps its own', () => {
+  assert.equal(settledOpacity('1'), '');
+  assert.equal(settledOpacity('0.4'), '0.4');
 });

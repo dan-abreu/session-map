@@ -39,12 +39,6 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### Seeing my requests
 
-- [ ] **in progress:** On the files side of the map: which part a file belongs to, who is editing it now, and which files have no box `id81`
-  - Asked: 2026-10-10 — "ficou bom, o que acha que da para detalhar mais? informação de mais não vai ficar legal né nesse lado, preciso de uma opnião"; then "pode fazer esses 3", the three Claude proposed: link the two sides, a dot on what a conversation edits now, mark the files with no box.
-  - What it means: no more text on the file boxes; a file lights its part and a part its files, a live dot shows where a conversation is editing, and the files with no box on the map are marked.
-  - How to confirm it is done: see `mm40`, `mm41`, `mm42`.
-  - Where it went: `mm40`, `mm41`, `mm42`.
-  - Status: in progress.
 
 ### The picture of the project
 

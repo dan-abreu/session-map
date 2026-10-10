@@ -137,7 +137,7 @@ test('GET /api/files/:project?all=1 lists every counted file of the program, wit
   await withServer(async ({ call }) => {
     const all = await call('/api/files/shop-abc123?all=1');
     assert.equal(all.status, 200);
-    assert.deepEqual(all.body.files, [{ path: 'src/a.js', status: null, lines: 3, kind: 'code' }]);
+    assert.deepEqual(all.body.files, [{ path: 'src/a.js', status: null, lines: 3, kind: 'code', owners: ['src'] }]);
     assert.equal((await call('/api/files/shop-abc123?all=1', { cookie: false })).status, 401);
   });
 });

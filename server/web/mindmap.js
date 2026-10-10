@@ -30,6 +30,9 @@ export function paintCount(el, count, memo) {
   el.replaceChildren(icon, num);
 }
 
+// Only a box still growing in carries its own opacity: a settled one leaves it to the stylesheet, so is-dim can fade it.
+export const settledOpacity = (opacity) => (opacity === '1' ? '' : opacity);
+
 const PULSE_MS = 1600;
 export function pulseOn(el) {
   el.classList.remove('is-pulse');
@@ -72,7 +75,8 @@ const lerpBox = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p), w: l
 // ctx: content(node) → DOM children of a box, signature(node) → string that changes when the content must be rebuilt,
 // onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), linkTip(link), freeArea() → {left, top, width, height};
 // count(node) → {n, label, pressed} or null: the number of conversations hung on the box, onCount(node) when it is pressed.
-// view.left (mm39): {tree, open, ctx}, a second tree from the same root drawn mirrored on its left, with a ctx of its own.
+// view.left (mm39): {tree, open, ctx, lit, live}, a second tree from the same root drawn mirrored on its left, with a ctx of
+// its own (also onHover(node, on) and classes(node) → {name: on}); lit: its boxes a picked part lights, live: where work goes on.
 export function createMindmap(root, ctx) {
   const world = document.createElement('div');
   world.className = 'mm-world';
@@ -94,6 +98,8 @@ export function createMindmap(root, ctx) {
   let relLit = null; // the key (a|b) of the line the Relations list lights
   let left = null; // the tree on the left of the root (mm39), as the last render had it
   const ctxOf = (node) => (node.side === 'left' && left ? left.ctx : ctx);
+  // The files side brings its own work going on (mm41) and its own light (mm40): view.left.live and view.left.lit.
+  const isLive = (view, id) => view.live.has(id) || Boolean(left?.live?.has(id));
   let tween = 0;
   let transform = { x: 0, y: 0, k: 1 };
   let touched = false; // the person dragged or zoomed since the last fit: a late fit must not undo that (mm39)
@@ -118,6 +124,12 @@ export function createMindmap(root, ctx) {
       box.type = 'button';
       box.className = 'mm-box';
       box.addEventListener('click', () => ctxOf(n.node).onPick(n.node));
+      // A box pointed at or reached by keyboard can light what it belongs to on the other side (mm40).
+      const hover = (on) => () => ctxOf(n.node).onHover?.(n.node, on);
+      box.addEventListener('pointerenter', hover(true));
+      box.addEventListener('pointerleave', hover(false));
+      box.addEventListener('focus', hover(true));
+      box.addEventListener('blur', hover(false));
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'mm-toggle';
@@ -161,19 +173,21 @@ export function createMindmap(root, ctx) {
     const cls = n.el.classList;
     cls.toggle('is-open', open);
     cls.toggle('is-selected', view.selected === node.id);
-    cls.toggle('is-live', view.live.has(node.id));
+    cls.toggle('is-live', isLive(view, node.id));
     cls.toggle('is-tip', Boolean(view.captions?.get(node.id)?.exact));
     cls.toggle('is-lit', Boolean(view.lit?.has(node.id)));
-    // The files side (mm39) is not part of what a period lights.
+    // The files side (mm39) is not part of what a period lights; a part picked lights its files in a light of its own (mm40).
     cls.toggle('is-dim', Boolean(view.lit) && !view.lit.has(node.id) && node.side !== 'left');
+    cls.toggle('is-part', Boolean(node.side === 'left' && left?.lit?.has(node.id)));
     cls.toggle('is-match', Boolean(view.match?.has(node.id)));
+    for (const [name, on] of Object.entries(c.classes?.(node) ?? {})) cls.toggle(name, on);
     n.box.setAttribute('aria-current', view.selected === node.id ? 'true' : 'false');
   }
 
   // A captioned box keeps room above and below it (pad), so its centre, where the curves meet it, stays the box's centre.
   function place(n, b, opacity) {
     n.el.style.transform = `translate(${b.x}px, ${b.y + n.pad}px)`;
-    n.el.style.opacity = opacity;
+    n.el.style.opacity = settledOpacity(opacity);
   }
 
   function drawEdges(at) {
@@ -251,7 +265,7 @@ export function createMindmap(root, ctx) {
     }));
     const lay = (t) => layoutTree(t, isOpen, (node) => sizes.get(node.id), { gapX: GAP_X, gapY: GAP_Y });
     const next = left?.tree.children.length ? joinSides(lay(tree), lay({ ...left.tree, id: tree.id })) : lay(tree);
-    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: view.live.has(e.to), fromRoot: e.from === tree.id }));
+    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: isLive(view, e.to), fromRoot: e.from === tree.id }));
     rels = view.relations ?? [];
     relLit = view.relLit ?? null;
     wires.setAttribute('width', String(next.width + 400));

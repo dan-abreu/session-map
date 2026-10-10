@@ -230,6 +230,12 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: open the project box: the architecture grows to one side and the folder tree to the other; create a file in the repository: it appears in its folder within seconds, marked new.
   - Where it went: `mm39`; more detail on that side in `id81`.
   - Status: done (on main, approved by the owner on 2026-10-10: "ficou bom").
+- [x] On the files side of the map: which part a file belongs to, who is editing it now, and which files have no box `id81`
+  - Asked: 2026-10-10 — "ficou bom, o que acha que da para detalhar mais? informação de mais não vai ficar legal né nesse lado, preciso de uma opnião"; then "pode fazer esses 3", the three Claude proposed: link the two sides, a dot on what a conversation edits now, mark the files with no box.
+  - What it means: no more text on the file boxes; a file lights its part and a part its files, a live dot shows where a conversation is editing, and the files with no box on the map are marked.
+  - How to confirm it is done: see `mm40`, `mm41`, `mm42`.
+  - Where it went: `mm40`, `mm41`, `mm42`; census counts and excluded files on the same side come from the foundation (`id77` follow-up, B2).
+  - Status: done (on main, saved with the owner's OK on 2026-10-10).
 
 ### The Flow
 

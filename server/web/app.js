@@ -463,9 +463,12 @@ function liveCaptions() {
 function mapView() {
   dotsShown = dotsAt((nodeId) => open.has(nodeId), agentMarks, tree);
   const range = activeRange();
-  const lit = range ? changedNodes(shown, tree, range.from, range.to) : null;
+  const selected = selectedNodeId();
+  // A file or folder pointed at on the files side lights its parts, over what a period lights (mm40).
+  const left = PHONE.matches ? null : repoSide?.view({ tree, selected, opens: selection?.type === 'node', working: liveEntries }) ?? null;
+  const lit = left?.hoverLit ?? (range ? changedNodes(shown, tree, range.from, range.to) : null);
   const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
-  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? splitIgnored(relationLinks(shown), ignoredRel).shown : null, relLit, left: PHONE.matches ? null : repoSide?.view() ?? null };
+  return { open, selected, live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? splitIgnored(relationLinks(shown), ignoredRel).shown : null, relLit, left };
 }
 
 const activeMap = () => (PHONE.matches ? outline : mindmap);
