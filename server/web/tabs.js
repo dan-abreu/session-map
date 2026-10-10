@@ -232,19 +232,20 @@ export function createTabs(ctx) {
           : empty('chat', tt('costs.none'), tt('costs.noneText')))));
   }
 
-  // One row per AI that did the map's own work today (sb07): Claude, and the other AI when one takes the bulk work.
-  // The numbers are machine-wide, so they are read once and never added up across projects.
+  // One row per AI that did the map's own work today (or14): Claude and every other AI that is on. The numbers are
+  // machine-wide, so they are read once and never added up across projects.
   function providerList(tt) {
-    const { rows } = providerSpend(ctx.state());
+    const { rows, others } = providerSpend(ctx.state());
     if (!rows.length) return null;
     const lang = ctx.lang();
     const sub = (row) => {
-      const s = row.isHelper;
+      const s = row.other;
       if (!s) return null;
       return [
+        s.on ? null : tt('costs.aiSwitchedOff'),
         s.reviewed ? tt('costs.helperReviewed', { n: s.reviewed, m: s.agreed }) : null,
         s.paused ? tt('costs.helperPaused', { disagreed: s.pausedWhy?.disagreed ?? 0, of: s.pausedWhy?.of ?? 0 }) : null,
-        s.enabled && s.capReached ? tt('costs.helperCap', { cap: usdText(s.capUSD, lang) }) : null,
+        others?.enabled && others.capReached ? tt('costs.helperCap', { cap: usdText(others.dailyUSD, lang) }) : null,
       ].filter(Boolean).join(' · ') || null;
     };
     return h('div', { class: 'ai-providers' }, h('h4', {}, tt('costs.byAi')),

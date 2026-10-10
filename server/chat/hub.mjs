@@ -24,10 +24,22 @@ import {
   settingsRun, withRunNote,
 } from './run.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
+import { conductorTail } from '../ai/conductor.mjs';
+import { loadStats } from '../ai/router.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
+const ARSENAL_MCP = fileURLToPath(new URL('../ai/arsenal-mcp.mjs', import.meta.url));
 const KEY_RE = /^[0-9a-f]{32}$/;
+
+// The MCP servers of an in-page chat (--strict-mcp-config: only these): the permission prompt, and the arsenal that
+// asks the other AIs through session-map (or14). The arsenal reads the token from smDir itself: no secret in its env.
+export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessionId }) {
+  return {
+    sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: permissionUrl, SM_PERMISSION_SECRET: secret } },
+    arsenal: { command: process.execPath, args: [ARSENAL_MCP], env: { SM_DIR: smDir, ...(arsenalUrl ? { SM_URL: arsenalUrl } : {}), ...(sessionId ? { SM_SESSION_ID: sessionId } : {}) } },
+  };
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEXT_MAX = 20_000;
 // Pasted images (mm22): what Claude Code itself accepts, a few per message.
@@ -91,13 +103,24 @@ const nodeTag = (node) => {
   return field && typeof node[field] === 'string' ? { kind: node.kind, [field]: node[field] } : { kind: node.kind };
 };
 
+// The conductor prompt's tail, built at each process start: who is ready today, the cap left, what the bench measured.
+// Only the conductor modes get it; a failure leaves the prompt without it.
+function tailFor(run, smDir, facts) {
+  if (run?.kind !== 'auto' && run?.kind !== 'maestro') return '';
+  let others = null;
+  try { others = typeof facts === 'function' ? facts() : null; } catch { others = null; }
+  try { return conductorTail({ others, stats: loadStats(smDir) }); } catch { return ''; }
+}
+
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
 // helperWrite(sessionId): when (ms) the conversation's background helpers last wrote, 0 for never; tests inject it.
 // eventsMax: how many events a chat keeps for a page that reconnects; tests make it small.
 // onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
+// arsenalUrl: where the arsenal tool of a page chat finds this server (main.mjs's baseUrl); without it, its default port.
+// conductorFacts(): the outside AIs right now (GET /api/ai/others' answer, main.mjs), for the conductor prompt's tail.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, eventsMax = EVENTS_MAX,
-  spawner, onAlert = () => {},
+  spawner, onAlert = () => {}, arsenalUrl, conductorFacts,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -534,7 +557,7 @@ ${prompt}`;
     if (resume) resuming.add(resume);
     try {
       // By file, not by argument: a command line is readable by other users of the machine.
-      const config = { mcpServers: { sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: await relayUrl(), SM_PERMISSION_SECRET: chat.secret } } } };
+      const config = { mcpServers: chatMcpServers({ permissionUrl: await relayUrl(), secret: chat.secret, smDir, arsenalUrl, sessionId: key }) };
       mkdirSync(join(smDir, 'chat'), { recursive: true });
       writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
       chats.set(key, chat);
@@ -546,7 +569,7 @@ ${prompt}`;
       if (resume) resuming.delete(resume);
     }
     chat.driver = startDriver({
-      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run) }), cwd, env: cleanEnv(env),
+      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, tailFor(run, smDir, conductorFacts)) }), cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
     sendTo(chat, body.text, prompt, undefined, images);

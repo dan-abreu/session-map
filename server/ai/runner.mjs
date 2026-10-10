@@ -6,7 +6,9 @@ import { delimiter, join } from 'node:path';
 import { readJsonFile, writeAtomic } from '../store.mjs';
 import { log } from '../log.mjs';
 import { normalizePath } from '../paths.mjs';
-import { HELPER_KINDS, emptyHelperState, helperStatus, pausedFor, recordReview, resumeHelper, reviewPicks, sameAnswer } from './review.mjs';
+import { HELPER_KINDS, emptyHelperState, helperStatus, pausedFor, providerReview, recordReview, resumeHelper, reviewPicks, sameAnswer } from './review.mjs';
+import { PROVIDERS, estimateCostUSD, providerOf } from './providers.mjs';
+import { bulkModelOf, laneWeights, pickLane, route } from './router.mjs';
 
 const TIMEOUT_MS = 90_000;
 const OUTPUT_MAX = 1_000_000;
@@ -144,8 +146,11 @@ export const aiKeyHash = hashOf;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 
 // Background calls to the user's own claude: one at a time, capped per hour, cached by content in smDir/ai-cache.json.
-// helper: () => {provider, model, enabled, dailyUSD}, read on every call; with apiRun and keyOf it lets a cheaper AI
-// take the bulk kinds (sb07). Whatever goes wrong there, the call falls back to Claude.
+// others: () => othersSettings(...) ({enabled, dailyUSD, off, models, keys}), read on every call; with apiRun and keyOf
+// the bulk kinds (HELPER_KINDS) go to every other AI with a key at once, in the order route() gives (or14): one call
+// in flight per provider, Claude keeping its own single line for everything else, its reviews and the fallbacks.
+// Whatever goes wrong outside, the call falls back to Claude. helper: the old single-helper settings, read only for
+// the status's old `helper` field until the page moves to `others`.
 export class AiQueue {
   #smDir;
   #run;
@@ -155,17 +160,25 @@ export class AiQueue {
   #state;
   #tail = Promise.resolve();
   #pending = 0;
+  #others;
   #helper;
   #apiRun;
   #keyOf;
+  #stats;
+  #onOutside;
+  #lanes = new Map(); // provider -> {tail, load}: one call in flight per outside AI
+  #reserved = new Map(); // provider -> dollars held for calls in flight
 
   constructor({
     smDir, enabled = true, model = 'haiku', maxCallsPerHour = 30, bin = findClaude(), run = runClaudeJSON, now = Date.now,
-    helper = null, apiRun = null, keyOf = null,
+    others = null, helper = null, apiRun = null, keyOf = null, stats = () => [], onOutside = null,
   }) {
+    this.#onOutside = onOutside;
+    this.#others = others;
     this.#helper = helper;
     this.#apiRun = apiRun;
     this.#keyOf = keyOf;
+    this.#stats = stats;
     this.#smDir = smDir;
     this.#run = run;
     this.#now = now;
@@ -178,6 +191,7 @@ export class AiQueue {
       cache: stored?.cache && typeof stored.cache === 'object' ? stored.cache : {},
       spent: stored?.spent ?? { day: '', usd: 0 },
       calls: Array.isArray(stored?.calls) ? stored.calls : [],
+      // Named `helper` on disk since sb07: the review windows and pauses, per provider and kind.
       helper: emptyHelperState(stored?.helper),
     };
   }
@@ -196,16 +210,21 @@ export class AiQueue {
     return hit ? { ok: true, value: hit.value, costUSD: 0, cached: true } : null;
   }
 
-  #spend(now, projectId, provider, costUSD = 0) {
+  #today(now) {
     const day = localDay(now);
-    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0, byProject: {}, byProvider: {} };
-    const spent = this.#state.spent;
-    spent.usd += costUSD;
+    if (this.#state.spent.day !== day) this.#state.spent = { day, usd: 0, byProject: {}, byProvider: {}, callsByProvider: {} };
+    return this.#state.spent;
+  }
+
+  #spend(now, projectId, provider, costUSD = 0) {
+    const spent = this.#today(now);
+    const usd = Number.isFinite(costUSD) ? costUSD : 0;
+    spent.usd += usd;
     spent.byProvider ??= {};
-    spent.byProvider[provider] = (spent.byProvider[provider] ?? 0) + costUSD;
+    spent.byProvider[provider] = (spent.byProvider[provider] ?? 0) + usd;
     if (projectId) {
       spent.byProject ??= {};
-      spent.byProject[projectId] = (spent.byProject[projectId] ?? 0) + costUSD;
+      spent.byProject[projectId] = (spent.byProject[projectId] ?? 0) + usd;
     }
   }
 
@@ -214,56 +233,145 @@ export class AiQueue {
     return day === localDay(now) ? byProvider?.[provider] ?? 0 : 0;
   }
 
+  // What every AI but Claude spent today: the one daily cap is for all of them together.
+  #outsideSpent(now) {
+    const { day, byProvider } = this.#state.spent;
+    if (day !== localDay(now)) return 0;
+    return Object.entries(byProvider ?? {}).reduce((sum, [p, usd]) => (p === 'claude' ? sum : sum + usd), 0);
+  }
+
+  #held(provider) {
+    if (provider) return this.#reserved.get(provider) ?? 0;
+    let sum = 0;
+    for (const usd of this.#reserved.values()) sum += usd;
+    return sum;
+  }
+
+  // Holds estimateUSD of the cap for one outside call, or null when it would not fit: what was spent today, plus what
+  // calls in flight may still cost, plus this one, all together and for this provider (whose share is the whole cap).
+  // The check and the hold happen at once, so calls running side by side can never pass the cap together.
+  // ticket.settle(costUSD, projectId?) books what the call really cost and frees the hold; only the first settle counts.
+  reserveOutside(provider, estimateUSD, capUSD) {
+    if (!provider || provider === 'claude' || !(estimateUSD >= 0) || !(capUSD > 0)) return null;
+    const now = this.#now();
+    if (this.#outsideSpent(now) + this.#held() + estimateUSD > capUSD) return null;
+    if (this.#spentToday(provider, now) + this.#held(provider) + estimateUSD > capUSD) return null;
+    this.#reserved.set(provider, this.#held(provider) + estimateUSD);
+    let open = true;
+    return {
+      settle: (costUSD = 0, projectId = null) => {
+        if (!open) return;
+        open = false;
+        const left = this.#held(provider) - estimateUSD;
+        if (left > 1e-12) this.#reserved.set(provider, left); else this.#reserved.delete(provider);
+        const at = this.#now();
+        this.#spend(at, projectId, provider, Number.isFinite(costUSD) && costUSD > 0 ? costUSD : 0);
+        const spent = this.#today(at);
+        spent.callsByProvider ??= {};
+        spent.callsByProvider[provider] = (spent.callsByProvider[provider] ?? 0) + 1;
+        this.#save();
+      },
+    };
+  }
+
+  // Claude's single line: everything for Claude waits its turn here.
+  #onClaude(fn) {
+    const job = this.#tail.then(fn);
+    this.#tail = job.catch(() => {});
+    return job;
+  }
+
+  #onLane(provider, fn) {
+    const lane = this.#lanes.get(provider) ?? { tail: Promise.resolve(), load: 0 };
+    this.#lanes.set(provider, lane);
+    lane.load++;
+    const job = lane.tail.then(fn).finally(() => { lane.load--; });
+    lane.tail = job.catch(() => {});
+    return job;
+  }
+
+  // Run directly: only from a job already in Claude's line.
   async #askClaude(prompt, schemaHint, now, projectId) {
     const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
     this.#spend(now, projectId, 'claude', res.costUSD);
     return res;
   }
 
-  // The helper to use for this call, with its key, or null: off, not this kind of work, paused, over its cap, no key.
-  async #helperFor(kind, now) {
-    if (!this.#helper || !this.#apiRun || !this.#keyOf || !HELPER_KINDS.has(kind)) return null;
-    const settings = this.#helper();
-    if (!settings?.enabled || !settings.provider || pausedFor(this.#state.helper, settings.provider, kind)) return null;
-    if (this.#spentToday(settings.provider, now) >= settings.dailyUSD) return null;
-    const key = await Promise.resolve(this.#keyOf(settings.provider)).catch(() => null);
-    return key ? { ...settings, key } : null;
+  #settings() {
+    if (!this.#others || !this.#apiRun || !this.#keyOf) return null;
+    const s = this.#others();
+    return s && s.enabled ? s : null;
+  }
+
+  // The outside AIs that may take this job right now: a key, switched on, not paused for it, room under the cap.
+  #usable(s, kind, now) {
+    if (this.#outsideSpent(now) + this.#held() >= s.dailyUSD) return [];
+    return (s.keys ?? []).filter((p) => providerOf(p) && !(s.off ?? []).includes(p) && !pausedFor(this.#state.helper, p, kind)
+      && this.#spentToday(p, now) + this.#held(p) < s.dailyUSD);
+  }
+
+  // Where a new job goes: {provider, model} of an outside AI, or null for Claude. Claude conducts: with any other AI
+  // available the bulk goes to them, spread by quality per dollar and how busy each is; Claude checks and catches.
+  #target(kind, sensitivity) {
+    if (!HELPER_KINDS.has(kind)) return null;
+    const s = this.#settings();
+    if (!s) return null;
+    const candidates = route({ kind, sensitivity, available: this.#usable(s, kind, this.#now()), stats: this.#stats(), models: s.models });
+    if (!candidates.length) return null;
+    const at = pickLane(laneWeights(candidates), candidates.map((c) => this.#lanes.get(c.provider)?.load ?? 0));
+    return at < 0 ? null : candidates[at];
+  }
+
+  // The activity log (activity.mjs) hears of every outside call: who, how long, what it cost, never the request. A log
+  // that fails must not fail the call it describes.
+  #noteOutside(call) {
+    try { this.#onOutside?.(call); } catch { /* the work goes on */ }
   }
 
   // A thrown error is not logged: its message could quote the request, key included.
-  async #askHelper(helper, prompt, schemaHint) {
+  async #askOutside(target, key, prompt, schemaHint) {
     try {
-      return await this.#apiRun(prompt, { provider: helper.provider, model: helper.model, key: helper.key, schemaHint });
+      return await this.#apiRun(prompt, { provider: target.provider, model: target.model, key, schemaHint });
     } catch {
       return { ok: false, error: 'helper-threw' };
     }
   }
 
-  // Claude conducts: it answers when the helper cannot, and re-asks a sample of the helper's answers, having the last word.
-  // valid: the caller's check of an answer (place: a listed part id or null). A helper answer that fails it is a wrong
-  // answer, not a success: Claude answers instead and the miss counts against the helper.
-  async #answer(hash, kind, prompt, schemaHint, now, projectId, valid) {
-    const helper = await this.#helperFor(kind, now);
-    if (!helper) return this.#askClaude(prompt, schemaHint, now, projectId);
-    const fromHelper = await this.#askHelper(helper, prompt, schemaHint);
-    const paid = fromHelper.costUSD ?? 0;
-    this.#spend(now, projectId, helper.provider, paid);
-    const invalid = fromHelper.ok && typeof valid === 'function' && !valid(fromHelper.value);
-    if (fromHelper.ok && !invalid && !reviewPicks(hash)) return fromHelper;
-    if (!fromHelper.ok) log('warn', 'ai-helper-fallback', { provider: helper.provider, error: fromHelper.error });
+  // Claude conducts: it answers when the other AI cannot, and re-asks a sample of its answers, having the last word.
+  // valid: the caller's check of an answer (place: a listed part id or null). An answer that fails it is a wrong
+  // answer, not a success: Claude answers instead and the miss counts against that AI.
+  async #answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity) {
+    const viaClaude = () => this.#onClaude(() => this.#askClaude(prompt, schemaHint, now, projectId));
+    const s = this.#settings();
+    const { provider } = target;
+    if (!s || !(s.keys ?? []).includes(provider) || (s.off ?? []).includes(provider) || pausedFor(this.#state.helper, provider, kind)) return viaClaude();
+    const key = await Promise.resolve(this.#keyOf(provider)).catch(() => null);
+    if (!key) return viaClaude();
+    const estimateUSD = estimateCostUSD(provider, target.model, prompt, undefined, schemaHint);
+    const ticket = this.reserveOutside(provider, estimateUSD, s.dailyUSD);
+    if (!ticket) return viaClaude();
+    const t0 = this.#now();
+    const fromOther = await this.#askOutside(target, key, prompt, schemaHint);
+    // A call that threw may have left: it costs the estimate. providers.mjs does the same for a timeout.
+    const paid = Number.isFinite(fromOther.costUSD) ? fromOther.costUSD : fromOther.error === 'helper-threw' ? estimateUSD : 0;
+    ticket.settle(paid, projectId);
+    this.#noteOutside({ kind, sensitivity, provider, model: target.model, ms: this.#now() - t0, costUSD: paid, ok: Boolean(fromOther.ok), ...(fromOther.ok ? {} : { error: fromOther.error }) });
+    const invalid = fromOther.ok && typeof valid === 'function' && !valid(fromOther.value);
+    if (fromOther.ok && !invalid && !reviewPicks(hash)) return fromOther;
+    if (!fromOther.ok) log('warn', 'ai-helper-fallback', { provider, error: fromOther.error });
     if (invalid) {
-      log('warn', 'ai-helper-fallback', { provider: helper.provider, error: 'invalid-answer' });
-      recordReview(this.#state.helper, helper.provider, kind, false, now);
+      log('warn', 'ai-helper-fallback', { provider, error: 'invalid-answer' });
+      recordReview(this.#state.helper, provider, kind, false, now);
     }
-    const fromClaude = await this.#askClaude(prompt, schemaHint, now, projectId);
+    const fromClaude = await viaClaude();
     const costUSD = round6(paid + (fromClaude.costUSD ?? 0));
-    if (!fromHelper.ok || invalid) return { ...fromClaude, costUSD };
-    if (!fromClaude.ok) return { ...fromHelper, costUSD };
-    recordReview(this.#state.helper, helper.provider, kind, sameAnswer(fromHelper.value, fromClaude.value, kind), now);
+    if (!fromOther.ok || invalid) return { ...fromClaude, costUSD };
+    if (!fromClaude.ok) return { ...fromOther, costUSD };
+    recordReview(this.#state.helper, provider, kind, sameAnswer(fromOther.value, fromClaude.value, kind), now);
     return { ...fromClaude, costUSD, reviewed: true };
   }
 
-  async #call(hash, kind, prompt, schemaHint, uncapped, projectId, valid) {
+  async #call(hash, kind, prompt, schemaHint, uncapped, projectId, valid, target, sensitivity) {
     const hit = this.#cached(hash);
     if (hit) return hit;
     const now = this.#now();
@@ -272,31 +380,41 @@ export class AiQueue {
       if (this.#state.calls.length >= this.#max) return { ok: false, error: 'rate-limited' };
       this.#state.calls.push(now);
     }
-    const res = await this.#answer(hash, kind, prompt, schemaHint, now, projectId, valid);
+    const res = target
+      ? await this.#answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity)
+      : await this.#askClaude(prompt, schemaHint, now, projectId);
     if (res.ok) this.#state.cache[hash] = { value: res.value, at: now };
     this.#save();
     return res;
   }
 
   // uncapped: the one-time bootstrap of a new project, which the hourly cap would stretch over hours.
-  ask({ key, prompt, schemaHint, uncapped = false, projectId = null, valid = null }) {
+  // sensitivity: what the prompt holds (router.mjs SENSITIVITIES). Unsaid is the strictest, 'client': a caller must say
+  // 'internal' or 'public' (life.mjs passes the project's class) before a direct Gemini key or DeepSeek may take it.
+  ask({ key, prompt, schemaHint, uncapped = false, projectId = null, valid = null, sensitivity = 'client' }) {
     if (!this.enabled) return Promise.resolve({ ok: false, error: 'ai-off' });
     const hash = hashOf(key);
     const hit = this.#cached(hash);
     if (hit) return Promise.resolve(hit);
+    const kind = key?.kind;
+    const target = this.#target(kind, sensitivity);
+    const work = () => this.#call(hash, kind, prompt, schemaHint, uncapped, projectId, valid, target, sensitivity);
     this.#pending++;
-    const job = this.#tail.then(() => this.#call(hash, key?.kind, prompt, schemaHint, uncapped, projectId, valid)).finally(() => { this.#pending--; });
-    this.#tail = job.catch(() => {});
-    return job;
+    return (target ? this.#onLane(target.provider, work) : this.#onClaude(work)).finally(() => { this.#pending--; });
   }
 
-  // The owner turned a paused helper back on.
+  // Paused for a kind of work (review.mjs): ask.mjs skips it as the queue does.
+  pausedFor(provider, kind) {
+    return pausedFor(this.#state.helper, provider, kind);
+  }
+
+  // The owner turned a paused AI back on.
   resumeHelper(provider) {
     resumeHelper(this.#state.helper, provider);
     this.#save();
   }
 
-  // A paid call made outside the queue (the page's Test button): it counts in the day's spend and the helper's cap.
+  // A paid call made outside the queue (the page's Test button): it counts in the day's spend and the daily cap.
   recordSpend(provider, costUSD) {
     if (!Number.isFinite(costUSD) || costUSD <= 0) return;
     this.#spend(this.#now(), null, provider, costUSD);
@@ -307,16 +425,51 @@ export class AiQueue {
     return round6(this.#spentToday(provider, this.#now()));
   }
 
-  // With a projectId, what the map spent on that project only; the page adds the projects up. With a helper wired, also
-  // today's spend per provider and the helper's state: both machine-wide, the same for every project.
+  outsideSpentToday() {
+    return round6(this.#outsideSpent(this.#now()));
+  }
+
+  #othersStatus(s, spentByProviderToday, calls) {
+    const outside = this.#outsideSpent(this.#now());
+    return {
+      enabled: Boolean(s.enabled),
+      dailyUSD: s.dailyUSD,
+      spentUSDToday: round6(outside),
+      capReached: outside >= s.dailyUSD,
+      providers: Object.keys(PROVIDERS).map((id) => {
+        const r = providerReview(this.#state.helper, id);
+        return {
+          id,
+          model: bulkModelOf(id, s.models),
+          hasKey: (s.keys ?? []).includes(id),
+          on: !(s.off ?? []).includes(id),
+          paused: Boolean(r.pausedWhy),
+          pausedWhy: r.pausedWhy,
+          spentUSDToday: spentByProviderToday[id] ?? 0,
+          reviewed: r.reviewed,
+          agreed: r.agreed,
+          calls: calls[id] ?? 0,
+          busy: this.#lanes.get(id)?.load ?? 0,
+        };
+      }),
+    };
+  }
+
+  // With a projectId, what the map spent on that project only; the page adds the projects up. With the others wired,
+  // also today's spend per provider and each outside AI's state: machine-wide, the same for every project.
   status(projectId) {
-    const { day, usd, byProject, byProvider } = this.#state.spent;
+    const { day, usd, byProject, byProvider, callsByProvider } = this.#state.spent;
     const today = day === localDay(this.#now());
     const amount = projectId === undefined ? usd : byProject?.[projectId] ?? 0;
     const base = { enabled: this.enabled, model: this.model, spentUSDToday: today ? round6(amount) : 0, queue: this.#pending };
-    if (!this.#helper) return base;
-    const settings = this.#helper();
+    if (!this.#others) return base;
+    const s = this.#others() ?? { enabled: false, dailyUSD: 0, off: [], models: {}, keys: [] };
     const spentByProviderToday = today ? Object.fromEntries(Object.entries(byProvider ?? {}).map(([k, v]) => [k, round6(v)])) : {};
-    return { ...base, spentByProviderToday, helper: helperStatus(this.#state.helper, settings, spentByProviderToday[settings.provider] ?? 0) };
+    const out = { ...base, spentByProviderToday, others: this.#othersStatus(s, spentByProviderToday, today ? callsByProvider ?? {} : {}) };
+    if (this.#helper) {
+      const h = this.#helper();
+      out.helper = helperStatus(this.#state.helper, h, spentByProviderToday[h.provider] ?? 0);
+    }
+    return out;
   }
 }

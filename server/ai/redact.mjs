@@ -1,8 +1,14 @@
 // What leaves the PC for an outside AI goes through here first: personal data and secrets become placeholders.
 // Claude (the local CLI) keeps receiving the prompt as written; only the helper providers see the masked text.
 
-const PRIVATE_KEY = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi;
+// Every pattern here must stay linear: /api/ai/ask takes 200 KB prompts, and a pattern that re-scans the rest of
+// the text from each position freezes the server for seconds or minutes (test/ai-redact.test.mjs times them).
+// The key header and footer are found apart: one regex with [\s\S]*? between them ran to the end of the text
+// again from every header that has no footer.
+const KEY_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const KEY_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
+// The scheme is capped at 64 characters: unbounded, it re-scanned a long run like a.a.a.a… from every letter.
+const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]{0,63}:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/g;
 const KNOWN_SECRETS = [
   /\bsk-[A-Za-z0-9_-]{16,}/g, // OpenAI, Anthropic, OpenRouter, DeepSeek
@@ -12,7 +18,10 @@ const KNOWN_SECRETS = [
   /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, // Slack
 ];
 // Unicode letters too: an ASCII-only local part would leave the accented half of a name out (joã[email]).
-const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/gu;
+// The regex finds "@domain" and the code walks back over the name: a regex that starts with the name tried every
+// letter of a long word as the start of an address and read to the word's end each time (12 s for 150 KB of z).
+const EMAIL_DOMAIN = /@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/gu;
+const EMAIL_NAME_CHAR = /^[\p{L}\p{N}._%+-]$/u;
 const CNPJ = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g;
 const CPF = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g;
 // Unpunctuated CPF (11 digits) and CNPJ (14 digits); 10 and 13 digits are left alone, they are usually timestamps.
@@ -47,6 +56,44 @@ const count = (text, re) => (text.match(re) ?? []).length;
 // A base64 secret mixes digits, capitals and small letters in one long piece; a file path is short pieces split by "/".
 const looksRandom = (run) => run.split('/').some((seg) => seg.length >= 32 && count(seg, /\d/g) >= 3 && count(seg, /[A-Z]/g) >= 3 && count(seg, /[a-z]/g) >= 3);
 
+// From each header to the first footer after it. With no footer after a header, none comes after a later header
+// either, so the search stops there.
+function maskKeys(text) {
+  let out = '';
+  let done = 0;
+  for (;;) {
+    KEY_BEGIN.lastIndex = done;
+    const begin = KEY_BEGIN.exec(text);
+    if (!begin) break;
+    KEY_END.lastIndex = begin.index + begin[0].length;
+    const end = KEY_END.exec(text);
+    if (!end) break;
+    out += `${text.slice(done, begin.index)}[secret]`;
+    done = end.index + end[0].length;
+  }
+  return out + text.slice(done);
+}
+
+// The name is the whole run of name characters just before the "@", never reaching into the address masked before
+// it; a letter outside the basic plane is two UTF-16 units and is stepped over as one.
+function maskEmails(text) {
+  let out = '';
+  let done = 0;
+  for (const m of text.matchAll(EMAIL_DOMAIN)) {
+    let start = m.index;
+    while (start > done) {
+      const pair = start - 2 >= done && /[\uDC00-\uDFFF]/.test(text[start - 1]) && /[\uD800-\uDBFF]/.test(text[start - 2]);
+      const width = pair ? 2 : 1;
+      if (!EMAIL_NAME_CHAR.test(text.slice(start - width, start))) break;
+      start -= width;
+    }
+    if (start === m.index) continue;
+    out += `${text.slice(done, start)}[email]`;
+    done = m.index + m[0].length;
+  }
+  return out + text.slice(done);
+}
+
 // The digest arrives JSON-quoted, so a line break inside a prompt is the two characters \n: the n glues to what
 // follows and hides it from every \b. A marker after each escape keeps the boundary; it is gone before returning.
 const MARK = '\u0000';
@@ -54,11 +101,11 @@ const ESCAPE = /\\[nrtbf]/g;
 
 export function redact(text) {
   let out = String(text ?? '').replaceAll(MARK, '').replace(ESCAPE, (m) => m + MARK);
-  out = out.replace(PRIVATE_KEY, '[secret]');
+  out = maskKeys(out);
   out = out.replace(URL_CREDENTIALS, '$1[credentials]@');
   out = out.replace(BEARER, 'Bearer [secret]');
   for (const re of KNOWN_SECRETS) out = out.replace(re, '[secret]');
-  out = out.replace(EMAIL, '[email]');
+  out = maskEmails(out);
   out = out.replace(CNPJ, '[cnpj]').replace(CPF, '[cpf]').replace(BARE_ID, '[id]');
   out = out.replace(CARD, (m) => (luhn(m.replace(/\D/g, '')) ? '[card]' : m));
   for (const re of PHONES) out = out.replace(re, '[phone]');

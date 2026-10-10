@@ -1,19 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeAtomic } from '../store.mjs';
-import { helperSettings } from './helper.mjs';
 import { getKey, listKeys, removeKey, setKey } from './keys.mjs';
 import { aiStatus, lifeOf } from './life.mjs';
-import { providerOf, publicCatalog, runApiJSON } from './providers.mjs';
+import { normalizePath } from '../paths.mjs';
+import { DEFAULT_PROJECT_CLASS, PROJECT_CLASSES, mergeProjectClasses, othersConfig, othersSettings, projectClasses } from './others.mjs';
+import { estimateCostUSD, providerOf, publicCatalog, runApiJSON } from './providers.mjs';
+import { bulkModelOf } from './router.mjs';
 
-// What the "Other AIs" dialog reads and writes (sb07): the keys, which helper takes the bulk work and its daily cap.
+// What the "Other AIs" dialog reads and writes (or14): the keys, a switch per provider and ONE daily cap for all of
+// them together. Which AI does which task is the router's decision (router.mjs), never the owner's.
 // The transport (token, demo, logging) is in main.mjs; every answer here is free of any key.
 
 const CONFIG_FILE = 'config.json';
-const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
 const DAILY_MAX_USD = 1000;
 const TEST_PROMPT = 'Reply with {"ok": true}';
 const TEST_TIMEOUT_MS = 30_000;
+const TEST_MAX_TOKENS = 64;
 const TEST_LIMIT = 5;
 const TEST_WINDOW_MS = 60_000;
 
@@ -30,67 +33,96 @@ function readConfig(smDir) {
 }
 
 // ai: the test doubles the page's collect also gets ({bin, run, apiRun, keyOf}); backend: the lock for keys (tests).
-export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSON, now = Date.now }) {
+// roots: async () => the roots of the projects the map knows; a class can be set only for those.
+export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSON, now = Date.now, roots = async () => [] }) {
   const lockOpt = backend ? { backend } : {};
   const life = () => lifeOf(smDir, readConfig(smDir) ?? {}, backend && !ai.keyOf ? { ...ai, keyOf: (provider) => getKey(smDir, provider, lockOpt) } : ai);
   const tests = [];
+  const keyIds = () => listKeys(smDir).map((k) => k.provider);
 
+  // others: what is chosen (enabled, the one daily cap, who is switched off); status.others: what is happening.
   const view = () => {
     const config = readConfig(smDir) ?? {};
-    return { ok: true, providers: publicCatalog(), keys: listKeys(smDir), helper: helperSettings(config.ai), status: aiStatus(life()) };
+    const keys = listKeys(smDir);
+    // projectClass: the classes chosen so far, by normalized root; any project not in it is projectClassDefault.
+    return {
+      ok: true, providers: publicCatalog(), keys, others: othersSettings(config.ai, keys.map((k) => k.provider)), status: aiStatus(life()),
+      projectClass: projectClasses(config.ai), projectClassDefault: DEFAULT_PROJECT_CLASS, projectClasses: [...PROJECT_CLASSES],
+    };
   };
 
-  // patch: {provider, key?} and/or {helper: {provider, model?, enabled}, dailyUSD}
+  // -> {change: {normalizedRoot: class|null}} or {error}. Only the roots of projects the map knows, only known classes.
+  async function checkProjectClass(given) {
+    if (!isObject(given) || !Object.keys(given).length) return { error: 'bad-project-class' };
+    const known = new Set((await roots().catch(() => [])).filter((r) => typeof r === 'string' && r).map(normalizePath));
+    const change = Object.create(null);
+    for (const [root, cls] of Object.entries(given)) {
+      if (cls !== null && !PROJECT_CLASSES.includes(cls)) return { error: 'bad-project-class' };
+      const key = root.trim() ? normalizePath(root) : '';
+      if (!known.has(key)) return { error: 'unknown-project' };
+      change[key] = cls;
+    }
+    return { change };
+  }
+
+  // patch: {provider, key} saves a key; {provider, on} switches one AI on or off (on also gives a paused one another
+  // chance); {dailyUSD} is the one cap for all; {enabled} switches every outside AI on or off at once;
+  // {projectClass: {root: 'client'|'internal'|'public'|null}} sets how private each known project is (null: back to the
+  // default, client). All or nothing: one unknown root or class refuses the whole request.
   async function save(patch) {
     if (!isObject(patch)) return fail(400, 'bad-helpers');
-    const { key, helper, dailyUSD } = patch;
-    if (key === undefined && helper === undefined && dailyUSD === undefined) return fail(400, 'bad-helpers');
+    const { key, on, enabled, dailyUSD, projectClass } = patch;
+    if (key === undefined && on === undefined && enabled === undefined && dailyUSD === undefined && projectClass === undefined) return fail(400, 'bad-helpers');
     if (key !== undefined && (typeof key !== 'string' || !providerOf(patch.provider))) return fail(400, providerOf(patch.provider) ? 'invalid-key' : 'unknown-provider');
-    if (helper !== undefined) {
-      if (!isObject(helper) || !providerOf(helper.provider)) return fail(400, 'unknown-provider');
-      if (typeof helper.enabled !== 'boolean') return fail(400, 'bad-helpers');
-      // '' is the page's empty field: the provider's usual model, no pin.
-      if (helper.model !== undefined && helper.model !== '' && !(typeof helper.model === 'string' && MODEL_RE.test(helper.model))) return fail(400, 'bad-helpers');
+    if (on !== undefined) {
+      if (!providerOf(patch.provider)) return fail(400, 'unknown-provider');
+      if (typeof on !== 'boolean') return fail(400, 'bad-helpers');
     }
+    if (enabled !== undefined && typeof enabled !== 'boolean') return fail(400, 'bad-helpers');
     if (dailyUSD !== undefined && !(typeof dailyUSD === 'number' && Number.isFinite(dailyUSD) && dailyUSD >= 0 && dailyUSD <= DAILY_MAX_USD)) return fail(400, 'bad-helpers');
 
+    let classChange;
+    if (projectClass !== undefined) {
+      const checked = await checkProjectClass(projectClass);
+      if (checked.error) return fail(400, checked.error);
+      classChange = checked.change;
+    }
     const config = readConfig(smDir);
     if (!config) return fail(409, 'config-unreadable');
+    if (on === true && !keyIds().includes(patch.provider) && key === undefined) return fail(409, 'no-key');
     if (key !== undefined) {
       const saved = await setKey(smDir, patch.provider, key, lockOpt);
       if (!saved.ok) return fail(saved.error === 'encrypt-failed' ? 500 : 400, saved.error);
     }
-    const aiConfig = isObject(config.ai) ? { ...config.ai } : {};
     let resume = null;
-    if (helper !== undefined) {
-      if (helper.enabled && !listKeys(smDir).some((k) => k.provider === helper.provider)) return fail(409, 'no-key');
-      const before = helperSettings(config.ai);
-      const model = helper.model ?? (before.provider === helper.provider ? aiConfig.helper?.model : undefined);
-      aiConfig.helper = { provider: helper.provider, ...(model ? { model } : {}), enabled: helper.enabled };
-      // A helper the owner turns on, swaps, gives a new model or saves again while paused starts clean: the page tells
-      // them to save the choice again to give a paused helper another chance.
-      const after = helperSettings(aiConfig);
-      const same = before.enabled && before.provider === after.provider && before.model === after.model;
-      if (helper.enabled && (!same || life().queue.status().helper?.paused)) resume = helper.provider;
-    }
-    if (dailyUSD !== undefined) aiConfig.helperDailyUSD = dailyUSD;
-    if (helper !== undefined || dailyUSD !== undefined) {
-      writeAtomic(join(smDir, CONFIG_FILE), `${JSON.stringify({ ...config, ai: aiConfig }, null, 2)}\n`);
+    if (on !== undefined || enabled !== undefined || dailyUSD !== undefined || classChange) {
+      const before = othersSettings(config.ai, keyIds());
+      const change = {};
+      if (enabled !== undefined) change.enabled = enabled;
+      if (dailyUSD !== undefined) change.dailyUSD = dailyUSD;
+      if (classChange) change.projectClass = mergeProjectClasses(config.ai, classChange);
+      if (on !== undefined) {
+        const rest = before.off.filter((p) => p !== patch.provider);
+        change.off = on ? rest : [...rest, patch.provider];
+        if (on) {
+          // Switching one on is a choice to use the others, even if the old dialog had them all off.
+          if (enabled === undefined) change.enabled = true;
+          // A switch the owner flips on, or presses again while the AI is paused, starts it clean.
+          const paused = life().queue.status().others?.providers.find((p) => p.id === patch.provider)?.paused;
+          if (before.off.includes(patch.provider) || paused) resume = patch.provider;
+        }
+      }
+      writeAtomic(join(smDir, CONFIG_FILE), `${JSON.stringify({ ...config, ai: othersConfig(config.ai, keyIds(), change) }, null, 2)}\n`);
     }
     if (resume) life().queue.resumeHelper(resume);
     return { status: 200, body: view() };
   }
 
+  // The key goes; the switch stays as the owner left it. Without a key the AI is simply left out of the choosing.
   function remove(provider) {
     if (!providerOf(provider)) return fail(400, 'unknown-provider');
-    const config = readConfig(smDir);
-    if (!config) return fail(409, 'config-unreadable');
+    if (!readConfig(smDir)) return fail(409, 'config-unreadable');
     removeKey(smDir, provider);
-    // Without its key the helper could only fall back to Claude: say so in the choice too.
-    const h = helperSettings(config.ai);
-    if (h.enabled && h.provider === provider) {
-      writeAtomic(join(smDir, CONFIG_FILE), `${JSON.stringify({ ...config, ai: { ...config.ai, helper: { ...config.ai.helper, enabled: false } } }, null, 2)}\n`);
-    }
     return { status: 200, body: view() };
   }
 
@@ -102,13 +134,18 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
     tests.push(t);
     const key = await getKey(smDir, provider, lockOpt);
     if (!key) return fail(409, 'no-key');
-    // A test is a real paid call: it counts against the provider's daily cap, and stops there like the bulk work.
-    const settings = helperSettings((readConfig(smDir) ?? {}).ai);
+    // A test is a real paid call: it is held against the one daily cap like the bulk work, so it can never pass it.
+    const settings = othersSettings((readConfig(smDir) ?? {}).ai, keyIds());
+    const model = bulkModelOf(provider, settings.models);
     const { queue } = life();
-    if (queue.spentToday(provider) >= settings.dailyUSD) return fail(429, 'cap-reached');
-    const model = settings.provider === provider ? settings.model : undefined;
-    const r = await apiRun(TEST_PROMPT, { provider, key, timeoutMs: TEST_TIMEOUT_MS, ...(model ? { model } : {}) });
-    queue.recordSpend(provider, Number(r?.costUSD));
+    const ticket = queue.reserveOutside(provider, estimateCostUSD(provider, model, TEST_PROMPT, TEST_MAX_TOKENS), settings.dailyUSD);
+    if (!ticket) return fail(429, 'cap-reached');
+    let r = null;
+    try {
+      r = await apiRun(TEST_PROMPT, { provider, key, model, timeoutMs: TEST_TIMEOUT_MS, maxTokens: TEST_MAX_TOKENS });
+    } finally {
+      ticket.settle(Number(r?.costUSD));
+    }
     // Only the verdict leaves: never the key, the model's words or an error body.
     if (r?.ok) return { status: 200, body: { ok: true, costUSD: Number.isFinite(r.costUSD) ? r.costUSD : 0 } };
     // 502: the provider, not this page, said no. The status keeps the page's generic client from reading it as a success.

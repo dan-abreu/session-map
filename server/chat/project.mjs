@@ -77,6 +77,8 @@ export function projectSections(project, rule) {
     `Project: ${project.name}`,
     'This is a chat about the whole project, opened at its root folder. What follows is a compact summary from session-map, not the history of its conversations: read the files when you need detail.',
     hasArch ? null : 'This project has no architecture map yet.',
+    // The arsenal (orchestration, all the AIs at once): the conductor knows the tool and the routing rule.
+    'You may ask other AIs with the ask_other_ai tool (list_other_ais shows who is on): send a review to another family than the author\'s, DeepSeek only for public data, and verify what they answer.',
   ].filter(Boolean).join('\n');
   // The blank line before each section after the head is counted here, so each share holds only its own section.
   const fixed = size(head) + (rule ? size(rule) : 0) + SEPARATOR * (Object.keys(SHARE).length + 1);

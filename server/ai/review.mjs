@@ -48,6 +48,18 @@ export function resumeHelper(state, provider) {
   for (const [key, r] of Object.entries(state.reviews)) if (key.startsWith(`${provider}:`)) r.window = [];
 }
 
+// One provider's record over every kind of work: {reviewed, agreed, pausedWhy (the first pause, or null)}.
+export function providerReview(state, provider) {
+  const mine = (obj) => Object.entries(obj).filter(([key]) => key.startsWith(`${provider}:`)).map(([, v]) => v);
+  const reviews = mine(state.reviews);
+  return {
+    reviewed: reviews.reduce((n, r) => n + r.reviewed, 0),
+    agreed: reviews.reduce((n, r) => n + r.agreed, 0),
+    pausedWhy: mine(state.paused)[0] ?? null,
+  };
+}
+
+// The old single-helper view (sb07), kept while the page still reads it.
 export function helperStatus(state, settings, spentUSDToday) {
   const mine = (obj) => Object.entries(obj).filter(([key]) => settings.provider && key.startsWith(`${settings.provider}:`)).map(([, v]) => v);
   const reviews = mine(state.reviews);

@@ -40,6 +40,13 @@ export const PROVIDERS = Object.freeze({
     },
     priceSource: 'https://api-docs.deepseek.com/quick_start/pricing',
     priceCheckedOn: CHECKED_ON,
+    // Thinking is on by default and its hidden reasoning ate the whole answer budget (bench of 2026-10-10): these
+    // short JSON and text jobs ask for none (https://api-docs.deepseek.com/api/create-chat-completion).
+    requestExtras: {
+      'deepseek-flash': { body: { thinking: { type: 'disabled' } } },
+      'deepseek-v4-flash': { body: { thinking: { type: 'disabled' } } },
+      'deepseek-v4-pro': { body: { thinking: { type: 'disabled' } } },
+    },
   },
   gemini: {
     id: 'gemini',
@@ -57,6 +64,13 @@ export const PROVIDERS = Object.freeze({
     },
     priceSource: 'https://ai.google.dev/gemini-api/docs/pricing',
     priceCheckedOn: CHECKED_ON,
+    // Gemini 3 always thinks a little (https://ai.google.dev/gemini-api/docs/openai): the lowest level each model
+    // accepts, and room for it on top of the answer. gemini-3.8-flash refuses 'minimal' with HTTP 400.
+    requestExtras: {
+      'gemini-3.1-flash-lite': { body: { reasoning_effort: 'minimal' }, reasoningRoomTokens: 1024 },
+      'gemini-3.5-flash-lite': { body: { reasoning_effort: 'minimal' }, reasoningRoomTokens: 1024 },
+      'gemini-3.8-flash': { body: { reasoning_effort: 'low' }, reasoningRoomTokens: 1024 },
+    },
   },
   openai: {
     id: 'openai',
@@ -74,16 +88,37 @@ export const PROVIDERS = Object.freeze({
     },
     priceSource: 'https://openai.com/api/pricing/',
     priceCheckedOn: CHECKED_ON,
+    // Checked against the API on 2026-10-10: every gpt-6 model refuses max_tokens (HTTP 400), Luna takes reasoning
+    // 'none', Sol and Astra start at 'low' and take only the default temperature. null: the field is left out.
+    maxTokensField: 'max_completion_tokens',
+    requestExtras: {
+      'gpt-6-luna': { body: { reasoning_effort: 'none' } },
+      'gpt-6.1-sol': { body: { reasoning_effort: 'low', temperature: null }, reasoningRoomTokens: 1024 },
+      'gpt-6-astra': { body: { reasoning_effort: 'low', temperature: null }, reasoningRoomTokens: 1024 },
+    },
   },
 });
 
 const TIMEOUT_MS = 60_000;
 const MAX_TOKENS = 1024;
+const MAX_TOKENS_CEILING = 8192;
+// The longest answer asked for: the caller's, within 1..8192, else 1024.
+const outTokens = (n) => (Number.isInteger(n) && n > 0 ? Math.min(n, MAX_TOKENS_CEILING) : MAX_TOKENS);
 
 export const providerOf = (id) => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null);
 
+// What one model needs in its request ({ body, reasoningRoomTokens }), or nothing for a model not in the catalog:
+// it gets no field it might refuse.
+const extrasOf = (p, model) => (p?.requestExtras && Object.hasOwn(p.requestExtras, model) ? p.requestExtras[model] : {});
+
+// The token budget a call asks for: the answer's, plus room for reasoning the model cannot skip.
+export const maxAnswerTokens = (providerId, model, maxTokens) => {
+  const p = providerOf(providerId);
+  return outTokens(maxTokens) + (Number(extrasOf(p, model || p?.defaultModel).reasoningRoomTokens) || 0);
+};
+
 // What the page may show: the catalog has no secrets, the copy keeps the frozen original out of reach.
-export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, ...p }) => structuredClone(p));
+export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, requestExtras, maxTokensField, ...p }) => structuredClone(p));
 
 // A model missing from the catalog could be any AI the owner typed, up to the dearest on the market: it is priced
 // above those, so the daily cap stops early rather than late. OpenRouter's own reported cost wins over this anyway.
@@ -98,33 +133,56 @@ export function costOf(providerId, model, tokensIn, tokensOut) {
 const promptWithHint = (prompt, schemaHint) => (schemaHint ? `${prompt}\n\nReply with one JSON object only, no prose, shaped like:\n${schemaHint}\n` : prompt);
 
 // The OpenAI-style answer: text and token counts; OpenRouter adds what it charged in usage.cost.
-function readAnswer(providerId, model, data) {
+// A reply without token counts was still paid for: it costs the pessimistic estimate, never $0.
+// Hidden thinking that only shows in total_tokens (Gemini leaves it out of completion_tokens) is billed as answer.
+function readAnswer(providerId, model, data, estimateUSD) {
   const content = data?.choices?.[0]?.message?.content;
+  const cut = data?.choices?.[0]?.finish_reason === 'length';
   const usage = data?.usage ?? {};
   const tokensIn = Number(usage.prompt_tokens) || 0;
-  const tokensOut = Number(usage.completion_tokens) || 0;
-  const costUSD = Number.isFinite(usage.cost) ? usage.cost : costOf(providerId, model, tokensIn, tokensOut);
-  return { content, tokensIn, tokensOut, costUSD };
+  const tokensOut = Math.max(Number(usage.completion_tokens) || 0, (Number(usage.total_tokens) || 0) - tokensIn);
+  const counted = Number.isFinite(usage.prompt_tokens) && Number.isFinite(usage.completion_tokens);
+  const costUSD = Number.isFinite(usage.cost) ? usage.cost : counted ? costOf(providerId, model, tokensIn, tokensOut) : estimateUSD;
+  return { content, cut, tokensIn, tokensOut, costUSD };
 }
 
-// Same shape as runClaudeJSON, plus who answered and the tokens. Errors are short codes: never the key, a header
-// or the body of the reply, which some providers echo the key into.
-export async function runApiJSON(prompt, { provider, model, key, schemaHint, fetchFn = fetch, timeoutMs = TIMEOUT_MS } = {}) {
+// Pessimistic on purpose: real text runs nearer 4 characters per token. Checked against the daily cap before a call.
+const CHARS_PER_TOKEN = 2;
+const HINT_TOKENS = 100;
+export function estimateCostUSD(providerId, model, prompt, maxTokens = MAX_TOKENS, schemaHint = '') {
+  const tokensIn = Math.ceil((String(prompt ?? '').length + String(schemaHint ?? '').length) / CHARS_PER_TOKEN) + HINT_TOKENS;
+  const usedModel = model || providerOf(providerId)?.defaultModel;
+  return costOf(providerId, usedModel, tokensIn, maxAnswerTokens(providerId, usedModel, maxTokens));
+}
+
+// Network errors that mean the request never reached the provider.
+const NOT_SENT = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH']);
+
+// One chat call -> {ok: true, content, meta} or a failure. Errors are short codes: never the key, a header or the
+// body of the reply, which some providers echo the key into. Everything sent goes through redact().
+async function callApi(text, { provider, model, key, fetchFn = fetch, timeoutMs = TIMEOUT_MS, maxTokens } = {}) {
   const p = providerOf(provider);
   const fail = (error, extra = {}) => {
     log('warn', 'ai-api-failed', { provider: p?.id ?? 'unknown', error });
     return { ok: false, error, ...(p ? { provider: p.id } : {}), ...extra };
   };
-  if (!p) return fail('unknown-provider');
-  if (typeof key !== 'string' || !key) return fail('no-key');
+  if (!p) return { fail: fail('unknown-provider') };
+  if (typeof key !== 'string' || !key) return { fail: fail('no-key') };
   const usedModel = model || p.defaultModel;
   const body = {
     model: usedModel,
-    messages: [{ role: 'user', content: redact(promptWithHint(prompt, schemaHint)) }],
+    messages: [{ role: 'user', content: redact(text) }],
     temperature: 0,
-    max_tokens: MAX_TOKENS,
+    [p.maxTokensField ?? 'max_tokens']: maxAnswerTokens(p.id, usedModel, maxTokens),
     ...(p.extraBody ?? {}),
+    ...(extrasOf(p, usedModel).body ?? {}),
   };
+  for (const [field, value] of Object.entries(body)) if (value === null) delete body[field];
+  // Once the request has left, the provider may bill it even if no answer or no cost comes back (a timeout, a dropped
+  // socket): such a failure carries the pessimistic estimate, which the daily cap books. Refused before any answer
+  // (HTTP errors, a connection that never opened) costs nothing.
+  const estimateUSD = estimateCostUSD(p.id, usedModel, text, maxTokens);
+  const sent = { costUSD: estimateUSD };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let data;
@@ -137,20 +195,39 @@ export async function runApiJSON(prompt, { provider, model, key, schemaHint, fet
     });
     if (!res.ok) {
       await res.text?.().catch(() => {}); // drained, never read: error bodies may quote the key
-      return fail(`http-${res.status}`);
+      return { fail: fail(`http-${res.status}`) };
     }
     try { data = await res.json(); } catch (err) {
-      return fail(controller.signal.aborted || err?.name === 'AbortError' ? 'timeout' : 'bad-output');
+      return { fail: fail(controller.signal.aborted || err?.name === 'AbortError' ? 'timeout' : 'bad-output', sent) };
     }
   } catch (err) {
-    return fail(controller.signal.aborted || err?.name === 'AbortError' ? 'timeout' : 'network');
+    if (controller.signal.aborted || err?.name === 'AbortError') return { fail: fail('timeout', sent) };
+    return { fail: fail('network', NOT_SENT.has(err?.cause?.code) ? {} : sent) };
   } finally {
     clearTimeout(timer);
   }
-  const { content, tokensIn, tokensOut, costUSD } = readAnswer(p.id, usedModel, data);
+  const { content, cut, tokensIn, tokensOut, costUSD } = readAnswer(p.id, usedModel, data, estimateUSD);
   const meta = { costUSD, provider: p.id, model: usedModel, tokensIn, tokensOut };
-  if (typeof content !== 'string') return fail('bad-output', meta);
-  const value = extractJSON(content);
-  if (!value) return fail('no-json', meta);
-  return { ok: true, value, ...meta };
+  // Stopped by the length limit with nothing to show (reasoning ate the budget): 'answer-cut', never a bad answer.
+  if (cut && !(typeof content === 'string' && content.trim())) return { fail: fail('answer-cut', meta) };
+  if (typeof content !== 'string') return { fail: fail('bad-output', meta) };
+  return { content, cut, meta, fail: null, failWith: (error) => fail(error, meta) };
+}
+
+// Same shape as runClaudeJSON, plus who answered and the tokens.
+export async function runApiJSON(prompt, { schemaHint, ...opts } = {}) {
+  const r = await callApi(promptWithHint(prompt, schemaHint), opts);
+  if (r.fail) return r.fail;
+  const value = extractJSON(r.content);
+  if (!value) return r.failWith(r.cut ? 'answer-cut' : 'no-json');
+  return { ok: true, value, ...r.meta };
+}
+
+// A plain-text answer (a review, a summary, a draft): {ok, text, costUSD, provider, model, tokensIn, tokensOut}.
+export async function runApiText(prompt, opts = {}) {
+  const r = await callApi(prompt, opts);
+  if (r.fail) return r.fail;
+  const text = r.content.trim();
+  if (!text) return r.failWith('empty');
+  return { ok: true, text, ...r.meta };
 }

@@ -2117,7 +2117,7 @@ function wire() {
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
   requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
-  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, openers: [$('#aiHelpersBar'), $('#aiHelpersOpen')] });
+  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name, root: p.root })), openers: [$('#aiHelpersBar'), $('#aiHelpersOpen')] });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,

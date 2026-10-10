@@ -1,4 +1,5 @@
-// The "Other AIs" dialog (sb07): keys for cheaper AIs, which one takes the bulk work, and what they spent today.
+// The "Other AIs" dialog (or14): the owner pastes keys, switches an AI on or off and sets ONE daily limit for all of
+// them; session-map picks which AI does which task, and may use several at once.
 // The pure part on top is what the Costs tab and node:test use; the DOM part only runs when the page calls it.
 
 const PROVIDER_NAMES = { claude: 'Claude', openrouter: 'OpenRouter', deepseek: 'DeepSeek', gemini: 'Google Gemini', openai: 'OpenAI (GPT)' };
@@ -10,19 +11,22 @@ export function usdText(usd, lang = 'en') {
   return new Intl.NumberFormat(lang, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: n > 0 && n < 0.1 ? 4 : 2 }).format(n);
 }
 
-// What the Costs tab lists, one row per AI that asked something today. Both pieces are machine-wide and every project
-// repeats them, so the first project that has them speaks for all: they must never be added up across projects.
+// What the Costs tab lists, one row per AI that asked something today, plus every outside AI that is on and ready.
+// Both pieces are machine-wide and every project repeats them, so the first project that has them speaks for all:
+// they must never be added up across projects.
 export function providerSpend(state) {
   const host = (state?.projects ?? []).find((p) => p.ai?.spentByProviderToday);
-  if (!host) return { rows: [], helper: null };
+  if (!host) return { rows: [], others: null };
   const spent = host.ai.spentByProviderToday;
-  const helper = host.ai.helper ?? null;
-  const ids = ['claude', ...Object.keys(spent).filter((id) => id !== 'claude' && spent[id] > 0)];
-  if (helper?.enabled && helper.provider && !ids.includes(helper.provider)) ids.push(helper.provider);
-  return { rows: ids.map((id) => ({ id, name: providerName(id), usd: spent[id] ?? 0, isHelper: helper?.provider === id ? helper : null })), helper };
+  const others = host.ai.others ?? null;
+  const mine = new Map((others?.providers ?? []).map((p) => [p.id, p]));
+  const ready = (p) => Boolean(others?.enabled && p.hasKey && p.on);
+  const ids = ['claude', ...[...mine.values()].filter((p) => (spent[p.id] ?? 0) > 0 || ready(p)).map((p) => p.id)];
+  for (const id of Object.keys(spent)) if (spent[id] > 0 && !ids.includes(id)) ids.push(id);
+  return { rows: ids.map((id) => ({ id, name: providerName(id), usd: spent[id] ?? 0, other: mine.get(id) ?? null })), others };
 }
 
-const ERROR_CODES = new Set(['no-key', 'http-400', 'http-401', 'http-402', 'http-403', 'http-404', 'http-429', 'timeout', 'network', 'bad-output', 'no-json', 'too-many-tests', 'invalid-key', 'unknown-provider', 'bad-helpers', 'encrypt-failed', 'config-unreadable', 'cap-reached']);
+const ERROR_CODES = new Set(['no-key', 'http-400', 'http-401', 'http-402', 'http-403', 'http-404', 'http-429', 'timeout', 'network', 'bad-output', 'no-json', 'too-many-tests', 'invalid-key', 'unknown-provider', 'bad-helpers', 'encrypt-failed', 'config-unreadable', 'cap-reached', 'unknown-project', 'bad-project-class']);
 // Both mean "they did not accept the request": usually a wrong model name or a malformed key.
 const SAME_AS = { 'http-422': 'http-400' };
 
@@ -35,6 +39,71 @@ export function whyKey(code, status) {
   return null;
 }
 
+// ---- what the other AIs did, and how private each project is (pure) -------------------------------------------
+
+export const PROJECT_CLASS_ORDER = Object.freeze(['client', 'internal', 'public']);
+const ACTIVITY_KINDS = new Set(['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning', 'place']);
+
+// A folder written the way the server writes it (server/paths.mjs normalizePath), so a project's saved class is found
+// by its root: slashes forward, no trailing one, /c/x as c:/x, lower case. (Windows short names are the server's own.)
+export function normalizeRoot(p) {
+  let out = String(p ?? '').replaceAll('\\', '/').replace(/^\/([a-z])(?=\/|$)/i, '$1:').replace(/\/+$/, '') || '/';
+  if (/^[a-z]:$/i.test(out)) out += '/';
+  return out.toLowerCase();
+}
+
+// The class of a project: what the owner chose for its folder, otherwise the strictest. The lookup ignores letter case.
+export function projectClassFor(classes, root) {
+  const want = normalizeRoot(root);
+  for (const [key, value] of Object.entries(classes ?? {})) {
+    if (normalizeRoot(key) === want) return PROJECT_CLASS_ORDER.includes(value) ? value : 'client';
+  }
+  return 'client';
+}
+
+// waiting: Claude has not said yet whether it used the work. routine: the map's own sorting, which Claude re-checks by
+// sampling and never reports one by one.
+export function activityStatus(it) {
+  if (it?.ok !== true) return 'failed';
+  if (it.result) return it.result.accepted === true ? 'accepted' : 'refused';
+  return it.source === 'map' ? 'routine' : 'waiting';
+}
+
+export function activityRows(items) {
+  return (Array.isArray(items) ? items : []).filter((it) => it && typeof it === 'object' && typeof it.id === 'string').map((it) => {
+    const picked = typeof it.recommendedBy === 'string' ? it.recommendedBy : '';
+    const verdict = typeof it.result?.why === 'string' ? it.result.why : '';
+    return {
+      id: it.id,
+      at: it.at,
+      source: it.source === 'map' ? 'map' : 'chat',
+      kind: ACTIVITY_KINDS.has(it.kind) ? it.kind : 'other',
+      sensitivity: ['public', 'internal', 'client'].includes(it.sensitivity) ? it.sensitivity : 'client',
+      provider: String(it.provider ?? ''),
+      model: String(it.model ?? ''),
+      costUSD: Number(it.costUSD) || 0,
+      ok: it.ok === true,
+      error: typeof it.error === 'string' ? it.error : null,
+      status: activityStatus(it),
+      pickedBecause: picked,
+      verdict,
+      reason: verdict || picked,
+    };
+  });
+}
+
+// "5 minutes ago" for the last day, a short date after that. '' when the date cannot be read.
+export function whenText(iso, lang = 'en', now = Date.now()) {
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return '';
+  const seconds = Math.round((now - at) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
+  if (seconds < 60) return rtf.format(0, 'second');
+  if (seconds < 3600) return rtf.format(-Math.round(seconds / 60), 'minute');
+  if (seconds < 86_400) return rtf.format(-Math.round(seconds / 3600), 'hour');
+  return new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(at);
+}
+
 // ---- the page --------------------------------------------------------------------------------------------------
 
 // ctx: dialog, h, t() (translator getter), lang(), api, toast, errorText, opener (optional buttons that open it).
@@ -42,8 +111,9 @@ export function createAiHelpers(ctx) {
   const { dialog, h, api } = ctx;
   let data = null;
   let canEdit = true;
-  let draft = { provider: '', model: '', dailyUSD: '' };
+  let draft = { dailyUSD: '' };
   let notes = {};
+  let activity = { ok: true, items: [] };
 
   const tt = () => ctx.t();
   const why = (res) => {
@@ -51,25 +121,30 @@ export function createAiHelpers(ctx) {
     return key ? tt()(key) : ctx.errorText(res.error);
   };
   const keyOf = (id) => data?.keys?.find((k) => k.provider === id) ?? null;
-  const catalogOf = (id) => data?.providers?.find((p) => p.id === id) ?? null;
+  const stateOf = (id) => data?.status?.others?.providers?.find((p) => p.id === id) ?? null;
 
-  // The usual model is not worth pinning: an empty field follows the program's choice.
-  const ownModel = (id, model) => (model && model !== catalogOf(id)?.defaultModel ? model : '');
+  const now = () => (typeof ctx.now === 'function' ? ctx.now() : Date.now());
+
+  async function loadActivity() {
+    const res = await api.aiActivity(50);
+    activity = res.ok ? { ok: true, items: activityRows(res.items) } : { ok: false, items: [] };
+  }
+
+  // A project's class is saved the moment it is chosen. What the page shows afterwards is what the server kept.
+  async function saveClass(root, value) {
+    const res = await api.setAiHelper({ projectClass: { [root]: value } });
+    if (res.ok) { apply(res); note('class', tt()('aih.pc.saved'), 'ok'); } else note('class', why(res), 'error');
+  }
 
   function resetDraft() {
-    const helper = data?.helper ?? {};
-    draft = {
-      provider: helper.enabled && helper.provider ? helper.provider : '',
-      model: helper.provider ? ownModel(helper.provider, helper.model) : '',
-      dailyUSD: String(helper.dailyUSD ?? 0.5),
-    };
+    draft = { dailyUSD: String(data?.others?.dailyUSD ?? 1) };
   }
 
   async function load() {
     const res = await api.aiHelpers();
     canEdit = res.status !== 401;
     if (res.ok) data = res;
-    else if (!data) data = { providers: [], keys: [], helper: { enabled: false }, status: {} };
+    else if (!data) data = { providers: [], keys: [], others: { enabled: false, dailyUSD: 1, off: [] }, status: {} };
     if (res.ok) resetDraft();
     return res;
   }
@@ -99,14 +174,27 @@ export function createAiHelpers(ctx) {
     else note(id, tt()('aih.testFail', { why: why(res) }), 'error');
   }
 
-  async function saveChoice() {
+  // A switch applies at once; the daily limit has its own Save.
+  async function switchProvider(id, on) {
+    const res = await api.setAiHelper({ provider: id, on });
+    if (res.ok) { apply(res); note(id, tt()(on ? 'aih.switchedOn' : 'aih.switchedOff'), 'ok'); } else note(id, why(res), 'error');
+  }
+
+  async function giveAnotherChance(id) {
+    const res = await api.setAiHelper({ provider: id, on: true });
+    if (res.ok) { apply(res); note(id, tt()('aih.resumed'), 'ok'); } else note(id, why(res), 'error');
+  }
+
+  async function switchAll(enabled) {
+    const res = await api.setAiHelper({ enabled });
+    if (res.ok) { apply(res); note('cap', tt()('aih.choiceSaved'), 'ok'); } else note('cap', why(res), 'error');
+  }
+
+  async function saveCap() {
     const cap = Number(draft.dailyUSD);
-    if (!Number.isFinite(cap) || cap < 0 || draft.dailyUSD === '') return note('choice', tt()('aih.capBad'), 'error');
-    const provider = draft.provider || data.helper.provider || data.providers[0]?.id;
-    // An empty model field is sent as '': the server drops an old pin and the usual model is used again.
-    const body = { dailyUSD: cap, helper: { provider, enabled: Boolean(draft.provider), ...(draft.provider ? { model: draft.model.trim() } : {}) } };
-    const res = await api.setAiHelper(body);
-    if (res.ok) { apply(res); note('choice', tt()('aih.choiceSaved'), 'ok'); } else note('choice', why(res), 'error');
+    if (!Number.isFinite(cap) || cap < 0 || draft.dailyUSD === '') return note('cap', tt()('aih.capBad'), 'error');
+    const res = await api.setAiHelper({ dailyUSD: cap });
+    if (res.ok) { apply(res); note('cap', tt()('aih.choiceSaved'), 'ok'); } else note('cap', why(res), 'error');
     return undefined;
   }
 
@@ -115,16 +203,33 @@ export function createAiHelpers(ctx) {
     return h('p', { class: `ah-note${n ? ` is-${n.tone}` : ''}`, role: 'status', 'aria-live': 'polite' }, n?.text ?? '');
   }
 
+  // DeepSeek's models (direct, or through OpenRouter, whose own router may pick one) only get public material: they
+  // never do the map's sorting, which is private (server/ai/router.mjs).
+  const publicOnly = (id, model) => id === 'deepseek' || /deepseek|^openrouter\//i.test(String(model ?? ''));
+
   function providerSection(p) {
     const t = tt();
     const saved = keyOf(p.id);
     const fieldId = `ahKey-${p.id}`;
     const field = h('input', { id: fieldId, type: 'password', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', disabled: !canEdit, placeholder: saved ? '' : t('aih.keyPlaceholder'), 'data-ah-key': p.id });
+    const st = stateOf(p.id);
+    const lang = ctx.lang();
+    const spentLine = [
+      st && (st.spentUSDToday > 0 || st.reviewed) ? t('aih.spent', { spent: usdText(st.spentUSDToday, lang) }) : null,
+      st?.reviewed ? t('aih.reviewed', { n: st.reviewed, m: st.agreed }) : null,
+    ].filter(Boolean).join(' · ');
+    const on = Boolean(saved) && !(data.others?.off ?? []).includes(p.id);
     return h('section', { class: 'al-section ah-provider', 'aria-labelledby': `ahName-${p.id}` },
       h('h3', { id: `ahName-${p.id}` }, p.name),
       h('p', { class: 'al-opt-hint' }, t(`aih.good.${p.id}`)),
       h('p', { class: 'ah-link' }, h('a', { href: p.keyUrl, target: '_blank', rel: 'noopener noreferrer' }, t('aih.getKey', { name: p.name }))),
       h('p', { class: 'ah-privacy' }, h('strong', {}, t('aih.privacy')), ' ', t(`aih.privacy.${p.id}`)),
+      h('div', { class: 'al-opt ah-switch' },
+        h('input', { type: 'checkbox', id: `ahOn-${p.id}`, 'data-ah-on': p.id, checked: on, disabled: !canEdit || !saved, onchange: async (e) => { await switchProvider(p.id, e.target.checked); render(`[data-ah-on="${p.id}"]`); } }),
+        h('label', { for: `ahOn-${p.id}` }, h('span', { class: 'al-opt-name' }, t('aih.on', { name: p.name })), h('span', { class: 'al-opt-hint' }, saved ? t(publicOnly(p.id, st?.model ?? p.defaultModel) ? 'aih.publicOnly' : 'aih.usesModel', { model: st?.model ?? p.defaultModel }) : t('aih.onNeedsKey')))),
+      st?.paused ? h('p', { class: 'dv-warning', role: 'status' }, `${t('aih.paused', { disagreed: st.pausedWhy?.disagreed ?? 0, of: st.pausedWhy?.of ?? 0 })} `,
+        h('button', { type: 'button', class: 'btn small-btn', 'data-ah-resume': p.id, disabled: !canEdit, onclick: async () => { await giveAnotherChance(p.id); render(`[data-ah-on="${p.id}"]`); } }, t('aih.resume'))) : null,
+      spentLine ? h('p', { class: 'al-opt-hint ah-today', 'data-ah-spent': p.id }, spentLine) : null,
       h('div', { class: 'dv-field ah-field' },
         h('label', { for: fieldId }, saved ? t('aih.keyReplace') : t('aih.keyLabel')),
         h('div', { class: 'ah-key-row' },
@@ -137,37 +242,71 @@ export function createAiHelpers(ctx) {
       noteLine(p.id));
   }
 
-  function choiceSection() {
+  // ONE limit for all the outside AIs together, and the switch that sends everything back to Claude.
+  function capSection() {
     const t = tt();
-    const options = [{ id: '', name: t('aih.claudeOnly'), hint: t('aih.claudeOnlyHint') },
-      ...data.providers.map((p) => ({ id: p.id, name: p.name, hint: keyOf(p.id) ? t(`aih.good.${p.id}`) : t('aih.needsKey'), off: !keyOf(p.id) }))];
-    const chosen = catalogOf(draft.provider);
-    const s = data.status?.helper;
-    const info = [];
-    if (s?.provider && (s.enabled || s.reviewed || s.spentUSDToday)) {
-      info.push(t('aih.today', { spent: usdText(s.spentUSDToday, ctx.lang()), cap: usdText(s.capUSD, ctx.lang()) }));
-      info.push(t('aih.reviewed', { n: s.reviewed, m: s.agreed }));
-    }
-    return h('section', { class: 'al-section ah-choice', 'aria-labelledby': 'ahChoice' },
-      h('h3', { id: 'ahChoice' }, t('aih.bulk')),
-      h('p', { class: 'al-opt-hint' }, t('aih.bulkHint')),
-      h('div', { class: 'ah-radios', role: 'radiogroup', 'aria-labelledby': 'ahChoice' }, options.map((o) => h('div', { class: 'al-opt' },
-        h('input', { type: 'radio', name: 'ahWho', id: `ahWho-${o.id || 'claude'}`, value: o.id, checked: draft.provider === o.id, disabled: !canEdit || o.off, onchange: () => { draft = { ...draft, provider: o.id, model: o.id && o.id === data.helper.provider ? ownModel(o.id, data.helper.model) : '' }; render('#ahModel'); } }),
-        h('label', { for: `ahWho-${o.id || 'claude'}` }, h('span', { class: 'al-opt-name' }, o.name), h('span', { class: 'al-opt-hint' }, o.hint))))),
-      draft.provider ? h('div', { class: 'dv-field ah-field' },
-        h('label', { for: 'ahModel' }, t('aih.model')),
-        h('input', { id: 'ahModel', type: 'text', value: draft.model, placeholder: chosen?.defaultModel ?? '', autocomplete: 'off', spellcheck: 'false', disabled: !canEdit, oninput: (e) => { draft = { ...draft, model: e.target.value }; } }),
-        h('span', { class: 'al-opt-hint' }, t('aih.modelHint', { model: chosen?.defaultModel ?? '' }))) : null,
-      chosen ? h('p', { class: 'ah-privacy' }, h('strong', {}, t('aih.choicePrivacy', { name: chosen.name })), ' ', t(`aih.privacy.${chosen.id}`)) : null,
+    const o = data.status?.others;
+    const cap = Number(draft.dailyUSD);
+    return h('section', { class: 'al-section ah-cap', 'aria-labelledby': 'ahCapTitle' },
+      h('h3', { id: 'ahCapTitle' }, t('aih.capTitle')),
+      h('div', { class: 'al-opt ah-switch' },
+        h('input', { type: 'checkbox', id: 'ahAll', 'data-ah-all': '1', checked: data.others?.enabled !== false, disabled: !canEdit, onchange: async (e) => { await switchAll(e.target.checked); render('#ahAll'); } }),
+        h('label', { for: 'ahAll' }, h('span', { class: 'al-opt-name' }, t('aih.master')), h('span', { class: 'al-opt-hint' }, t('aih.masterHint')))),
       h('div', { class: 'dv-field ah-field' },
         h('label', { for: 'ahCap' }, t('aih.cap')),
         h('input', { id: 'ahCap', type: 'number', min: '0', step: '0.05', inputmode: 'decimal', class: 'num', value: draft.dailyUSD, disabled: !canEdit, oninput: (e) => { draft = { ...draft, dailyUSD: e.target.value }; } }),
         h('span', { class: 'al-opt-hint' }, t('aih.capHint'))),
-      s?.paused ? h('p', { class: 'dv-warning', role: 'status' }, t('aih.paused', { disagreed: s.pausedWhy?.disagreed ?? 0, of: s.pausedWhy?.of ?? 0 })) : null,
-      s?.enabled && s.capReached ? h('p', { class: 'al-opt-hint' }, t('aih.capReached')) : null,
-      info.length ? h('p', { class: 'al-opt-hint ah-today' }, info.join(' · ')) : null,
-      h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-choice': '1', disabled: !canEdit, onclick: async () => { await saveChoice(); render('[data-ah-choice]'); } }, t('aih.saveChoice'))),
-      noteLine('choice'));
+      Number.isFinite(cap) && cap >= 50 ? h('p', { class: 'al-opt-hint' }, t('aih.capHigh')) : null,
+      o ? h('p', { class: 'al-opt-hint ah-today', 'data-ah-total': '1' }, t('aih.todayAll', { spent: usdText(o.spentUSDToday, ctx.lang()), cap: usdText(o.dailyUSD, ctx.lang()) })) : null,
+      o?.enabled && o.capReached ? h('p', { class: 'al-opt-hint' }, t('aih.capReached')) : null,
+      h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-cap': '1', disabled: !canEdit, onclick: async () => { await saveCap(); render('[data-ah-cap]'); } }, t('aih.saveCap'))),
+      noteLine('cap'));
+  }
+
+  function classesSection() {
+    const t = tt();
+    const projects = (typeof ctx.projects === 'function' ? ctx.projects() : []).filter((p) => p && typeof p.root === 'string' && p.root);
+    return h('section', { class: 'al-section ah-classes', 'data-ah-classes': '1', 'aria-labelledby': 'ahClassTitle' },
+      h('h3', { id: 'ahClassTitle' }, t('aih.pc.title')),
+      h('p', { class: 'al-opt-hint' }, t('aih.pc.lede')),
+      h('dl', { class: 'ah-class-help' }, PROJECT_CLASS_ORDER.flatMap((c) => [h('dt', {}, t(`aih.pc.${c}`)), h('dd', {}, t(`aih.pc.${c}.hint`))])),
+      projects.length ? h('div', { class: 'ah-class-list' }, projects.map((p) => {
+        const current = projectClassFor(data.projectClass, p.root);
+        const id = 'ahClass-' + String(p.id ?? p.root).replace(/[^\w-]/g, '');
+        return h('div', { class: 'dv-field ah-class-row' },
+          h('label', { for: id }, p.name ?? p.root),
+          h('select', { id, 'data-ah-class': p.root, disabled: !canEdit, onchange: async (e) => { await saveClass(p.root, e.target.value); render('#' + id); } },
+            PROJECT_CLASS_ORDER.map((c) => h('option', { value: c, selected: c === current }, t(`aih.pc.${c}`)))));
+      })) : h('p', { class: 'al-opt-hint', 'data-ah-noproject': '1' }, t('aih.pc.none')),
+      noteLine('class'));
+  }
+
+  function activityItem(r) {
+    const t = tt();
+    const lang = ctx.lang();
+    const failedKey = r.status === 'failed' && r.error ? whyKey(r.error, 0) : null;
+    const answered = r.status === 'accepted' || r.status === 'refused';
+    return h('li', { class: 'ah-act', 'data-ah-act': r.id, 'data-status': r.status },
+      h('div', { class: 'ah-act-head' },
+        h('strong', {}, providerName(r.provider)),
+        r.model ? h('span', { class: 'ah-act-model' }, r.model) : null,
+        h('span', { class: 'ah-act-when' }, whenText(r.at, lang, now()))),
+      h('p', { class: 'ah-act-what' }, [t(`aih.act.kind.${r.kind}`), t(`aih.act.sens.${r.sensitivity}`), t(`aih.act.by.${r.source}`), t('aih.act.cost', { cost: usdText(r.costUSD, lang) })].join(' · ')),
+      h('p', { class: 'ah-act-state' }, h('span', { class: 'ah-badge is-' + r.status }, t(`aih.act.status.${r.status}`))),
+      r.status === 'failed' ? h('p', { class: 'ah-act-why' }, t('aih.act.failedWhy', { why: failedKey ? t(failedKey) : t('aih.act.failedGeneric') })) : null,
+      answered && r.verdict ? h('p', { class: 'ah-act-why' }, t('aih.act.verdictLabel', { why: r.verdict })) : null,
+      r.pickedBecause ? h('p', { class: 'ah-act-why' }, t('aih.act.pickedBecause', { why: r.pickedBecause })) : null);
+  }
+
+  function activitySection() {
+    const t = tt();
+    return h('section', { class: 'al-section ah-activity', 'data-ah-activity': '1', 'aria-labelledby': 'ahActTitle' },
+      h('h3', { id: 'ahActTitle' }, t('aih.act.title')),
+      h('p', { class: 'al-opt-hint' }, t('aih.act.lede')),
+      !activity.ok ? h('p', { class: 'dv-warning', role: 'status' }, t('aih.act.loadFail'))
+        : activity.items.length ? h('ol', { class: 'ah-act-list' }, activity.items.map(activityItem))
+          : h('p', { class: 'al-opt-hint', 'data-ah-actempty': '1' }, t('aih.act.empty')),
+      h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-refresh': '1', onclick: async () => { await loadActivity(); render('[data-ah-refresh]'); } }, t('aih.act.refresh'))));
   }
 
   function render(focusSelector) {
@@ -175,12 +314,16 @@ export function createAiHelpers(ctx) {
     dialog.replaceChildren(...[
       h('h2', { id: 'aiHelpersTitle' }, t('aih.title')),
       h('p', { class: 'al-lede' }, t('aih.lede')),
+      h('p', { class: 'al-opt-hint' }, t('aih.ledeClaude')),
+      h('p', { class: 'al-opt-hint ah-chat-use' }, t('aih.chatUse')),
       h('p', { class: 'al-lede' }, t('aih.ledeCost')),
       h('p', { class: 'al-opt-hint ah-redact' }, t('aih.redact')),
       h('p', { class: 'al-opt-hint ah-redact' }, t('aih.sent')),
       canEdit ? null : h('p', { class: 'dv-warning' }, t('notify.needKey')),
       ...data.providers.map(providerSection),
-      choiceSection(),
+      capSection(),
+      classesSection(),
+      activitySection(),
       h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn primary', onclick: () => dialog.close() }, t('aih.close'))),
     ].filter(Boolean));
     if (focusSelector) dialog.querySelector(focusSelector)?.focus();
@@ -188,7 +331,7 @@ export function createAiHelpers(ctx) {
 
   async function open() {
     notes = {};
-    await load();
+    await Promise.all([load(), loadActivity()]);
     render();
     if (!dialog.open) dialog.showModal();
   }

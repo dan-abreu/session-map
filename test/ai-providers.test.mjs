@@ -149,7 +149,8 @@ test('runApiJSON gives up after timeoutMs', async () => {
   });
   const started = Date.now();
   const res = await runApiJSON('x', { provider: 'deepseek', key: 'sk-deepseekkey0123456789', fetchFn: hang, timeoutMs: 50 });
-  assert.deepEqual(res, { ok: false, error: 'timeout', provider: 'deepseek' });
+  assert.deepEqual({ ...res, costUSD: undefined }, { ok: false, error: 'timeout', provider: 'deepseek', costUSD: undefined });
+  assert.ok(res.costUSD > 0, 'the request left: booked at the estimate');
   assert.ok(Date.now() - started < 2000);
 });
 
@@ -168,4 +169,144 @@ test('the key never shows in a result or a log line, whatever goes wrong', async
     for (const line of lines) assert.ok(!line.includes(KEY), line);
     assert.ok(!JSON.stringify(result).includes('THISISTHESECRET'));
   }
+});
+
+test('runApiText returns the plain answer, redacted on the way out and capped in length, with the same failures as runApiJSON', async () => {
+  const { runApiText } = await import('../server/ai/providers.mjs');
+  const { fetchFn, calls } = fakeFetch(reply(chat('  Looks fine, but line 3 divides by zero.  ')));
+  const got = await runApiText(`Review this. token=${KEY}`, { provider: 'openai', model: 'gpt-6.1-sol', key: KEY, maxTokens: 2048, fetchFn });
+  assert.equal(got.ok, true);
+  assert.equal(got.text, 'Looks fine, but line 3 divides by zero.');
+  assert.equal(got.provider, 'openai');
+  assert.equal(got.model, 'gpt-6.1-sol');
+  assert.equal(got.costUSD, costOf('openai', 'gpt-6.1-sol', 1000, 100));
+  assert.ok(calls[0].body.max_completion_tokens >= 2048, 'the asked length, plus room for reasoning');
+  assert.equal(calls[0].body.messages[0].content.includes(KEY), false, 'the key is redacted before it leaves');
+  assert.equal(calls[0].body.messages[0].content.includes('Reply with one JSON'), false, 'plain text: no JSON instruction');
+
+  const empty = await runApiText('x', { provider: 'openai', key: KEY, fetchFn: fakeFetch(reply(chat('   '))).fetchFn });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.error, 'empty');
+  const http = await runApiText('x', { provider: 'openai', key: KEY, fetchFn: fakeFetch(reply('nope', { status: 401 })).fetchFn });
+  assert.deepEqual([http.ok, http.error], [false, 'http-401']);
+  assert.equal((await runApiText('x', { provider: 'nope', key: KEY })).error, 'unknown-provider');
+  assert.equal((await runApiText('x', { provider: 'openai' })).error, 'no-key');
+});
+
+test('maxTokens is clamped, and runApiJSON keeps its usual 1024 when none is given', async () => {
+  const { fetchFn, calls } = fakeFetch(reply(chat('{"ok": true}')));
+  await runApiJSON('x', { provider: 'openrouter', key: KEY, fetchFn });
+  await runApiJSON('x', { provider: 'openrouter', key: KEY, fetchFn, maxTokens: 1e9 });
+  await runApiJSON('x', { provider: 'openrouter', key: KEY, fetchFn, maxTokens: -5 });
+  assert.deepEqual(calls.map((c) => c.body.max_tokens), [1024, 8192, 1024]);
+});
+
+// Thinking models spend hidden reasoning out of the same token budget as the answer: with nothing set, DeepSeek and
+// Gemini 3.8 used it all and the answer came back empty (bench run 2026-10-10-21-43-44). Each model gets what it needs.
+async function bodyFor(provider, model, opts = {}) {
+  const { fetchFn, calls } = fakeFetch(reply(chat('{"ok": true}')));
+  const res = await runApiJSON('x', { provider, model, key: KEY, fetchFn, ...opts });
+  assert.equal(res.ok, true, `${provider}:${model}`);
+  return calls[0].body;
+}
+
+test('DeepSeek: thinking is turned off, so the whole budget goes to the answer', async () => {
+  for (const model of ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro']) {
+    const body = await bodyFor('deepseek', model);
+    assert.deepEqual(body.thinking, { type: 'disabled' }, model);
+    assert.equal(body.max_tokens, 1024, model);
+    assert.equal(body.temperature, 0, model);
+    assert.equal(body.reasoning_effort, undefined, model);
+  }
+  assert.equal((await bodyFor('deepseek', 'deepseek-some-new-model')).thinking, undefined, 'a model not in the catalog gets no field it may refuse');
+});
+
+test('Gemini 3: the lowest thinking level each model accepts, and room for it on top of the answer', async () => {
+  const lite = await bodyFor('gemini', 'gemini-3.1-flash-lite');
+  assert.equal(lite.reasoning_effort, 'minimal');
+  assert.equal((await bodyFor('gemini', 'gemini-3.5-flash-lite')).reasoning_effort, 'minimal');
+  // gemini-3.8-flash answers HTTP 400 to 'minimal' (checked 2026-10-10): 'low' is its lowest.
+  const flash = await bodyFor('gemini', 'gemini-3.8-flash');
+  assert.equal(flash.reasoning_effort, 'low');
+  assert.ok(flash.max_tokens > 1024, 'thinking cannot be turned off on Gemini 3: the answer keeps its 1024');
+  assert.equal(flash.temperature, 0);
+  assert.equal(flash.thinking, undefined);
+});
+
+test('OpenAI gpt-6: max_completion_tokens, the lowest reasoning each model accepts, and no temperature where only 1 is allowed', async () => {
+  const luna = await bodyFor('openai', 'gpt-6-luna');
+  assert.equal(luna.max_tokens, undefined, "OpenAI answers HTTP 400 to 'max_tokens'");
+  assert.equal(luna.max_completion_tokens, 1024);
+  assert.equal(luna.reasoning_effort, 'none');
+  assert.equal(luna.temperature, 0);
+  for (const model of ['gpt-6.1-sol', 'gpt-6-astra']) {
+    const body = await bodyFor('openai', model);
+    assert.equal(body.reasoning_effort, 'low', model);
+    assert.ok(!('temperature' in body), `${model} refuses temperature 0`);
+    assert.ok(body.max_completion_tokens > 1024, `${model} reasons a little: the answer keeps its 1024`);
+    assert.equal(body.max_tokens, undefined);
+  }
+  const typed = await bodyFor('openai', 'gpt-7-new', { maxTokens: 300 });
+  assert.equal(typed.max_completion_tokens, 300, 'any OpenAI model takes max_completion_tokens');
+  assert.equal(typed.reasoning_effort, undefined);
+});
+
+test('OpenRouter keeps its plain request, and the catalog page does not show the request fields', async () => {
+  const body = await bodyFor('openrouter', undefined);
+  assert.deepEqual(Object.keys(body).sort(), ['max_tokens', 'messages', 'model', 'provider', 'temperature', 'usage']);
+  for (const p of publicCatalog()) assert.equal(p.requestExtras, undefined, p.id);
+});
+
+test('an answer the length limit cut off is answer-cut, so callers can tell it from a reply without JSON', async () => {
+  const cut = (content) => fakeFetch(reply({ choices: [{ message: { role: 'assistant', content }, finish_reason: 'length' }], usage: { prompt_tokens: 100, completion_tokens: 1024 } })).fetchFn;
+  for (const content of ['', null, '{"code": "export function f(']) {
+    const res = await runApiJSON('x', { provider: 'deepseek', key: KEY, fetchFn: cut(content) });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, 'answer-cut', JSON.stringify(content));
+    assert.equal(res.costUSD, costOf('deepseek', 'deepseek-flash', 100, 1024), 'the cut answer was paid for');
+  }
+  const { runApiText } = await import('../server/ai/providers.mjs');
+  assert.equal((await runApiText('x', { provider: 'deepseek', key: KEY, fetchFn: cut('') })).error, 'answer-cut');
+  const stopped = fakeFetch(reply({ choices: [{ message: { content: 'no json' }, finish_reason: 'stop' }] })).fetchFn;
+  assert.equal((await runApiJSON('x', { provider: 'deepseek', key: KEY, fetchFn: stopped })).error, 'no-json', 'a finished reply without JSON stays no-json');
+});
+
+test('hidden thinking that only shows in total_tokens is billed as answer tokens', async () => {
+  // Gemini's OpenAI-style usage leaves thinking out of completion_tokens (seen 2026-10-10: 45 in, 11 out, 1054 total).
+  const { fetchFn } = fakeFetch(reply(chat('{"ok": true}', { prompt_tokens: 45, completion_tokens: 11, total_tokens: 1054 })));
+  const res = await runApiJSON('x', { provider: 'gemini', model: 'gemini-3.8-flash', key: KEY, fetchFn });
+  assert.equal(res.tokensOut, 1009);
+  assert.equal(res.costUSD, costOf('gemini', 'gemini-3.8-flash', 45, 1009));
+});
+
+test('estimateCostUSD is pessimistic: more tokens than the text has, and the full answer length', async () => {
+  const { estimateCostUSD } = await import('../server/ai/providers.mjs');
+  const prompt = 'x'.repeat(4000);
+  const est = estimateCostUSD('openai', 'gpt-6.1-sol', prompt, 1024);
+  assert.ok(est >= costOf('openai', 'gpt-6.1-sol', 1000, 1024), String(est));
+  assert.equal(estimateCostUSD('openai', 'gpt-6.1-sol', prompt), est, '1024 answer tokens by default');
+  assert.ok(estimateCostUSD('openrouter', 'some/unknown-model', 'x', 10) >= costOf('openrouter', 'some/unknown-model', 1, 10));
+});
+
+test('a call that left but whose cost is unknown is booked at the pessimistic estimate, never at $0', async () => {
+  const { estimateCostUSD, runApiText } = await import('../server/ai/providers.mjs');
+  const prompt = 'y'.repeat(30_000);
+  const est = estimateCostUSD('openai', 'gpt-6-astra', prompt, 2048);
+  assert.ok(est > 0.05, String(est));
+  const base = { provider: 'openai', model: 'gpt-6-astra', key: KEY, maxTokens: 2048 };
+  const hang = (url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  });
+  const timedOut = await runApiText(prompt, { ...base, fetchFn: hang, timeoutMs: 20 });
+  assert.equal(timedOut.error, 'timeout');
+  assert.equal(timedOut.costUSD, est, 'the request was sent: the provider may still bill it');
+  const noUsage = await runApiText(prompt, { ...base, fetchFn: fakeFetch(reply({ choices: [{ message: { content: 'fine' } }] })).fetchFn });
+  assert.equal(noUsage.ok, true);
+  assert.equal(noUsage.costUSD, est, 'a reply without token counts is not free');
+  const dropped = await runApiText(prompt, { ...base, fetchFn: async () => { throw new TypeError('fetch failed', { cause: { code: 'UND_ERR_SOCKET' } }); } });
+  assert.deepEqual([dropped.error, dropped.costUSD], ['network', est], 'the socket closed after sending');
+  const refused = await runApiText(prompt, { ...base, fetchFn: async () => { throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } }); } });
+  assert.deepEqual([refused.error, refused.costUSD ?? 0], ['network', 0], 'nothing left the PC');
+  const http = await runApiText(prompt, { ...base, fetchFn: fakeFetch(reply({}, { status: 401 })).fetchFn });
+  assert.equal(http.costUSD ?? 0, 0, 'refused before any answer was made');
 });

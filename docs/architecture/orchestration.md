@@ -40,7 +40,9 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 ### Senior conductor
 
-- [ ] **Think before delegating** `or04`
+- [ ] **in progress:** **Think before delegating** `or04`
+  - 2026-10-10, the owner: Claude is the conductor of one arsenal: Claude's models (Haiku, Sonnet, Opus, Fable) at each effort level and every outside AI with a key. It sizes each task by itself, picks the level and the worker, and decides where each AI fits, itself included. The Automatic and Maestro prompts (`server/chat/run.mjs`) get the whole arsenal, the routing rules and, at the start of each chat, which outside AIs are available today, their cap left and their measured results.
+  - Fable 5.1 is part of the arsenal: the top level for the hardest long autonomous work and the last word on critical deliveries (it leads the agent indexes; 2.5× Opus's price, so never the default). Today `MODELS` in `server/chat/run.mjs` has only haiku, sonnet and opus: Fable must be added there too (fixed mode and the subagent choices).
   - Understand the request, look at architecture and Flow, break it down and order it. Pick the model for the quality the task needs (the strongest without hesitating when it asks), ask for a second opinion from the reviewer, call nothing "done" without proof, explain each decision.
   - Learn from mistakes by kind of task: go up a model where the light one erred.
 - [ ] **Route by kind of task** `or05`
@@ -63,7 +65,14 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 ### Later (ideas, not committed)
 
-- [ ] **detail:** Arsenal: the conductor calls the right AI for each task `or11`
+- [ ] **in progress:** Every AI with a key at once, picked by the conductor, never by the owner `or14`
+  - The owner only pastes keys and sets one daily cap; a dispatcher picks the AI per task (kind, data sensitivity, cost, measured accuracy), spreads bulk work over all of them at once, sends reviews to another family, never sends client data to DeepSeek, and pauses an AI that errs too often. Asked on 2026-10-10 (`id22`).
+- [ ] **important:** Watch the outside AIs' versions `or15`
+  - Once a day, ask each provider for its model list and warn when a model in use disappears, is scheduled to retire or changes the version behind its name (e.g. `deepseek-flash`); re-run the bench on just that model under a small cap so the routing follows; re-check prices on a schedule (Gemini 3.8 Flash doubles on 2027-01-01). Asked on 2026-10-10 ("as API tem versao?") after OpenAI's gpt-6 models started refusing `max_tokens`.
+- [ ] **in progress · detail:** Arsenal: the conductor calls the right AI for each task `or11`
+  - First piece (2026-10-10): an "ask another AI" tool in every Claude Code conversation (an MCP server that goes through session-map, so keys, caps and costs stay in one place).
+  - The other AIs are Claude's subagents: Claude reads the task, decides, hands a piece to the right AI (it answers with a draft or a patch), checks it, runs the tests and only then accepts. Every handoff shows in session-map (which AI, what task, cost, accepted or refused).
+  - Later: other AIs working on their own in an isolated copy of the project (Codex CLI, Gemini CLI, Claude Code pointed at DeepSeek), after the text subagents prove themselves.
   - A studio where Claude is the conductor and calls the right AI for video, image, voice, bulk text and code, with the right repositories and skills already chosen; session-map is the panel: each business area, what is being done, by which AI, at what cost. The board in `or09` is its central piece.
   - Seeds that exist: the Discover tab, the architecture map, costs per chat. First natural piece: Discover for every AI plus "which AI for each task" (`mm18`, `mm19`).
   - Risks: platform competition, quality of cheap AIs, privacy (data going to other providers), safety of third-party tools. Next step agreed: a strategy talk after v0.2 (audience, first slice, how it earns, separate product or evolution).

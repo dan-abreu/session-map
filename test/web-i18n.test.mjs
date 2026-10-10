@@ -64,7 +64,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['auto', 'maestro', 'ultracode', 'fixed', 'settings'].flatMap((k) => [`run.way.${k}`, `run.why.${k}`, `run.hint.${k}`]),
     ...['direct', 'helpers', 'reinforced', 'ask-reinforce'].map((l) => `run.level.${l}`),
     ...['low', 'medium', 'high', 'xhigh', 'max'].flatMap((e) => [`run.effort.${e}`, `run.effortHint.${e}`]),
-    ...['haiku', 'sonnet', 'opus'].map((m) => `run.modelHint.${m}`),
+    ...['haiku', 'sonnet', 'opus', 'fable'].map((m) => `run.modelHint.${m}`),
     ...['bad-run', 'restarting', 'bad-limit', 'config-unreadable'].map((c) => `err.${c}`),
     ...['desktop', 'remote', 'claudeai'].map((o) => `convs.origin.${o}`),
     ...['pinned', 'today', 'yesterday', 'week', 'older'].map((g) => `convs.group.${g}`),

@@ -9,6 +9,7 @@ import { logAction, runAction } from './actions.mjs';
 import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
+import { createAskRoutes } from './ai/askroute.mjs';
 import { createHelperRoutes } from './ai/helperroute.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
@@ -119,17 +120,18 @@ async function serveFile(res, path) {
   res.end(body);
 }
 
-// helpers ({backend, apiRun}): the lock for the other AIs' keys and their call, replaceable for tests.
+// helpers ({backend, apiRun, textRun}): the lock for the other AIs' keys and their call, replaceable for tests; askAi ({ask}):
+// askOthers behind POST /api/ai/ask (tests).
 // collectFn, ai, catalog ({token, fetchFn, exec, bin}) and deliver (the desktop and phone alerts) are replaceable for tests;
 // addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
-  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {},
+  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
 } = {}) {
   let watcher = null;
-  const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({ smDir, dir, onAlert: (a) => watcher?.push([a]) });
+  const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({ smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]) });
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
   const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
   let ready = false;
@@ -333,7 +335,9 @@ export function createApp({
   }
 
   // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
-  const helperRoutes = demo || !smDir ? null : createHelperRoutes({ smDir, ai, ...helpers });
+  const helperRoutes = demo || !smDir ? null : createHelperRoutes({ smDir, ai, roots: async () => ((await quickState()).projects ?? []).map((p) => p.root), ...helpers });
+  // Claude asks the other AIs itself (or14): the page's cookie or the stdio tool's header token, loopback only.
+  const askRoutes = createAskRoutes({ smDir, demo, token, ai, ...helpers, ...askAi });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -577,6 +581,10 @@ export function createApp({
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
+    if (askRoutes.handles(path)) {
+      const r = await askRoutes.handle(req, url, addressOf(req));
+      return send(res, r.status, r.body, r.headers);
+    }
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
     throw new HttpError(404, 'not-found');
   }
@@ -592,7 +600,7 @@ export function createApp({
     } catch {
       return send(res, 400, 'bad request');
     }
-    const auth = authorize(req, url, { token, address: addressOf(req) });
+    const auth = askRoutes.authorizeHeader(req, url, addressOf(req)) ?? authorize(req, url, { token, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
     if (auth.status !== 200) return send(res, auth.status, auth.status === 401 ? 'token required' : 'forbidden');
     try {

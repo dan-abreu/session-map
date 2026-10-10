@@ -12,7 +12,7 @@ const HEADER_EVENTS = new Set(['session', 'mode', 'run']);
 // How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
 const DEFAULT_RUN = { kind: 'auto', selfReinforce: false };
 const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
-const MODELS = ['haiku', 'sonnet', 'opus'];
+const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const RUN_KINDS = new Set(['auto', ...WAYS]);
 const usd = (v) => `US$ ${v.toFixed(2)}`;

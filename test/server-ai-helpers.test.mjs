@@ -64,25 +64,31 @@ test('the demo never touches keys', async () => {
   });
 });
 
-test('reading gives the catalog, the keys set, the helper choice and its status, and no secret', async () => {
+
+test('reading gives the catalog, the keys set, the one cap and each AI\'s state, and no secret', async () => {
   await withServer({}, async ({ call }) => {
     const got = await call('GET', '/api/settings/ai-helpers', { auth: true });
     assert.equal(got.status, 200);
     assert.deepEqual(got.json.providers.map((p) => p.id).sort(), ['deepseek', 'gemini', 'openai', 'openrouter']);
     assert.deepEqual(got.json.keys, []);
-    assert.equal(got.json.helper.enabled, false);
-    assert.equal(got.json.helper.dailyUSD, 0.5);
-    assert.equal(got.json.status.helper.enabled, false);
+    assert.equal(got.json.others.enabled, false, 'with no key there is nothing to use');
+    assert.equal(got.json.others.dailyUSD, 1);
+    assert.deepEqual(got.json.others.off, []);
+    assert.equal('helper' in got.json, false, 'the single-helper choice is gone');
+    assert.equal(got.json.status.others.dailyUSD, 1);
+    assert.deepEqual(got.json.status.others.providers.map((p) => p.id).sort(), ['deepseek', 'gemini', 'openai', 'openrouter']);
     assert.equal(got.json.providers.some((p) => 'extraBody' in p), false);
   });
 });
 
-test('a saved key is answered, listed, logged and stored without its text', async () => {
+test('a saved key is answered, listed, logged and stored without its text, and switches the others on by itself', async () => {
   await withServer({}, async ({ call, smDir }) => {
     const saved = await post(call, { provider: 'openrouter', key: KEY });
     assert.equal(saved.status, 200);
     assert.equal(saved.json.keys[0].provider, 'openrouter');
     assert.equal(saved.json.keys[0].last4, KEY.slice(-4));
+    assert.equal(saved.json.others.enabled, true);
+    assert.equal(saved.json.status.others.providers.find((p) => p.id === 'openrouter').hasKey, true);
     const got = await call('GET', '/api/settings/ai-helpers', { auth: true });
     assert.equal(got.json.keys[0].last4, KEY.slice(-4));
     for (const r of [saved, got]) assert.equal(r.text.includes(KEY), false, 'the key is in a response');
@@ -102,63 +108,107 @@ test('a key that cannot be one is refused and nothing is stored', async () => {
   });
 });
 
-test('the helper choice goes to config.json next to what the person already wrote', async () => {
+test('switching an AI off and on, and the one cap, go to config.json in the new shape next to what the person wrote', async () => {
   const seed = (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: 5, ai: { maxCallsPerHour: 7 } }));
   await withServer({ seed }, async ({ call, smDir }) => {
     await post(call, { provider: 'deepseek', key: KEY });
-    const saved = await post(call, { helper: { provider: 'deepseek', model: 'deepseek-chat', enabled: true }, dailyUSD: 0.25 });
-    assert.equal(saved.status, 200);
+    const off = await post(call, { provider: 'deepseek', on: false });
+    assert.equal(off.status, 200);
+    assert.deepEqual(off.json.others.off, ['deepseek']);
+    assert.equal(off.json.status.others.providers.find((p) => p.id === 'deepseek').on, false);
+    const capped = await post(call, { dailyUSD: 0.25 });
+    assert.equal(capped.json.others.dailyUSD, 0.25);
+    assert.equal(capped.json.status.others.dailyUSD, 0.25);
     const config = JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8'));
     assert.equal(config.budget, 5);
     assert.equal(config.ai.maxCallsPerHour, 7);
-    assert.deepEqual(config.ai.helper, { provider: 'deepseek', model: 'deepseek-chat', enabled: true });
-    assert.equal(config.ai.helperDailyUSD, 0.25);
-    const got = await call('GET', '/api/settings/ai-helpers', { auth: true });
-    assert.equal(got.json.helper.enabled, true);
-    assert.equal(got.json.helper.provider, 'deepseek');
-    assert.equal(got.json.status.helper.capUSD, 0.25);
+    assert.deepEqual(config.ai.others.off, ['deepseek']);
+    assert.equal(config.ai.others.dailyUSD, 0.25);
+    assert.equal('helper' in config.ai || 'helperDailyUSD' in config.ai, false);
+    const on = await post(call, { provider: 'deepseek', on: true });
+    assert.deepEqual(on.json.others.off, []);
+    assert.equal(on.json.others.enabled, true);
   });
 });
 
-test('the helper cannot be turned on without a key, nor with a wrong choice', async () => {
+test('the old single-helper config is read as before and written away in the new shape on the first save', async () => {
+  const old = { ai: { maxCallsPerHour: 7, helper: { provider: 'openrouter', model: 'google/gemini-2.5-flash-lite', enabled: true }, helperDailyUSD: 0.25 } };
+  await withServer({ seed: (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify(old)) }, async ({ call, smDir }) => {
+    const got = await call('GET', '/api/settings/ai-helpers', { auth: true });
+    assert.equal(got.json.others.dailyUSD, 0.25);
+    assert.equal(got.json.others.enabled, true);
+    assert.deepEqual(got.json.others.models, {}, 'the old model is not carried over: the router picks per kind of work');
+    const saved = await post(call, { provider: 'gemini', on: false });
+    assert.equal(saved.status, 200);
+    const config = JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8'));
+    assert.equal('helper' in config.ai || 'helperDailyUSD' in config.ai, false);
+    assert.equal(config.ai.others.dailyUSD, 0.25);
+    assert.equal(config.ai.others.models, undefined);
+    assert.equal(config.ai.maxCallsPerHour, 7);
+  });
+});
+
+test('an AI cannot be switched on without a key, and wrong requests are refused', async () => {
   await withServer({}, async ({ call }) => {
-    assert.equal((await post(call, { helper: { provider: 'openrouter', enabled: true } })).status, 409);
-    assert.equal((await post(call, { helper: { provider: 'nope', enabled: false } })).status, 400);
-    assert.equal((await post(call, { helper: { provider: 'openrouter', enabled: 'yes' } })).status, 400);
-    assert.equal((await post(call, { helper: { provider: 'openrouter', model: 'x'.repeat(200), enabled: false } })).status, 400);
-    assert.equal((await post(call, { helper: { provider: 'openrouter', model: 'a b;c', enabled: false } })).status, 400);
+    assert.equal((await post(call, { provider: 'openrouter', on: true })).status, 409);
+    assert.equal((await post(call, { provider: 'nope', on: false })).status, 400);
+    assert.equal((await post(call, { provider: 'openrouter', on: 'yes' })).status, 400);
+    assert.equal((await post(call, { enabled: 'yes' })).status, 400);
     assert.equal((await post(call, { dailyUSD: -1 })).status, 400);
     assert.equal((await post(call, { dailyUSD: 'a lot' })).status, 400);
     assert.equal((await post(call, { dailyUSD: 1e9 })).status, 400);
+    assert.equal((await post(call, { helper: { provider: 'openrouter', enabled: true } })).status, 400, 'the old single choice is gone');
     assert.equal((await post(call, {})).status, 400);
   });
 });
 
-test('removing the key of the helper in use switches the helper off', async () => {
+test('the master switch sends everything back to Claude and back', async () => {
+  await withServer({}, async ({ call }) => {
+    await post(call, { provider: 'openrouter', key: KEY });
+    const off = await post(call, { enabled: false });
+    assert.equal(off.json.others.enabled, false);
+    assert.equal(off.json.status.others.enabled, false);
+    assert.equal((await post(call, { enabled: true })).json.others.enabled, true);
+  });
+});
+
+test('removing a key keeps the switch as it was, and the AI is left out of the choosing', async () => {
   await withServer({}, async ({ call }) => {
     await post(call, { provider: 'gemini', key: KEY });
-    await post(call, { helper: { provider: 'gemini', enabled: true } });
     const gone = await call('DELETE', '/api/settings/ai-helpers?provider=gemini', { auth: true });
     assert.equal(gone.status, 200);
     assert.deepEqual(gone.json.keys, []);
-    assert.equal(gone.json.helper.enabled, false);
+    assert.equal(gone.json.status.others.providers.find((p) => p.id === 'gemini').hasKey, false);
     assert.equal((await call('DELETE', '/api/settings/ai-helpers?provider=nope', { auth: true })).status, 400);
   });
 });
 
-test('turning a paused helper back on clears its pause', async () => {
-  const seed = (smDir) => {
-    const helper = emptyHelperState();
-    for (let i = 0; i < 12; i++) recordReview(helper, 'openrouter', 'place', i % 2 === 0, '2026-10-10T10:00:00Z');
-    writeFileSync(join(smDir, 'ai-cache.json'), JSON.stringify({ helper }));
-  };
-  await withServer({ seed }, async ({ call }) => {
-    await post(call, { provider: 'openrouter', key: KEY, helper: { provider: 'openrouter', enabled: false } });
+const pausedSeed = (config) => (smDir) => {
+  const helper = emptyHelperState();
+  for (let i = 0; i < 12; i++) recordReview(helper, 'openrouter', 'place', i % 2 === 0, '2026-10-10T10:00:00Z');
+  writeFileSync(join(smDir, 'ai-cache.json'), JSON.stringify({ helper }));
+  if (config) writeFileSync(join(smDir, 'config.json'), JSON.stringify(config));
+};
+
+test('pressing "on" again gives a paused AI another chance, as the page says', async () => {
+  await withServer({ seed: pausedSeed({ ai: { others: { dailyUSD: 1 } } }) }, async ({ call }) => {
+    await post(call, { provider: 'openrouter', key: KEY });
+    const row = (r) => r.json.status.others.providers.find((p) => p.id === 'openrouter');
     const before = await call('GET', '/api/settings/ai-helpers', { auth: true });
-    assert.equal(before.json.status.helper.paused, true);
-    const on = await post(call, { helper: { provider: 'openrouter', enabled: true } });
-    assert.equal(on.status, 200);
-    assert.equal(on.json.status.helper.paused, false);
+    assert.equal(row(before).paused, true);
+    assert.equal(row(before).pausedWhy.kind, 'place');
+    const again = await post(call, { provider: 'openrouter', on: true });
+    assert.equal(again.status, 200);
+    assert.equal(row(again).paused, false);
+  });
+});
+
+test('switching an AI off and on clears an old pause too', async () => {
+  await withServer({ seed: pausedSeed() }, async ({ call }) => {
+    await post(call, { provider: 'openrouter', key: KEY });
+    await post(call, { provider: 'openrouter', on: false });
+    const on = await post(call, { provider: 'openrouter', on: true });
+    assert.equal(on.json.status.others.providers.find((p) => p.id === 'openrouter').paused, false);
   });
 });
 
@@ -199,48 +249,36 @@ test('tests are limited to a few per minute', async () => {
   });
 });
 
-const pausedSeed = (config) => (smDir) => {
-  const helper = emptyHelperState();
-  for (let i = 0; i < 12; i++) recordReview(helper, 'openrouter', 'place', i % 2 === 0, '2026-10-10T10:00:00Z');
-  writeFileSync(join(smDir, 'ai-cache.json'), JSON.stringify({ helper }));
-  writeFileSync(join(smDir, 'config.json'), JSON.stringify(config));
-};
-
-test('saving the choice again un-pauses a helper that is already on, as the page says', async () => {
-  await withServer({ seed: pausedSeed({ ai: { helper: { provider: 'openrouter', enabled: true } } }) }, async ({ call }) => {
-    await post(call, { provider: 'openrouter', key: KEY });
-    assert.equal((await call('GET', '/api/settings/ai-helpers', { auth: true })).json.status.helper.paused, true);
-    const again = await post(call, { dailyUSD: 0.5, helper: { provider: 'openrouter', model: '', enabled: true } });
-    assert.equal(again.status, 200);
-    assert.equal(again.json.status.helper.paused, false);
-  });
-});
-
-test('an empty model field drops a pinned model, so the usual one is used again', async () => {
-  await withServer({ seed: (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { helper: { provider: 'openrouter', model: 'google/gemini-2.5-flash-lite', enabled: true } } })) }, async ({ call, smDir }) => {
-    await post(call, { provider: 'openrouter', key: KEY });
-    const kept = await post(call, { dailyUSD: 0.5, helper: { provider: 'openrouter', enabled: true } });
-    assert.equal(kept.json.helper.model, 'google/gemini-2.5-flash-lite', 'a caller that sends no model keeps the pin');
-    const cleared = await post(call, { dailyUSD: 0.5, helper: { provider: 'openrouter', model: '', enabled: true } });
-    assert.equal(cleared.status, 200);
-    assert.equal(cleared.json.helper.model, 'deepseek/deepseek-v4.1-flash');
-    assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8')).ai.helper, { provider: 'openrouter', enabled: true });
-  });
-});
-
-test('a test call is booked in the spend of the day, uses the chosen model and stops at the daily cap', async () => {
-  await withServer({ seed: (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { helper: { provider: 'openrouter', model: 'google/gemini-2.5-flash-lite', enabled: true }, helperDailyUSD: 0.00003 } })) }, async ({ call, calls }) => {
+test('a test call is booked in the spend of the day, uses the model in use and stops at the one daily cap', async () => {
+  const config = { ai: { others: { dailyUSD: 0.00006, models: { openrouter: 'google/gemini-2.5-flash-lite' } } } };
+  await withServer({ seed: (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify(config)) }, async ({ call, calls }) => {
     await post(call, { provider: 'openrouter', key: KEY });
     const first = await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'openrouter' } });
     assert.equal(first.status, 200);
     assert.equal(calls[0].model, 'google/gemini-2.5-flash-lite');
     const got = await call('GET', '/api/settings/ai-helpers', { auth: true });
     assert.equal(got.json.status.spentByProviderToday.openrouter, 0.00002);
-    assert.equal(got.json.status.helper.spentUSDToday, 0.00002);
+    const row = got.json.status.others.providers.find((p) => p.id === 'openrouter');
+    assert.equal(row.spentUSDToday, 0.00002);
+    assert.equal(row.calls, 1);
+    assert.equal(got.json.status.others.spentUSDToday, 0.00002);
     assert.equal((await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'openrouter' } })).status, 200);
     const over = await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'openrouter' } });
     assert.equal(over.status, 429);
     assert.deepEqual(over.json, { ok: false, error: 'cap-reached' });
     assert.equal(calls.length, 2, 'no call goes out over the cap');
+  });
+});
+
+test('the cap is for all the AIs together: what one spent leaves less for the test of another', async () => {
+  const config = { ai: { others: { dailyUSD: 0.00006, models: { openrouter: 'google/gemini-2.5-flash-lite' } } } };
+  await withServer({ seed: (smDir) => writeFileSync(join(smDir, 'config.json'), JSON.stringify(config)) }, async ({ call, calls }) => {
+    await post(call, { provider: 'openrouter', key: KEY });
+    await post(call, { provider: 'deepseek', key: KEY });
+    await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'openrouter' } });
+    await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'openrouter' } });
+    const other = await call('POST', '/api/settings/ai-helpers/test', { auth: true, body: { provider: 'deepseek' } });
+    assert.equal(other.status, 429, 'deepseek is stopped by what openrouter spent');
+    assert.equal(calls.length, 2);
   });
 });
