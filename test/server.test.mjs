@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/main.mjs';
 import { loadToken, sameToken } from '../server/auth.mjs';
-import { archiveTranscript } from '../server/archive.mjs';
+import { archiveTranscript, archivedPath } from '../server/archive.mjs';
 import { listTranscripts } from '../server/sources/claude.mjs';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
@@ -293,6 +293,25 @@ test('an archived conversation reads with every step, like the chat screen (mm22
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('a conversation removed from session-map (mm43) leaves the history and cannot be read there; its archive copy stays', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-srv-rm-'));
+  const dir = join(root, 'claude');
+  const smDir = join(root, 'sm');
+  cpSync(new URL('./fixtures/claude/', import.meta.url), dir, { recursive: true });
+  const S1 = '11111111-1111-4111-8111-111111111111';
+  assert.equal(archiveTranscript(listTranscripts(dir).find((r) => r.sessionId === S1), smDir), 'archived');
+  writeFileSync(join(smDir, 'removed.json'), JSON.stringify([S1]));
+  try {
+    await withServer({ dir, smDir }, async ({ call }) => {
+      const cookie = { cookie: `sm_token=${loadToken(smDir)}` };
+      const history = await call('GET', '/api/history?q=checkout');
+      assert.ok(!JSON.parse(history.text).results.some((r) => r.sessionId === S1));
+      assert.equal((await call('GET', `/api/conversation/${S1}`, { headers: cookie })).status, 404);
+      assert.ok(existsSync(archivedPath(smDir, S1)), 'the archive copy is not erased');
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('an image of an archived conversation is served only with the token, and only as an image (mm22)', async () => {
   const root = mkdtempSync(join(tmpdir(), 'sm-srv-img-'));
   const dir = join(root, 'claude');
@@ -310,6 +329,32 @@ test('an image of an archived conversation is served only with the token, and on
       assert.equal(ok.status, 200);
       assert.equal(ok.headers['content-type'], 'image/png');
       assert.equal((await call('GET', `/api/conversation/${S9}/image/1`, { headers: cookie })).status, 404);
+      // Removed from session-map (mm43): its images go with it, though the archive copy stays.
+      writeFileSync(join(smDir, 'removed.json'), JSON.stringify([S9]));
+      assert.equal((await call('GET', `/api/conversation/${S9}/image/0`, { headers: cookie })).status, 404);
+      assert.ok(existsSync(archivedPath(smDir, S9)));
     });
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('delete from session-map (mm43) needs the token like every write, and hands the hub\'s running conversations to the action and to collect', async () => {
+  const ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const DRIVEN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const row = (sessionId) => ({ sessionId, status: 'closed', live: false, archived: false, updatedAt: '2026-10-09T10:00:00.000Z' });
+  const seen = [];
+  const collectFn = (opts) => {
+    seen.push(opts.driving);
+    return { generatedAt: new Date().toISOString(), waitingCount: 0, projects: [{ id: 'shop-abc123', name: 'shop', root: '/work/shop', workCells: [], chats: [row(ID), row(DRIVEN)], conversations: [] }] };
+  };
+  const chat = { drivingIds: () => new Set([DRIVEN]) };
+  await withServer({ collectFn, chat, stateTtlMs: 0 }, async ({ call, token, port, smDir }) => {
+    const write = { 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' };
+    assert.equal((await call('POST', '/api/action', { headers: write, body: { action: 'delete', sessionId: ID } })).status, 401);
+    const good = { ...write, cookie: `sm_token=${token}` };
+    assert.equal((await call('POST', '/api/action', { headers: good, body: { action: 'delete', sessionId: ID } })).status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'removed.json'), 'utf8')), [ID]);
+    const busy = await call('POST', '/api/action', { headers: good, body: { action: 'delete', sessionId: DRIVEN } });
+    assert.equal(busy.status, 409, 'the hub runs it now');
+    assert.ok(seen.length > 0 && seen.every((d) => d instanceof Set && d.has(DRIVEN)));
+  });
 });

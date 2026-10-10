@@ -75,8 +75,9 @@ const mtimeIso = (root, rel) => {
 };
 
 // built: [{project, key, ownersOf, commits}] from collect; groups: [{root, items}]. Hangs project.fresh on each project
-// and keeps the rows in the state's internals under `changes`.
-export async function attachChanges({ dir, smDir, now, windowMs, liveById }, built, groups) {
+// and keeps the rows in the state's internals under `changes`. removed: the ids removed from session-map (mm43), whose
+// changes still show, as made outside a conversation.
+export async function attachChanges({ dir, smDir, now, windowMs, liveById, removed = new Set() }, built, groups) {
   const nowMs = now.getTime();
   const byKey = new Map(built.map((b) => [b.key, b]));
   const titles = new Map(built.flatMap((b) => (b.project.conversations ?? []).map((r) => [r.sessionId, r.title])));
@@ -86,6 +87,7 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById }, bui
   const newestFirst = groups.flatMap((g) => g.items.map((item) => ({ g, item }))).sort((x, y) => y.item.ref.mtimeMs - x.item.ref.mtimeMs);
   for (const { g, item } of newestFirst) {
     const s = item.summary;
+    const unnamed = removed.has(s.sessionId);
     const place = placer({ root: g.root, cwd: s.cwd, skip: [dir, smDir] });
     const sources = [{ file: item.ref.path, agent: null }, ...agentsOf(item, liveById.has(s.sessionId)).map((a) => ({ file: a.file, agent: a }))];
     for (const src of sources) {
@@ -98,8 +100,8 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById }, bui
         const from = change.from ? place(change.from) : null;
         events.get(key).push({
           id, ts: change.ts, kind: change.kind, path: hit.rel, ...(from ? { from: from.rel } : {}), added: change.added, removed: change.removed,
-          sessionId: s.sessionId, title: titles.get(s.sessionId) ?? s.title ?? '', model: change.model,
-          agent: src.agent ? agentOf(src.agent, change, item) : null,
+          sessionId: unnamed ? null : s.sessionId, title: unnamed ? null : titles.get(s.sessionId) ?? s.title ?? '', model: change.model,
+          agent: src.agent && !unnamed ? agentOf(src.agent, change, item) : null,
         });
         refs.get(key).set(id, { file: src.file, change });
       }

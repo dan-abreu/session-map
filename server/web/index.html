@@ -134,6 +134,7 @@
           <button type="button" data-scope="project" aria-pressed="true" data-i18n="convs.scope.project"></button>
           <button type="button" data-scope="all" aria-pressed="false" data-i18n="convs.scope.all"></button>
         </div>
+        <div class="cv-states" id="convsStates" role="group" data-i18n-aria="convs.states"></div>
       </div>
       <div class="cv-filter" id="convsFilter" hidden></div>
       <div class="cv-list" id="convsList" data-i18n-aria="convs.label" role="region"><div class="skeleton" aria-hidden="true"><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span></div></div>
@@ -439,6 +440,7 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <section class="cut" id="cutPanel" aria-labelledby="cutTitle" hidden></section>
   <ol id="alertStack" class="al-stack" aria-live="polite" data-i18n-aria="notify.stack"></ol>
   <dialog id="alertsDialog" class="dv-dialog al-dialog" aria-labelledby="alertsTitle"></dialog>
   <dialog id="aiHelpersDialog" class="dv-dialog al-dialog ah-dialog" aria-labelledby="aiHelpersTitle"></dialog>

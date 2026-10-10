@@ -20,6 +20,7 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/snapshots.mjs`
 - `server/workflows.mjs`
 - `server/store.mjs`
+- `server/hidden.mjs`
 
 ## Rules that must not break
 

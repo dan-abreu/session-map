@@ -24,6 +24,7 @@ import { collect, topLevelOf } from './collect.mjs';
 import { fileOwners } from './arch/fileowners.mjs';
 import { loadConfig } from './config.mjs';
 import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
+import { readRemoved } from './hidden.mjs';
 import { createFoundationRoute } from './foundation/http/index.mjs';
 import { refreshFoundation } from './foundation/refresh.mjs';
 import { linksOf } from './imports.mjs';
@@ -129,7 +130,7 @@ export function createApp({
     if (!cached || (cached.done && Date.now() - cached.at >= stateTtlMs)) {
       const promise = demo
         ? readFile(DEMO_STATE, 'utf8').then(JSON.parse)
-        : Promise.resolve(collectFn({ dir, smDir, ...(ai ? { ai } : {}) }));
+        : Promise.resolve(collectFn({ dir, smDir, driving: chat?.drivingIds?.() ?? new Set(), ...(ai ? { ai } : {}) }));
       const entry = { at: Date.now(), promise, done: false };
       cached = entry;
       promise.then((s) => {
@@ -462,7 +463,9 @@ export function createApp({
     // The demo is for screenshots: the real archive stays out of it.
     if (req.method === 'GET' && path === '/api/history') {
       if (demo) return send(res, 200, { results: [] });
-      const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir));
+      // One removed from session-map (mm43) leaves the history too; its archive copy stays until "Delete from history".
+      const removed = readRemoved(smDir);
+      const entries = readIndex(smDir).filter((e) => !isAiRunnerCwd(e.cwd, smDir) && !removed.has(e.sessionId));
       const ms = (name) => { const n = Number(url.searchParams.get(name)); return url.searchParams.get(name) && Number.isFinite(n) ? n : undefined; };
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20, from: ms('from'), to: ms('to') }) });
     }
@@ -478,7 +481,7 @@ export function createApp({
       if (demo) throw new HttpError(404, 'unknown-session');
       // With every step's input and output (files it read, commands it ran) it is as sensitive as the chat: token only.
       if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
-      const entry = readIndex(smDir).find((e) => e.sessionId === id);
+      const entry = readRemoved(smDir).has(id) ? null : readIndex(smDir).find((e) => e.sessionId === id);
       const messages = entry && !isAiRunnerCwd(entry.cwd, smDir) ? readArchived(smDir, id) : [];
       if (!messages.length) throw new HttpError(404, 'unknown-session');
       const { items, costUSD } = readConversation(archivedPath(smDir, id), { cwd: entry.cwd ?? '' });
@@ -488,7 +491,8 @@ export function createApp({
     if (req.method === 'GET' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'image' && parts.length === 6) {
       if (demo) throw new HttpError(404, 'not-found');
       if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
-      const file = UUID_RE.test(parts[3]) ? archivedPath(smDir, parts[3]) : null;
+      // One removed from session-map (mm43) shows nowhere, its images neither.
+      const file = UUID_RE.test(parts[3]) && !readRemoved(smDir).has(parts[3]) ? archivedPath(smDir, parts[3]) : null;
       const found = file && /^\d{1,6}$/.test(parts[5]) ? readImage(file, Number(parts[5])) : null;
       if (!found || !IMAGE_TYPES.has(found.media)) throw new HttpError(404, 'not-found');
       res.writeHead(200, { 'content-type': found.media, 'cache-control': 'private, max-age=86400' });
@@ -504,7 +508,7 @@ export function createApp({
     }
     if (req.method === 'POST' && path === '/api/action') {
       if (demo) throw new HttpError(403, 'demo');
-      const result = await runAction(await readBody(req), { state: await state(), dir, smDir, exec: catalog.exec, bin: catalog.bin });
+      const result = await runAction(await readBody(req), { state: await state(), dir, smDir, driving: chat?.drivingIds?.() ?? new Set(), exec: catalog.exec, bin: catalog.bin });
       fresh();
       return send(res, result.status, result.body);
     }

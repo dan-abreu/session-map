@@ -22,6 +22,7 @@ import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWord
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
 import { createAiHelpers } from './aihelpers.js';
+import { createCutPanel } from './cutoff.js';
 import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
@@ -192,8 +193,9 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-// A real <dialog> for the irreversible actions (Stop a conversation, Delete from history).
-function confirmAction(text, label) {
+// A real <dialog> for the irreversible actions (Stop a conversation, Delete from history). focus 'cancel': it opens on
+// Cancel, for an action the page cannot undo (Delete from session-map), so a stray Enter does not confirm it.
+function confirmAction(text, label, { focus } = {}) {
   const dialog = $('#confirmDialog');
   return new Promise((resolve) => {
     const done = (value) => () => { dialog.close(); resolve(value); };
@@ -204,7 +206,7 @@ function confirmAction(text, label) {
         h('button', { type: 'button', class: 'btn danger', onclick: done(true) }, label))));
     dialog.addEventListener('cancel', () => resolve(false), { once: true });
     dialog.showModal();
-    dialog.querySelector('.danger').focus();
+    dialog.querySelector(focus === 'cancel' ? '.btn:not(.danger)' : '.danger').focus();
   });
 }
 
@@ -557,6 +559,7 @@ function renderNow() {
   now.render(jobs);
   if (project) picker.update(state.projects.map((p) => ({ id: p.id, name: p.name, hue: projectHue(p) })), project.id, jobBadges(jobs));
   alerts.refreshTitle();
+  cutPanel?.render(state);
 }
 
 function goTo(projectId, sel) {
@@ -683,7 +686,7 @@ function showOnMap(entry) {
 // From the Live panel or a card of the Now strip (same shape: project and chat).
 function openFromLive(entry) {
   const out = listConversations(state, { projectId: entry.project.id, showArchived: true });
-  const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === entry.chat.sessionId);
+  const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === entry.chat.sessionId);
   if (hit) openConversation(hit);
   else goTo(entry.project.id, { type: 'chat', id: entry.chat.sessionId });
 }
@@ -737,6 +740,15 @@ async function runAction(body, okText) {
   if (okText) toast(okText);
   poll();
   return true;
+}
+
+// Delete (mm43) takes a conversation out of session-map only: the server never touches Claude Code's own file for it. Always asks first.
+async function deleteConversation(row) {
+  if (row.status === 'busy') return toast(errorText('busy'));
+  if (!(await confirmAction(t('action.deleteConfirm', { title: row.title || t('chat.untitled') }), t('action.delete'), { focus: 'cancel' }))) return false;
+  const ok = await runAction({ action: 'delete', sessionId: row.sessionId }, t('action.deleted'));
+  if (ok && chat.isOpen() && chat.current() === row.sessionId) chat.close();
+  return ok;
 }
 
 // Files of a part or a branch, with the buttons that take them out of the page: a terminal here and the phone's VS Code.
@@ -929,6 +941,7 @@ function chatMore(sessionId) {
     return [
       { label: t('chat.moreRename'), icon: 'rename', run: () => openPlace({ row, project: p }) },
       { label: t(`action.${archive}`), icon: 'archive', run: () => runAction({ action: archive, sessionId }, t(`action.${archive}d`)) },
+      { label: t('action.delete'), icon: 'trash', run: () => deleteConversation(row) },
       vscode || !row.live ? {
         label: vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: vscode ? 'code' : 'terminal',
         run: () => runAction({ action: 'open', sessionId }, t(vscode ? 'action.openedVscode' : 'action.openedTerminal')),
@@ -961,6 +974,8 @@ function openPlace({ row, project: home }) {
   const dialog = $('#placeDialog');
   const owned = row.partSource === 'owner';
   const startPart = owned ? (row.partId ?? NO_PART) : AUTO_PART;
+  const archive = row.archived ? 'unarchive' : 'archive';
+  const busy = row.status === 'busy';
   const nameInput = h('input', { type: 'text', id: 'placeName', value: row.title ?? '', maxlength: '120', autocomplete: 'off', 'aria-describedby': 'placeNameHint' });
   const projectSelect = h('select', { id: 'placeProject' }, state.projects.map((p) => h('option', { value: p.id, selected: p.id === home.id }, p.name)));
   const partSelect = h('select', { id: 'placePart' });
@@ -999,6 +1014,12 @@ function openPlace({ row, project: home }) {
       h('div', { class: 'pl-field' }, h('label', { for: 'placePart' }, t('place.part')), h('span', { class: 'pl-select' }, partSelect, icon('chevron', 'select-chevron')), noMap)),
     h('p', { class: 'note pl-learns' }, t('place.learns')),
     h('div', { class: 'actions' },
+      h('span', { class: 'pl-left' },
+        h('button', { type: 'button', class: 'btn', onclick: async () => { if (await runAction({ action: archive, sessionId: row.sessionId }, t(`action.${archive}d`))) dialog.close(); } }, icon('archive', 'btn-icon'), t(`action.${archive}`)),
+        h('button', {
+          type: 'button', class: 'btn danger-quiet', disabled: busy, title: busy ? t('err.busy') : null,
+          onclick: async () => { if (await deleteConversation(row)) dialog.close(); },
+        }, icon('trash', 'btn-icon'), t('action.delete'))),
       h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, t('confirm.cancel')),
       h('button', { type: 'submit', class: 'btn primary' }, t('place.save')))));
   dialog.showModal();
@@ -1177,7 +1198,7 @@ function itemDetails(node) {
 // The chats about the whole project, newest first, as the list shows them (so a click opens them the same way).
 function projectChatEntries() {
   const out = listConversations(state, { projectId: project.id });
-  return [...out.working, ...out.waiting, ...out.recent].filter((e) => e.row.node?.kind === 'project')
+  return [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].filter((e) => e.row.node?.kind === 'project')
     .sort((a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.row.updatedAt ?? '')));
 }
 
@@ -1913,6 +1934,7 @@ let convs = null;
 let live = null;
 let alerts = null;
 let aiHelpers = null;
+let cutPanel = null;
 let now = null;
 let picker = null;
 
@@ -1926,7 +1948,7 @@ function openFromAlert(group) {
   if (group.kind === 'clash') return openWaiting();
   if (group.alerts.length !== 1 || !first.sessionId) return undefined;
   const out = listConversations(state, { projectId: target.id, scope: 'all', showArchived: true });
-  const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === first.sessionId);
+  const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === first.sessionId);
   return hit ? openConversation(hit) : toast(t('alert.notFound'));
 }
 
@@ -1994,6 +2016,17 @@ function wire() {
     // A visitor (mm24) is moved and renamed from the project it was born in.
     onMove: (e) => openPlace({ ...e, project: e.home ?? e.project }),
     onFilter: () => renderMap(),
+  });
+  cutPanel = createCutPanel({
+    root: $('#cutPanel'), h, t: (key, vars) => t(key, vars), icon, relative, phone: PHONE, toast, errorText,
+    // Resumes it as a page conversation in its own folder; the server refuses a second run of the same one.
+    onContinue: ({ row, project: p }) => api.chatStart({ projectId: p.id, sessionId: row.sessionId, text: t('cut.continueText'), cut: true }).then((res) => { setTimeout(poll, 1500); return res; }),
+    onDismiss: ({ row }) => runAction({ action: 'dismiss-cut', sessionId: row.sessionId }, t('cut.dismissed')),
+    onOpen: ({ row, project: p }) => {
+      const out = listConversations(state, { projectId: p.id, showArchived: true });
+      const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === row.sessionId);
+      if (hit) openConversation(hit);
+    },
   });
   now = createNowStrip({
     root: $('#now'), line: $('#nowLine'), counts: $('#nowCounts'), cards: $('#nowCards'), h, t: () => t, icon, relative, list: listText, phone: PHONE, store,
@@ -2154,7 +2187,7 @@ function applyDeepLink() {
   const conv = params.get('conv');
   if (conv) {
     const out = listConversations(state, { projectId: project.id, scope: 'all', showArchived: true });
-    const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === conv);
+    const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === conv);
     if (hit) setTimeout(() => openConversation(hit), 80);
   }
   if (params.get('convfilter')) setTimeout(() => convs.filterTo(params.get('convfilter')), 60);
@@ -2165,7 +2198,7 @@ function applyDeepLink() {
   const placeId = params.get('place');
   if (placeId) {
     const out = listConversations(state, { projectId: project.id, scope: 'all', showArchived: true });
-    const hit = [...out.working, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === placeId);
+    const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === placeId);
     if (hit) setTimeout(() => openPlace(hit), 120);
   }
   if (params.get('picker') === '1') setTimeout(() => $('#project').click(), 120);

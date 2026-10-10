@@ -23,7 +23,8 @@ import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
 import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
-import { listLiveSessions, listTranscripts, readHelperUsage, readHelperWork, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { bootTime, listLiveSessions, listTranscripts, readHelperUsage, readHelperWork, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { readDismissed, readRemoved } from './hidden.mjs';
 import { countRepo } from './sources/count.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
@@ -47,6 +48,11 @@ const EXAMPLES_MAX = 20;
 // ponytail: the list gets the newest 300 of a project; page through the server if a month ever holds more.
 const CONVERSATIONS_MAX = 300;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// A cut-off older than a week leaves the panel by itself, so old ones do not flood it the first time (mm43).
+const CUT_KEEP_MS = 7 * DAY;
+// A transcript line and bootTime() read the same wall clock, and a Restart puts as little as 10 s between the last line and
+// the boot: a few seconds of slack, not the minute a session file's own start time gets (BOOT_SLACK_MS).
+const CUT_BOOT_SLACK_MS = 5_000;
 
 // Per-request data the page must not see (cwd, pid) but the actions need; same key as server/actions.mjs.
 const INTERNALS = Symbol.for('session-map.internals');
@@ -322,18 +328,33 @@ function originOf(sessionId, entrypoint, pageChats, fromPage = false) {
   return 'terminal';
 }
 
+// Whether a conversation was working when the server fell or the PC restarted (mm43), one rule per origin. A page chat:
+// page-chats.json still says running (only a turn's end writes false), and nothing drives it now, unless the transcript shows
+// the turn closed after the page's last turn end (finished elsewhere, as in VS Code). VS Code and the terminal
+// do not die with the server, so only a restart (the last line is from before this boot) or their own process dying
+// mid-turn (a session file left "busy") cuts them; a question waiting for the person is not cut off. Other origins never are.
+// cutCtx: {nowMs, bootMs, staleBusy, dismissed, driving}; page: the conversation's page-chats.json entry; summary may be null.
+function cutOffOf(row, page, summary, cutCtx) {
+  const id = row.sessionId;
+  const at = Date.parse(row.updatedAt);
+  if (row.live || cutCtx.driving.has(id) || cutCtx.dismissed[id] === row.updatedAt || !(cutCtx.nowMs - at <= CUT_KEEP_MS)) return false;
+  if (row.origin === 'map') return page?.running === true && !(summary?.turnOpen === false && at > Date.parse(page.updatedAt ?? ''));
+  if (row.origin !== 'vscode' && row.origin !== 'terminal') return false;
+  return Boolean(summary?.turnOpen && !summary.pendingQuestion && (at < cutCtx.bootMs - CUT_BOOT_SLACK_MS || cutCtx.staleBusy.has(id)));
+}
+
 // The list of conversations (plano-v02 § v0.2.2 item 0): every conversation of the window, shown on the map or not, plus the
 // page's own older than the window, which stay resumable. Light rows: the map's chats carry the full detail.
-function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf }) {
+function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx, removed }) {
   const onMap = new Map(chats.map((c) => [c.sessionId, c]));
   const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
   const nodeOf = (page) => (page?.node && typeof page.node.kind === 'string' ? page.node : null);
-  const fromTranscripts = placed.map((x) => {
+  const fromTranscripts = placed.filter((x) => !removed.has(x.item.summary.sessionId)).map((x) => {
     const s = x.item.summary;
     const live = liveById.get(s.sessionId);
     const chat = onMap.get(s.sessionId);
     const page = pageChats[s.sessionId];
-    return {
+    const row = {
       sessionId: s.sessionId,
       title: cut(titleOf(s) || page?.title),
       origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats, s.fromPage),
@@ -352,8 +373,10 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       chattable: !live,
       onMap: Boolean(chat),
     };
+    const cutOff = cutOffOf(row, page, s, cutCtx);
+    return { ...row, waiting: row.waiting && !cutOff, cutOff };
   });
-  const seen = new Set(fromTranscripts.map((r) => r.sessionId));
+  const seen = new Set([...fromTranscripts.map((r) => r.sessionId), ...removed]);
   const fromPage = Object.entries(pageChats)
     .filter(([id, c]) => UUID_RE.test(id) && !seen.has(id) && c?.projectId === projectId)
     .map(([sessionId, c]) => ({
@@ -374,7 +397,8 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       live: false,
       chattable: true,
       onMap: false,
-    }));
+    }))
+    .map((row) => ({ ...row, cutOff: cutOffOf(row, pageChats[row.sessionId], null, cutCtx) }));
   return [...fromTranscripts, ...fromPage]
     .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')) || a.sessionId.localeCompare(b.sessionId))
     .slice(0, CONVERSATIONS_MAX);
@@ -384,7 +408,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
 const tunnelOf = (url) => (typeof url === 'string' && url.startsWith('https://') ? url : null);
 
 async function buildProject(ctx, { root, items }) {
-  const { dir, smDir, now, nowIso, liveById, archived, prices, userConfig, life } = ctx;
+  const { dir, smDir, now, nowIso, liveById, archived, removed, prices, userConfig, life } = ctx;
   const projectId = projectIdOf(root);
   const config = loadConfig(root, smDir);
   const main = await mainBranch(root);
@@ -413,10 +437,11 @@ async function buildProject(ctx, { root, items }) {
       ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageOf(s.sessionId), placements[s.sessionId]),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
-      shown: liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch),
+      // Removed from session-map (mm43): its cost still counts below, but it shows nowhere.
+      shown: !removed.has(s.sessionId) && (liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch)),
     };
   });
-  const forLineage = (partId) => placed.filter((x) => x.partId === partId).map((x) => ({ sessionId: x.item.summary.sessionId, startedAt: x.item.summary.startedAt, editedFiles: x.item.summary.editedFiles }));
+  const forLineage = (partId) => placed.filter((x) => x.partId === partId && !removed.has(x.item.summary.sessionId)).map((x) => ({ sessionId: x.item.summary.sessionId, startedAt: x.item.summary.startedAt, editedFiles: x.item.summary.editedFiles }));
 
   const chats = placed.filter((x) => x.shown).map((x) => {
     const s = x.item.summary;
@@ -455,7 +480,11 @@ async function buildProject(ctx, { root, items }) {
     const { sessionId, cwd } = x.item.summary;
     ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null });
   }
-  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf });
+  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed });
+  // A cut-off conversation (mm43) waits for nobody: the person had answered and its turn was running. Its question and its
+  // card's items are behind them, so the Now strip, the waiting list and the count agree with the list's "Cut off".
+  const cutIds = new Set(conversations.filter((r) => r.cutOff).map((r) => r.sessionId));
+  for (const c of chats) if (cutIds.has(c.sessionId)) c.waiting = { strong: false, weak: false, items: [] };
 
   const workCells = memo.workCells.map((w) => {
     const mine = placed.filter((x) => x.shown && x.workCellId === w.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
@@ -472,7 +501,9 @@ async function buildProject(ctx, { root, items }) {
   });
 
   const events = readEvents(smDir, projectId).filter((e) => now.getTime() - Date.parse(e.ts) <= WINDOW_MS);
-  const activity = activityItems(memo.activity, events, (files) => partsTouched(files, arch, { topLevel }), workCells, items);
+  // A commit or push of a conversation removed from session-map (mm43) stays in the activity, tied to no conversation.
+  const named = items.filter((i) => !removed.has(i.summary.sessionId));
+  const activity = activityItems(memo.activity, events, (files) => partsTouched(files, arch, { topLevel }), workCells, named);
 
   if (aiOn && arch.parts.length) {
     const cellOf = (x) => workCells.find((w) => w.id === x.workCellId) ?? null;
@@ -524,16 +555,22 @@ function currencyOf(c) {
   return c && typeof c.code === 'string' && Number.isFinite(c.rate) && c.rate > 0 ? { code: c.code, rate: c.rate } : { code: 'USD', rate: 1 };
 }
 
-// ai: {bin, run} replaces the claude binary and the call (tests); isAlive replaces the pid check.
-export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}) {
+// ai: {bin, run} replaces the claude binary and the call (tests); isAlive replaces the pid check. bootMs: when this PC
+// started; driving: the sessionIds the chat hub runs right now (mm43).
+export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootMs = bootTime(), driving = new Set() } = {}) {
   const nowIso = now.toISOString();
   const userConfig = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
-  const live = listLiveSessions(dir, isAlive ? { isAlive } : {}).filter((s) => s.alive);
+  const sessions = listLiveSessions(dir, isAlive ? { isAlive, bootMs } : { bootMs });
+  const live = sessions.filter((s) => s.alive);
+  // A session file left "busy" by a process that died (VS Code restarted, the PC shut down with Fast Startup).
+  const staleBusy = new Set(sessions.filter((s) => !s.alive && s.status === 'busy').map((s) => s.sessionId));
   const archivedList = readJsonFile(join(smDir, 'archived.json'), []);
   const ctx = {
     dir, smDir, now, nowIso,
     liveById: new Map(live.map((s) => [s.sessionId, s])),
     archived: new Set(Array.isArray(archivedList) ? archivedList : []),
+    removed: readRemoved(smDir),
+    cut: { nowMs: now.getTime(), bootMs, staleBusy, dismissed: readDismissed(smDir), driving },
     prices: loadPrices(userConfig.prices ?? {}),
     userConfig,
     life: lifeOf(smDir, userConfig, ai),
@@ -565,7 +602,7 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
   hangFootprints(built, touches);
   let changes = new Map();
   try {
-    changes = await attachChanges({ dir, smDir, now, windowMs: WINDOW_MS, liveById: ctx.liveById }, built, groups);
+    changes = await attachChanges({ dir, smDir, now, windowMs: WINDOW_MS, liveById: ctx.liveById, removed: ctx.removed }, built, groups);
   } catch (err) {
     log('warn', 'changes-failed', { error: err.message });
   }

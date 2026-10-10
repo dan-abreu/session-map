@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree } from '../server/web/tree.js';
-import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue, SECTION_GROUPS, projectChats } from '../server/web/convlist.js';
+import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue, SECTION_GROUPS, projectChats, STATE_FILTERS, bucketOf, stateOf } from '../server/web/convlist.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -158,7 +158,7 @@ test('listConversations gives one section per project: the project chats pinned 
   assert.deepEqual(ids('waiting'), ['asks']);
   assert.deepEqual(ids(dateGroup(ago(4), now)), ['today']);
   assert.deepEqual(ids('older'), ['old']);
-  assert.deepEqual(sec.counts, { working: 2, waiting: 1, total: 6 });
+  assert.deepEqual(sec.counts, { working: 2, waiting: 1, cutoff: 0, total: 6 });
 });
 
 test('projectChats: the chats about the whole project that are not archived, newest first, for the root bubble', () => {
@@ -329,4 +329,112 @@ test('on a computer the conversation sheet takes the whole height of the stage, 
   assert.ok(stage.includes('<aside id="chat"'), 'it still lives in the stage');
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
   assert.match(css, /\.stage:has\(\.chat:not\(\[hidden\]\)\) \.mm-tools \{[^}]*padding-right: calc\(var\(--chat-w/, 'the map tools make room beside it');
+});
+
+// ---- the state filters and the "Cut off" group (mm43) ----
+
+test('bucketOf: archived beats working, working beats cut off, cut off beats waiting, and the rest is finished', () => {
+  assert.deepEqual(STATE_FILTERS, ['working', 'waiting', 'cutoff', 'finished', 'archived']);
+  assert.equal(bucketOf(row('a', { archived: true, status: 'busy', cutOff: true, waiting: true })), 'archived');
+  assert.equal(bucketOf(row('b', { status: 'busy', cutOff: true, waiting: true })), 'working');
+  assert.equal(bucketOf(row('c', { cutOff: true, waiting: true })), 'cutoff');
+  assert.equal(bucketOf(row('d', { waiting: true })), 'waiting');
+  assert.equal(bucketOf(row('e')), 'finished');
+  assert.equal(bucketOf(row('f', { status: 'idle' })), 'finished');
+});
+
+const mixed = () => shop([
+  row('w', { status: 'busy', updatedAt: ago(1) }),
+  row('q', { waiting: true, updatedAt: ago(2) }),
+  row('c1', { cutOff: true, updatedAt: ago(3) }),
+  row('c2', { cutOff: true, waiting: true, updatedAt: ago(4) }),
+  row('f', { updatedAt: ago(5) }),
+  row('z', { archived: true, cutOff: true, updatedAt: ago(6) }),
+]);
+
+test('listConversations counts each state, archived included, and the counts add up to the rows the box and the search leave', () => {
+  const state = mixed();
+  const out = listConversations(state, { projectId: state.projects[0].id });
+  assert.deepEqual(out.counts, { working: 1, waiting: 1, cutoff: 2, finished: 1, archived: 1 });
+  assert.equal(Object.values(out.counts).reduce((a, b) => a + b, 0), 6, 'archived rows count even while the list hides them');
+  assert.equal(out.total, 5, 'the list itself still hides archived rows');
+  const searched = listConversations(state, { projectId: state.projects[0].id, query: 'chat z' });
+  assert.deepEqual(searched.counts, { working: 0, waiting: 0, cutoff: 0, finished: 0, archived: 1 }, 'the search narrows the counts too');
+});
+
+test('listConversations with a state shows only that state; archived shows only archived rows, whatever showArchived says', () => {
+  const state = mixed();
+  const ids = (opts) => listConversations(state, { projectId: state.projects[0].id, ...opts }).sections
+    .flatMap((s) => SECTION_GROUPS.flatMap((g) => s[g])).map((e) => e.row.sessionId).sort();
+  assert.deepEqual(ids({ state: 'working' }), ['w']);
+  assert.deepEqual(ids({ state: 'waiting' }), ['q']);
+  assert.deepEqual(ids({ state: 'cutoff' }), ['c1', 'c2']);
+  assert.deepEqual(ids({ state: 'finished' }), ['f']);
+  assert.deepEqual(ids({ state: 'archived' }), ['z'], 'archived rows show with showArchived off');
+  assert.deepEqual(ids({ state: 'archived', showArchived: true }), ['z']);
+  assert.deepEqual(ids({ state: 'cutoff', showArchived: true }), ['c1', 'c2'], 'any other state never shows an archived row');
+  assert.deepEqual(ids({}), ['c1', 'c2', 'f', 'q', 'w'], 'no state keeps today: archived hidden');
+  assert.deepEqual(ids({ showArchived: true }), ['c1', 'c2', 'f', 'q', 'w', 'z']);
+  assert.equal(listConversations(state, { projectId: state.projects[0].id, state: 'cutoff' }).counts.working, 1, 'the counts do not change with the pick');
+});
+
+test('a cut-off row sits in its own group after working, and says "Cut off" in its state word', () => {
+  const state = mixed();
+  const [sec] = listConversations(state, { projectId: state.projects[0].id }).sections;
+  assert.equal(SECTION_GROUPS.indexOf('cutoff'), SECTION_GROUPS.indexOf('working') + 1);
+  assert.deepEqual(sec.cutoff.map((e) => e.row.sessionId), ['c1', 'c2']);
+  assert.deepEqual(sec.waiting.map((e) => e.row.sessionId), ['q'], 'a cut-off row that also waits is not counted twice');
+  assert.deepEqual(sec.counts, { working: 1, waiting: 1, cutoff: 2, total: 5 });
+  assert.equal(stateOf(row('c', { cutOff: true })), 'cutoff');
+  assert.equal(stateOf(row('w', { cutOff: true, status: 'busy' })), 'busy', 'a conversation working again is not cut off');
+});
+
+test('the column draws the cut-off group and the state word on its rows', async () => {
+  const list = await drawList(mixed());
+  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]).slice(0, 3), ['working', 'cutoff', 'waiting']);
+  const cut = withClass(list, 'cv-row').find((r) => r.attrs['data-session'] === 'c1');
+  assert.equal(withClass(cut, 'cv-state')[0].text.trim(), 'convs.state.cutoff');
+});
+
+test('the filter bar has five buttons with their count; a click picks one, a second click goes back to all', async () => {
+  const state = mixed();
+  const { createConvList } = await import('../server/web/convlist.js');
+  const els = new Map();
+  const realDocument = globalThis.document;
+  globalThis.document = { activeElement: null, getElementById: (id) => els.get(id) ?? els.set(id, new El('div', id)).get(id) };
+  const wired = (tag, attrs = {}, ...children) => {
+    const el = fakeH(tag, attrs, ...children);
+    if (attrs?.onclick) el.addEventListener('click', attrs.onclick);
+    return el;
+  };
+  try {
+    const t = Object.assign((key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key), { count: (key, n) => `${key}:${n}` });
+    createConvList({
+      root: new El('aside'), h: wired, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
+      t: () => t, relative: () => '1h', money: (v) => `$${v}`, list: (xs) => xs.join(', '), phone: { matches: false },
+      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null, unseen: () => new Set(),
+      onOpen() {}, onMove() {}, onFilter() {},
+    }).render();
+    const bar = els.get('convsStates');
+    const buttons = () => walkAll(bar).filter((el) => el.attrs?.['data-state']);
+    assert.deepEqual(buttons().map((b) => b.attrs['data-state']), STATE_FILTERS);
+    assert.deepEqual(buttons().map((b) => withClass(b, 'num')[0].text), ['1', '1', '2', '1', '1']);
+    assert.ok(buttons().every((b) => b.attrs['aria-pressed'] === 'false'));
+    assert.match(buttons()[2].text, /convs\.states\.cutoff/);
+    const list = els.get('convsList');
+    buttons()[2].fire('click');
+    assert.equal(buttons()[2].attrs['aria-pressed'], 'true');
+    assert.deepEqual(withClass(list, 'cv-row').map((r) => r.attrs['data-session']).sort(), ['c1', 'c2']);
+    buttons()[2].fire('click');
+    assert.ok(buttons().every((b) => b.attrs['aria-pressed'] === 'false'), 'a second click goes back to all');
+    assert.equal(withClass(list, 'cv-row').length, 5);
+    buttons()[4].fire('click');
+    assert.deepEqual(withClass(list, 'cv-row').map((r) => r.attrs['data-session']), ['z']);
+    buttons()[4].fire('click');
+    state.projects[0].conversations = [row('only')];
+    buttons()[0].fire('click');
+    assert.match(list.text, /convs\.stateEmpty/, 'a pick with no rows says so, with its name');
+  } finally {
+    globalThis.document = realDocument;
+  }
 });

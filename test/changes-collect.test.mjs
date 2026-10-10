@@ -249,3 +249,46 @@ test('a copy of a removed file goes a month after the file was last seen', async
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('a conversation removed from session-map (mm43) is named by no change and no commit, though its changes still show', async () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-chg-rm-')));
+  const dir = join(base, 'claude');
+  const smDir = join(base, 'sm');
+  mkdirSync(dir);
+  mkdirSync(smDir);
+  try {
+    const shop = repo(join(base, 'shop'), { ...ARCH, 'src/shop/cart.js': 'a\nb\nc\n' });
+    const cart = join(shop, 'src', 'shop', 'cart.js');
+    writeFileSync(cart, 'a\nB\nc\n');
+    git(shop, 'commit', '-q', '-am', 'cart totals');
+    const commit = pair(shop, 3 * MIN, 'Bash', { command: 'git add . && git commit -q -m "cart totals"' }, { stdout: '' });
+    const lines = [
+      { type: 'ai-title', aiTitle: 'Cart', sessionId: A },
+      { sessionId: A, cwd: shop, timestamp: iso(30 * MIN), type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'text', text: 'fix the cart' }] } },
+      ...pair(shop, 5 * MIN, 'Edit', { file_path: cart, old_string: 'b', new_string: 'B' }, { filePath: cart, structuredPatch: [{ oldStart: 1, oldLines: 3, newStart: 1, newLines: 3, lines: [' a', '-b', '+B', ' c'] }] }),
+      ...commit,
+      { sessionId: A, cwd: shop, timestamp: iso(MIN), type: 'assistant', message: { id: 'last', model: 'claude-opus-4', role: 'assistant', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 10, output_tokens: 10 } } },
+    ];
+    const projDir = join(dir, 'projects', 'shop');
+    mkdirSync(projDir, { recursive: true });
+    const file = join(projDir, `${A}.jsonl`);
+    writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const t = (NOW.getTime() - MIN) / 1000;
+    utimesSync(file, t, t);
+    const seen = async () => {
+      const state = await collect({ dir, smDir, now: NOW, isAlive: () => false, ai: { bin: null } });
+      const project = state.projects.find((p) => p.id === projectIdOf(shop));
+      return { rows: changesOf(state, project.id), commit: project.activity.find((i) => i.kind === 'commit' && i.subject === 'cart totals') };
+    };
+    const before = await seen();
+    assert.ok(before.rows.some((r) => r.sessionId === A), 'the setup ties a change to the conversation');
+    assert.equal(before.commit.sessionId, A, 'the setup ties the commit to the conversation');
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([A]));
+    const after = await seen();
+    assert.ok(!JSON.stringify(after.rows).includes(A), 'no change names it or links to it');
+    assert.equal(after.rows.length, before.rows.length, 'its changes still show, as made outside a conversation');
+    assert.equal(after.commit.sessionId, undefined);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

@@ -86,7 +86,13 @@ const visible = (row, showArchived) => showArchived || !row.archived;
 const DAY_MS = 86_400_000;
 export const DATE_GROUPS = ['today', 'yesterday', 'week', 'older'];
 // The groups of a project's section, top to bottom (mm04).
-export const SECTION_GROUPS = ['pinned', 'working', 'waiting', 'visiting', ...DATE_GROUPS];
+export const SECTION_GROUPS = ['pinned', 'working', 'cutoff', 'waiting', 'visiting', ...DATE_GROUPS];
+
+// The state filters on top of the list (mm43), in the order of the chips. A conversation is in one of them only:
+// archived beats working, working beats cut off (it was picked up again), cut off beats waiting for the person.
+export const STATE_FILTERS = ['working', 'waiting', 'cutoff', 'finished', 'archived'];
+export const bucketOf = (row) => (row.archived ? 'archived' : row.status === 'busy' ? 'working' : row.cutOff ? 'cutoff' : row.waiting ? 'waiting' : 'finished');
+const isCut = (row) => bucketOf(row) === 'cutoff';
 
 // By calendar day on this device, like Claude and ChatGPT: late last night is yesterday though less than a day ago.
 export function dateGroup(iso, nowMs) {
@@ -111,18 +117,20 @@ export const projectChats = (project) => conversationsOf(project).filter((r) => 
   .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
 
 function sectionOf(project, entries, nowMs) {
-  const sec = { project, hue: projectHue(project), pinned: [], working: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [] };
+  const sec = { project, hue: projectHue(project), pinned: [], working: [], cutoff: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [] };
   const own = entries.filter((e) => !e.home);
   for (const e of [...entries].sort(newest)) {
     if (e.home) sec.visiting.push(e);
     else if (isPinned(e.row)) sec.pinned.push(e);
     else if (e.row.status === 'busy') sec.working.push(e);
+    else if (isCut(e.row)) sec.cutoff.push(e);
     else if (e.row.waiting) sec.waiting.push(e);
     else sec[dateGroup(e.row.updatedAt, nowMs)].push(e);
   }
   sec.counts = {
     working: own.filter((e) => e.row.status === 'busy').length,
-    waiting: own.filter((e) => e.row.status !== 'busy' && e.row.waiting).length,
+    cutoff: own.filter((e) => isCut(e.row)).length,
+    waiting: own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && e.row.waiting).length,
     total: entries.length,
   };
   sec.newest = entries.reduce((m, e) => (String(e.row.updatedAt ?? '') > m ? String(e.row.updatedAt) : m), '');
@@ -135,11 +143,14 @@ const bySection = (a, b) => (b.counts.working > 0) - (a.counts.working > 0) || (
 // opts: projectId, scope ('project' | 'all'), query, nodeId (only that box and below, in the open project), showArchived.
 // Each entry: {row, project, nodeId, place, home (a visitor's own project, mm24)}. Working now, then waiting for the person,
 // then the rest, newest first in each; visitors apart; sections: the same entries per project, in SECTION_GROUPS (mm04).
-export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false } = {}) {
+// state (mm43): one of STATE_FILTERS keeps that state's rows (archived ones only under 'archived'; visitors out, so a chip's
+// count is what shows). counts has every state over the rows the scope, the search and the box leave, archived included.
+export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false, state: only = null } = {}) {
   const q = plain(query);
   const projects = scope === 'all' ? state.projects : state.projects.filter((p) => p.id === projectId);
   const entries = [];
   const sections = [];
+  const counts = Object.fromEntries(STATE_FILTERS.map((b) => [b, 0]));
   const nowMs = Date.parse(state.generatedAt) || Date.now();
   for (const project of projects) {
     const mine = [];
@@ -147,11 +158,12 @@ export function listConversations(state, { projectId, scope = 'project', query =
     const homeOf = (row) => state.projects.find((p) => p.id === row.bornIn.projectId) ?? { id: row.bornIn.projectId, name: row.bornIn.name };
     const rows = [...conversationsOf(project).map((row) => ({ row })), ...visitorsOf(project).map((row) => ({ row, home: homeOf(row) }))];
     for (const { row, home } of rows) {
-      if (!visible(row, showArchived)) continue;
       const at = nodeIn(index, row);
       if (nodeId && project.id === projectId && at !== nodeId && !index.get(at).path.includes(nodeId)) continue;
       const place = placeIn(index, row, at);
       if (q && !plain([row.title, ...place.path, scope === 'all' ? project.name : ''].join(' ')).includes(q)) continue;
+      if (!home) counts[bucketOf(row)] += 1;
+      if (only ? home || bucketOf(row) !== only : !visible(row, showArchived)) continue;
       mine.push(home ? { row, project, nodeId: at, place, home } : { row, project, nodeId: at, place });
     }
     entries.push(...mine);
@@ -159,10 +171,11 @@ export function listConversations(state, { projectId, scope = 'project', query =
   }
   const own = entries.filter((e) => !e.home);
   const working = own.filter((e) => e.row.status === 'busy').sort(newest);
-  const waiting = own.filter((e) => e.row.status !== 'busy' && e.row.waiting).sort(newest);
-  const recent = own.filter((e) => e.row.status !== 'busy' && !e.row.waiting).sort(newest);
+  const cutoff = own.filter((e) => isCut(e.row)).sort(newest);
+  const waiting = own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && e.row.waiting).sort(newest);
+  const recent = own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && !e.row.waiting).sort(newest);
   const visiting = entries.filter((e) => e.home).sort(newest);
-  return { working, waiting, recent, visiting, total: entries.length, sections: sections.sort(bySection) };
+  return { working, cutoff, waiting, recent, visiting, total: entries.length, counts, sections: sections.sort(bySection) };
 }
 
 // How many conversations each box holds, itself and below: the number on the box, which filters the list to it.
@@ -185,11 +198,11 @@ export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
 const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
 const DATED = new Set(DATE_GROUPS);
 
-const toneOf = (row) => (row.status === 'busy' ? 'busy' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
+const toneOf = (row) => (row.status === 'busy' ? 'busy' : isCut(row) ? 'cutoff' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
 // The word on every row (mm33): its state, and "finished, not seen yet" until the person opens it.
-export const stateOf = (row, unseen) => (row.status !== 'busy' && !row.waiting && unseen?.has(row.sessionId) ? 'unseen' : toneOf(row));
+export const stateOf = (row, unseen) => (row.status !== 'busy' && !isCut(row) && !row.waiting && unseen?.has(row.sessionId) ? 'unseen' : toneOf(row));
 // Each group's own icon; its colour comes from the g-<name> class.
-const GROUP_ICON = { pinned: 'compass', working: 'auto', waiting: 'bell', visiting: 'connect', today: 'clock', yesterday: 'clock', week: 'clock', older: 'calendar' };
+const GROUP_ICON = { pinned: 'compass', working: 'auto', cutoff: 'stop', waiting: 'bell', visiting: 'connect', today: 'clock', yesterday: 'clock', week: 'clock', older: 'calendar' };
 
 // ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), list(names) (joined in the
 // page's language), phone (media query), state(),
@@ -208,6 +221,8 @@ export function createConvList(ctx) {
   let collapsed = store.get('sm.convs.collapsed') === '1';
   let query = '';
   let filter = null;
+  // The state chip picked on top of the list (mm43): not saved, and a change of project or scope keeps it.
+  let picked = null;
   // "<projectId>:<group>" of the date groups showing every row, past the first page.
   let showAll = new Set();
   // projectId → true (open) | false (closed), as the person left each project folder in "All projects".
@@ -280,7 +295,7 @@ export function createConvList(ctx) {
   const groupsOf = (sec, heading) => SECTION_GROUPS.map((g) => groupView(sec, g, heading)).filter(Boolean);
 
   // Open unless the person closed it; a project with work going on, the open one and a search show open by default.
-  const isFolderOpen = (sec, openId) => (query.trim() ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.waiting > 0));
+  const isFolderOpen = (sec, openId) => (query.trim() ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.cutoff > 0 || sec.counts.waiting > 0));
 
   function folderView(sec, openId, { collapsible = true } = {}) {
     const tt = ctx.t();
@@ -320,6 +335,18 @@ export function createConvList(ctx) {
       h('button', { type: 'button', class: 'cv-filter-clear', 'aria-label': tt('convs.filterClear'), title: tt('convs.filterClear'), onclick: () => filterTo(null) }, icon('close', 'cv-filter-icon')));
   }
 
+  // Five chips, each with its word and how many conversations it holds; one stays pressed, a second click lets it go.
+  function renderStates(counts) {
+    const tt = ctx.t();
+    const bar = byId('convsStates');
+    const keep = bar.contains(document.activeElement) ? document.activeElement.dataset?.state : null;
+    bar.replaceChildren(...STATE_FILTERS.map((b) => h('button', {
+      type: 'button', class: `cv-sc c-${b}${counts[b] ? '' : ' is-zero'}`, 'data-state': b, 'aria-pressed': String(picked === b),
+      onclick: () => { picked = picked === b ? null : b; showAll = new Set(); render(); },
+    }, h('span', { class: 'cv-sc-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-sc-word' }, tt(`convs.states.${b}`)), h('span', { class: 'cv-sc-n num' }, String(counts[b])))));
+    if (keep) bar.querySelector(`[data-state="${keep}"]`)?.focus({ preventScroll: true });
+  }
+
   function render() {
     const s = ctx.state();
     const p = ctx.project();
@@ -327,7 +354,8 @@ export function createConvList(ctx) {
     const tt = ctx.t();
     renderFilter();
     for (const b of root.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === scope));
-    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: ctx.showArchived() });
+    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: ctx.showArchived(), state: picked });
+    renderStates(out.counts);
     const mine = conversationsOf(p).filter((r) => ctx.showArchived() || !r.archived);
     byId('convsTotal').textContent = String(out.total);
     byId('convsRailCount').textContent = String(mine.length);
@@ -341,6 +369,7 @@ export function createConvList(ctx) {
     if (!body.length) {
       let empty = { art: 'chat', title: tt('convs.emptyTitle'), text: scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty') };
       if (filter) empty = { art: 'map', title: tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) }), text: tt('convs.filterEmptyText') };
+      if (picked) empty = { art: 'chat', title: tt('convs.stateEmpty', { name: tt(`convs.states.${picked}`) }), text: tt('convs.stateEmptyText') };
       if (query.trim()) empty = { art: 'search', title: tt('convs.noMatch', { q: query.trim() }), text: tt('convs.noMatchText') };
       body = [emptyState({ h, icon: ctx.icon }, { ...empty, compact: true })];
     }

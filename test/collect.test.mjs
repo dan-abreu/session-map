@@ -53,7 +53,8 @@ function repo(root, { arch = false } = {}) {
 }
 
 // One conversation file: 2 USD of claude-fake-1 per assistant line (200k input at 5/M + 40k output at 25/M).
-function writeChat(dir, { id, cwd, branch = 'main', title, prompts = ['add the cart'], edits = [], card, endedAgo = HOUR, question = false, mtimeAgo = endedAgo, entrypoint }) {
+// The turn ends as a finished one does (end_turn); stopReason: null leaves it open, cut mid-stream (mm43).
+function writeChat(dir, { id, cwd, branch = 'main', title, prompts = ['add the cart'], edits = [], card, endedAgo = HOUR, question = false, mtimeAgo = endedAgo, entrypoint, stopReason = 'end_turn', tail = [] }) {
   const ts = iso(endedAgo);
   const base = { sessionId: id, cwd, gitBranch: branch, timestamp: ts, ...(entrypoint ? { entrypoint } : {}) };
   const lines = [];
@@ -65,7 +66,8 @@ function writeChat(dir, { id, cwd, branch = 'main', title, prompts = ['add the c
   });
   const block = card ? `\`\`\`session-map\n${JSON.stringify(card)}\n\`\`\`\n` : '';
   const text = `${block}${'x'.repeat(400)} done${question ? ' Should I push?' : '.'}`;
-  lines.push({ ...base, type: 'assistant', message: { id: `${id}-m`, model: 'claude-fake-1', role: 'assistant', content: [{ type: 'text', text }], usage: { input_tokens: 200_000, output_tokens: 40_000 } } });
+  lines.push({ ...base, type: 'assistant', message: { id: `${id}-m`, model: 'claude-fake-1', role: 'assistant', content: [{ type: 'text', text }], usage: { input_tokens: 200_000, output_tokens: 40_000 }, ...(stopReason ? { stop_reason: stopReason } : {}) } });
+  for (const extra of tail) lines.push({ ...base, ...extra });
   const projDir = join(dir, 'projects', cwd.replace(/[^a-z0-9]/gi, '-'));
   mkdirSync(projDir, { recursive: true });
   const file = join(projDir, `${id}.jsonl`);
@@ -644,4 +646,132 @@ test('the owner\'s moves teach the AI: its prompt lists them as examples', async
     forgetLife(smDir);
     cleanup(dir, smDir, join(root, '..'));
   }
+});
+
+// ---- cut off (mm43): what was working when the server fell or the PC restarted --------------------------------------------
+
+const BOOT = NOW.getTime() - 30 * 60_000;
+const ASK_TAIL = [{ type: 'assistant', message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'ask-1', name: 'AskUserQuestion', input: { questions: [] } }] } }];
+
+async function cutRows(setup, opts = {}) {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'));
+  try {
+    setup({ dir, smDir, root, projectId: projectIdOf(root) });
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI, bootMs: BOOT, ...opts });
+    return Object.fromEntries((state.projects[0]?.conversations ?? []).map((r) => [r.sessionId, r.cutOff]));
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+}
+
+test('cutOff: a VS Code or terminal turn left open before this boot is cut off; one written after it, or closed, is not', async () => {
+  const cut = await cutRows(({ dir, root }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'claude-vscode', endedAgo: HOUR, stopReason: null });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'claude-vscode', endedAgo: 10 * 60_000, stopReason: null });
+    writeChat(dir, { id: C, cwd: root, entrypoint: 'cli', endedAgo: HOUR, stopReason: 'end_turn' });
+    writeChat(dir, { id: D, cwd: root, entrypoint: 'cli', endedAgo: HOUR, stopReason: null });
+  });
+  assert.deepEqual(cut, { [A]: true, [B]: false, [C]: false, [D]: true });
+});
+
+// A Restart takes well under a minute from the last transcript line to the boot (this PC: 10 to 57 s).
+test('cutOff: a turn whose last line came 30 s before the boot is cut off', async () => {
+  const cut = await cutRows(({ dir, root }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'claude-vscode', endedAgo: 30 * 60_000 + 30_000, stopReason: null });
+  });
+  assert.deepEqual(cut, { [A]: true });
+});
+
+test('cutOff: a page chat left "running" but whose turn was later finished elsewhere is not cut off', async () => {
+  const cut = await cutRows(({ dir, smDir, root, projectId }) => {
+    // A: finished in VS Code after the page's last turn end. B: the page sent a prompt and fell before claude wrote it.
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'sdk-cli', endedAgo: 10 * 60_000, stopReason: 'end_turn' });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'sdk-cli', endedAgo: 10 * 60_000, stopReason: 'end_turn' });
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
+      [A]: { projectId, title: 'a', running: true, updatedAt: iso(HOUR) },
+      [B]: { projectId, title: 'b', running: true, updatedAt: iso(10 * 60_000 - 2_000) },
+    }));
+  });
+  assert.deepEqual(cut, { [A]: false, [B]: true });
+});
+
+test('cutOff: a session file left "busy" by a dead process cuts the turn off, though it was written after the boot', async () => {
+  const cut = await cutRows(({ dir, root }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'claude-vscode', endedAgo: 10 * 60_000, stopReason: null });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'claude-vscode', endedAgo: 10 * 60_000, stopReason: null });
+    writeSession(dir, { pid: 4343, id: A, cwd: root, status: 'busy' });
+    writeSession(dir, { pid: 4344, id: B, cwd: root, status: 'idle' });
+  }, { isAlive: (pid) => pid !== 4343 && pid !== 4344 });
+  assert.deepEqual(cut, { [A]: true, [B]: false });
+});
+
+test('cutOff: a conversation still running, waiting on a question or older than a week is not cut off', async () => {
+  const cut = await cutRows(({ dir, root }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'claude-vscode', endedAgo: HOUR, stopReason: null });
+    writeSession(dir, { pid: 4242, id: A, cwd: root, status: 'busy' });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'claude-vscode', endedAgo: HOUR, tail: ASK_TAIL });
+    writeChat(dir, { id: C, cwd: root, entrypoint: 'cli', endedAgo: 8 * 24 * HOUR, stopReason: null });
+  });
+  assert.deepEqual(cut, { [A]: false, [B]: false, [C]: false });
+});
+
+test('cutOff: a dismissal holds while the last activity is the same, and lapses when the conversation moves on', async () => {
+  const cut = await cutRows(({ dir, smDir, root }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'claude-vscode', endedAgo: HOUR, stopReason: null });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'claude-vscode', endedAgo: HOUR, stopReason: null });
+    writeFileSync(join(smDir, 'cut-dismissed.json'), JSON.stringify({ [A]: iso(HOUR), [B]: iso(2 * HOUR) }));
+  });
+  assert.deepEqual(cut, { [A]: false, [B]: true });
+});
+
+test('cutOff: a page chat whose turn never ended is cut off unless the hub drives it now; a script is never', async () => {
+  const E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const setup = ({ dir, smDir, root, projectId }) => {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'sdk-cli', endedAgo: 10 * 60_000, stopReason: null });
+    writeChat(dir, { id: B, cwd: root, entrypoint: 'sdk-cli', endedAgo: 10 * 60_000, stopReason: null });
+    writeChat(dir, { id: E, cwd: root, entrypoint: 'sdk-ts', endedAgo: HOUR, stopReason: null });
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [A]: { projectId, title: 'a', running: true }, [B]: { projectId, title: 'b', running: false } }));
+  };
+  assert.deepEqual(await cutRows(setup), { [A]: true, [B]: false, [E]: false });
+  assert.deepEqual(await cutRows(setup, { driving: new Set([A]) }), { [A]: false, [B]: false, [E]: false });
+});
+
+// The person answered "Shall I push?" and the server fell before claude wrote anything: the question is behind them.
+test('a cut-off conversation is not waiting for the person: not in its row, its chat or the waiting count', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'));
+  try {
+    writeChat(dir, { id: A, cwd: root, entrypoint: 'sdk-cli', endedAgo: 10 * 60_000, question: true, stopReason: 'end_turn', card: { title: 'Cart', waiting: ['approve tax rule'] } });
+    const page = (running) => writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [A]: { projectId: projectIdOf(root), title: 'a', running, updatedAt: iso(10 * 60_000 - 2_000) } }));
+    page(false);
+    const before = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI, bootMs: BOOT });
+    assert.equal(before.projects[0].conversations[0].waiting, true, 'the setup waits for the person');
+    page(true);
+    const after = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI, bootMs: BOOT });
+    const [p] = after.projects;
+    assert.deepEqual([p.conversations[0].cutOff, p.conversations[0].waiting], [true, false]);
+    assert.deepEqual(p.chats[0].waiting, { strong: false, weak: false, items: [] });
+    assert.equal(after.waitingCount, 0);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('a conversation removed from session-map is nowhere in the state, but its cost still counts', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Cart page', edits: ['src/shop/cart.ts'] });
+    writeChat(dir, { id: B, cwd: root, title: 'Invoices', prompts: ['work on `bi01` now'], question: true, card: { title: 'Invoices', waiting: ['approve tax rule'] } });
+    const before = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([B]));
+    const after = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const [p] = after.projects;
+    assert.deepEqual(p.chats.map((c) => c.sessionId), [A]);
+    assert.deepEqual(p.conversations.map((r) => r.sessionId), [A]);
+    assert.ok(!JSON.stringify(after.projects).includes(B), 'not in visitors, work cells or anywhere else');
+    assert.ok(after.waitingCount < before.waitingCount, 'its waiting no longer counts');
+    assert.deepEqual(p.cost, before.projects[0].cost);
+    assert.deepEqual(after.totals, before.totals);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
 });

@@ -120,6 +120,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
   - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, and `mm33`, the list that shows at a glance where each chat comes from and what it is doing, are released in v0.2.3; `mm23` is open; `rd04` waits for the owner's OK).
+- [ ] **in progress:** After a crash or a restart, the conversations that were working are easy to bring back; delete or archive conversations; the list split by state `id82`
+  - Asked: 2026-10-10 — "seria bom fica explicito as conversas que estavam trabalhando, quando o servidor cair ou pc reiniciar, fica facil voltar o serviço, pode ficar no painel, também ter a opçao de deletar as conversas ou arquivar elas, e também separar as converas pelas opções de \"esperando você\", essas coisas eu nao sei todas"; 2026-10-10 — "Sim, pode reforçar."
+  - What it means: when the server falls or the PC restarts, a panel lists the conversations that were working at that moment, from any origin, with Continue on each and Continue all; a conversation can be archived (hidden, comes back) or deleted from session-map (asks for confirmation; the conversation file itself stays on the PC, so Claude Code still has it); the conversation list can be filtered by state: Working, Waiting for you, Cut off, Finished, Archived.
+  - How to confirm it is done: restart the server while two chats work: on opening the map, the panel shows both with Continue; Continue all brings both back; archive one and it leaves the list and comes back in Archived; delete one, confirm, and it is gone from the map; a click on "Waiting for you" shows only those.
+  - Where it went: `mm43`.
+  - Status: in progress (`mm43` built on 2026-10-10 with a reinforced team: the Cut off panel with Continue and Continue all, Delete from session-map with confirmation next to Archive, the state filters with counts; waiting for the next version; deleting the conversation file on the PC too was not chosen and stays out).
 
 ### Files, terminal and the first use of a repository
 

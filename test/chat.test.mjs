@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -1207,4 +1208,107 @@ test('once the helpers stop writing, the idle chat closes', async () => {
       assert.ok(Date.now() - since >= 200, 'it waited for the helpers to be quiet for a whole idle time');
     });
   });
+});
+
+// ---- Continue on a cut-off conversation (mm43): one process per conversation, whatever the clicks ----------------------
+
+test('two starts of the same conversation in a row spawn one claude; the second is told it is busy', async () => {
+  let spawns = 0;
+  const spawner = (...args) => { spawns++; return spawn(...args); };
+  await withHub({ spawner }, async ({ hub, state }) => {
+    const [a, b] = await Promise.all([
+      hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state),
+      hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state),
+    ]);
+    assert.equal(a.status, 200);
+    assert.deepEqual([b.status, b.body.error], [409, 'busy']);
+    assert.equal(spawns, 1);
+    const r = recorder();
+    hub.subscribe(a.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+  });
+});
+
+test('a second Continue of a cut-off conversation after its resumed turn ended is told it is busy, and starts no turn', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const a = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue', cut: true }, state);
+    assert.equal(a.status, 200);
+    const r = recorder();
+    hub.subscribe(a.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    const b = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue', cut: true }, state);
+    assert.deepEqual([b.status, b.body.error], [409, 'busy']);
+    await pause(100);
+    assert.equal(r.count((e) => e.type === 'user'), 1, 'no second turn');
+  });
+});
+
+test('a Continue of a page conversation whose turn is no longer running is told it is busy and spawns nothing', async () => {
+  let spawns = 0;
+  const spawner = (...args) => { spawns++; return spawn(...args); };
+  await withHub({ spawner }, async ({ hub, state, smDir, root }) => {
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [CLOSED]: { projectId: 'demo-abc123', cwd: root, running: false } }));
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue', cut: true }, state);
+    assert.deepEqual([res.status, res.body.error], [409, 'busy']);
+    assert.equal(spawns, 0);
+  });
+});
+
+test('a conversation whose own claude is still alive (its session file names a live pid) is not resumed', async () => {
+  let spawns = 0;
+  const spawner = (...args) => { spawns++; return spawn(...args); };
+  await withHub({ spawner }, async ({ hub, state, root }) => {
+    mkdirSync(join(root, 'sessions'), { recursive: true });
+    writeFileSync(join(root, 'sessions', `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: CLOSED, cwd: root, status: 'busy', startedAt: Date.now() }));
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state);
+    assert.deepEqual([res.status, res.body.error], [409, 'live-chat']);
+    assert.equal(spawns, 0);
+  });
+});
+
+test('a conversation removed from session-map cannot be resumed', async () => {
+  await withHub({}, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([CLOSED]));
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state);
+    assert.deepEqual([res.status, res.body.error], [404, 'unknown-session']);
+  });
+});
+
+test('drivingIds holds a resumed conversation while its claude runs and lets it go once it exits', async () => {
+  await withHub({ idleMs: 200 }, async ({ hub, state }) => {
+    assert.deepEqual(hub.drivingIds(), new Set());
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state);
+    assert.ok(hub.drivingIds().has(CLOSED));
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await r.until((e) => e.type === 'session' && e.data.state === 'ended');
+    assert.equal(hub.drivingIds().has(CLOSED), false);
+  });
+});
+
+test('the list of a part and the cut-off alerts leave out a conversation removed from session-map', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-chat-root-'));
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
+  const state = makeState(root);
+  const first = createChatHub({ smDir, dir: root, bin: FAKE });
+  let sessionId;
+  try {
+    const res = await first.start({ projectId: 'demo-abc123', partId: 'auth', text: 'SLOW' }, state);
+    const r = recorder();
+    first.subscribe(res.body.chatKey, r.sink);
+    sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+    await r.until((e) => e.type === 'text' && e.data.partial);
+  } finally { await first.close(); }
+  const later = createChatHub({ smDir, dir: root, bin: FAKE });
+  try {
+    assert.equal(later.interrupted(state).length, 1);
+    assert.equal(later.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 1);
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([sessionId]));
+    assert.deepEqual(later.interrupted(state), []);
+    assert.deepEqual(later.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats, []);
+  } finally {
+    await later.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  }
 });

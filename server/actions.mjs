@@ -2,13 +2,14 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { readJsonFile, writeAtomic } from './store.mjs';
+import { addRemoved, dismissCut } from './hidden.mjs';
 import { safeResolve, vscodeUrl } from './files.mjs';
 import { installFromCatalog } from './sources/catalog.mjs';
 import { killProcess, newTerminal, openUrl, processName as processNameDefault, processStart as processStartDefault } from './launch.mjs';
 import { log } from './log.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install', 'open-file']);
+const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install', 'open-file', 'delete', 'dismiss-cut']);
 const CLAUDE_PROCESS_RE = /claude|node/i;
 const PID_START_SLACK_MS = 5000;
 const LINE_MAX = 10_000_000;
@@ -136,6 +137,14 @@ async function dispatch(body, deps) {
       return reply(200, { opened: 'terminal' });
     case 'close':
       return close(chat, info, deps);
+    // Delete hides the conversation from session-map only (mm43): its transcript and the projects are never touched.
+    case 'delete':
+      if (chat.status === 'busy' || deps.driving?.has(chat.sessionId)) return reply(409, { error: 'busy' });
+      addRemoved(deps.smDir, chat.sessionId);
+      return reply(200);
+    case 'dismiss-cut':
+      dismissCut(deps.smDir, chat.sessionId, chat.updatedAt ?? null);
+      return reply(200);
     default:
       setArchived(deps.smDir, chat.sessionId, body.action === 'archive');
       return reply(200);
@@ -161,7 +170,7 @@ export function logAction(smDir, body, status) {
   }
 }
 
-// deps: state (from collect), dir, smDir; spawner, processName, processStart, kill and platform are replaceable for tests.
+// deps: state (from collect), dir, smDir, driving (the ids the chat hub runs now); spawner, processName, processStart, kill and platform are replaceable for tests.
 export async function runAction(body, { processName = processNameDefault, processStart = processStartDefault, kill = killProcess, ...deps }) {
   const res = await dispatch(body, { processName, processStart, kill, ...deps });
   logAction(deps.smDir, body, res.status);

@@ -1,7 +1,7 @@
 // Everything that depends on Claude Code's undocumented on-disk formats lives in this file and in claude-conversation.mjs
 // (the whole conversation as the chat screen shows it).
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, uptime } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { CONTEXT_HEAD, personsWords } from '../chat/prompt.mjs';
@@ -70,7 +70,13 @@ function isAliveDefault(pid) {
   }
 }
 
-export function listLiveSessions(dir, { isAlive = isAliveDefault } = {}) {
+// When this PC last started; a session file written before it cannot have a live process (mm43).
+export const bootTime = () => Date.now() - uptime() * 1000;
+// The clock and the uptime disagree by a little; a minute keeps a session started at boot alive.
+export const BOOT_SLACK_MS = 60_000;
+
+// bootMs: a file whose startedAt is before this boot is dead even when Windows has given its pid to another program.
+export function listLiveSessions(dir, { isAlive = isAliveDefault, bootMs = 0 } = {}) {
   const sessions = [];
   for (const file of listDir(join(dir, 'sessions'))) {
     if (!file.isFile() || !file.name.endsWith('.json')) continue;
@@ -88,8 +94,9 @@ export function listLiveSessions(dir, { isAlive = isAliveDefault } = {}) {
       entrypoint: str(raw.entrypoint),
       kind: str(raw.kind),
       updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0,
+      startedAt: Number.isFinite(raw.startedAt) ? raw.startedAt : null,
       bridgeSessionId: typeof raw.bridgeSessionId === 'string' ? raw.bridgeSessionId : null,
-      alive: isAlive(raw.pid),
+      alive: isAlive(raw.pid) && !(Number.isFinite(raw.startedAt) && raw.startedAt < bootMs - BOOT_SLACK_MS),
     });
   }
   return sessions;
@@ -319,6 +326,25 @@ export function liveStepsOf(entries, cwd) {
 
 // ---- transcript summary ----------------------------------------------------
 
+const INTERRUPTED = '[Request interrupted by user';
+
+// Whether the transcript stops inside a turn (mm43): a reply cut mid-stream (no stop_reason) or a tool asked for and never
+// answered keeps it open, as does a prompt or a tool result still waiting for the assistant. end_turn, stop_sequence (an API
+// error) and max_tokens close it, and so does the person pressing stop. Claude Code's own commands (<command-name>/exit,
+// <local-command-stdout>), injected blocks and the summary a /compact writes are not turns, so they change nothing.
+function turnOpenAfter(entry, open) {
+  if (entry.isCompactSummary) return open;
+  if (entry.type === 'assistant') {
+    const reason = entry.message?.stop_reason;
+    return !(reason && reason !== 'tool_use');
+  }
+  const blocks = blocksOf(entry);
+  const texts = blocks.flatMap((b) => (b.type === 'text' ? [b.text] : b.type === 'tool_result' ? [textOf(b.content)] : []));
+  if (texts.some((t) => typeof t === 'string' && t.trimStart().startsWith(INTERRUPTED))) return false;
+  if (humanPromptOf(entry) !== null || blocks.some((b) => b.type === 'tool_result')) return true;
+  return open;
+}
+
 function summarize(entries, sessionId) {
   let cwd = '';
   let gitBranch = '';
@@ -334,6 +360,7 @@ function summarize(entries, sessionId) {
   const launches = {};
   let lastHuman = null;
   let fromPage = false;
+  let turnOpen = false;
   const usageById = new Map();
   const toolUses = [];
   const results = new Map();
@@ -369,6 +396,7 @@ function summarize(entries, sessionId) {
     }
     const run = launchOf(entry);
     if (run && lastHuman && !launches[run]) launches[run] = requestOf(lastHuman);
+    if ((entry.type === 'user' || entry.type === 'assistant') && !entry.isSidechain && !entry.isMeta) turnOpen = turnOpenAfter(entry, turnOpen);
 
     if (entry.type === 'assistant') {
       const row = usageRowOf(entry, `line-${i}`);
@@ -426,6 +454,7 @@ function summarize(entries, sessionId) {
     lastAssistantText,
     turnStartedAt,
     pendingQuestion: lastTool?.name === 'AskUserQuestion' && !results.has(lastTool.id),
+    turnOpen,
     liveSteps: liveStepsOf(entries, cwd),
     editedFiles,
     lastFile,

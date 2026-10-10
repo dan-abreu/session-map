@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  claudeDir, listLiveSessions, listTranscripts, readTranscript,
+  bootTime, claudeDir, listLiveSessions, listTranscripts, readTranscript,
   readHelperUsage, readHelperWork, readWorkflows, readFullTranscript, forEachLine, stepOf,
 } from '../server/sources/claude.mjs';
 import { firstPrompt } from '../server/chat/prompt.mjs';
@@ -41,7 +41,7 @@ test('listLiveSessions reads valid session files, skips junk, marks dead pids', 
   const byPid = Object.fromEntries(sessions.map((s) => [s.pid, s]));
   assert.deepEqual(byPid[1001], {
     pid: 1001, sessionId: A, cwd: '/work/acme-shop', name: 'checkout', status: 'busy',
-    entrypoint: 'claude-vscode', kind: 'interactive', updatedAt: 1760000300000,
+    entrypoint: 'claude-vscode', kind: 'interactive', updatedAt: 1760000300000, startedAt: null,
     bridgeSessionId: null, alive: true,
   });
   assert.equal(byPid[1002].status, 'idle');
@@ -378,4 +378,79 @@ test('stepOf names a file outside the conversation\'s folder by its last folders
   assert.deepEqual(stepOf({ name: 'Edit', input: { file_path: '/work/a/src/x.js' } }, '/work/a', true), { kind: 'edit', target: 'src/x.js' });
   assert.deepEqual(stepOf({ name: 'Edit', input: { file_path: 'D:\\home\\ana\\work\\shop\\server\\pay\\provider.ts' } }, 'D:/home/ana/work/panel', true), { kind: 'edit', target: '…/server/pay/provider.ts' });
   assert.deepEqual(stepOf({ name: 'Read', input: { file_path: '/b/c.js' } }, '/work/a', true), { kind: 'read', target: '/b/c.js' }, 'a short path stays whole');
+});
+
+// ---- whether a transcript stops inside a turn (mm43) ------------------------------------
+
+const said = (ts, stopReason, extra = {}) => line({ type: 'assistant', timestamp: `2026-10-09T10:00:${ts}.000Z`, ...extra, message: { role: 'assistant', stop_reason: stopReason, content: [{ type: 'text', text: 'ok' }] } });
+const asked = (ts, id) => line({ type: 'assistant', timestamp: `2026-10-09T10:00:${ts}.000Z`, message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'Bash', input: { command: 'ls' } }] } });
+const turnOpen = (lines) => withTempDir((dir) => {
+  const file = join(dir, `${A}.jsonl`);
+  writeFileSync(file, `${lines.join('\n')}\n`);
+  return readTranscript(file).turnOpen;
+});
+
+test('turnOpen: a turn the assistant closed with end_turn is not open, nor are the bookkeeping lines Claude Code writes after it', () => {
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', 'end_turn')]), false);
+  assert.equal(turnOpen([
+    prompt('01', 'go'), said('02', 'end_turn'),
+    line({ type: 'system', subtype: 'stop_hook_summary', timestamp: '2026-10-09T10:00:03.000Z' }),
+    line({ type: 'last-prompt', lastPrompt: 'go' }),
+    line({ type: 'cost-state', timestamp: '2026-10-09T10:00:04.000Z' }),
+  ]), false);
+});
+
+test('turnOpen: a tool result with no answer, a tool asked for and never answered, or a reply cut mid-stream leave the turn open', () => {
+  assert.equal(turnOpen([prompt('01', 'go'), asked('02', 'b1'), result('03', 'b1', 'files')]), true);
+  assert.equal(turnOpen([prompt('01', 'go'), asked('02', 'b1')]), true);
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', null)]), true);
+});
+
+test('turnOpen: a prompt with no answer is open; the person pressing stop closes it', () => {
+  assert.equal(turnOpen([said('01', 'end_turn'), prompt('02', 'now the tests')]), true);
+  assert.equal(turnOpen([prompt('01', 'go'), asked('02', 'b1'), prompt('03', '[Request interrupted by user]')]), false);
+  assert.equal(turnOpen([prompt('01', 'go'), asked('02', 'b1'), result('03', 'b1', '[Request interrupted by user for tool use]')]), false);
+});
+
+test('turnOpen: Claude Code\'s own commands after a finished turn (/exit) are not a turn', () => {
+  assert.equal(turnOpen([
+    prompt('01', 'go'), said('02', 'end_turn'),
+    prompt('03', '<command-name>/exit</command-name>\n<command-message>exit</command-message>'),
+    prompt('04', '<local-command-stdout>Bye!</local-command-stdout>'),
+  ]), false);
+});
+
+// The shape of a real manual /compact after a finished turn: the summary is a user entry with plain text and no isMeta.
+test('turnOpen: the summary a /compact writes is not a turn, so a finished turn stays finished and an open one open', () => {
+  const compact = [
+    line({ type: 'system', subtype: 'compact_boundary', timestamp: '2026-10-09T10:00:03.000Z' }),
+    line({ type: 'user', isCompactSummary: true, isVisibleInTranscriptOnly: true, timestamp: '2026-10-09T10:00:04.000Z', message: { role: 'user', content: 'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.' } }),
+    prompt('05', '<command-name>/compact</command-name>\n<command-message>compact</command-message>'),
+    prompt('06', '<local-command-stdout>Compacted</local-command-stdout>'),
+  ];
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', 'end_turn'), ...compact]), false);
+  assert.equal(turnOpen([prompt('01', 'go'), asked('02', 'b1'), result('03', 'b1', 'files'), ...compact.slice(0, 2)]), true, 'an automatic compact mid-turn keeps it open');
+});
+
+test('turnOpen: helper (sidechain) and meta entries are ignored', () => {
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', 'end_turn'), line({ type: 'user', isSidechain: true, timestamp: '2026-10-09T10:00:03.000Z', message: { role: 'user', content: 'helper task' } })]), false);
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', 'end_turn'), line({ type: 'user', isMeta: true, timestamp: '2026-10-09T10:00:03.000Z', message: { role: 'user', content: 'Caveat: meta' } })]), false);
+  assert.equal(turnOpen([prompt('01', 'go'), said('02', null, { isSidechain: true })]), true);
+});
+
+test('listLiveSessions: a session file written before this boot has no live process, even when its pid is taken; the default keeps the old rule', () => {
+  withTempDir((dir) => {
+    mkdirSync(join(dir, 'sessions'));
+    writeFileSync(join(dir, 'sessions', 'old.json'), JSON.stringify({ pid: process.pid, sessionId: B, cwd: '/x', name: 'old', status: 'busy', startedAt: 1_000_000, updatedAt: 1_000_000 }));
+    const [before] = listLiveSessions(dir, { bootMs: 1_000_000 + 120_000 });
+    assert.equal(before.alive, false);
+    assert.equal(before.startedAt, 1_000_000);
+    assert.equal(listLiveSessions(dir, { bootMs: 1_000_000 + 30_000 })[0].alive, true, 'within the slack it still counts');
+    assert.equal(listLiveSessions(dir)[0].alive, true);
+  });
+});
+
+test('bootTime is a moment in the past', () => {
+  const at = bootTime();
+  assert.ok(Number.isFinite(at) && at < Date.now());
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { INTERNALS, runAction } from '../server/actions.mjs';
@@ -197,5 +197,60 @@ test('open reaches a conversation only the list knows (older than the map): VS C
     assert.deepEqual(f.spawned[0].args.slice(-3), ['claude', '--resume', OLD_TERM]);
     assert.equal((await runAction({ action: 'open', sessionId: OLD_VS }, f.deps)).body.opened, 'vscode');
     assert.equal((await runAction({ action: 'open', sessionId: UNKNOWN }, f.deps)).status, 404);
+  } finally { f.cleanup(); }
+});
+
+// ---- delete from session-map and dismiss a cut-off (mm43) ------------------------------------
+
+const listAll = (root) => readdirSync(root, { recursive: true }).map(String).sort();
+
+test('delete only hides the conversation in session-map: removed.json and the log change, Claude Code\'s files never', async () => {
+  const f = fixture();
+  try {
+    const projDir = join(f.dir, 'projects', 'work-shop');
+    mkdirSync(projDir, { recursive: true });
+    const transcript = join(projDir, `${TERM_CLOSED}.jsonl`);
+    writeFileSync(transcript, '{"type":"user","message":{"role":"user","content":"hi"}}\n');
+    const old = (Date.now() - 3_600_000) / 1000;
+    utimesSync(transcript, old, old);
+    const bytes = readFileSync(transcript);
+    const { mtimeMs } = statSync(transcript);
+    const files = listAll(f.dir);
+
+    const res = await runAction({ action: 'delete', sessionId: TERM_CLOSED }, f.deps);
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(f.smDir, 'removed.json'), 'utf8')), [TERM_CLOSED]);
+    const [logged] = readFileSync(join(f.smDir, 'actions.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual([logged.action, logged.sessionId, logged.status], ['delete', TERM_CLOSED, 200]);
+    assert.deepEqual(readFileSync(transcript), bytes);
+    assert.equal(statSync(transcript).mtimeMs, mtimeMs);
+    assert.deepEqual(listAll(f.dir), files);
+    assert.equal(f.spawned.length + f.killed.length, 0);
+  } finally { f.cleanup(); }
+});
+
+test('delete refuses a conversation at work, one the hub drives, an unknown one and a bad id', async () => {
+  const f = fixture();
+  try {
+    assert.equal((await runAction({ action: 'delete', sessionId: TERM_BUSY }, f.deps)).status, 409);
+    const driven = await runAction({ action: 'delete', sessionId: TERM_CLOSED }, { ...f.deps, driving: new Set([TERM_CLOSED]) });
+    assert.deepEqual([driven.status, driven.body.error], [409, 'busy']);
+    assert.equal((await runAction({ action: 'delete', sessionId: UNKNOWN }, f.deps)).status, 404);
+    assert.equal((await runAction({ action: 'delete', sessionId: 'nope' }, f.deps)).status, 400);
+    assert.equal(statSync(join(f.smDir, 'removed.json'), { throwIfNoEntry: false }), undefined);
+  } finally { f.cleanup(); }
+});
+
+test('dismiss-cut remembers the last activity the conversation had, the same way twice', async () => {
+  const f = fixture();
+  try {
+    f.deps.state.projects[0].chats.find((c) => c.sessionId === TERM_CLOSED).updatedAt = '2026-09-10T09:00:00.000Z';
+    const file = join(f.smDir, 'cut-dismissed.json');
+    assert.equal((await runAction({ action: 'dismiss-cut', sessionId: TERM_CLOSED }, f.deps)).status, 200);
+    const first = readFileSync(file, 'utf8');
+    assert.deepEqual(JSON.parse(first), { [TERM_CLOSED]: '2026-09-10T09:00:00.000Z' });
+    assert.equal((await runAction({ action: 'dismiss-cut', sessionId: TERM_CLOSED }, f.deps)).status, 200);
+    assert.equal(readFileSync(file, 'utf8'), first);
+    assert.equal((await runAction({ action: 'dismiss-cut', sessionId: UNKNOWN }, f.deps)).status, 404);
   } finally { f.cleanup(); }
 });

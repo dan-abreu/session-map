@@ -11,7 +11,8 @@ import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
 import { waitingFor } from '../parse/waiting.mjs';
 import { archivedPath } from '../archive.mjs';
-import { claudeDir, readFullTranscript } from '../sources/claude.mjs';
+import { bootTime, claudeDir, listLiveSessions, readFullTranscript } from '../sources/claude.mjs';
+import { readRemoved } from '../hidden.mjs';
 import { helperPath, maskSecrets, readConversation, readImage, toolDetails, versionOf } from '../sources/claude-conversation.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
@@ -101,6 +102,8 @@ export function createChatHub({
   const chats = new Map();
   const bySession = new Map();
   const everDriven = new Set();
+  // The conversations a start is resuming right now, before bySession holds them: a double click starts one process (mm43).
+  const resuming = new Set();
   let relay = null;
 
   // The conversations the page started or wrote into, by sessionId: where they belong, the person's own words as title,
@@ -435,7 +438,8 @@ ${prompt}`;
   }
 
   // body: {projectId, node? ({kind, partId?, layerId?, group?, code?, line?}: the point of the map), partId? (same as a part node),
-  //        frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), text}
+  //        frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), cut? (a Continue from the
+  //        cut-off panel, mm43), text}
   async function start(body, state) {
     if (!body || typeof body !== 'object') return reply(400, { error: 'bad-request' });
     if (!isText(body.text)) return reply(400, { error: 'bad-text' });
@@ -461,9 +465,14 @@ ${prompt}`;
       const chat = find(project, 'chat', body.sessionId);
       const page = readPageChats()[body.sessionId];
       saved = page?.projectId === project.id ? page : null;
-      // A page conversation older than the map's window is still resumable: the page remembers its folder.
-      if (!chat && !saved) return reply(404, { error: 'unknown-session' });
+      // A page conversation older than the map's window is still resumable: the page remembers its folder. One removed
+      // from session-map (mm43) is not.
+      if ((!chat && !saved) || readRemoved(smDir).has(body.sessionId)) return reply(404, { error: 'unknown-session' });
+      if (resuming.has(body.sessionId)) return reply(409, { error: 'busy' });
       const driven = drivenNow(body.sessionId);
+      // A Continue from the cut-off panel is for a turn nothing finished: once the hub drives the conversation, or a page
+      // conversation's turn is no longer running, another tab's older state must not start a second paid turn.
+      if (body.cut === true && (driven || (page && page.running !== true))) return reply(409, { error: 'busy', ...(driven ? { chatKey: driven.key } : {}) });
       if (driven) {
         if (driven.running) return reply(409, { error: 'busy', chatKey: driven.key });
         if (body.mode !== undefined) changeMode(driven, body.mode);
@@ -474,6 +483,8 @@ ${prompt}`;
       }
       // A conversation open in VS Code or a terminal is someone else's: writing into it would interleave two drivers.
       if (chat && !chat.chattable) return reply(409, { error: 'live-chat' });
+      // The state can be a whole collect old: its own process is looked for again, by the session files of this boot.
+      if (listLiveSessions(dir, { bootMs: bootTime() }).some((s) => s.alive && s.sessionId === body.sessionId)) return reply(409, { error: 'live-chat' });
       cwd = state[INTERNALS]?.chats.get(body.sessionId)?.cwd ?? saved?.cwd;
       if (!cwd) return reply(409, { error: 'no-folder' });
       resume = body.sessionId;
@@ -520,14 +531,19 @@ ${prompt}`;
       reinforcing: false, autoAnswered: false,
     };
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
-    // By file, not by argument: a command line is readable by other users of the machine.
-    const config = { mcpServers: { sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: await relayUrl(), SM_PERMISSION_SECRET: chat.secret } } } };
-    mkdirSync(join(smDir, 'chat'), { recursive: true });
-    writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
-    chats.set(key, chat);
-    if (resume) {
-      bySession.set(resume, chat);
-      everDriven.add(resume);
+    if (resume) resuming.add(resume);
+    try {
+      // By file, not by argument: a command line is readable by other users of the machine.
+      const config = { mcpServers: { sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: await relayUrl(), SM_PERMISSION_SECRET: chat.secret } } } };
+      mkdirSync(join(smDir, 'chat'), { recursive: true });
+      writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
+      chats.set(key, chat);
+      if (resume) {
+        bySession.set(resume, chat);
+        everDriven.add(resume);
+      }
+    } finally {
+      if (resume) resuming.delete(resume);
     }
     chat.driver = startDriver({
       bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run) }), cwd, env: cleanEnv(env),
@@ -581,7 +597,8 @@ ${prompt}`;
     const onPoint = (c) => (kind ? c.node?.kind === kind : partId ? c.partId === partId && (!code || c.node?.code === code) : Boolean(workCellId) && c.workCellId === workCellId);
     const belongs = (c) => c.projectId === project.id && onPoint(c);
     const rowOf = (sessionId) => (project.conversations ?? []).find((r) => r.sessionId === sessionId);
-    const chats = Object.entries(readPageChats()).filter(([sessionId, c]) => belongs(c) && !rowOf(sessionId)?.archived).map(([sessionId, c]) => {
+    const removed = readRemoved(smDir);
+    const chats = Object.entries(readPageChats()).filter(([sessionId, c]) => belongs(c) && !rowOf(sessionId)?.archived && !removed.has(sessionId)).map(([sessionId, c]) => {
       const driven = drivenNow(sessionId);
       const cost = driven?.costUSD ?? rowOf(sessionId)?.costUSD;
       return {
@@ -761,8 +778,9 @@ ${prompt}`;
   // The page conversations a restart cut off in the last day, as alerts for the watcher's first look.
   function interrupted(state) {
     const recent = Date.now() - CUT_OFF_ALERT_MS;
+    const removed = readRemoved(smDir);
     return Object.entries(readPageChats())
-      .filter(([sessionId, c]) => UUID_RE.test(sessionId) && cutOff(sessionId, c, state) && Date.parse(c.updatedAt ?? '') >= recent)
+      .filter(([sessionId, c]) => UUID_RE.test(sessionId) && !removed.has(sessionId) && cutOff(sessionId, c, state) && Date.parse(c.updatedAt ?? '') >= recent)
       .map(([sessionId, c]) => ({
         kind: 'error', reason: 'restart', projectId: c.projectId,
         projectName: state?.projects.find((p) => p.id === c.projectId)?.name ?? basename(String(c.root ?? '')),
@@ -772,5 +790,7 @@ ${prompt}`;
 
   return {
     start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, interrupted, drivenIds: () => everDriven,
+    // The conversations the hub runs right now or is resuming: collect leaves them out of the cut-off panel (mm43).
+    drivingIds: () => new Set([...[...bySession].filter(([, c]) => !c.ended).map(([id]) => id), ...resuming]),
   };
 }
