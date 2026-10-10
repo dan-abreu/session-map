@@ -839,6 +839,11 @@ body.is-splitting { cursor: row-resize; user-select: none; }
   background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere;
 }
 .file-open:hover { background: var(--bg-3); }
+.file-open[aria-busy="true"] { cursor: progress; background: var(--bg-3); }
+.file-busy { margin-left: auto; flex: none; font-size: var(--fs-2xs); font-weight: 650; color: var(--active-ink); }
+.file-open[aria-busy="true"] .file-lines { display: none; }
+.pf-paths .file-name.path { font-family: var(--mono); }
+.files-tree + .pf-head { margin-top: var(--sp-4); }
 .file-open:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
 .files-tree + .actions, .block > .actions.secondary { margin-bottom: 10px; }
 .file-dialog {

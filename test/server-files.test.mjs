@@ -132,3 +132,12 @@ test('a file opens with the files it uses and the files that use it, when asked 
     assert.equal(plain.body.links, undefined, 'only when asked: the graph costs a read of the project');
   });
 });
+
+test('GET /api/files/:project?all=1 lists every counted file of the program, with its lines and kind, never a secret (the project Files tab)', async () => {
+  await withServer(async ({ call }) => {
+    const all = await call('/api/files/shop-abc123?all=1');
+    assert.equal(all.status, 200);
+    assert.deepEqual(all.body.files, [{ path: 'src/a.js', status: null, lines: 3, kind: 'code' }]);
+    assert.equal((await call('/api/files/shop-abc123?all=1', { cookie: false })).status, 401);
+  });
+});

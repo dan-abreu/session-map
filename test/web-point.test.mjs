@@ -86,3 +86,14 @@ test('every page script parses (app.js is never imported by the tests, so a typo
     assert.equal(run.status, 0, `${f}: ${run.stderr}`);
   }
 });
+
+test('the project Files tab opens any file: the whole program as a tree, and the files with no box as rows that open', () => {
+  const files = readFileSync(new URL('files.js', WEB), 'utf8');
+  const root = body('programFiles');
+  assert.match(root, /files\.tree\(\{ all: true \}\)/, 'the whole program as a folder tree');
+  assert.match(app, /openable \? files\.pathRow\(path\)/, 'the listed paths open the viewer');
+  assert.match(root, /openable: k !== 'binary'/, 'a binary file stays plain text');
+  assert.match(files, /scope\.all \? \{ all: '1' \}/);
+  assert.match(files, /onclick: \(e\) => busy\(e\.currentTarget, \(\) => onOpen\(f\)\)/, 'a file row says it is opening while it loads');
+  for (const t of Object.values(LANGS)) assert.notEqual(t('files.opening'), 'files.opening');
+});

@@ -21,7 +21,7 @@ import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
 import { collect } from './collect.mjs';
 import { loadConfig } from './config.mjs';
-import { findFiles, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
+import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { linksOf } from './imports.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
@@ -300,6 +300,11 @@ export function createApp({
     if (cell === undefined) throw new HttpError(404, 'unknown-front');
     if (parts[2] === 'files') {
       if (param('find') !== null) return send(res, 200, { ok: true, files: await findFiles(project.root, param('find').slice(0, 200)) });
+      // The whole program as the count sees it (no dependencies, generated or binary files, never a secret).
+      if (param('all') === '1') {
+        const files = (await countRepo(project.root)).files.filter((f) => !isSecretsFile(f.path));
+        return send(res, 200, { ok: true, files: files.map((f) => ({ path: f.path, status: null, lines: f.lines, kind: f.kind })) });
+      }
       if (param('part') !== null) {
         const part = project.arch.parts.find((p) => p.id === param('part'));
         if (!part) throw new HttpError(404, 'unknown-part');

@@ -311,22 +311,25 @@ function unownedChip(node) {
 }
 
 const PATHS_SHOWN = 30;
-const pathList = (paths, n) => (paths.length ? h('ul', { class: 'plain rows pf-paths' },
-  paths.slice(0, PATHS_SHOWN).map((path) => h('li', {}, h('code', { class: 'path' }, path))),
+// openable: a click opens the file in the viewer (a binary file has nothing to read).
+const pathList = (paths, n, { openable = true } = {}) => (paths.length ? h('ul', { class: 'plain rows pf-paths' },
+  paths.slice(0, PATHS_SHOWN).map((path) => h('li', {}, openable ? files.pathRow(path) : h('code', { class: 'path' }, path))),
   n > PATHS_SHOWN ? h('li', { class: 'muted' }, t('files.morePaths', { n: numText(n - PATHS_SHOWN) })) : null) : null);
 
-// The project panel's count: the whole program, the files no box owns (to give them one) and what was left out, by reason.
+// The project panel's files: the whole program as a folder tree to open any file, the files no box owns (to give them
+// one) and what was left out of the count, by reason.
 function programFiles(sizes) {
   if (!sizes?.total) return null;
   const unowned = sizes.unowned.files;
   return kblock('files', { title: t('files.program'), from: t('files.programFrom') },
     h('p', { class: 'pf-lead num' }, t('files.programLead', { files: plural('size.files', sizes.total.files), lines: plural('size.lines', sizes.total.lines) })),
+    files.tree({ all: true }),
     h('h4', { class: `pf-head${unowned ? ' is-unowned' : ''}` }, unowned ? plural('size.unowned', unowned) : t('files.allOwned')),
     unowned ? h('p', { class: 'muted small' }, t('files.unownedHint')) : null,
     pathList(sizes.unowned.paths, unowned),
     h('h4', { class: 'pf-head' }, t('files.left')),
     ['dep', 'generated', 'binary'].map((k) => (sizes.left[k].files
-      ? h('details', { class: 'pf-left' }, h('summary', {}, t(`files.left.${k}`, { n: numText(sizes.left[k].files) })), pathList(sizes.left[k].paths, sizes.left[k].files))
+      ? h('details', { class: 'pf-left' }, h('summary', {}, t(`files.left.${k}`, { n: numText(sizes.left[k].files) })), pathList(sizes.left[k].paths, sizes.left[k].files, { openable: k !== 'binary' }))
       : h('p', { class: 'pf-left muted small' }, t(`files.left.${k}`, { n: '0' })))));
 }
 

@@ -26,7 +26,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
   function kinds(files) {
     const tt = t();
     const list = kindCounts(files);
-    return list.length ? h('p', { class: 'files-kinds' }, list.map((k) => h('span', { class: `files-kind fk-${k.kind}`, title: tt('files.lines', { n: k.lines }) }, tt(`files.kind.${k.kind}`), h('span', { class: 'num' }, String(k.files))))) : null;
+    return list.length ? h('p', { class: 'files-kinds' }, list.map((k) => h('span', { class: `files-kind fk-${k.kind}`, title: tt.count('files.lines', k.lines) }, tt(`files.kind.${k.kind}`), h('span', { class: 'num' }, String(k.files))))) : null;
   }
 
   function fileRow(f, onOpen) {
@@ -34,10 +34,29 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
     const status = f.status ? [h('span', { class: 'file-status', 'aria-hidden': 'true' }, f.status), h('span', { class: 'visually-hidden' }, `${tt(`wc.status.${f.status}`)}: `)] : [];
     // A removed file has nothing left to read.
     if (f.status === 'D') return h('li', { class: 'file st-D', title: tt('files.removed') }, status, f.name);
-    const lines = f.lines !== undefined ? h('span', { class: 'file-lines num' }, tt('files.lines', { n: f.lines })) : null;
+    const lines = f.lines !== undefined ? h('span', { class: 'file-lines num' }, tt.count('files.lines', f.lines)) : null;
     return h('li', { class: `file${f.status ? ` st-${f.status}` : ''}` },
-      h('button', { type: 'button', class: 'file-open', onclick: () => onOpen(f) }, status, h('span', { class: 'file-name' }, f.name), lines));
+      h('button', { type: 'button', class: 'file-open', onclick: (e) => busy(e.currentTarget, () => onOpen(f)) }, status, h('span', { class: 'file-name' }, f.name), lines));
   }
+
+  // The first file of a big project can take a few seconds (the map of what uses what is built then): the row says it is
+  // opening, so a click never looks lost.
+  async function busy(btn, run) {
+    if (btn.getAttribute('aria-busy') === 'true') return;
+    const note = h('span', { class: 'file-busy' }, t()('files.opening'));
+    btn.setAttribute('aria-busy', 'true');
+    btn.append(note);
+    try {
+      await run();
+    } finally {
+      btn.removeAttribute('aria-busy');
+      note.remove();
+    }
+  }
+
+  // A plain path as a row that opens the file (the project's lists of files with no box and of what was left out).
+  const pathRow = (path) => h('button', { type: 'button', class: 'file-open', onclick: (e) => busy(e.currentTarget, () => open(path)) },
+    h('span', { class: 'file-name path' }, path));
 
   function folder(dir, key, onOpen, openAll, depth) {
     const tt = t();
@@ -58,10 +77,11 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
     return h('div', { class: 'organelle-list' }, kinds(files), h('div', { class: 'ftree' }, branch(fileTree(files), key, onOpen, files.length <= OPEN_ALL_MAX, 0)));
   }
 
-  // scope: {workCell, files} (the branch's own list, already in the state) or {part} (asked from the server, kept for a while).
+  // scope: {workCell, files} (the branch's own list, already in the state), or {part} or {all} (the whole program), asked from
+  // the server and kept for a while.
   function tree(scope) {
     const el = h('div', { class: 'files-tree' });
-    const key = `${project().id}|${scope.part ?? scope.workCell}`;
+    const key = `${project().id}|${scope.all ? '*' : scope.part ?? scope.workCell}`;
     const draw = (files) => el.replaceChildren(files.length ? rows(files, key, (f) => open(f.path, f.workCell ?? scope.workCell)) : h('p', { class: 'muted' }, t()('files.empty')));
     if (scope.files) {
       draw(scope.files);
@@ -71,7 +91,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
     if (hit) draw(hit.files);
     else el.replaceChildren(h('p', { class: 'muted' }, t()('files.loading')));
     if (!hit || Date.now() - hit.at > LIST_TTL_MS) {
-      api.files(project().id, { part: scope.part }).then((res) => {
+      api.files(project().id, scope.all ? { all: '1' } : { part: scope.part }).then((res) => {
         if (!res.ok) return hit ? undefined : el.replaceChildren(h('p', { class: 'muted' }, errorText(res.error)));
         lists.set(key, { at: Date.now(), files: res.files });
         return draw(res.files);
@@ -81,13 +101,18 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
   }
 
   // line: an item's line in its part file, shown and marked like a changed one.
+  // The code shows at once; what it uses and what uses it comes a moment later, since the first file of a big project
+  // builds that map (seconds on a few thousand files).
   async function open(path, workCell, { line = null } = {}) {
-    const res = await api.file(project().id, path, workCell, !workCell);
+    const res = await api.file(project().id, path, workCell, false);
     if (!res.ok) {
       toast(errorText(res.error));
       return;
     }
-    view(path, workCell, line ? { ...res, changes: [{ from: line, to: line }], itemLine: line } : res);
+    const slot = view(path, workCell, line ? { ...res, changes: [{ from: line, to: line }], itemLine: line } : res);
+    if (workCell) return;
+    const withLinks = await api.file(project().id, path, workCell, true);
+    if (withLinks.ok && slot.isConnected) slot.replaceChildren(...[linksPanel(withLinks.links, workCell)].filter(Boolean));
   }
 
   function linksPanel(links, workCell) {
@@ -109,6 +134,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
 
   function view(path, workCell, file) {
     const tt = t();
+    const slot = h('div', { class: 'file-links-slot' }, ...[linksPanel(file.links, workCell)].filter(Boolean));
     const marks = changedLines(file.changes);
     const lines = file.text.split('\n');
     if (lines.at(-1) === '') lines.pop();
@@ -202,18 +228,19 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
       h('div', { class: 'file-head' },
         h('div', { class: 'file-title' },
           h('h2', { id: 'fileTitle' }, h('code', {}, path)),
-          h('p', { class: 'meta' }, `${tt('files.readOnly')} · ${tt('files.lines', { n: file.lines })} · ${file.itemLine ? tt('files.itemLine', { n: file.itemLine }) : file.changes.length ? tt('files.changes') : tt('files.noChanges')}`)),
+          h('p', { class: 'meta' }, `${tt('files.readOnly')} · ${tt.count('files.lines', file.lines)} · ${file.itemLine ? tt('files.itemLine', { n: file.itemLine }) : file.changes.length ? tt('files.changes') : tt('files.noChanges')}`)),
         h('div', { class: 'actions' },
           h('button', { type: 'button', class: 'btn primary', onclick: openInVscode, title: tt('files.fromPhone') }, vscodeLabel),
           h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, tt('files.close')))),
       h('div', { class: 'file-tools' }, h('label', { class: 'fs-field' }, search), count, prev, next),
-      linksPanel(file.links, workCell),
+      slot,
       h('div', { class: 'file-body' }, code, more));
     setCurrent(current);
     dialog.classList.remove('is-change');
     if (!dialog.open) dialog.showModal();
     code.querySelector('.is-changed')?.scrollIntoView({ block: 'center' });
+    return slot;
   }
 
-  return { tree, open, close: () => dialog.close() };
+  return { tree, open, pathRow, close: () => dialog.close() };
 }
