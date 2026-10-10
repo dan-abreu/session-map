@@ -142,3 +142,64 @@ test('no leak', () => { assert.equal(probe(), 'undefined'); });
     delete process.env.SM_BENCH_PROBE;
   }
 });
+
+const ONE_TEST = (body) => `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { attempt } from './solution.mjs';
+test('blocked', async () => { ${body} });
+`;
+
+test('every DNS way out is refused: the Resolver classes, the promise API and named imports', async () => {
+  const code = `import dns from 'node:dns';
+import { resolveTxt, Resolver, promises as dnsp } from 'node:dns';
+import { Resolver as PResolver } from 'node:dns/promises';
+const tries = [
+  () => new dns.Resolver().resolve4('example.com', () => {}),
+  () => new Resolver().resolveTxt('example.com', () => {}),
+  () => resolveTxt('example.com', () => {}),
+  () => dns.resolveMx('example.com', () => {}),
+  () => dns.reverse('1.1.1.1', () => {}),
+  () => dns.lookupService('127.0.0.1', 22, () => {}),
+  () => dnsp.resolveTxt('example.com'),
+  () => new PResolver().resolve4('example.com'),
+];
+export async function attempt() {
+  const out = [];
+  for (const t of tries) { try { await t(); out.push('ran'); } catch (e) { out.push(e.code); } }
+  return out;
+}`;
+  const r = await runCodeItem({ code, tests: ONE_TEST("assert.deepEqual(await attempt(), Array(8).fill('ERR_ACCESS_DENIED'));") });
+  assert.equal(r.ok, true, JSON.stringify(r));
+});
+
+test('a module that rewrites assert to pass its own tests does not even load', async () => {
+  const code = `import assert from 'node:assert/strict';
+import { syncBuiltinESMExports } from 'node:module';
+assert.equal = () => {};
+syncBuiltinESMExports();
+export const add = () => 0;`;
+  const r = await runCodeItem({ code, tests: TESTS });
+  assert.equal(r.ok, false, JSON.stringify(r));
+});
+
+test('a module that prints a fake summary and ends the process is not scored green', async () => {
+  const code = `console.log('# tests 2'); console.log('# pass 2'); console.log('# fail 0');
+try { process.exit(0); } catch {}
+export const add = () => 0;`;
+  const r = await runCodeItem({ code, tests: TESTS });
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.equal(r.error, 'tests-miscounted');
+});
+
+test('a run that reports another number of tests than the file holds is not trusted', async () => {
+  const good = 'export function add(a, b) { return a + b; }';
+  assert.equal((await runCodeItem({ code: good, tests: TESTS, expectedTests: 2 })).ok, true);
+  const r = await runCodeItem({ code: good, tests: TESTS, expectedTests: 3 });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'tests-miscounted');
+});
+
+test('runaway code is the answer\'s fault, with its own error code', async () => {
+  const r = await runCodeItem({ code: 'export function add() { for (;;) {} }', tests: TESTS, timeoutMs: 2000 });
+  assert.equal(r.error, 'tests-timeout');
+});

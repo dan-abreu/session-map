@@ -49,7 +49,7 @@ test('gold only from the owner, an item code or file ownership; never from the A
   const convs = [
     summary(1), // placed by hand on a part
     summary(2), // placed by hand on "no part"
-    summary(3, { mentionedCodes: [{ code: 'wb01', n: 2 }] }),
+    summary(3, { mentionedCodes: [{ code: 'wb01', n: 2 }], userPrompts: ['finish WB01 please'] }),
     summary(4, { editedFiles: [join(ROOT, 'server', 'a.js')] }),
     summary(5), // nobody knows
     summary(6), // only the AI answered
@@ -91,7 +91,7 @@ test('the prompt is the product\'s own, and the examples never hold the item\'s 
 
 test('a small limit still holds every kind of answer, in a stable order', async () => {
   const convs = [];
-  for (let n = 1; n <= 4; n++) convs.push(summary(n, { mentionedCodes: [{ code: 'sv01', n: 1 }] }));
+  for (let n = 1; n <= 4; n++) convs.push(summary(n, { mentionedCodes: [{ code: 'sv01', n: 1 }], userPrompts: [`sv01 step ${n}`] }));
   convs.push(summary(5, { editedFiles: [join(ROOT, 'web', 'x.js')] }), summary(6));
   setPlacement(SM, id(6), { partId: null });
   const first = await buildClassifySet({ smDir: SM, limit: 3, deps: deps(convs) });
@@ -104,7 +104,7 @@ test('a small limit still holds every kind of answer, in a stable order', async 
 });
 
 test('removed conversations, empty digests, one-part projects and other projects are left out', async () => {
-  const convs = [summary(1, { mentionedCodes: [{ code: 'sv01', n: 1 }] }), summary(2, { mentionedCodes: [{ code: 'sv01', n: 1 }] }), summary(3, { userPrompts: [], mentionedCodes: [{ code: 'sv01', n: 1 }] })];
+  const convs = [summary(1, { mentionedCodes: [{ code: 'sv01', n: 1 }], userPrompts: ['do sv01'] }), summary(2, { mentionedCodes: [{ code: 'sv01', n: 1 }], userPrompts: ['do sv01'] }), summary(3, { userPrompts: [], mentionedCodes: [{ code: 'sv01', n: 1 }] })];
   addRemoved(SM, id(1));
   const out = await buildClassifySet({ smDir: SM, deps: deps(convs) });
   assert.deepEqual(JSON.parse(readFileSync(classifySetPath(SM), 'utf8')).items.map((i) => i.id), [id(2)]);
@@ -117,4 +117,38 @@ test('removed conversations, empty digests, one-part projects and other projects
   const other = await buildClassifySet({ smDir: SM, projectId: 'someone-else-000000', deps: deps(convs) });
   assert.equal(other.total, 0);
   assert.ok(out.total === 1);
+});
+
+test('a code gold is kept only when the prompt lets a reader reach it', async () => {
+  const sv = [{ code: 'sv01', n: 2 }];
+  const convs = [
+    summary(1, { mentionedCodes: sv, userPrompts: ['finish sv01'] }), // kept
+    summary(2, { mentionedCodes: sv, userPrompts: ['o que é isso?'] }), // the code is only in the replies
+    summary(3, { mentionedCodes: [{ code: 'sv01', n: 1 }, { code: 'wb01', n: 1 }], userPrompts: ['sv01 and wb01'] }), // a tie
+    summary(4, { mentionedCodes: sv, userPrompts: ['sv01 again'], editedFiles: [join(ROOT, 'web', 'page.js')] }), // files say web
+  ];
+  const out = await buildClassifySet({ smDir: SM, deps: deps(convs) });
+  const ids = JSON.parse(readFileSync(classifySetPath(SM), 'utf8')).items.map((i) => i.id);
+  assert.deepEqual(ids, [id(1)]);
+  assert.deepEqual(out.dropped, { 'code-not-in-prompt': 1, 'code-tie': 1, 'files-disagree': 1 });
+});
+
+test('a files gold comes from the conversation\'s own edits, never from its helpers\' (the prompt does not show them)', async () => {
+  const convs = [summary(1), summary(2, { editedFiles: [join(ROOT, 'server', 'a.js')] })];
+  const d = deps(convs);
+  d.conversations = () => convs.map((s) => ({ summary: s, helperEdits: [join(ROOT, 'web', 'helper.js')], card: null }));
+  await buildClassifySet({ smDir: SM, deps: d });
+  const items = JSON.parse(readFileSync(classifySetPath(SM), 'utf8')).items;
+  assert.deepEqual(items.map((i) => [i.id, i.gold.partId]), [[id(2), 'server']]);
+});
+
+test('two items with the very same digest and different gold are both left out', async () => {
+  const same = { title: 'o que seria isso?', userPrompts: ['o que seria isso?'] };
+  const convs = [summary(1, same), summary(2, same), summary(3, { title: 'other' })];
+  setPlacement(SM, id(1), { partId: 'server' });
+  setPlacement(SM, id(2), { partId: 'web' });
+  setPlacement(SM, id(3), { partId: 'web' });
+  const out = await buildClassifySet({ smDir: SM, deps: deps(convs) });
+  assert.deepEqual(JSON.parse(readFileSync(classifySetPath(SM), 'utf8')).items.map((i) => i.id), [id(3)]);
+  assert.equal(out.dropped['same-prompt-other-gold'], 2);
 });

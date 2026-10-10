@@ -191,14 +191,17 @@ test('a resumed run reuses what it already has and redoes only what was skipped 
     let n = 0;
     const flaky = perfect({ cost: 0.04 });
     const first = async (...args) => (++n === 2 ? { ok: false, value: null, costUSD: 0, error: 'timeout' } : flaky(...args));
-    // Estimates: 0.08, then 0.06 each; the timed-out call costs nothing, so the fourth (0.08 + 0.06) passes 0.13.
+    // Estimates: 0.08, then 0.06 each. The timed-out call may have been billed, so its 0.06 is booked: 0.10 spent,
+    // and the third call (0.06 more) would pass 0.13.
     const out1 = await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'], maxUSD: 0.13 }), { call: first, keyedProviders: [] });
-    assert.deepEqual(out1.results.map((r) => r.skipped ?? r.error), [null, 'timeout', null, 'budget']);
+    assert.deepEqual(out1.results.map((r) => r.skipped ?? r.error), [null, 'timeout', 'budget', 'budget']);
+    assert.deepEqual([out1.results[1].costUSD, out1.results[1].costEstimated], [0.06, true]);
+    assert.equal(out1.spentUSD, 0.1);
 
     const again = perfect({ cost: 0.04 });
     const out2 = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku'], maxUSD: 8 }, { call: again, keyedProviders: [] });
     assert.equal(out2.runId, 'run-a');
-    assert.equal(again.calls.length, 2, 'only the broken and the skipped item are asked again');
+    assert.equal(again.calls.length, 3, 'only the broken and the skipped items are asked again');
     assert.ok(out2.results.every((r) => r.score === 1 && !r.skipped));
     assert.equal(out2.results.length, 4);
   } finally {
@@ -329,4 +332,216 @@ test('the command line reads lists, numbers and switches', () => {
   assert.throws(() => parseCli(['--max-usd', '-1']), /max-usd/);
   assert.equal(parseCli(['--resume', 'run-x']).resume, 'run-x');
   assert.throws(() => parseCli(['--resume', '../etc']), /resume/);
+});
+
+test('a long prompt after a short one is estimated by its size, so the total cap holds', async () => {
+  const env = scratch();
+  try {
+    const long = 'x'.repeat(100_000);
+    writeSet(join(env.setsDir, 'pt.json'), 'pt', [{ id: 'p0', prompt: 'x'.repeat(100) }, ...[1, 2, 3].map((i) => ({ id: `p${i}`, prompt: long }))]);
+    const call = async (c, prompt) => ({ ok: true, value: { text: GOOD_PT }, costUSD: prompt.length / 1e5 });
+    const out = await runBench(base(env, { kinds: ['pt'], only: ['claude:haiku'], maxUSD: 0.5 }), { call, keyedProviders: [] });
+    assert.ok(out.spentUSD <= 0.5, `spent ${out.spentUSD}`);
+    assert.deepEqual(out.results.map((r) => r.skipped ?? null), [null, 'budget', 'budget', 'budget']);
+  } finally {
+    env.done();
+  }
+});
+
+test('an answer in the wrong shape is a failure, never a free "no part" or "no bug"', async () => {
+  const env = scratch();
+  try {
+    allSets(env);
+    const call = async () => ({ ok: true, value: {}, costUSD: 0.01 });
+    const out = await runBench(base(env, { kinds: ['classify', 'review'], only: ['claude:haiku'] }), { call, keyedProviders: [] });
+    assert.ok(out.results.every((r) => r.score === 0 && r.ok === false && r.error === 'bad-shape'), JSON.stringify(out.results));
+  } finally {
+    env.done();
+  }
+});
+
+test('code that hangs in the sandbox is the answer\'s fault: a resumed run does not ask again', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'code.json'), 'code', CODE);
+    // The reference has no expectedTests; the answers are tested with the count the reference gave.
+    const runCode = async ({ expectedTests }) => (expectedTests === undefined
+      ? { ok: true, passed: 1, failed: 0, total: 1, ms: 1 }
+      : { ok: false, passed: 0, failed: 0, total: 0, timedOut: true, error: 'tests-timeout', ms: 20_000 });
+    const out = await runBench(base(env, { kinds: ['code'], only: ['claude:haiku'] }), { call: perfect(), keyedProviders: [], runCode });
+    assert.equal(out.results[0].error, 'tests-timeout');
+    const again = perfect();
+    await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['code'], only: ['claude:haiku'] }, { call: again, keyedProviders: [], runCode });
+    assert.equal(again.calls.length, 0);
+  } finally {
+    env.done();
+  }
+});
+
+test('when the sandbox broke on this machine, a resumed run tests the stored answer again without paying twice', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'code.json'), 'code', CODE);
+    const broken = async () => { throw new Error('disk full'); };
+    const first = await runBench(base(env, { kinds: ['code'], only: ['claude:haiku'] }), { call: perfect(), keyedProviders: [], runCode: broken });
+    assert.equal(first.results[0].error, 'sandbox-failed');
+    const again = perfect();
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['code'], only: ['claude:haiku'] }, { call: again, keyedProviders: [] });
+    assert.equal(again.calls.length, 0);
+    assert.deepEqual([out.results[0].score, out.results[0].error, out.results[0].costUSD], [1, null, 0.01]);
+    assert.equal(out.spentUSD, 0.01);
+  } finally {
+    env.done();
+  }
+});
+
+test('a code item whose reference fails its own tests is left out for everyone, with a note', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'code.json'), 'code', [{ ...CODE[0], reference: 'export function add(a, b) { return a - b; }' }]);
+    const call = perfect();
+    const out = await runBench(base(env, { kinds: ['code'], only: ['claude:haiku'] }), { call, keyedProviders: [] });
+    assert.equal(call.calls.length, 0);
+    assert.equal(out.results[0].skipped, 'broken-item');
+    assert.ok(out.notes.some((n) => /k1/.test(n)), out.notes.join('\n'));
+  } finally {
+    env.done();
+  }
+});
+
+test('an answer that adds tests of its own is not trusted: the count must match the reference', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'code.json'), 'code', CODE);
+    const code = "import { test } from 'node:test';\ntest('free', () => {});\nexport function add(a, b) { return a + b; }";
+    const call = async () => ({ ok: true, value: { code }, costUSD: 0.01 });
+    const out = await runBench(base(env, { kinds: ['code'], only: ['claude:haiku'] }), { call, keyedProviders: [] });
+    assert.deepEqual([out.results[0].score, out.results[0].error], [0, 'tests-miscounted']);
+  } finally {
+    env.done();
+  }
+});
+
+test('an answer cut off before its JSON closed (no-json, bad-output) is asked again on resume', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [{ ...REVIEW[1], id: 'r0' }, { ...REVIEW[1], id: 'r1' }]);
+    let n = 0;
+    const flaky = perfect({ cost: 0.01 });
+    const first = async (...args) => (++n === 1 ? { ok: false, value: null, costUSD: 0.001, error: 'no-json' } : flaky(...args));
+    const out1 = await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: first, keyedProviders: [] });
+    assert.equal(out1.results[0].error, 'no-json');
+    const again = perfect({ cost: 0.01 });
+    const out2 = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku'], maxUSD: 8 }, { call: again, keyedProviders: [] });
+    assert.equal(again.calls.length, 1, 'only the cut-off answer is asked again');
+    assert.ok(out2.results.every((r) => r.ok && r.score === 1));
+  } finally {
+    env.done();
+  }
+});
+
+test('an answer the length limit cut off (answer-cut) is asked again on resume', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [{ ...REVIEW[1], id: 'r0' }]);
+    const cut = async () => ({ ok: false, value: null, costUSD: 0.001, error: 'answer-cut' });
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: cut, keyedProviders: [] });
+    const again = perfect({ cost: 0.01 });
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku'], maxUSD: 8 }, { call: again, keyedProviders: [] });
+    assert.equal(again.calls.length, 1);
+    assert.ok(out.results.every((r) => r.ok && r.score === 1));
+  } finally {
+    env.done();
+  }
+});
+
+test('a resumed run with --only measures new contestants under the cap: earlier money of the others does not count', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0], REVIEW[1]]);
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: perfect({ cost: 0.5 }), keyedProviders: [] });
+    const again = perfect({ cost: 0.001 });
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['openai:gpt-6-luna'], maxUSD: 0.5 }, { call: again, keyedProviders: ['openai'] });
+    assert.deepEqual(again.calls.map((c) => c.contestant), ['openai:gpt-6-luna', 'openai:gpt-6-luna']);
+    assert.equal(out.spentUSD, 1.002, 'the run still reports everything it cost');
+    assert.deepEqual(out.results.map((r) => r.contestant).sort(), ['claude:haiku', 'claude:haiku', 'openai:gpt-6-luna', 'openai:gpt-6-luna']);
+    const saved = JSON.parse(readFileSync(join(env.smDir, 'bench', 'runs', 'run-a', 'results.json'), 'utf8'));
+    assert.deepEqual(saved.spentEachUSD, { 'claude:haiku': 1, 'openai:gpt-6-luna': 0.002 });
+  } finally {
+    env.done();
+  }
+});
+
+test('money a run cannot put on one contestant still counts against the cap of a resumed --only run', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[1]]);
+    mkdirSync(join(env.smDir, 'bench', 'runs', 'run-a'), { recursive: true });
+    writeFileSync(join(env.smDir, 'bench', 'runs', 'run-a', 'results.json'), JSON.stringify({ runId: 'run-a', spentUSD: 1, results: [] }));
+    const again = perfect({ cost: 0.001 });
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['openai:gpt-6-luna'], maxUSD: 0.5 }, { call: again, keyedProviders: ['openai'] });
+    assert.equal(again.calls.length, 0);
+    assert.equal(out.results[0].skipped, 'budget');
+  } finally {
+    env.done();
+  }
+});
+
+test('each run writes bench/routing.json the router reads, merged with what earlier runs measured', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0], REVIEW[1]]);
+    const routing = join(env.smDir, 'bench', 'routing.json');
+    mkdirSync(join(env.smDir, 'bench'), { recursive: true });
+    writeFileSync(routing, JSON.stringify({ updatedAt: '2026-01-01T00:00:00.000Z', entries: [
+      { kind: 'review', contestant: 'claude:haiku', accuracy: 0.1, costPerCorrectUSD: 9, n: 40 },
+      { kind: 'code', contestant: 'claude:haiku', accuracy: 0.9, costPerCorrectUSD: 0.01, n: 30 },
+    ] }));
+    let n = 0;
+    const good = perfect({ cost: 0.02 });
+    const call = async (c, ...rest) => (c.id === 'openai:gpt-6-luna' && ++n === 1 ? { ok: true, value: { bugs: [] }, costUSD: 0.02, error: null } : good(c, ...rest));
+    await runBench(base(env, { kinds: ['review', 'pt'], only: ['claude:haiku', 'openai:gpt-6-luna'] }), { call, keyedProviders: ['openai'] });
+    const data = JSON.parse(readFileSync(routing, 'utf8'));
+    assert.match(data.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.notEqual(data.updatedAt, '2026-01-01T00:00:00.000Z');
+    const by = Object.fromEntries(data.entries.map((e) => [`${e.kind} ${e.contestant}`, e]));
+    assert.deepEqual(Object.keys(by).sort(), ['code claude:haiku', 'review claude:haiku', 'review openai:gpt-6-luna'], 'no pt set: nothing measured there, nothing written');
+    const pick = (e) => ({ kind: e.kind, contestant: e.contestant, accuracy: e.accuracy, costPerCorrectUSD: e.costPerCorrectUSD, n: e.n });
+    assert.deepEqual(pick(by['review claude:haiku']), { kind: 'review', contestant: 'claude:haiku', accuracy: 1, costPerCorrectUSD: 0.02, n: 2 }, 'the newer measure replaces the older');
+    assert.deepEqual(pick(by['review openai:gpt-6-luna']), { kind: 'review', contestant: 'openai:gpt-6-luna', accuracy: 0.5, costPerCorrectUSD: 0.04, n: 2 });
+    assert.deepEqual(pick(by['code claude:haiku']), { kind: 'code', contestant: 'claude:haiku', accuracy: 0.9, costPerCorrectUSD: 0.01, n: 30 }, 'what this run did not measure is kept');
+  } finally {
+    env.done();
+  }
+});
+
+test('routing.json: a kind with no right answer is booked at its whole cost, and a broken file is replaced', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0]]);
+    const routing = join(env.smDir, 'bench', 'routing.json');
+    mkdirSync(join(env.smDir, 'bench'), { recursive: true });
+    writeFileSync(routing, '{ not json');
+    const wrong = async () => ({ ok: true, value: { bugs: [] }, costUSD: 0.03, error: null });
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: wrong, keyedProviders: [] });
+    const [e] = JSON.parse(readFileSync(routing, 'utf8')).entries;
+    assert.deepEqual([e.accuracy, e.costPerCorrectUSD, e.n], [0, 0.03, 1]);
+  } finally {
+    env.done();
+  }
+});
+
+test('routing.json keeps a measure from a later run over one from the run being resumed', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[1]]);
+    const routing = join(env.smDir, 'bench', 'routing.json');
+    mkdirSync(join(env.smDir, 'bench'), { recursive: true });
+    const later = { kind: 'review', contestant: 'claude:haiku', accuracy: 0.7, costPerCorrectUSD: 0.5, n: 25, runId: '2099-01-01-00-00-00' };
+    writeFileSync(routing, JSON.stringify({ updatedAt: '2099-01-01T00:00:00.000Z', entries: [later] }));
+    await runBench(base(env, { runId: '2026-10-10-21-43-44', kinds: ['review'], only: ['claude:haiku'] }), { call: perfect(), keyedProviders: [] });
+    assert.deepEqual(JSON.parse(readFileSync(routing, 'utf8')).entries, [later]);
+  } finally {
+    env.done();
+  }
 });

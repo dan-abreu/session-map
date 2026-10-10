@@ -16,7 +16,7 @@ test('classify: a gold of null means "none fits", and only a null-like answer is
   assert.equal(scoreClassify(item, { partId: '' }).score, 1);
   assert.equal(scoreClassify(item, { partId: 'none' }).score, 1);
   assert.equal(scoreClassify(item, { partId: 'map' }).score, 0);
-  assert.equal(scoreClassify({ id: 'c3', gold: null }, {}).score, 1);
+  assert.equal(scoreClassify({ id: 'c3', gold: null }, { partId: null }).score, 1);
 });
 
 test('classify: the stored answer is only the part id, cut short', () => {
@@ -56,11 +56,37 @@ test('review: on a clean item, no reports is right and every report is a false a
   assert.equal(r.falseAlarms, 2);
 });
 
-test('review: a missed bug scores zero; a malformed answer counts as no reports', () => {
+test('review: a missed bug scores zero; a malformed answer is a bad shape, never "no reports"', () => {
   const item = { id: 'r1', clean: false, bugLines: [10] };
   assert.equal(scoreReview(item, { bugs: [] }).score, 0);
   assert.equal(scoreReview(item, { bugs: 'none' }).score, 0);
   assert.equal(scoreReview(item, null).falseAlarms, 0);
+  assert.equal(scoreReview(item, null).badShape, true);
+});
+
+test('an answer that ignores the asked shape never wins a "no bug" or "no part" item', () => {
+  const clean = { id: 'r2', clean: true, bugLines: [] };
+  for (const v of [{}, { issues: [{ line: 3 }] }, null, 'none']) {
+    const r = scoreReview(clean, v);
+    assert.deepEqual([r.score, r.badShape], [0, true], JSON.stringify(v));
+  }
+  const none = { id: 'c2', gold: { partId: null } };
+  for (const v of [{}, { part: 'server' }, { partId: 7 }, null]) {
+    const r = scoreClassify(none, v);
+    assert.deepEqual([r.score, r.badShape], [0, true], JSON.stringify(v));
+  }
+  assert.equal(scoreClassify(none, { partId: null }).badShape, undefined);
+});
+
+test('review: a report with no usable line is a false alarm, never a hit', () => {
+  const early = { id: 'r3', clean: false, bugLines: [1] };
+  for (const line of [null, '', 0, 1.5, 'abc', undefined]) {
+    const r = scoreReview(early, { bugs: [{ line, why: 'x' }] });
+    assert.deepEqual([r.score, r.hits, r.falseAlarms], [0, 0, 1], String(line));
+  }
+  assert.equal(scoreReview(early, { bugs: [{ line: '2' }] }).score, 1);
+  const clean = { id: 'r2', clean: true, bugLines: [] };
+  assert.equal(scoreReview(clean, { bugs: [{ line: null, why: 'something' }] }).score, 0);
 });
 
 const GOOD_PT = 'Agora a lista de conversas tem uma caixa de busca. Quando você digita uma palavra, aparecem só as conversas que falam dela. Funciona com as suas 214 conversas em menos de um segundo, e nada foi perdido ou apagado. Para experimentar, abra a lista, clique na caixa no alto e digite uma palavra que você lembra de alguma conversa. Se quiser ver tudo de novo, é só apagar o que digitou. Assim fica mais fácil achar aquela conversa antiga sem precisar rolar a tela inteira.';
@@ -77,6 +103,7 @@ test('pt: jargon, English or a wrong size fails the automatic checks', () => {
   assert.equal(scorePt({ id: 'p1' }, { text: 'The search box is now on the list and you can type a word to see only the chats that mention it, which is fast and safe for everyone who uses it every day.' }).score, 0);
   assert.equal(scorePt({ id: 'p1' }, { text: 'Pronto, está feito.' }).score, 0);
   assert.equal(scorePt({ id: 'p1' }, { text: 42 }).score, 0);
+  assert.equal(scorePt({ id: 'p1' }, { text: 42 }).badShape, true);
 });
 
 test('scoreAnswer sends each kind to its scorer and refuses an unknown kind', () => {

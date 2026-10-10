@@ -88,3 +88,26 @@ test('a runner that throws is a failed answer, not a crashed bench', async () =>
   const call = makeCaller({ smDir: '/sm', runClaude: async () => { throw new Error('boom'); } });
   assert.deepEqual(await call(parseContestant('claude:haiku'), 'p'), { ok: false, value: null, costUSD: 0, error: 'crashed' });
 });
+
+test('a longer prompt than the ones seen is estimated by the dearest cost per character, not by the last bill', () => {
+  const haiku = parseContestant('claude:haiku');
+  // A 100-character call cost 0.001: a 100,000-character prompt may cost a thousand times that.
+  const est = estimateUSD(haiku, 'x'.repeat(100_000), [{ costUSD: 0.001, chars: 100 }]);
+  assert.ok(est >= 1, `too low: ${est}`);
+  // A prompt no longer than the ones seen keeps the old rule: the dearest bill with a margin.
+  assert.equal(estimateUSD(haiku, 'x'.repeat(50), [{ costUSD: 0.01, chars: 100 }, { costUSD: 0.02, chars: 100 }]), 0.03);
+  // A very long first prompt is not priced at the flat first guess.
+  assert.ok(estimateUSD(haiku, 'x'.repeat(200_000)) > estimateUSD(haiku, 'hi') * 5);
+});
+
+test('an outside call asks for room enough for a whole module or hidden reasoning, and the estimate prices that room', async () => {
+  const seen = [];
+  const runApi = async (prompt, opts) => { seen.push(opts); return { ok: false, error: 'http-500', costUSD: 0 }; };
+  const call = makeCaller({ smDir: '/sm', runClaude: () => assert.fail('no claude'), runApi, getKeyFn: async () => 'k' });
+  await call(parseContestant('deepseek:deepseek-flash'), 'p', '{}');
+  assert.equal(seen[0].maxTokens, 8192);
+  const est = estimateUSD(parseContestant('openai:gpt-6.1-sol'), 'x'.repeat(4000));
+  assert.ok(est >= (2000 * 0.1 + 8192 * 0.5) / 1e6, `too low: ${est}`);
+  // Sol is also given room to reason on top of the answer: the estimate prices every token the call may bill.
+  assert.ok(est >= (2000 * 2 + (8192 + 1024) * 10) / 1e6, `the reasoning room is left out: ${est}`);
+});
