@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28
+- The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28, id73
 - Following the work live: id30, id33
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50
@@ -84,6 +84,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the project's list shows the orchestration chat pinned; asking it for two items starts two activity chats on those items after one confirmation; when they finish, each posts its result in the orchestration thread and ticks its item.
   - Where it went: `or01`, `or02`, `or03`.
   - Status: accepted.
+- [ ] **in progress:** A general chat about the whole project, many of them, opened like Claude's "New chat" `id73`
+  - Asked: 2026-10-09 ~23:30 — paraphrased (the exact words were not recorded): besides the chats on each bubble, he wants a general chat about the whole project that works like Claude: a clear "New chat" button at the top, many chats listed in the project, closing the panel and opening another, reopening any of them; the root bubble should open them too.
+  - What it means: plain project chats, the first step of the orchestration chat: started from the map tools, the conversation list or the root bubble, in the project's root folder, with a compact project summary in the first message; pinned on top of the project's card; resumed, renamed and archived like any chat. The manager's powers (activity chats, reports back) stay in `or01` to `or03`.
+  - How to confirm it is done: see `or13`.
+  - Where it went: `or13` (first step of `or01`).
+  - Status: built on 2026-10-10 (not released yet); it moves to the closed ideas once the owner confirms it.
 - [ ] Earn some money with it `id28`
   - Asked: 2026-10-09 00:35 — "Da pra ganhar um dinheirinho com isso?"; 2026-10-09 00:40 — "Não, só tô pensando alto"
   - What it means: a possible paid team plan in the cloud (a map shared between machines), or the Arsenal as a product; nothing of it goes into v0.x.

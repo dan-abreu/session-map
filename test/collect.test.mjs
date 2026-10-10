@@ -518,6 +518,23 @@ test('conversations lists every conversation of the window, the page ones older 
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
+test('a project chat belongs to the whole project: the codes and files it touches never pin it to one part', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Before launch', prompts: ['what about `bi01`?'], edits: ['src/shop/cart.ts'] });
+    const projectId = projectIdOf(root);
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [A]: { projectId, root, cwd: root, partId: null, node: { kind: 'project' }, title: 'Before launch', startedAt: iso(2 * HOUR) } }));
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const [p] = state.projects;
+    const row = p.conversations.find((r) => r.sessionId === A);
+    assert.deepEqual([row.node, row.partId, row.partSource, row.itemCode], [{ kind: 'project' }, null, 'project', null]);
+    const chat = p.chats.find((c) => c.sessionId === A);
+    assert.deepEqual([chat.partId, chat.itemCode], [null, null]);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
 test('collect reads the workflows of a live conversation again on every pass, though its transcript did not change', async () => {
   const dir = tmp();
   const smDir = tmp();

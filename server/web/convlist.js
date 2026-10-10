@@ -4,7 +4,7 @@ import { archTree, ownerHue } from './tree.js';
 import { emptyState } from './empty.js';
 
 const RECENT_PAGE = 50;
-const SPECIAL = new Set(['idea', 'create-arch', 'flow']);
+const SPECIAL = new Set(['idea', 'create-arch', 'flow', 'project']);
 const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 const newest = (a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.row.updatedAt ?? ''));
 
@@ -103,7 +103,12 @@ export function dateGroup(iso, nowMs) {
 // Each project's own color, the same everywhere a project shows (list, picker, Now strip).
 export const projectHue = (project) => ownerHue(project.id);
 
-const isPinned = (row) => row.node?.kind === 'orchestration';
+// The chats about the whole project sit on top of its card, like the chats of a project in Claude.
+const isPinned = (row) => row.node?.kind === 'project';
+
+// Those chats, not archived, newest first: what the root bubble counts.
+export const projectChats = (project) => conversationsOf(project).filter((r) => isPinned(r) && !r.archived)
+  .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
 
 function sectionOf(project, entries, nowMs) {
   const sec = { project, hue: projectHue(project), pinned: [], working: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [] };
@@ -248,7 +253,7 @@ export function createConvList(ctx) {
         h('span', { class: `cv-state s-${state}` }, h('span', { class: 'cv-state-dot', 'aria-hidden': 'true' }), tt(`convs.state.${state}`)),
         originBadge(row.origin)),
       step ? h('span', { class: 'cv-step' }, step) : null,
-      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon(e.place.special === 'idea' ? 'idea' : 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
+      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon({ idea: 'idea', project: 'compass' }[e.place.special] ?? 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
       work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null),
       h('button', {
         type: 'button', class: 'cv-move', 'aria-label': tt('convs.moveAria', { title }), title: tt('convs.move'), 'aria-haspopup': 'dialog',

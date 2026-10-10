@@ -47,6 +47,15 @@ export function archTree(project) {
   return { id: 'p', kind: 'project', label: project.name, children: layers, counts: sumCounts(layers) };
 }
 
+// The point a chat opened on a box is about: the root opens the chats of the whole project (orchestration or01).
+export function chatPointOf(node) {
+  if (node.kind === 'project') return { kind: 'project' };
+  if (node.kind === 'layer') return { kind: 'layer', layerId: node.layerId };
+  if (node.kind === 'part') return { kind: 'part', partId: node.partId };
+  if (node.kind === 'group') return { kind: 'group', partId: node.partId, group: node.group };
+  return { kind: 'item', partId: node.partId, ...(node.item.code ? { code: node.item.code } : { line: node.item.line }) };
+}
+
 function walk(node, fn, path = []) {
   fn(node, path);
   for (const c of node.children) walk(c, fn, [...path, node.id]);

@@ -22,7 +22,13 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 ### Chats
 
-- [ ] **blocks:** Orchestration chat per project `or01`
+- [x] Project chats: general chats about the whole project, many per project, like Claude's "New chat" `or13`
+  - "New chat" at the top of the map tools and of the conversation list, and a click on the root bubble, open a chat about the whole project in its root folder; the root bubble's panel lists the earlier ones to reopen.
+  - The first message carries a compact summary built from the state (layers and parts with one line each and their open items counted, what is working now, what waits for the owner, recent decisions, last changes and versions; at most 3,800 bytes, never the history) and the rule that a new request becomes an item in the right part's "What's missing", with the flow changed alongside, citing item codes (`server/chat/project.mjs`).
+  - Kept in page-chats.json with the point kind `project`; never pinned to one part by the codes or files it touches; listed under "Project chats" on top of the project's card (title from the first message, time, state, cost); resumes with its history, renames and archives like any chat.
+  - How to confirm it is done: click the root bubble: the panel lists the project chats and offers a new one; send a message: the first prompt shows the summary under 4 KB, the chat opens in the project root and shows on top of the list in "Project chats" with its title, time, state and cost; "New chat" starts another; reopen the first from the list and continue it with its history; archive it and it leaves the list and the panel.
+- [ ] **in progress · blocks:** Orchestration chat per project `or01`
+  - First step done: the plain project chats (`or13`); the manager's powers below come next.
   - Pinned on top of the list and on the root node. Starts from the compact project summary, absorbs "New idea" (puts items in the right place), and when long it summarizes and continues (`--resume` with its own summary, or a chained new session).
   - First of the backlog once the foundation is done (the owner decided on 2026-10-09 that understanding the programs comes first; see the Foundation part, `fd11`).
 - [ ] **blocks:** Activity chats started from the orchestration `or02`

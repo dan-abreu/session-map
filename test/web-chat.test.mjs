@@ -36,7 +36,7 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close', '#chatWhere': 'where',
-  '#chatRun': 'run', '#chatRunPanel': 'runpanel',
+  '#chatRun': 'run', '#chatRunPanel': 'runpanel', '#chatNew': 'new',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
@@ -186,6 +186,40 @@ test('an item lists the chats opened on it, and an idea those at the project roo
   chat.open({ projectId: 'acme-shop', title: 'New idea', intro: 'intro', start: { node: { kind: 'idea' } } });
   await settle();
   assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&kind=idea'));
+});
+
+test('the project chats: the root lists the chats about the whole project, with their cost, under their own heading', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ ...LIST, chats: LIST.chats.map((c, n) => ({ ...c, costUSD: n ? 0.5 : 1.25 })) }) });
+  const { chat, part } = makeChat({ money: (v) => `US$ ${v.toFixed(2)}` });
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', listTitle: 'Chats about the whole project', start: { node: { kind: 'project' } } });
+  await settle();
+  assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&kind=project'));
+  const list = text(part('#chatList'));
+  assert.ok(list.includes('Chats about the whole project'));
+  assert.ok(list.includes('US$ 1.25') && list.includes('US$ 0.50'), 'what each one cost');
+});
+
+test('"New chat" shows once the sheet holds a conversation, and starts a fresh one', async () => {
+  server({ 'GET /api/chat/list': () => LIST, [`GET /api/chat/history/${S1}`]: () => HISTORY });
+  let fresh = 0;
+  const { chat, part } = makeChat();
+  const newChat = () => fresh++;
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat, start: { node: { kind: 'project' } } });
+  await settle();
+  assert.equal(part('#chatNew').hidden, true, 'already a new chat');
+  chat.open({ projectId: 'acme-shop', title: 'Second question', intro: 'intro', newChat, start: { sessionId: S1 } });
+  await settle();
+  assert.equal(part('#chatNew').hidden, false);
+  part('#chatNew').fire('click');
+  assert.equal(fresh, 1);
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat, start: { node: { kind: 'project' } } });
+  await settle();
+  walk(part('#chatList')).find((e) => e.tag === 'button' && e.attrs.onclick).attrs.onclick();
+  await settle();
+  assert.equal(part('#chatNew').hidden, false, 'one reopened from the panel list keeps it');
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { sessionId: S1 } });
+  await settle();
+  assert.equal(part('#chatNew').hidden, true, 'a bubble chat keeps its sheet as it was');
 });
 
 test('a ready request fills the box and goes with the point in the first message', async () => {

@@ -1,7 +1,7 @@
 import { LANGS, pickLang, translator } from './i18n.js';
 import {
   archTree, defaultOpen, nodeById, ancestorsOf, searchTree, changedNodes, branchMarks, clashMarks, clashChip, relationLinks, ownerHue, initial, countLabel, listsDone, isPerson,
-  sizeOf, shareText,
+  sizeOf, shareText, chatPointOf,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
 import { createOutline } from './outline.js';
@@ -13,7 +13,7 @@ import { createFiles } from './files.js';
 import { createChangesView, freshFor } from './changes.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
-import { createConvList, conversationCounts, listConversations, offMapNote, projectHue, visitorsOf } from './convlist.js';
+import { createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
@@ -346,6 +346,12 @@ function freshOfNode(node) {
   return freshFor(project.fresh ?? null, { kind: node.kind, partId: node.partId, partIds });
 }
 
+// The root bubble opens the project chats: the chip says how many there are, or invites the first one.
+function projectChatChip() {
+  const n = projectChats(project).length;
+  return h('span', { class: 'bx-chip is-projchat' }, icon('chat', 'bx-chip-icon'), n ? t.count('projchat.count', n) : t('projchat.start'));
+}
+
 function freshChip(node) {
   const fresh = freshOfNode(node);
   if (!fresh) return null;
@@ -376,7 +382,7 @@ function boxContent(node) {
   const c = node.counts;
   if (node.kind === 'project') {
     const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
-    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), freshChip(node), agents, hasMap() ? progress(c) : null, live].filter(Boolean);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), projectChatChip(), sizeLine(node), unownedChip(node), freshChip(node), agents, hasMap() ? progress(c) : null, live].filter(Boolean);
   }
   return [
     h('span', { class: 'bx-title' }, node.label),
@@ -392,7 +398,7 @@ function boxContent(node) {
 function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
-    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length,
+    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length, node.kind === 'project' && projectChats(project).length,
     sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node), dotsSig(node)]);
 }
 
@@ -722,13 +728,6 @@ function filesSection({ part, workCell, files: fileList, folder = true }) {
 
 // ---- a point of the map: the chat beside it and its details ------------------------------
 
-function nodeRef(node) {
-  if (node.kind === 'layer') return { kind: 'layer', layerId: node.layerId };
-  if (node.kind === 'part') return { kind: 'part', partId: node.partId };
-  if (node.kind === 'group') return { kind: 'group', partId: node.partId, group: node.group };
-  return { kind: 'item', partId: node.partId, ...(node.item.code ? { code: node.item.code } : { line: node.item.line }) };
-}
-
 function setPointTab(tab) {
   const details = tab === 'details';
   $('#ptab-chat').setAttribute('aria-selected', String(!details));
@@ -742,12 +741,13 @@ let pointNode = null;
 let pointSub = 'summary'; // the tab of the details: Summary, Tasks, Conversations, Changes or Files (mm07)
 
 function openPoint(node, { tab = 'chat' } = {}) {
-  if (node.kind === 'project') return select({ type: 'project' });
+  const point = chatPointOf(node);
+  if (point.kind === 'project') return openProjectChat();
   closePanel(false);
   closeLists();
   selection = { type: 'node', id: node.id };
   chat.open({
-    projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: nodeRef(node) },
+    projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: point },
   });
   if (pointNode !== node.id) pointSub = 'summary';
   pointNode = node.id;
@@ -766,6 +766,22 @@ function plainPoint() {
   pointNode = null;
   $('#pointTabs').hidden = true;
   setPointTab('chat');
+}
+
+// The chats about the whole project (orchestration or01, first step), like a project's chats in Claude: a new one, with
+// the earlier ones listed above the box to reopen. The root bubble, the list and the map tools all open it.
+const projectChatOf = () => ({ title: t('projchat.title'), listTitle: t('projchat.list'), newChat: openProjectChat });
+
+function openProjectChat() {
+  if (!project) return;
+  closePanel(false);
+  closeLists();
+  convs.closeDrawer();
+  if (view !== 'map') showView('map');
+  selection = tree ? { type: 'node', id: tree.id } : null;
+  chat.open({ projectId: project.id, subtitle: project.name, intro: t('projchat.intro'), start: { node: { kind: 'project' } }, ...projectChatOf() });
+  plainPoint();
+  renderMap();
 }
 
 function openIdea() {
@@ -814,6 +830,7 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   chat.open({
     projectId: home?.id ?? project.id, mapProjectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
     where: row.origin === 'map' ? null : () => whereOf(row),
+    ...(row.node?.kind === 'project' ? { newChat: openProjectChat, listTitle: t('projchat.list') } : {}),
   });
   if (node.kind === 'project') plainPoint();
   else {
@@ -1872,6 +1889,8 @@ function wire() {
   });
   $('#fit').addEventListener('click', () => mindmap.fit(true));
   $('#newIdea').addEventListener('click', openIdea);
+  $('#newChat').addEventListener('click', openProjectChat);
+  $('#convsNewChat').addEventListener('click', openProjectChat);
   $('#createArch').addEventListener('click', createArch);
   for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
     b.addEventListener('click', () => {

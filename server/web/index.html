@@ -116,6 +116,7 @@
     <div class="cv-body" id="convsBody">
       <div class="cv-head">
         <h2 id="convsTitle" data-help="convs"><span data-i18n="convs.title"></span> <span class="cv-total num" id="convsTotal"></span></h2>
+        <button type="button" class="btn small-btn cv-new" id="convsNewChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
         <button type="button" class="icon-btn cv-collapse" id="convsCollapse" aria-controls="convsBody" aria-expanded="true" data-i18n-aria="convs.collapse" data-i18n-title="convs.collapse"><svg><use href="#i-sidebar"/></svg></button>
       </div>
       <div class="cv-tools">
@@ -147,7 +148,8 @@
         </div>
         <div class="mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
-        <button type="button" class="btn primary" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
+        <button type="button" class="btn primary" id="newChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+        <button type="button" class="btn" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
         <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
           <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>
         </button>
@@ -231,7 +233,10 @@
           <p class="meta crumbs" id="chatContext" data-chat="context"></p>
           <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
         </div>
-        <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+        <div class="sheet-head-tools">
+          <button type="button" class="btn small-btn chat-new" id="chatNew" data-chat="new" data-i18n-title="projchat.newHint" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+          <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
+        </div>
       </div>
       <div class="seg point-tabs" id="pointTabs" role="tablist" hidden>
         <button type="button" role="tab" id="ptab-chat" aria-selected="true" aria-controls="chatPane" data-i18n="point.chat"></button>

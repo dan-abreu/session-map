@@ -71,6 +71,7 @@ export function createChat({
   const pendingEl = q('pending');
   const suggestEl = q('suggest');
   const modeNameEl = q('modename');
+  const newEl = q('new');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
   const uid = root.id || 'chat';
   let context = null;
@@ -605,6 +606,8 @@ export function createChat({
     stopBtn.hidden = !running;
     sendBtn.disabled = running || stuck;
     input.disabled = stuck;
+    // A sheet that offers "New chat" (the project chats) shows it once it holds a conversation.
+    if (newEl) newEl.hidden = !context?.newChat || (!shownId() && !items.length);
     const statusEl = q('status');
     statusEl.textContent = statusText(state);
     statusEl.dataset.state = mirror ? 'mirror' : state.kind;
@@ -735,7 +738,7 @@ export function createChat({
   async function loadList(ctx) {
     const node = ctx.start?.node;
     let scope = {};
-    if (node?.kind === 'idea' || node?.kind === 'create-arch' || node?.kind === 'flow') scope = { kind: node.kind };
+    if (['idea', 'create-arch', 'flow', 'project'].includes(node?.kind)) scope = { kind: node.kind };
     else if (node?.partId) scope = { partId: node.partId, ...(node.kind === 'item' && node.code ? { code: node.code } : {}) };
     else if (ctx.start?.workCellId) scope = { workCellId: ctx.start.workCellId };
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
@@ -750,11 +753,12 @@ export function createChat({
     if (!chats.length || key || log?.items.length) return;
     const tt = t();
     listEl.replaceChildren(
-      h('li', { class: 'chat-list-head' }, tt('chat.openHere')),
+      h('li', { class: 'chat-list-head' }, ctx.listTitle ?? tt('chat.openHere')),
       ...chats.map((c) => h('li', {},
-        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle }) },
+        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle, newChat: ctx.newChat, listTitle: ctx.listTitle }) },
           h('span', { class: 'lr-title' }, c.title || tt('chat.untitled')),
-          h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt))))));
+          h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt)),
+          Number.isFinite(c.costUSD) ? h('span', { class: 'lr-cost num' }, money(c.costUSD)) : null))));
     listEl.hidden = false;
   }
 
@@ -883,6 +887,7 @@ export function createChat({
   });
   pcBtn.addEventListener('click', () => { if (!pcBtn.disabled) onPcMode?.(choice); });
   q('close').addEventListener('click', () => close());
+  newEl?.addEventListener('click', () => context?.newChat?.());
 
   function freshDrawing() {
     cache = new WeakMap();
@@ -929,7 +934,10 @@ export function createChat({
   }
 
   function resume(entry) {
-    open({ projectId: entry.projectId, title: entry.title, subtitle: entry.subtitle || t()('chat.resuming'), intro: t()('chat.introResume'), start: { sessionId: entry.sessionId } });
+    open({
+      projectId: entry.projectId, title: entry.title, subtitle: entry.subtitle || t()('chat.resuming'), intro: t()('chat.introResume'), start: { sessionId: entry.sessionId },
+      ...(entry.newChat ? { newChat: entry.newChat, listTitle: entry.listTitle } : {}),
+    });
   }
 
   function close() {

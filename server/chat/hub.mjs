@@ -406,8 +406,8 @@ ${prompt}`;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
       prompt = firstPrompt({ sections: context.sections, mother, workCell, text: body.text, board });
-      // An idea or a new map is about the whole project: it starts at the root, whatever branch is picked.
-      const atRoot = node?.kind === 'idea' || node?.kind === 'create-arch' || node?.kind === 'flow';
+      // An idea, a new map or a project chat is about the whole project: it starts at the root, whatever branch is picked.
+      const atRoot = ['idea', 'create-arch', 'flow', 'project'].includes(node?.kind);
       cwd = atRoot ? project.root : workCell?.path ?? project.root;
       place = { ...place, partId: context.part?.id ?? null, workCellId: workCell?.id ?? null, ...(node ? { node: nodeTag(node) } : {}) };
     }
@@ -493,12 +493,14 @@ ${prompt}`;
     const { partId, workCellId, code, kind } = query;
     const onPoint = (c) => (kind ? c.node?.kind === kind : partId ? c.partId === partId && (!code || c.node?.code === code) : Boolean(workCellId) && c.workCellId === workCellId);
     const belongs = (c) => c.projectId === project.id && onPoint(c);
-    const chats = Object.entries(readPageChats()).filter(([, c]) => belongs(c)).map(([sessionId, c]) => {
+    const rowOf = (sessionId) => (project.conversations ?? []).find((r) => r.sessionId === sessionId);
+    const chats = Object.entries(readPageChats()).filter(([sessionId, c]) => belongs(c) && !rowOf(sessionId)?.archived).map(([sessionId, c]) => {
       const driven = drivenNow(sessionId);
+      const cost = driven?.costUSD ?? rowOf(sessionId)?.costUSD;
       return {
         sessionId, title: c.title ?? '', startedAt: c.startedAt ?? null, updatedAt: c.updatedAt ?? c.startedAt ?? null,
         mode: c.mode ?? 'settings', run: parseRun(c.run) ?? { kind: 'settings' }, chatKey: driven?.key ?? null, running: Boolean(driven?.running),
-        interrupted: cutOff(sessionId, c, state),
+        interrupted: cutOff(sessionId, c, state), costUSD: Number.isFinite(cost) ? cost : null,
       };
     }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
     return reply(200, { chats, settings: settingsMode(project.root, dir), mine: settingsRun(project.root, dir), reinforce: reinforceState() });

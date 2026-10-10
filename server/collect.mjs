@@ -157,17 +157,19 @@ async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
 // ---- placing chats -----------------------------------------------------------
 
 // The owner's own move first (mm21), then an item code the conversation cites, then the part the page opened it on, then
-// the files it edited, then what the AI answered earlier (desenho-3 § 2).
-function placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts, placement) {
+// the files it edited, then what the AI answered earlier (desenho-3 § 2). A project chat belongs to the whole project.
+// page: what page-chats.json keeps of a conversation the page started in this project.
+function placeInPart(item, arch, placeFiles, root, aiAnswers, page, placement) {
   const s = item.summary;
   if (!arch.parts.length) return { partId: null, partSource: 'none' };
   if (placement && 'partId' in placement && (placement.partId === null || arch.parts.some((p) => p.id === placement.partId))) {
     return { partId: placement.partId, partSource: 'owner' };
   }
+  if (page?.node?.kind === 'project') return { partId: null, partSource: 'project' };
   const byCode = partByCodes(s.mentionedCodes, arch);
   if (byCode) return { partId: byCode, partSource: 'code' };
-  const byPage = pageParts.get(s.sessionId);
-  if (byPage && arch.parts.some((p) => p.id === byPage)) return { partId: byPage, partSource: 'page' };
+  const byPage = page?.partId;
+  if (typeof byPage === 'string' && arch.parts.some((p) => p.id === byPage)) return { partId: byPage, partSource: 'page' };
   const byFiles = placeFiles(repoFiles([...s.editedFiles ?? [], ...item.helperEdits ?? []], root, s.cwd)).partId;
   if (byFiles) return { partId: byFiles, partSource: 'files' };
   const byAi = aiAnswers[s.sessionId]?.partId;
@@ -397,7 +399,7 @@ async function buildProject(ctx, { root, items }) {
   const pageChats = readJsonFile(join(smDir, 'page-chats.json'), {}) ?? {};
   const { placements } = ctx;
   const titleOf = (s) => placements[s.sessionId]?.title || s.title;
-  const pageParts = new Map(Object.entries(pageChats).filter(([, c]) => c?.projectId === projectId && typeof c.partId === 'string').map(([id, c]) => [id, c.partId]));
+  const pageOf = (sessionId) => (pageChats[sessionId]?.projectId === projectId ? pageChats[sessionId] : null);
 
   const openBranches = new Set(memo.workCells.filter((w) => w.status !== 'merged').map((w) => w.branch));
   const placed = items.map((item) => {
@@ -405,7 +407,7 @@ async function buildProject(ctx, { root, items }) {
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
       item, updatedAt,
-      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageParts, placements[s.sessionId]),
+      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageOf(s.sessionId), placements[s.sessionId]),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
       shown: liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch),

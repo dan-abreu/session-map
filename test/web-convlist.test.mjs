@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree } from '../server/web/tree.js';
-import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue } from '../server/web/convlist.js';
+import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue, SECTION_GROUPS, projectChats } from '../server/web/convlist.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -29,7 +29,7 @@ test('nodeOfConversation: the item it works on, else its part, layer or group, a
   assert.equal(nodeOfConversation(tree, row('c', { partId: 'orders' })), 'pt:orders');
   assert.equal(nodeOfConversation(tree, row('d', { node: { kind: 'layer', layerId: 'engine' } })), 'l:engine');
   assert.equal(nodeOfConversation(tree, row('e', { partId: 'orders', node: { kind: 'group', group: 'Checkout' } })), 'g:orders:Checkout');
-  for (const kind of ['idea', 'create-arch', 'flow']) assert.equal(nodeOfConversation(tree, row('f', { partId: 'orders', node: { kind } })), 'p', kind);
+  for (const kind of ['idea', 'create-arch', 'flow', 'project']) assert.equal(nodeOfConversation(tree, row('f', { partId: 'orders', node: { kind } })), 'p', kind);
   assert.equal(nodeOfConversation(tree, row('g')), 'p');
   assert.equal(nodeOfConversation(tree, row('h', { partId: 'gone' })), 'p');
 });
@@ -41,6 +41,7 @@ test('placeOf names the way down the map, and marks the points that are not boxe
   assert.deepEqual(placeOf(tree, row('c', { node: { kind: 'idea' } })), { path: [], special: 'idea' });
   assert.deepEqual(placeOf(tree, row('d', { node: { kind: 'create-arch' } })), { path: [], special: 'create-arch' });
   assert.deepEqual(placeOf(tree, row('e')), { path: [], special: 'off' });
+  assert.deepEqual(placeOf(tree, row('f', { partId: 'orders', node: { kind: 'project' } })), { path: [], special: 'project' }, 'a project chat is about the whole project');
 });
 
 test('listConversations: working now first, then waiting for you, then the rest newest first', () => {
@@ -137,10 +138,11 @@ test('dateGroup splits by calendar day like Claude and ChatGPT: today, yesterday
   assert.equal(dateGroup(null, now), 'older');
 });
 
-test('listConversations gives one section per project: pinned orchestration, working, waiting, then by date', () => {
+test('listConversations gives one section per project: the project chats pinned on top, working, waiting, then by date', () => {
   const now = Date.parse(NOW);
   const state = shop([
-    row('orch', { node: { kind: 'orchestration' }, status: 'busy', updatedAt: ago(1) }),
+    row('proj', { node: { kind: 'project' }, status: 'busy', updatedAt: ago(1) }),
+    row('proj2', { node: { kind: 'project' }, updatedAt: ago(60 * 24 * 20) }),
     row('busy', { status: 'busy', updatedAt: ago(2) }),
     row('asks', { waiting: true, updatedAt: ago(3) }),
     row('today', { updatedAt: ago(4) }),
@@ -150,12 +152,23 @@ test('listConversations gives one section per project: pinned orchestration, wor
   assert.equal(sec.project.name, 'acme-shop');
   assert.equal(sec.hue, projectHue(state.projects[0]));
   const ids = (k) => sec[k].map((e) => e.row.sessionId);
-  assert.deepEqual(ids('pinned'), ['orch'], 'the orchestration chat sits on top whatever it is doing');
+  assert.deepEqual(ids('pinned'), ['proj', 'proj2'], 'the project chats sit on top whatever they are doing, newest first');
+  assert.equal(SECTION_GROUPS[0], 'pinned', 'their group is the first of the card');
   assert.deepEqual(ids('working'), ['busy']);
   assert.deepEqual(ids('waiting'), ['asks']);
   assert.deepEqual(ids(dateGroup(ago(4), now)), ['today']);
   assert.deepEqual(ids('older'), ['old']);
-  assert.deepEqual(sec.counts, { working: 2, waiting: 1, total: 5 });
+  assert.deepEqual(sec.counts, { working: 2, waiting: 1, total: 6 });
+});
+
+test('projectChats: the chats about the whole project that are not archived, newest first, for the root bubble', () => {
+  const state = shop([
+    row('a', { node: { kind: 'project' }, updatedAt: ago(30) }),
+    row('b', { node: { kind: 'project' }, updatedAt: ago(5) }),
+    row('c', { node: { kind: 'project' }, archived: true }),
+    row('d', { node: { kind: 'idea' } }),
+  ]);
+  assert.deepEqual(projectChats(state.projects[0]).map((r) => r.sessionId), ['b', 'a']);
 });
 
 test('in "All projects" every row carries its project, and the projects with work going on come first', () => {

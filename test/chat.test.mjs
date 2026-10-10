@@ -602,6 +602,61 @@ test('"New idea" opens at the project root with no part; it is listed by its kin
   });
 });
 
+test('a project chat opens at the root with the compact project summary; many are listed by their kind and each resumes', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const log = join(dir, 'fake.json');
+    const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
+    const root = mkdtempSync(join(tmpdir(), 'sm-chat-root-'));
+    const branch = mkdtempSync(join(tmpdir(), 'sm-chat-branch-'));
+    const state = withItem(makeState(root), root);
+    state.projects[0].workCells[0].path = branch;
+    const hubs = [];
+    const talk = async (body) => {
+      const hub = hubs.at(-1);
+      const res = await hub.start({ projectId: 'demo-abc123', ...body }, state);
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      return { r, sessionId, call: JSON.parse(readFileSync(log, 'utf8')) };
+    };
+    const sameDir = (a, b) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+    try {
+      hubs.push(createChatHub({ smDir, dir, bin: FAKE, env: { ...env, FAKE_LOG: log } }));
+      const first = await talk({ node: { kind: 'project' }, frontId: 'feature/login', text: 'What is left before launch?' });
+      const prompt = first.r.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
+      for (const piece of ['Project: demo', 'Auth: Sign in and sessions. (1 open)', "What's missing", 'flow diagram', 'What is left before launch?']) assert.ok(prompt.includes(piece), piece);
+      assert.ok(sameDir(first.call.cwd, root), 'the root folder, whatever branch is picked');
+      assert.equal(first.r.events.find((e) => e.type === 'user').data.text, 'What is left before launch?', 'the page shows only the person\'s words');
+      const saved = JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8'))[first.sessionId];
+      assert.deepEqual([saved.node, saved.partId, saved.title], [{ kind: 'project' }, null, 'What is left before launch?']);
+
+      const second = await talk({ node: { kind: 'project' }, text: 'Plan the next release' });
+      const listed = hubs[0].list({ projectId: 'demo-abc123', kind: 'project' }, state).body.chats;
+      assert.deepEqual(listed.map((c) => c.sessionId).sort(), [first.sessionId, second.sessionId].sort(), 'many project chats, each its own conversation');
+      assert.ok(listed.every((c) => c.costUSD > 0), 'each with what it cost so far');
+      state.projects[0].conversations = [{ sessionId: second.sessionId, archived: true }];
+      assert.deepEqual(hubs[0].list({ projectId: 'demo-abc123', kind: 'project' }, state).body.chats.map((c) => c.sessionId), [first.sessionId], 'an archived one leaves the panel, as it leaves the list');
+      delete state.projects[0].conversations;
+      assert.equal(hubs[0].list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 0, 'not a chat of any part');
+
+      // Closed and reopened later (another server run): it resumes with its history, without the summary again.
+      await hubs[0].close();
+      hubs.push(createChatHub({ smDir, dir, bin: FAKE, env: { ...env, FAKE_LOG: log } }));
+      assert.equal(hubs[1].history(first.sessionId, state).body.messages[0].text, 'What is left before launch?');
+      const again = await talk({ sessionId: first.sessionId, text: 'And the docs?' });
+      assert.equal(again.sessionId, first.sessionId, 'the same conversation');
+      assert.equal(again.call.argv[again.call.argv.indexOf('--resume') + 1], first.sessionId);
+      assert.ok(sameDir(again.call.cwd, root));
+      assert.ok(again.r.events.some((e) => e.type === 'text' && e.data.text === 'echo: And the docs?'), 'no summary on a resumed chat');
+    } finally {
+      for (const hub of hubs) await hub.close();
+      for (const d of [root, smDir, branch]) await rm(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    }
+  });
+});
+
 test('point refusals: a bad node is 400, an unknown item 404, creating a map that exists or an idea without one 409', async () => {
   await withHub({}, async ({ hub, state, root }) => {
     withItem(state, root);

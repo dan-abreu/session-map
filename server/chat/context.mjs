@@ -2,7 +2,9 @@
 // and the rule that keeps the map true. Pure: it receives the project and returns text.
 // Keep code-shaped tokens out of the fixed texts: the transcript reader counts them as item codes and places the chat by them.
 
-const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow', 'clash']);
+import { projectSections } from './project.mjs';
+
+const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow', 'clash', 'project']);
 const LIST_MAX = 40;
 
 const WORDS = {
@@ -31,6 +33,12 @@ function upkeep(arch, { idea = false } = {}) {
     '- Keep the rest of the file as it is, and cite the item\'s code in your replies.',
   ].filter(Boolean).join('\n');
 }
+
+// The owner's golden rule (2026-10-09): architecture and flow change together, nothing is born in only one of them.
+const FLOW_RULE = '- Architecture and flow go together: a new part, or a new link between parts, also goes into the flow diagram of the map (the mermaid flowchart in its README.md) in the same change. A small task is only an item.';
+
+// A project chat: new requests land in the right part, the flow follows the map.
+const projectRule = (arch) => (arch.source === 'worktree' ? `${upkeep(arch)}\n${FLOW_RULE}` : upkeep(arch));
 
 const OWNER_RULE = 'Who an item is with: by default an item has no owner, which means Claude does it, so leave the owner out. Put `**with <name>:**` (in Portuguese `**com o <nome>:**`) only when the item needs the person: a decision only they can make, an account or access only they can create, a payment, or a physical action. Writing code, tests, docs and configuration is the work of Claude even when the person is the one who knows the area: the owner of an item is not who owns the area or who will write the code.';
 
@@ -145,6 +153,7 @@ export function contextOf(project, node, { draft = '' } = {}) {
   if (node.kind === 'clash') return clashContext(project, node);
   const { arch } = project;
   const hasArch = arch && arch.source !== 'none';
+  if (node.kind === 'project') return { sections: projectSections(project, hasArch ? projectRule(arch) : null), part: null };
   if (node.kind === 'create-arch') return hasArch ? fail(409, 'arch-exists') : { sections: [CREATE_TEXT], part: null };
   if (!hasArch) return fail(409, 'no-arch');
   if (node.kind === 'idea') return { sections: [`Project: ${project.name}`, ideaText(arch), upkeep(arch, { idea: true })], part: null };

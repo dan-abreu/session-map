@@ -52,7 +52,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['clash', 'decision', 'question'].map((k) => `waiting.${k}`),
     ...['not-flowchart', 'empty-flowchart', 'fence-in-drawing', 'arch-not-here'].map((c) => `flow.err.${c}`),
     ...['working', 'waiting', 'recent'].map((g) => `convs.group.${g}`),
-    ...['idea', 'create-arch', 'flow', 'off'].map((k) => `convs.place.${k}`),
+    ...['idea', 'create-arch', 'flow', 'off', 'project'].map((k) => `convs.place.${k}`),
     ...['map', 'vscode', 'terminal', 'sdk'].map((o) => `convs.origin.${o}`),
     ...['busy', 'waiting', 'idle', 'closed', 'unseen'].map((d) => `convs.state.${d}`),
     ...['pinned', 'working', 'waiting', 'visiting', 'today', 'yesterday', 'week', 'older'].map((g) => `convs.group.${g}`),
@@ -68,7 +68,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['bad-run', 'restarting', 'bad-limit', 'config-unreadable'].map((c) => `err.${c}`),
     ...['desktop', 'remote', 'claudeai'].map((o) => `convs.origin.${o}`),
     ...['pinned', 'today', 'yesterday', 'week', 'older'].map((g) => `convs.group.${g}`),
-    'chat.placedBy.owner', 'err.bad-place',
+    'chat.placedBy.owner', 'chat.placedBy.project', 'err.bad-place',
     ...['working', 'waiting', 'finished'].flatMap((k) => [`now.${k}`, `now.kind.${k}`]),
   ];
   assert.deepEqual(dynamic.filter((k) => !(k in LANGS.en)), []);

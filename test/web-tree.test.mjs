@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, branchMarks, clashMarks, changedNodes,
-  boardItems, relationLinks, nodeById, ownerHue, initial, countLabel, listsDone, clashChip,
+  boardItems, relationLinks, nodeById, ownerHue, initial, countLabel, listsDone, clashChip, chatPointOf,
 } from '../server/web/tree.js';
 import { translator } from '../server/web/i18n.js';
 
@@ -57,6 +57,17 @@ test('archTree: project, layers in map order, parts, named groups, items; items 
   assert.deepEqual(shop.children[1].children.map((n) => n.id), ['i:shop:L22', 'i:shop:sh03'], 'an item with no code is known by its line');
   assert.equal(shop.children[1].children[0].item.title, 'Typo tolerance');
   assert.deepEqual(front.children[1].children, [], 'a part with no items has no children');
+});
+
+test('chatPointOf: the root bubble opens the chats of the whole project; every other box opens a chat on itself', () => {
+  const root = archTree(project());
+  assert.deepEqual(chatPointOf(root), { kind: 'project' });
+  assert.deepEqual(chatPointOf(nodeById(root, 'l:front')), { kind: 'layer', layerId: 'front' });
+  assert.deepEqual(chatPointOf(nodeById(root, 'pt:shop')), { kind: 'part', partId: 'shop' });
+  assert.deepEqual(chatPointOf(nodeById(root, 'g:shop:Search')), { kind: 'group', partId: 'shop', group: 'Search' });
+  assert.deepEqual(chatPointOf(nodeById(root, 'i:shop:sh01')), { kind: 'item', partId: 'shop', code: 'sh01' });
+  assert.deepEqual(chatPointOf(nodeById(root, 'i:shop:L22')), { kind: 'item', partId: 'shop', line: 22 });
+  assert.deepEqual(chatPointOf(archTree({ name: 'bare', arch: { layers: [], parts: [] } })), { kind: 'project' }, 'a project with no map has its chats too');
 });
 
 test('archTree counts done/total, open items with a person and blockers at every level', () => {
