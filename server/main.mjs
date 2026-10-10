@@ -10,6 +10,7 @@ import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
+import { changeDetailOf, changesOf } from './changes-state.mjs';
 import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { readConversation, readImage } from './sources/claude-conversation.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
@@ -21,6 +22,7 @@ import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run
 import { collect } from './collect.mjs';
 import { loadConfig } from './config.mjs';
 import { findFiles, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
+import { linksOf } from './imports.mjs';
 import { log } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
@@ -320,7 +322,26 @@ export function createApp({
     }
     const out = await readFileForView(root, param('path'), { diffBase, ref });
     if (!out.ok) throw new HttpError(FILE_ERRORS[out.error], out.error);
+    // What it uses and what uses it (mm26), from the project folder's own files: a branch's copy has no graph of its own.
+    if (param('links') === '1' && !cell) out.links = await linksOf(project.root, param('path').replaceAll('\\', '/'));
     return send(res, 200, out);
+  }
+
+  // The Changes tab (mm30): the rows of one project, or of every project with "*", and one change's before and after.
+  // File names, who changed them and the lines themselves: as sensitive as the files, so even a local read needs the key.
+  async function changesRoute(req, res, parts, url) {
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (demo) throw new HttpError(403, 'demo');
+    const s = await state();
+    const wanted = parts[3] === '*' ? s.projects : s.projects.filter((p) => p.id === parts[3]);
+    if (!wanted.length) throw new HttpError(404, 'unknown-project');
+    if (parts[2] === 'change') {
+      const detail = await changeDetailOf(s, wanted[0].id, url.searchParams.get('id') ?? '');
+      if (!detail) throw new HttpError(404, 'unknown-change');
+      return send(res, 200, { ok: true, ...detail });
+    }
+    const rows = wanted.flatMap((p) => changesOf(s, p.id).map((r) => ({ ...r, projectId: p.id })));
+    return send(res, 200, { ok: true, rows: rows.sort((a, b) => b.ts.localeCompare(a.ts)) });
   }
 
   // The Flow tab (plano-v02 § v0.2.1): export, the import preview and apply, and the workshop draft. The demo answers from
@@ -441,6 +462,7 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
+    if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'changes' || (parts[2] === 'change' && parts[3] !== '*')) && parts.length === 4) return changesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);

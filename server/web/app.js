@@ -10,6 +10,7 @@ import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
+import { createChangesView, freshFor } from './changes.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { createConvList, conversationCounts, listConversations, projectHue, visitorsOf } from './convlist.js';
@@ -33,7 +34,7 @@ import {
 const $ = (sel) => document.querySelector(sel);
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
-const VIEWS = ['map', 'flow', 'board', 'history', 'costs', 'discover'];
+const VIEWS = ['map', 'flow', 'changes', 'board', 'history', 'costs', 'discover'];
 const SEARCH_MAX = 8;
 const CHAT_WIDTH = 460;
 
@@ -335,18 +336,35 @@ function footChip(node) {
   return share ? h('span', { class: 'bx-chip is-foot', title: t('box.footTitle', { share: shareText(share) }) }, icon('chat', 'bx-foot-icon'), t('box.foot', { share: shareText(share) })) : null;
 }
 
+// "+N files +M lines now" (mm30): what changed in the box in the last minutes, the way to the Changes tab.
+function freshOfNode(node) {
+  const partIds = node.kind === 'layer' ? node.children.filter((c) => c.kind === 'part').map((c) => c.partId) : undefined;
+  return freshFor(project.fresh ?? null, { kind: node.kind, partId: node.partId, partIds });
+}
+
+function freshChip(node) {
+  const fresh = freshOfNode(node);
+  if (!fresh) return null;
+  const files = plural('box.nowFiles', fresh.files);
+  const lines = plural('box.nowLines', fresh.lines);
+  // A rename moves no line: the chip says only the files then.
+  const words = fresh.lines ? t('box.now', { files, lines }) : t('box.nowOnly', { files });
+  return h('span', { class: 'bx-chip is-fresh', title: t('box.nowTitle', { files, lines }) }, h('span', { class: 'bx-fresh-dot', 'aria-hidden': 'true' }), words);
+}
+
 function boxContent(node) {
   const live = marks.live.has(node.id) ? liveDot() : null;
   if (node.kind === 'item') return [...itemBody(node), live].filter(Boolean);
   const c = node.counts;
   if (node.kind === 'project') {
     const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
-    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), hasMap() ? progress(c) : null, live].filter(Boolean);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), sizeLine(node), unownedChip(node), freshChip(node), hasMap() ? progress(c) : null, live].filter(Boolean);
   }
   return [
     h('span', { class: 'bx-title' }, node.label),
     h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, countText(c)), ...chipsOf(c), ...(node.kind === 'part' ? partBadges(node) : []), footChip(node)),
     sizeLine(node),
+    freshChip(node),
     c.total ? progress(c) : null,
     live,
   ].filter(Boolean);
@@ -356,7 +374,7 @@ function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
     part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length,
-    sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part)]);
+    sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node)]);
 }
 
 const toggleLabel = (node, isOpen) => t(isOpen ? 'map.collapse' : 'map.expand', { name: node.label });
@@ -1615,6 +1633,12 @@ function refreshView(first = false) {
     else flow.refresh();
     return;
   }
+  if (view === 'changes') {
+    const root = $('#view-changes');
+    if (first) changesView.render(root);
+    else changesView.refresh(root);
+    return;
+  }
   if (!['board', 'history', 'costs'].includes(view)) return;
   const root = $(`#view-${view}`);
   if (first) tabs.render(view, root);
@@ -1658,6 +1682,7 @@ function renderResults() {
 let discover = null;
 let chat = null;
 let files = null;
+let changesView = null;
 let tabs = null;
 let mindmap = null;
 let outline = null;
@@ -1777,6 +1802,10 @@ function wire() {
     onApplied: () => setTimeout(poll, 600),
   });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
+  changesView = createChangesView({
+    h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
+    dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText,
+  });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,

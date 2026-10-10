@@ -1,6 +1,6 @@
 // Help that sits where the question comes up (mm11): a "?" next to the title of every area with one sentence, and the
 // help menu in the top bar with the welcome tour, the "Technical details" switch and a glossary of plain and technical words.
-export const HELP_AREAS = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'discover', 'alerts'];
+export const HELP_AREAS = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts'];
 
 // Plain words whose technical original sits in TECH: the glossary shows them side by side.
 export const GLOSSARY = ['gloss.branch', 'gloss.commit', 'gloss.merge', 'gloss.push', 'gloss.helpers', 'gloss.team', 'gloss.readme', 'gloss.mermaid', 'gloss.cost', 'gloss.git', 'gloss.mcp', 'gloss.hook'];

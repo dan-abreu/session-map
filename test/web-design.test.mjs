@@ -116,6 +116,8 @@ const PAIRS = [
   ['--bg-2', '--ink', null, 4.5],
   ['--focus', '--bg', null, 3],
   ['--focus', '--bg-2', null, 3],
+  // The colors of code in the file viewer (mm26), on the viewer's surface.
+  ...['com', 'str', 'kw', 'num', 'tag', 'attr', 'key'].map((k) => [`--syn-${k}`, '--bg-2', null, 4.5]),
 ];
 
 for (const [name, map] of [['light', light], ['dark', dark]]) {

@@ -120,9 +120,16 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [ ] **important:** The rest of the real footprint `mm34`
   - What is left of `mm24` and `mm25`: before work starts, the orchestration says "will touch: A, B, C"; a middle level of components between a part and its items (level 2 of `fl09`, also on the mind map); an item that spans parts shows in each, linked; the Files tab of a box marks what changed in the period.
   - How to confirm it is done: an orchestration plan lights the parts it names before the first edit; a part opens into its components with the files of each; an item whose files sit in two parts shows in both with a link; the Files tab with "last 7 days" picked marks the files changed in that week.
-- [ ] **important:** Walk through the files of a box `mm26`
+- [x] **Claude:** Walk through the files of a box `mm26`
   - A file tree per box like VS Code's explorer; code colored, with line numbers and search in the file; jump to the files it uses and the files that use it (import graph); Open in VS Code at the line.
   - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
+  - Done on main: the Files tab of a box is a folder tree like the editor's explorer (folders first, single-folder chains on one line, open folders kept while the page lives); a file opens with the code in colors (our own small reader, no dependency), line numbers, search in the file with next and previous, the files it uses and that use it with the line of each (`server/imports.mjs` reads the import lines of JavaScript, TypeScript, CSS and HTML over the saved files) and the libraries it asks for; a click on a line picks it for Open in VS Code. Other languages, new files not yet saved and very long files go on in `mm36`.
+- [ ] **important:** The rest of the Changes tab `mm35`
+  - What is left of `mm30`: an edit made by a command the conversation ran (a script, a formatter, `sed`) reads "outside the conversations": tie it to the conversation whose step ran just before the folder changed; the release is looked up for the newest 60 saved changes of a project (older ones read "Saved"); a click on a box's "+N files" chip opens the Changes tab filtered to that part.
+  - How to confirm it is done: a conversation that runs a formatter shows those files under its name; a change saved months ago and released shows its version; the chip opens the tab with the part already picked.
+- [ ] **detail:** The rest of the walk through the files `mm36`
+  - What is left of `mm26`: the files it uses and that use it for other languages (Python, Go and the rest, with the foundation's readers, `fd` series) and for path aliases; a new file not saved yet in "used by"; files of tens of thousands of lines drawn as they scroll instead of in slices of 1,500.
+  - How to confirm it is done: a Python file lists its imports; a file just created by a conversation shows in "used by" of what it imports; a 50,000-line file scrolls smoothly to its end.
 
 ### Ideas
 
@@ -131,8 +138,9 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Review mode: one idea at a time with Keep, Later and Discard; filters by status, date, part and "no destination yet"; each idea links to the item it went to and that item's chats.
   - The watcher marks an idea done when its destination item is ticked and its check passes, showing the proof (commit, test, release); an idea untouched for a while (accepted with no movement, later past its date) gets a reminder in "Waiting for you".
   - How to confirm it is done: the tab lists every item of the part with its status; Discard without a reason is refused; ticking a destination item with a passing check turns its idea done with a link to the proof; an idea accepted 14 days ago with no movement shows a reminder.
-- [ ] **important:** Live Changes tab: every file created, edited, deleted or renamed, with its diff `mm30`
+- [x] **Claude:** Live Changes tab: every file created, edited, deleted or renamed, with its diff `mm30`
   - From the steps in every conversation (helpers and workflows included) and the working tree: who, where (project › part › file), lines added and removed, before/after, saved → committed → released; the box lights up; deleted files keep their previous content; filters and a daily timeline.
+  - Done on main: `server/changes.mjs` reads every edit step and its result (and the commands that remove or rename files) from each conversation, its helpers and workflow agents, as the transcripts grow; `server/changes-state.mjs` places each file on its project and part, joins what the folder holds not saved yet (made by hand or another program shows as "outside the conversations") and finds the saved change and the version that carry it. The Changes tab: who (conversation or helper, with the model), where (project › part › file), lines added and removed, Not saved yet → Saved → Released, filters by project, part, conversation, kind and the period, a day-by-day line, and the before and after of each change (a removed file keeps its previous content; a secrets file never shows). A box lights with "+N files +M lines now" for 10 minutes. What is left moved to `mm35`.
 - [ ] **important:** Workflows you can trace: from the request to every agent and the places it touches `mm31`
   - Tree request → workflow → agents → live footprint; one colour per workflow and a dot per active agent on its box, several projects at once; trace both ways between a request and its files, commits and release.
 

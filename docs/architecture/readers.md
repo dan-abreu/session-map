@@ -13,6 +13,8 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 - `server/archive.mjs`
 - `server/config.mjs`
 - `server/parse/`
+- `server/changes.mjs`
+- `server/imports.mjs`
 
 ## Rules that must not break
 

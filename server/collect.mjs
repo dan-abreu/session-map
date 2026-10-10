@@ -14,6 +14,7 @@ import { parentOf, readLineage } from './brain/lineage.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
+import { attachChanges } from './changes-state.mjs';
 import { footprintOf, touchesOf } from './footprint.mjs';
 import { log } from './log.mjs';
 import { parseCard } from './parse/card.mjs';
@@ -501,6 +502,7 @@ async function buildProject(ctx, { root, items }) {
       costByDay: dailyCost(allRows, prices),
     },
     rows: allRows,
+    commits: memo.activity,
     key: normalizePath(root),
     ownersOf: (files) => ownersOf(files, arch, { topLevel }),
   };
@@ -546,6 +548,12 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     return null;
   })))).filter(Boolean);
   hangFootprints(built, touches);
+  let changes = new Map();
+  try {
+    changes = await attachChanges({ dir, smDir, now, windowMs: WINDOW_MS, liveById: ctx.liveById }, built, groups);
+  } catch (err) {
+    log('warn', 'changes-failed', { error: err.message });
+  }
   const projects = built.map((b) => b.project);
 
   const sum = (key) => round6(projects.reduce((s, p) => s + p.cost[key], 0));
@@ -564,7 +572,7 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai } = {}
     budget: Number.isFinite(monthlyUSD) && monthlyUSD > 0 ? { monthlyUSD, used: round6(costOf(monthRows, ctx.prices).usd) } : null,
     projects,
   };
-  Object.defineProperty(state, INTERNALS, { value: { chats: ctx.internals }, enumerable: false });
+  Object.defineProperty(state, INTERNALS, { value: { chats: ctx.internals, changes }, enumerable: false });
   return state;
 }
 

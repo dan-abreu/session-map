@@ -120,3 +120,15 @@ test('GET /api/files/:project?find= lists files for an @ mention, only with the 
     assert.equal((await call('/api/files/shop-abc123?find=a', { cookie: false })).status, 401);
   });
 });
+
+test('a file opens with the files it uses and the files that use it, when asked (mm26)', async () => {
+  await withServer(async ({ call, root }) => {
+    writeFileSync(join(root, 'src', 'b.js'), "import { one } from './a.js';\n");
+    git(root, 'add', 'src/b.js');
+    const a = await call(`/api/file/shop-abc123?path=${enc('src/a.js')}&links=1`);
+    assert.equal(a.status, 200);
+    assert.deepEqual(a.body.links, { graph: true, uses: [], usedBy: [{ path: 'src/b.js', line: 1 }], libraries: [] });
+    const plain = await call(`/api/file/shop-abc123?path=${enc('src/a.js')}`);
+    assert.equal(plain.body.links, undefined, 'only when asked: the graph costs a read of the project');
+  });
+});

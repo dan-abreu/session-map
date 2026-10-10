@@ -26,7 +26,7 @@ export function dayName(tt, lang, dayKey, now = new Date()) {
   return new Intl.DateTimeFormat(lang, { weekday: 'long', day: 'numeric', month: 'long', ...(y !== today.getFullYear() ? { year: 'numeric' } : {}) }).format(date);
 }
 
-const localDay = (ts) => {
+export const localDay = (ts) => {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };

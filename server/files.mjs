@@ -94,6 +94,11 @@ export async function findFiles(root, query) {
     .slice(0, FOUND_MAX);
 }
 
+export const isSecretsFile = (path) => {
+  const name = String(path).replaceAll('\\', '/').split('/').pop();
+  return ENV_RE.test(name) && !ENV_TEMPLATE_RE.test(name);
+};
+
 const looksBinary = (buf) => buf.subarray(0, 8000).includes(0);
 
 function changesOf(diff) {
@@ -144,4 +149,40 @@ export function vscodeUrl(abs, line) {
   const encode = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   const parts = abs.replaceAll('\\', '/').split('/').map((s, i) => (i === 0 && /^[a-z]:$/i.test(s) ? s : encode(s)));
   return `vscode://file/${parts.join('/').replace(/^\//, '')}:${line}`;
+}
+
+const DIFF_LINES_MAX = 3000;
+const HUNK_HEAD_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+// Unified diff text to hunks of lines that start with ' ', '+' or '-'.
+function hunksOf(diff) {
+  const hunks = [];
+  let left = DIFF_LINES_MAX;
+  for (const line of diff.split('\n')) {
+    const head = HUNK_HEAD_RE.exec(line);
+    if (head) hunks.push({ oldStart: Number(head[1]), newStart: Number(head[2]), lines: [] });
+    else if (hunks.length && left > 0 && /^[ +-]/.test(line)) {
+      hunks.at(-1).lines.push(line.replace(/\r$/, ''));
+      left--;
+    }
+  }
+  return { hunks, cut: left <= 0 };
+}
+
+// The before and after of a file not saved yet (mm30), against the last saved version: an edit's changed lines with a
+// little context, every line of a new file, and the previous content of a removed one.
+export async function worktreeDiff(root, rel) {
+  const segments = lexical(rel);
+  if (!segments) return { ok: false, error: 'bad-path' };
+  const name = segments.at(-1);
+  if (ENV_RE.test(name) && !ENV_TEMPLATE_RE.test(name)) return { ok: false, error: 'sensitive' };
+  const path = segments.join('/');
+  const { out } = await run(root, ['diff', 'HEAD', '--no-color', '--no-ext-diff', '--unified=3', '--', path]);
+  if (out && /^Binary files /m.test(out)) return { ok: false, error: 'binary' };
+  if (out?.trim()) return { ok: true, ...hunksOf(out) };
+  const file = await readFileForView(root, path);
+  if (!file.ok) return file;
+  const lines = file.text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return { ok: true, hunks: [{ oldStart: 0, newStart: 1, lines: lines.slice(0, DIFF_LINES_MAX).map((l) => `+${l.replace(/\r$/, '')}`) }], cut: lines.length > DIFF_LINES_MAX };
 }

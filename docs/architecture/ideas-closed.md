@@ -7,9 +7,10 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - The first evening: a map of every chat: id01, id02, id03, id04, id05, id06, id07, id08, id09, id10, id11, id12
 - The picture of the project: id13, id14, id15, id17, id18, id19
 - The model, the orchestration and other AIs: id20, id21
-- Following the work live: id29, id31, id32, id34, id35, id36, id37, id38
+- Following the work live: id29, id31, id32, id34, id35, id36, id37, id38, id39
 - Files, terminal and the first use of a repository: id40
 - The Flow: id43, id44
+- This registry: id68
 
 ## How it works
 
@@ -207,6 +208,12 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: the root's file count equals the census total; each layer's count equals the sum of its parts; the "files with no box" number matches the census list of unowned files.
   - Where it went: `mm25`; what changed in the period in `mm34`; exact numbers from `fd01`.
   - Status: done (on main): files, lines and share in every box, summed upward, and the files with no box on the root, counted by session-map itself; the census (`fd01`) refines the numbers.
+- [x] Walk through the files of a box `id39`
+  - Asked: 2026-10-09 16:17 — "e tem como percorrer nos arquivos? seria muito bom"
+  - What it means: a file tree per box like VS Code's explorer, the code colored with line numbers and search, jumps to the files it uses and that use it, and Open in VS Code at the line.
+  - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
+  - Where it went: `mm26`; what is left in `mm36`; files as dots in a part `mm15`.
+  - Status: done (on main): a folder tree per box like the editor's, the code in colors with line numbers, search in the file, the files it uses and that use it (JavaScript, TypeScript, CSS and HTML), and Open in VS Code at the picked line. Other languages in the graph go on in `mm36`.
 
 ### Files, terminal and the first use of a repository
 
@@ -231,3 +238,12 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: ask the workshop chat for a new box: the drawing changes at once; add an arrow by hand and undo it; the README is unchanged until Apply.
   - Where it went: `fl03`.
   - Status: done (released in v0.2.1).
+
+### This registry
+
+- [x] See where the work is happening: what is being created, edited and deleted `id68`
+  - Asked: 2026-10-09 16:46 — "quero ver onde eles estão mexendo o que estão criando, o que estão apagando, quero isso, saber tudo mesmo do programa"
+  - What it means: a live Changes tab with every file touched (created, edited, deleted, renamed), who touched it, where in the map, lines added and removed, the before/after diff, and whether it is saved, committed or released.
+  - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content; see `mm30`.
+  - Where it went: `mm30`; what is left in `mm35`.
+  - Status: done (on main): the Changes tab lists every file created, edited, removed or renamed by the conversations, their helpers and workflow agents, and what the folder holds not saved yet, with who, where, lines, before and after, and saved → released; the boxes light with "+N files +M lines now". Edits made by a command (a script, a formatter) still read "outside the conversations": `mm35`.

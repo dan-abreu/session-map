@@ -62,7 +62,7 @@ test('the tour starts once by itself, and only when it was never seen or skipped
 });
 
 test('every area of the page has a "?" with one sentence in both languages', () => {
-  const required = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'discover', 'alerts'];
+  const required = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts'];
   assert.deepEqual([...HELP_AREAS].sort(), [...required].sort());
   for (const area of required) {
     assert.ok(has(`help.${area}`), `help.${area} words`);

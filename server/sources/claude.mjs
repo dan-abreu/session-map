@@ -509,6 +509,24 @@ function helperFiles(sessionDir) {
   return files;
 }
 
+// Each helper and workflow agent transcript with who it is (mm30): the task it was given, or its workflow step's label,
+// and the model it was asked to run on.
+export function helperAgents(sessionDir) {
+  const labels = new Map();
+  for (const wf of listDir(join(sessionDir, 'subagents', 'workflows'))) {
+    if (!wf.isDirectory()) continue;
+    const text = readText(join(sessionDir, 'subagents', 'workflows', wf.name, 'journal.jsonl'));
+    for (const e of text ? parseLines(text) : []) if (e.type === 'started' && typeof e.agentId === 'string' && typeof e.label === 'string') labels.set(e.agentId, e.label);
+  }
+  return helperFiles(sessionDir).map((file) => {
+    const id = basename(file, '.jsonl').slice('agent-'.length);
+    let meta = null;
+    try { meta = JSON.parse(readText(file.replace(/\.jsonl$/, '.meta.json'))); } catch { /* no meta file */ }
+    const label = labels.get(id) ?? (typeof meta?.description === 'string' ? meta.description : '');
+    return { file, label: label.slice(0, STEP_MAX), model: typeof meta?.model === 'string' ? meta.model : null };
+  });
+}
+
 export function readHelperUsage(sessionDir) {
   const usageById = new Map();
   for (const file of helperFiles(sessionDir)) {

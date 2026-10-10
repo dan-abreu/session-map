@@ -137,6 +137,7 @@ Semantic tokens only; a raw hex, `rgb()` or shadow outside `:root` fails the tes
 | `--focus` | keyboard focus ring (3:1 on every surface) |
 | `--k-tasks`, `--k-chats`, `--k-branches`, `--k-changes`, `--k-files` (+ `-ink`, `-fill`) | the five kinds of information, the same in map, panels, lists, Now strip and alerts |
 | `--lv0`…`--lv4` | the map's levels: project, layer, part, group, item |
+| `--syn-com`, `--syn-str`, `--syn-kw`, `--syn-num`, `--syn-tag`, `--syn-attr`, `--syn-key` | code colors in the file viewer and in a change's before and after (AA on `--bg-2`) |
 | `--scrim`, `--shadow-*`, `--on-clash`, `--on-waiting`, `--on-strong-*` | overlays, depth and text on strong fills |
 
 Project colors and people's initials come from a hue (`oklch(var(--owner-l) var(--owner-c) <hue>)`), so they stay readable in both themes.
@@ -195,6 +196,9 @@ Each component has every state: default, hover, focus-visible (2 px `--focus` ri
 - **Empty state** (`.empty-state`, `.is-compact` in columns and lists): drawing, title, one sentence, optional button.
 - **Skeleton** (`.skeleton`, `.sk-bar`, `.sk-box`): only while the first data loads; removed as soon as it arrives.
 - **Toast** (`#toast`): a short confirmation at the bottom, gone after about 3 seconds.
+- **Change row** (`.chg-btn`): kind chip (Created green, Edited blue, Removed red, Renamed violet), file name in mono with its folder, lines `+N −M`, then where · who · time, and the state chip (Not saved yet amber, Saved green, Released blue). A click opens the before and after in the file dialog (`.is-change`, as tall as its content).
+- **Fresh chip** (`.bx-chip.is-fresh`): "+N files · +M lines now" on a box for 10 minutes after a change, in the changes color with a live dot; the box's border lights too.
+- **File tree** (`.ftree`): native `<details>` folders, folders first, single-folder chains on one line, a count per folder.
 - **Sheet** (`.sheet`): panels, chats, lists; a close button, Esc closes, resizable on desktop.
 - **Chat composer**: one line when empty, grows to 40% of the panel, then scrolls; the permission row folds to one line.
 

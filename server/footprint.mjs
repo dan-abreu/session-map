@@ -46,10 +46,11 @@ const isFile = (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? 
 // root and cwd: where the conversation is listed and where it ran; edited: every file it and its helpers edited; seen:
 // the paths its steps named. skip: folders whose files never count (the Claude folder, session-map's own).
 // Returns rootKey → {root, edited: [repo path], seen: [repo path]}; seen leaves out folders, missing files and edited ones.
-export function touchesOf({ root, cwd, edited = [], seen = [], skip = [] }) {
+// The repository and repo path of a file a conversation named (file → {home, rel} | null): its own project first, then
+// whichever repository the file lives in; never a skipped folder.
+export function placer({ root, cwd, skip = [] }) {
   const skipped = skip.filter(Boolean).map((s) => normalizePath(s));
-  const out = new Map();
-  const place = (file) => {
+  return (file) => {
     const p = slash(file);
     if (ABSOLUTE_RE.test(p) && skipped.some((s) => normalizePath(p).startsWith(`${s}/`))) return null;
     const own = repoFiles([p], root, cwd);
@@ -59,6 +60,11 @@ export function touchesOf({ root, cwd, edited = [], seen = [], skip = [] }) {
     const rel = other && relativeFiles([p], [other])[0];
     return rel ? { home: other, rel } : null;
   };
+}
+
+export function touchesOf({ root, cwd, edited = [], seen = [], skip = [] }) {
+  const out = new Map();
+  const place = placer({ root, cwd, skip });
   const add = (hit, field) => {
     if (!hit || LEFT_OUT.includes(kindOfFile(hit.rel))) return;
     const key = normalizePath(hit.home);

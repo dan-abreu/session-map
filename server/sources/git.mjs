@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { lineCount } from './count.mjs';
 import { log } from '../log.mjs';
 
 const TIMEOUT_MS = 5000;
@@ -130,4 +132,68 @@ export async function activityOf(root, { since } = {}) {
   const cutoff = since ? Date.parse(since) : null;
   const recent = (i) => cutoff === null || Number.isNaN(cutoff) || Date.parse(i.ts) >= cutoff;
   return [...commits.filter(recent), ...tags.filter(recent), ...pushes.filter(recent)].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+}
+
+const WORKTREE_MAX = 500;
+const UNTRACKED_MAX_BYTES = 1024 * 1024;
+const HASH_RE = /^[0-9a-f]{7,40}$/i;
+
+const kindOfStatus = (xy) => {
+  if (xy.includes('?') || xy.includes('A')) return 'create';
+  if (xy.includes('R')) return 'rename';
+  if (xy.includes('D')) return 'delete';
+  return 'edit';
+};
+
+// Lines added and removed per path against the last saved version; a rename is keyed by its new path.
+function numstat(out) {
+  const stats = new Map();
+  const fields = out.split('\0');
+  for (let i = 0; i < fields.length; i++) {
+    const m = /^(-|\d+)\t(-|\d+)\t(.*)$/s.exec(fields[i]);
+    if (!m) continue;
+    let path = m[3];
+    if (!path) { path = fields[i + 2]; i += 2; }
+    stats.set(path, { added: m[1] === '-' ? 0 : Number(m[1]), removed: m[2] === '-' ? 0 : Number(m[2]) });
+  }
+  return stats;
+}
+
+function untrackedLines(root, path) {
+  try {
+    const st = statSync(join(root, path));
+    if (!st.isFile() || st.size > UNTRACKED_MAX_BYTES) return 0;
+    const buf = readFileSync(join(root, path));
+    return buf.subarray(0, 8000).includes(0) ? 0 : lineCount(buf);
+  } catch {
+    return 0;
+  }
+}
+
+// What is not saved yet in the project's folder (mm30): every edited, new, removed or renamed file, with its lines.
+export async function workingTree(root) {
+  const status = await git(root, ['-c', 'core.quotepath=off', 'status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  if (!status) return [];
+  const stats = numstat(await git(root, ['-c', 'core.quotepath=off', 'diff', 'HEAD', '--numstat', '-z', '-M']));
+  const out = [];
+  const fields = status.split('\0');
+  for (let i = 0; i < fields.length && out.length < WORKTREE_MAX; i++) {
+    const field = fields[i];
+    if (field.length < 4) continue;
+    const xy = field.slice(0, 2);
+    const path = field.slice(3);
+    const kind = kindOfStatus(xy);
+    const entry = { path, kind, ...(stats.get(path) ?? { added: kind === 'create' ? untrackedLines(root, path) : 0, removed: 0 }) };
+    if (xy.includes('R')) entry.from = fields[++i];
+    out.push(entry);
+  }
+  return out;
+}
+
+// The first version (tag) whose history holds the saved change: where that change was released. Ties in date go to the
+// lower version number.
+export async function firstTagWith(root, hash) {
+  if (!HASH_RE.test(String(hash))) return null;
+  const out = await git(root, ['tag', '--contains', hash, '--sort=v:refname', '--sort=creatordate', '--format=%(refname:short)']);
+  return lines(out)[0] ?? null;
 }

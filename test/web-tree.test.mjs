@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   archTree, defaultOpen, layoutTree, edgePath, searchTree, ancestorsOf, branchMarks, clashMarks, changedNodes,
-  boardItems, relationLinks, nodeById, ownerHue, initial, filesByFolder, countLabel, listsDone, clashChip,
+  boardItems, relationLinks, nodeById, ownerHue, initial, countLabel, listsDone, clashChip,
 } from '../server/web/tree.js';
 import { translator } from '../server/web/i18n.js';
 
@@ -145,11 +145,10 @@ test('relationLinks keeps the links between parts of different layers', () => {
   assert.deepEqual(relationLinks(project()).map((l) => [l.a, l.b]), [['pay', 'shop']]);
 });
 
-test('ownerHue, initial and filesByFolder keep working for the panels', () => {
+test('ownerHue and initial keep working for the panels', () => {
   assert.equal(ownerHue('Ana@x.test '), ownerHue('ana@x.test'));
   assert.equal(initial('  ana'), 'A');
   assert.equal(initial(''), '?');
-  assert.deepEqual(filesByFolder([{ path: 'b/z.ts' }, { path: 'a.md' }, { path: 'b/a.ts' }]).map((g) => [g.folder, g.files.map((f) => f.name)]), [['', ['a.md']], ['b', ['a.ts', 'z.ts']]]);
 });
 
 test('countLabel reads "N open" everywhere when the map lists no done items, and "done of total" when it does', () => {

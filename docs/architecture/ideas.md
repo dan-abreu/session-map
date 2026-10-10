@@ -8,13 +8,13 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 
 - The picture of the project: id16
 - The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28
-- Following the work live: id30, id33, id39
+- Following the work live: id30, id33
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50
 - Clarity and polish: id51, id52, id53, id54, id55, id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72
-- This registry: id65, id66, id67, id68, id69
+- This registry: id65, id66, id67, id69
 
 ## How it works
 
@@ -105,12 +105,6 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
   - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, is done on main; `mm23` is open; the list that shows at a glance where each chat comes from and what it is doing is open in `mm33`; `rd04` waits for the owner's OK).
-- [ ] Walk through the files of a box `id39`
-  - Asked: 2026-10-09 16:17 — "e tem como percorrer nos arquivos? seria muito bom"
-  - What it means: a file tree per box like VS Code's explorer, the code colored with line numbers and search, jumps to the files it uses and that use it, and Open in VS Code at the line.
-  - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
-  - Where it went: `mm26`; files as dots in a part `mm15`.
-  - Status: accepted.
 
 ### Files, terminal and the first use of a repository
 
@@ -296,12 +290,6 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the model comes from the code files (census, extractors, import graph); the architecture markdown becomes an output generated and checked against the code, with file:line evidence.
   - How to confirm it is done: every box lists the code files it owns; a doc sentence without evidence in the code is flagged; see `fd12`.
   - Where it went: `fd12`.
-  - Status: accepted.
-- [ ] See where the work is happening: what is being created, edited and deleted `id68`
-  - Asked: 2026-10-09 16:46 — "quero ver onde eles estão mexendo o que estão criando, o que estão apagando, quero isso, saber tudo mesmo do programa"
-  - What it means: a live Changes tab with every file touched (created, edited, deleted, renamed), who touched it, where in the map, lines added and removed, the before/after diff, and whether it is saved, committed or released.
-  - How to confirm it is done: while a chat or workflow edits a file, the file shows up in Changes within seconds with its diff and its box lights up; a deleted file keeps its previous content; see `mm30`.
-  - Where it went: `mm30`.
   - Status: accepted.
 - [ ] See where each workflow is working and which request started it, several places at once `id69`
   - Asked: 2026-10-09 16:47 — "quero ver onde os workflow estão trabalhando onde pedi, porque sei que pode ser em varios locais ao mesmo tempo"

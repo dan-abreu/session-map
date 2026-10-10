@@ -231,18 +231,6 @@ export function relationLinks(project) {
   return (project.arch?.links ?? []).filter((l) => layerOf.has(l.a) && layerOf.has(l.b) && layerOf.get(l.a) !== layerOf.get(l.b));
 }
 
-export function filesByFolder(files) {
-  const groups = new Map();
-  for (const f of files) {
-    const cut = f.path.lastIndexOf('/');
-    const folder = cut < 0 ? '' : f.path.slice(0, cut);
-    if (!groups.has(folder)) groups.set(folder, []);
-    groups.get(folder).push({ ...f, name: f.path.slice(cut + 1) });
-  }
-  return [...groups].sort(([a], [b]) => a.localeCompare(b))
-    .map(([folder, list]) => ({ folder, files: list.sort((a, b) => a.name.localeCompare(b.name)) }));
-}
-
 // A map whose files keep only the open work (done items are deleted, not ticked) would read "0 of 212 done" everywhere:
 // it reads "212 open" instead, at every level.
 export const listsDone = (root) => root.counts.done > 0;
