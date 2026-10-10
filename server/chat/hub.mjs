@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { exportMermaid, readDraft, writeDraft } from '../arch/flow.mjs';
@@ -43,6 +43,9 @@ const RELAY_BODY_MAX = 4 * 1024 * 1024;
 // The docs give the permission tool 30 s; answering first keeps the denial ours, with our message.
 const PERMISSION_TIMEOUT_MS = 25_000;
 const IDLE_MS = 30 * 60_000;
+// The walk over a conversation's helper files only stats: a workflow can leave thousands, and the answer needs the newest one.
+const HELPER_WALK_MAX = 5000;
+const HELPER_DEPTH_MAX = 8;
 // An ended chat keeps its events a while, so a page that reconnects still sees how it ended.
 const LINGER_MS = 5 * 60_000;
 const DENIED = 'Denied by the person in session-map.';
@@ -73,9 +76,10 @@ const nodeTag = (node) => {
 };
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
+// helperWrite(sessionId): when (ms) the conversation's background helpers last wrote, 0 for never; tests inject it.
 // onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
 export function createChatHub({
-  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, spawner, onAlert = () => {},
+  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, spawner, onAlert = () => {},
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -228,8 +232,7 @@ export function createChatHub({
       if (chat.flow) saveFlowDraft(chat);
       const auto = endTurnRun(chat, evt.data.processCostUSD);
       clearTimeout(chat.idleTimer);
-      chat.idleTimer = setTimeout(() => { chat.closing = true; chat.driver.end(); }, idleMs);
-      chat.idleTimer.unref?.();
+      armIdle(chat, idleMs);
       if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now() });
       const { processCostUSD, ...data } = evt.data;
       emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD });
@@ -319,6 +322,38 @@ export function createChatHub({
     if (kind === 'chat') return [...project.chats, ...(project.conversations ?? [])].find((c) => c.sessionId === id) ?? null;
     const items = { part: project.arch?.parts, workCell: project.workCells }[kind] ?? [];
     return items.find((x) => x.id === id) ?? null;
+  }
+
+  // Ending stdin makes claude exit, and a workflow or background agent still running inside the session dies with it. So a
+  // chat that went quiet stays open while those helpers still write (journals, agent transcripts) and is looked at again.
+  function armIdle(chat, ms) {
+    chat.idleTimer = setTimeout(() => {
+      if (chat.ended) return;
+      const wait = chat.sessionId ? idleMs - (Date.now() - (helperWrite ?? newestHelperWrite)(chat.sessionId)) : 0;
+      if (wait > 0) armIdle(chat, Math.min(wait, idleMs));
+      else { chat.closing = true; chat.driver.end(); }
+    }, ms);
+    chat.idleTimer.unref?.();
+  }
+
+  // claude keeps what a conversation's background work writes under projects/<folder>/<sessionId>/subagents/.
+  function newestHelperWrite(sessionId) {
+    const file = transcriptOf(sessionId);
+    if (!file) return 0;
+    let newest = 0;
+    let seen = 0;
+    const walk = (folder, depth) => {
+      let names = [];
+      try { names = readdirSync(folder, { withFileTypes: true }); } catch { return; }
+      for (const entry of names) {
+        if (++seen > HELPER_WALK_MAX) return;
+        const path = join(folder, entry.name);
+        if (entry.isDirectory()) { if (depth < HELPER_DEPTH_MAX) walk(path, depth + 1); continue; }
+        try { newest = Math.max(newest, statSync(path).mtimeMs); } catch { /* gone between the listing and the stat */ }
+      }
+    };
+    walk(join(dirname(file), sessionId, 'subagents'), 0);
+    return newest;
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.

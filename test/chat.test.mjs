@@ -1034,3 +1034,57 @@ test('"Resolve with the AI" on a clash opens at the project root and tells the A
     assert.deepEqual([bad.status, bad.body.error], [404, 'unknown-front']);
   });
 });
+
+// ---- pc12: a chat that went quiet is not closed while its background helpers still write ----
+
+// The folder claude keeps a conversation's workflow journals and agent transcripts in.
+const helperFile = (dir, sessionId) => join(dir, 'projects', 'demo', sessionId, 'subagents', 'workflow', 'journal.jsonl');
+const touchHelper = (dir, sessionId) => {
+  const file = helperFile(dir, sessionId);
+  mkdirSync(join(file, '..'), { recursive: true });
+  writeFileSync(file, `${Date.now()}\n`);
+};
+async function idleChat(dir, env, fn) {
+  await withHub({ dir, idleMs: 400, env }, async ({ hub, state }) => {
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi' }, state);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+    await nthTurnEnd(r, 1);
+    await fn({ r, sessionId, ended: () => r.until((e) => e.type === 'session' && e.data.state === 'ended') });
+  });
+}
+
+test('an idle chat with no helper activity still closes after idleMs', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, ended }) => {
+      const since = Date.now();
+      await ended();
+      assert.ok(Date.now() - since >= 300, 'not before the idle time');
+      assert.equal(r.count((e) => e.type === 'error'), 0);
+    });
+  });
+});
+
+test('an idle chat whose helpers keep writing is not closed, and is checked again', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, sessionId }) => {
+      const until = Date.now() + 1800;
+      while (Date.now() < until) { touchHelper(dir, sessionId); await pause(100); }
+      assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0, 'about 4 idle times went by with fresh helper files');
+    });
+  });
+});
+
+test('once the helpers stop writing, the idle chat closes', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, sessionId, ended }) => {
+      const until = Date.now() + 900;
+      while (Date.now() < until) { touchHelper(dir, sessionId); await pause(100); }
+      assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0);
+      const since = Date.now();
+      await ended();
+      assert.ok(Date.now() - since >= 200, 'it waited for the helpers to be quiet for a whole idle time');
+    });
+  });
+});
