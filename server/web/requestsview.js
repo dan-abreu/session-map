@@ -30,7 +30,7 @@ export function createRequestsView(ctx) {
     const status = w.status ?? 'missing';
     const label = [h('span', { class: `req-dot s-${status}`, 'aria-hidden': 'true' }), h('code', { class: 'code-chip' }, w.code),
       h('span', { class: 'req-act-title' }, w.title ?? tt('requests.notOnMap')),
-      w.status ? h('span', { class: 'req-act-state' }, tt(`board.${w.status}`)) : null];
+      w.status ? h('span', { class: 'req-act-state' }, tt(`requests.act.${w.status}`)) : null];
     return h('li', {}, w.status
       ? h('button', { type: 'button', class: 'req-act', onclick: () => ctx.openItem(p.id, w.code) }, label)
       : h('span', { class: 'req-act is-missing' }, label));
