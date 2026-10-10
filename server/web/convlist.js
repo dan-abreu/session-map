@@ -35,6 +35,12 @@ export function workWords(row, project) {
   return working.length ? { born: born.name, working } : null;
 }
 
+// The note of a conversation off this project's map: where it does work, when that is in other projects.
+export function offMapNote(row, project) {
+  const work = workWords(row, project);
+  return work ? { key: 'chat.offMapWorking', vars: { where: work.working } } : { key: 'chat.offMap', vars: {} };
+}
+
 // id → {node, path (the ids above it, the project first)}, built once per list.
 function indexOf(tree) {
   const index = new Map();

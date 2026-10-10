@@ -139,3 +139,13 @@ test('workflowView draws the tree: the request, the team with its phase, each he
   more.attrs.onclick();
   assert.equal(opened, 1);
 });
+
+// .plain lists are grids with an "auto" track: a long file path grew the track past the panel and the place beside it
+// was cut at the panel's edge (seen on the real state, 2026-10-10). The team's file and commit lists clamp it.
+test('the team tree file and commit lists clamp their column, so a long path ellipsizes inside the panel', () => {
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  for (const sel of ['.wf-files ul', '.wf-commits']) {
+    const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, s]) => s.split(',').some((x) => x.trim() === sel));
+    assert.ok(rules.some(([, , body]) => /grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(body)), `${sel} has grid-template-columns: minmax(0, 1fr)`);
+  }
+});

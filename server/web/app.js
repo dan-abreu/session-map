@@ -13,7 +13,7 @@ import { createFiles } from './files.js';
 import { createChangesView, freshFor } from './changes.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
-import { createConvList, conversationCounts, listConversations, projectHue, visitorsOf } from './convlist.js';
+import { createConvList, conversationCounts, listConversations, offMapNote, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
@@ -1368,6 +1368,7 @@ function renderChatPanel(c) {
   const wc = c.workCellId && workCellById(c.workCellId);
   const parent = c.parentId && chatById(c.parentId);
   const card = c.card || {};
+  const offMap = offMapNote(c, project);
   panelHead(c.title, pill(chatTone(c), t(`chat.${c.status}`)), c.archived ? h('span', { class: 'level-badge' }, t('chat.archived')) : null, part ? partLink(part) : null);
   const waitingSig = waitingSignal({ chat: c });
   const waitingBlock = waitingSig ? sigCard(waitingSig, { answer: () => answerChat(c) }, c.waiting.items.length ? [list(c.waiting.items)] : []) : null;
@@ -1381,7 +1382,7 @@ function renderChatPanel(c) {
   ].filter(Boolean);
   $('#panelBody').replaceChildren(...[
     waitingBlock,
-    !part && hasMap() ? h('p', { class: 'note' }, t('chat.offMap')) : null,
+    !part && hasMap() ? h('p', { class: 'note' }, t(offMap.key, { ...offMap.vars, where: listText(offMap.vars.where ?? []) })) : null,
     chatTools(c),
     section(t('chat.doing'), card.doing ? h('p', { class: 'lead' }, card.doing) : null),
     kblock('tasks', { from: t('kind.tasks.fromChat') }, list(card.todo)),
@@ -1843,7 +1844,7 @@ function wire() {
     onOpenPart: (partId) => openPartPoint(partId),
     onApplied: () => setTimeout(poll, 600),
   });
-  files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project });
+  files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project, phone: () => PHONE.matches });
   changesView = createChangesView({
     h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,

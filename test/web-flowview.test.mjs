@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName, forLayout,
+  partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName, forLayout, startScroll,
 } from '../server/web/flowview.js';
 
 const counts = (o = {}) => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, ...o });
@@ -90,4 +90,15 @@ test('forLayout: leaves alone a drawing whose layers all have arrows, a single l
   assert.equal(forLayout('sequenceDiagram\n  a->>b: hi'), 'sequenceDiagram\n  a->>b: hi');
   const loose = 'flowchart LR\n  subgraph a["A"]\n    x["X"]\n  end\n  subgraph b["B"]\n    y["Y"]\n  end\n  x --> out\n  out --> y';
   assert.equal(forLayout(loose), loose, 'an arrow to a box outside every layer counts as a way out');
+});
+
+// On a phone a drawing wider than the screen opened on its left edge, where mermaid had put the last group: the screen
+// showed dots and one row (seen on the real state, 2026-10-10). It opens on the first group written in the drawing.
+test('startScroll: the drawing opens on its first group, never past the end, and at the start when it fits', () => {
+  const clusters = [{ id: 'base', left: 10 }, { id: 'motor', left: 486 }, { id: 'entrada', left: 690 }];
+  assert.equal(startScroll(['entrada', 'motor', 'base'], clusters, { max: 615 }), 615);
+  assert.equal(startScroll(['motor', 'entrada'], clusters, { max: 615 }), 474);
+  assert.equal(startScroll(['base'], clusters, { max: 615 }), 0);
+  assert.equal(startScroll(['entrada'], clusters, { max: 0 }), 0);
+  assert.equal(startScroll([], clusters, { max: 615 }), 0);
 });

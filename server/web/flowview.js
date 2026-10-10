@@ -163,6 +163,13 @@ function fitWidth(svg, area, minZoom = ZOOM_MIN) {
   svg.style.minWidth = minZoom ? `${Math.round(w * minZoom)}px` : '';
 }
 
+// Where a drawing wider than its area opens: on the first group written in the text (mermaid may lay it out far right).
+// clusters: {id, left} with left measured from the drawing's left edge; max: how far the area can scroll.
+export function startScroll(layerIds, clusters, { max, pad = FIT_PAD }) {
+  const first = layerIds.map((id) => clusters.find((c) => c.id === id)).find(Boolean);
+  return first ? Math.min(max, Math.max(0, Math.round(first.left - pad))) : 0;
+}
+
 const svgEl = (tag, attrs) => {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
@@ -348,6 +355,12 @@ export function createFlowView(ctx) {
     fitWidth(res.svg, canvas);
     lastModel = parseFlow(text);
     if (lastModel.ok) decorate(res.svg, lastModel);
+    // Only the diagram opens on its first group: the workshop redraws on every edit and keeps where the person scrolled.
+    if (lastModel.ok && mode === 'view') {
+      const left = canvas.getBoundingClientRect().left - canvas.scrollLeft;
+      const clusters = [...res.svg.querySelectorAll('g.cluster')].map((g) => ({ id: g.id, left: g.getBoundingClientRect().left - left }));
+      canvas.scrollLeft = startScroll(lastModel.layers.map((l) => l.id), clusters, { max: canvas.scrollWidth - canvas.clientWidth });
+    }
   }
 
   async function renderView() {

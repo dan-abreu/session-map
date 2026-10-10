@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree, kindCounts, nodeById, shareText, sizeOf } from '../server/web/tree.js';
-import { conversationCounts, listConversations, workWords } from '../server/web/convlist.js';
+import { conversationCounts, listConversations, offMapNote, workWords } from '../server/web/convlist.js';
 import { workingIn } from '../server/web/live.js';
 import { nowJobs } from '../server/web/now.js';
 
@@ -119,4 +119,18 @@ test('kindCounts splits a box\'s counted files into screens, code, tests and doc
   const files = [{ path: 'a.tsx', kind: 'screen', lines: 3 }, { path: 'b.js', kind: 'code', lines: 9 }, { path: 'c.test.js', kind: 'test', lines: 2 }, { path: 'd.js', kind: 'code', lines: 1 }, { path: 'gone.js', status: 'D' }];
   assert.deepEqual(kindCounts(files), [{ kind: 'screen', files: 1, lines: 3 }, { kind: 'code', files: 2, lines: 10 }, { kind: 'test', files: 1, lines: 2 }]);
   assert.deepEqual(kindCounts([]), []);
+});
+
+// Seen on the real state: a conversation opened in one folder edited 300+ files of another project, and its panel said
+// it "edited no file of a part". Off this map, the note names where it does work.
+test('offMapNote: off this map, a conversation working in other projects says where; otherwise the plain note', () => {
+  const state = state2();
+  const notes = state.projects[1];
+  assert.deepEqual(offMapNote(notes.conversations[0], notes), { key: 'chat.offMapWorking', vars: { where: ['acme-shop'] } });
+  assert.deepEqual(offMapNote({}, notes), { key: 'chat.offMap', vars: {} });
+});
+
+test('the off-map note that names other projects exists in both languages', async () => {
+  const { LANGS } = await import('../server/web/i18n.js');
+  for (const lang of Object.keys(LANGS)) assert.match(LANGS[lang]['chat.offMapWorking'] ?? '', /\{where\}/, lang);
 });

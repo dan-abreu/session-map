@@ -2628,12 +2628,12 @@ mark.fs-hit.is-current { background: var(--lit-fill); box-shadow: 0 0 0 1px var(
 .wf-agent-step { margin-top: 0; margin-bottom: 0; font-size: var(--fs-xs); color: var(--active-ink); font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wf-files, .wf-more { font-size: var(--fs-xs); color: var(--ink-2); }
 .wf-files summary, .wf-more summary { width: fit-content; cursor: pointer; }
-.wf-files ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.wf-files ul { list-style: none; margin: 4px 0 0; padding: 0; grid-template-columns: minmax(0, 1fr); }
 .wf-file { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 2px 4px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .wf-file:hover { background: var(--bg-3); }
 .wf-file-path { min-width: 0; font-family: var(--mono); font-size: var(--fs-2xs); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wf-file-where { flex: none; max-width: 45%; margin-left: auto; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.wf-commits { display: grid; gap: 2px; }
+.wf-commits { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .wf-commit { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-xs); color: var(--ink); }
 .wf-commit-subject { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wf-release { flex: none; padding: 0 8px; border-radius: var(--r-pill); background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-2xs); font-weight: 650; line-height: 1.7; }

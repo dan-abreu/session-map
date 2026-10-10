@@ -34,19 +34,31 @@ export function changeDays(rows) {
   return [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([day, list]) => ({ day, ...tally(list) }));
 }
 
+// The situations count files, like the first tile: each file sits where its newest change is.
 export function changeTotals(rows) {
-  const by = (state) => rows.filter((r) => r.state === state).length;
+  const newest = new Map();
+  for (const r of rows) {
+    const key = `${r.projectId}|${r.path}`;
+    if (!newest.has(key) || r.ts > newest.get(key).ts) newest.set(key, r);
+  }
+  const by = (state) => [...newest.values()].filter((r) => r.state === state).length;
   return { ...tally(rows), pending: by('pending'), saved: by('saved'), released: by('released') };
 }
 
-// The list cut into days, newest day first (rows arrive newest first).
-export function changeGroups(rows) {
+// The list cut into days, newest day first (rows arrive newest first). Only the first `limit` rows are kept; n is every
+// change of the day.
+export function changeGroups(rows, limit = Infinity) {
   const groups = [];
-  for (const r of rows) {
+  rows.forEach((r, i) => {
     const day = localDay(r.ts);
-    if (groups.at(-1)?.day !== day) groups.push({ day, rows: [] });
-    groups.at(-1).rows.push(r);
-  }
+    if (groups.at(-1)?.day !== day) {
+      if (i >= limit) return;
+      groups.push({ day, rows: [], n: 0 });
+    }
+    const g = groups.at(-1);
+    g.n += 1;
+    if (i < limit) g.rows.push(r);
+  });
   return groups;
 }
 
@@ -212,8 +224,8 @@ export function createChangesView(ctx) {
       summary(list),
       timeline(noDay),
       list.length
-        ? h('div', { class: 'chg-list' }, changeGroups(list.slice(0, 500)).map((g) => h('section', { class: 'chg-day' },
-          h('h3', { class: 'chg-day-title' }, dayName(tt, ctx.lang(), g.day), h('span', { class: 'num chg-day-n' }, tt.count('changes.count', g.rows.length))),
+        ? h('div', { class: 'chg-list' }, changeGroups(list, 500).map((g) => h('section', { class: 'chg-day' },
+          h('h3', { class: 'chg-day-title' }, dayName(tt, ctx.lang(), g.day), h('span', { class: 'num chg-day-n' }, tt.count('changes.count', g.n))),
           h('ul', { class: 'chg-rows' }, g.rows.map(rowEl)))),
           list.length > 500 ? h('p', { class: 'view-note' }, tt('changes.more', { n: ctx.number(list.length - 500) })) : null)
         : emptyState({ h, icon: ctx.icon }, { art: 'clock', title: tt('changes.empty.title'), text: tt('changes.empty.text') }));

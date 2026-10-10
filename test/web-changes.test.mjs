@@ -35,8 +35,12 @@ test('the day by day line counts files, lines and changes of each day, oldest fi
   ]);
 });
 
-test('the totals say how many files and lines changed and how many are not saved, saved or released', () => {
-  assert.deepEqual(changeTotals(ROWS), { n: 4, files: 3, added: 14, removed: 7, pending: 2, saved: 1, released: 1 });
+// The situations count files, as the first tile does: on the real state 339 files read as 137 + 346 + 294 changes.
+// A file is where its newest change is: src/a.js was released once, then edited again and not saved.
+test('the totals say how many files and lines changed and how many of those files are not saved, saved or released', () => {
+  assert.deepEqual(changeTotals(ROWS), { n: 4, files: 3, added: 14, removed: 7, pending: 2, saved: 1, released: 0 });
+  const t = changeTotals(ROWS);
+  assert.equal(t.pending + t.saved + t.released, t.files);
   assert.deepEqual(changeTotals([]), { n: 0, files: 0, added: 0, removed: 0, pending: 0, saved: 0, released: 0 });
 });
 
@@ -44,6 +48,12 @@ test('the list is cut into days, newest day first', () => {
   assert.deepEqual(changeGroups(ROWS).map((g) => [g.day, g.rows.map((r) => r.id)]), [
     [localDay(at(9, 0)), ['a', 'b']], [localDay(at(8, 0)), ['c']], [localDay(at(7, 0)), ['d']],
   ]);
+});
+
+// Only the first 500 rows are drawn; the day's title said "500 changes" for a day with 777.
+test('a day shown in part keeps the count of all its changes', () => {
+  assert.deepEqual(changeGroups(ROWS, 1).map((g) => [g.rows.map((r) => r.id), g.n]), [[['a'], 2]]);
+  assert.deepEqual(changeGroups(ROWS, 3).map((g) => [g.rows.length, g.n]), [[2, 2], [1, 1]]);
 });
 
 test('a box lights with what changed in it in the last minutes; a layer and the project add up their parts', () => {

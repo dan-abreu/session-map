@@ -9,11 +9,15 @@ const SLICE = 1500;
 // Small trees open whole, like the editor with few files; bigger ones open their first level.
 const OPEN_ALL_MAX = 40;
 const SEARCH_MS = 120;
+const LINKS_OPEN_MAX = 12;
+
+// The files a file uses and that use it start open when the list is short, but never on a phone: there the code comes first.
+export const linksOpen = (links, { phone = false } = {}) => !phone && links.uses.length + links.usedBy.length <= LINKS_OPEN_MAX;
 
 // Read-only files of a part or a branch (desenho-2 § 29, mm26): a folder tree like the editor's explorer and a viewer with the
 // code in colors, line numbers, search in the file, the files it uses and that use it, and Open in VS Code at the line.
 // ctx: dialog (the viewer), h, t (translator getter), toast, errorText, project (getter of the current project).
-export function createFiles({ dialog, h, t, toast, errorText, project }) {
+export function createFiles({ dialog, h, t, toast, errorText, project, phone = () => false }) {
   const lists = new Map();
   // Folders the person opened or closed, kept while the page lives, so a refresh of the panel keeps the tree as it was.
   const folded = new Map();
@@ -95,7 +99,7 @@ export function createFiles({ dialog, h, t, toast, errorText, project }) {
         ? h('ul', { class: 'fl-list' }, items.map((x) => h('li', {}, h('button', { type: 'button', class: 'fl-link', onclick: () => open(x.path, workCell) },
           h('span', { class: 'fl-path' }, x.path), h('span', { class: 'fl-line num' }, tt('files.atLine', { n: x.line }))))))
         : h('p', { class: 'muted small' }, empty));
-    return h('details', { class: 'file-links', open: links.uses.length + links.usedBy.length <= 12 },
+    return h('details', { class: 'file-links', open: linksOpen(links, { phone: phone() }) },
       h('summary', {}, tt('files.links', { uses: links.uses.length, usedBy: links.usedBy.length })),
       h('div', { class: 'fl-groups' },
         list(tt('files.uses'), links.uses, tt('files.usesNone')),
