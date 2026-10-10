@@ -46,6 +46,27 @@ In Portuguese the sections are `## Onde está no código` and `## O que falta`; 
 
 Change only that line; leave the rest of the file byte for byte. If the section has a line like "4 open items: ...", update its numbers. Cite the item code in your replies and in the board card: that is how the map hangs the conversation on the part.
 
+## The person's requests
+
+Write every request of the person down the same day, in their own words, never only in your memory. The page's Requests tab reads them.
+
+- **Where:** the registry part of the architecture folder (`ideas.md` or `pedidos.md`, whose items carry an "Asked:" / "Pedido:" line). A project with no registry keeps it in session-map's folder, `~/.claude/session-map/projects/<project id>/pedidos.md` (the id is in the page's link), so nothing is written into the repository without an OK.
+- **One item per request**, code `rq` plus the next number (never a prefix the map's items use), ticked when done or discarded:
+
+```markdown
+- [ ] Show the orders on the phone `rq12`
+  - Pedido: 2026-10-10 05:10 — "the person's exact words"; 2026-10-11 09:00 — "the next time they asked"
+  - O que significa: one or two plain sentences.
+  - Como conferir: how the person sees it is done.
+  - Onde foi: `ord07`, `op03`.
+  - Situação: em andamento.
+```
+
+English labels: Asked, What it means, How to confirm it is done, Where it went, Status. The status starts with new, accepted, in progress, done, later or discarded (novo, aceito, em andamento, feito, depois, descartado), the detail in brackets: `feito (publicado na v1.4.0)`, `descartado (the reason)`. A request is never deleted.
+
+- **Every request becomes at least one item.** Work that changes the program goes under the right part, and into the Flow when it adds a part or a link. Work that changes no code (research, accounts, releases, documents, a decision only the person can make) goes in the operation part, `operation.md` / `operacao.md` (next to `pedidos.md` when the registry lives in session-map's folder), with `From request \`rq12\`.` / `Do pedido \`rq12\`.` as its first detail line.
+- **Keep it moving together:** when an item starts or ends, update the request's status in the same edit.
+
 ## Who an item is with
 
 By default an item has no owner, which means Claude does it: leave the owner out. Put `with <name>` (`com o <nome>`) only when the item needs the person: a decision only they can make, an account or access only they can create, a payment, or a physical action. Writing code, tests, docs and configuration is Claude's work even when the person is the one who knows the area: the owner of an item is not who owns the area or who will write the code. The map counts every item with a person as "waiting for you", so a wrong owner buries the real decisions.

@@ -17,6 +17,16 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ## What's missing
 
+### Requests and the repository
+
+- [ ] **in progress · Claude:** The Requests tab: every request of the owner and the work it became `mm38`
+  - A top tab "Requests" reads the registry of requests (items with an "Asked" line, in English or Portuguese), groups them by state (being done, will be done, later, done, dropped), shows the owner's words and dates, what it means, the activities it became with their live state and a bar, the version it shipped in, and flags a request with no activity yet; filters "waiting for you" and "not turned into work yet", search, one project or all.
+  - The registry part is no longer drawn on the map; the Operation part (`operation.md` / `operacao.md`) holds the work that changes no code and stays out of the Flow; a project whose repository has neither keeps them in session-map's folder (`projects/<id>/`), shown in a layer "Requests and operation".
+  - How to confirm it is done: the tab lists every request of a project with the right counts; a click on an activity opens it on the map; a request with no activity shows in red; the Flow has no box for the registry or the operation.
+- [ ] **important:** The project box opens the whole repository like VS Code on one side, the plan on the other `mm39`
+  - The purple root box: the architecture to one side, and to the other the repository's real folders and files, opening folder by folder, with counts, a new file marked as it appears, and a click that opens the file in the viewer.
+  - How to confirm it is done: open the root: both sides grow; a file created in the repository shows up in its folder within seconds, marked new; a click opens it read-only.
+
 ### Views
 
 - [x] **Claude:** Mind map and an outline for phones `mm01`

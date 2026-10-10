@@ -6,6 +6,7 @@ import { costInRange } from './range.js';
 import { signalCard } from './blocks.js';
 import { costSignal } from './signals.js';
 import { emptyState } from './empty.js';
+import { requestsOf } from './requests.js';
 
 const HISTORY_DEBOUNCE_MS = 250;
 
@@ -22,11 +23,13 @@ export function createTabs(ctx) {
   const partName = (p, id) => p.arch.parts.find((x) => x.id === id)?.name ?? '';
   const empty = (art, title, text, compact = false) => emptyState({ h, icon: ctx.icon }, { art, title, text, compact });
 
-  function itemCard(p, { nodeId, part, group, item }) {
+  // origin: the owner's request the item came from, when the registry names it.
+  function itemCard(p, { nodeId, part, group, item }, origin = null) {
     const tt = t();
     return h('li', { class: 'card' }, h('button', { type: 'button', class: 'card-btn', onclick: () => ctx.go(p.id, { type: 'node', id: nodeId }) },
       h('span', { class: 'card-kind' }, [part.name, group].filter(Boolean).join(' · ')),
       h('span', { class: 'card-title' }, item.title),
+      origin ? h('span', { class: 'card-origin' }, tt('board.fromRequest', { title: origin.title })) : null,
       h('span', { class: 'card-meta' },
         item.who ? h('span', { class: `who${item.who.toLowerCase() === 'claude' ? '' : ' is-person'}` }, item.who) : null,
         item.weight ? h('span', { class: `weight w-${item.weight}` }, tt(`item.weight.${item.weight}`)) : null,
@@ -46,13 +49,15 @@ export function createTabs(ctx) {
     const columns = { todo: [], doing: [], done: [] };
     for (const p of projects) {
       const cols = boardItems(p);
-      for (const k of Object.keys(columns)) columns[k].push(...cols[k].map((entry) => ({ p, entry })));
+      const origin = new Map();
+      for (const r of requestsOf(p).list) for (const w of r.went) if (!origin.has(w.code)) origin.set(w.code, r);
+      for (const k of Object.keys(columns)) columns[k].push(...cols[k].map((entry) => ({ p, entry, origin: origin.get(entry.item.code) ?? null })));
     }
     const noMap = projects.filter((p) => !p.arch.parts.length);
     const column = (k) => h('section', { class: `col col-${k}`, 'aria-labelledby': `col-${k}` },
       h('h3', { id: `col-${k}` }, tt(`board.${k}`), h('span', { class: 'col-count num' }, String(columns[k].length))),
       columns[k].length
-        ? h('ul', { class: 'cards' }, columns[k].map(({ p, entry }) => itemCard(p, entry)))
+        ? h('ul', { class: 'cards' }, columns[k].map(({ p, entry, origin }) => itemCard(p, entry, origin)))
         : empty({ todo: 'check', doing: 'clock', done: 'check' }[k], tt(`board.${k}.empty`), null, true));
     root.replaceChildren(h('div', { class: 'view-wrap wide' },
       h('div', { class: 'view-head' }, h('h2', { 'data-help': 'board' }, tt('board.title')), filter),

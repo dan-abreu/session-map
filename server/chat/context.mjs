@@ -18,19 +18,30 @@ const itemLine = (i) => `- [${i.status === 'done' ? 'x' : ' '}] ${i.title}${i.co
 
 // idea: the "Nova ideia" chat writes its item only after the person's OK, so the rule that a new request becomes an
 // item before the work starts stays out of it.
+// The owner's requests (id76): written the same day in his words, each turned into work; the registry and the operation
+// part may live in session-map's own folder, which a chat edits even when the map is read from the main branch.
+function requestsRule(arch) {
+  const registry = arch.parts?.find((p) => p.role === 'requests');
+  const operation = arch.parts?.find((p) => p.role === 'operation');
+  if (!registry) return null;
+  return `- Write each new request of the person the same day, in their own words, as one item of ${registry.file} (its date and words, what it means, how to confirm it, where it went, its status), and turn it into work: an item of the right part, or, for work that changes no code, an item of ${operation?.file ?? 'the operation part'}. Keep the request's status moving with its items (session-map:architecture).`;
+}
+
 function upkeep(arch, { idea = false } = {}) {
   const w = WORDS[arch.lang] ?? WORDS.en;
   if (arch.source !== 'worktree') {
     return [
       `This project's architecture map is read from its main branch (${arch.dir}/); it is not in this folder, so do not edit it here.`,
       'If the work changes what is planned, say in your reply which item should be added, started or closed.',
-    ].join('\n');
+      !idea && requestsRule(arch),
+    ].filter(Boolean).join('\n');
   }
   return [
     `This project keeps its plan in ${arch.dir}/ (the session-map:architecture convention): one file per part, the open work under "## ${w.missing}".`,
     !idea && `- Something new the person asks for becomes an item in that section of the right part before you start: \`- [ ] what to do\` ending with its code in backticks, under a \`###\` group if one fits. The code is the prefix the part's items use plus the next number in the folder.`,
     `- When you start an item, put \`**${w.doing}:**\` in front of its text, or add \`${w.doing}\` as the first token of the bold prefix it already has (tokens are separated by \` · \`). When it is done, tick it: \`- [x]\`.`,
     '- Keep the rest of the file as it is, and cite the item\'s code in your replies.',
+    !idea && requestsRule(arch),
   ].filter(Boolean).join('\n');
 }
 

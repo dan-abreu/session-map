@@ -7,6 +7,7 @@ import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { attachToParts, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
+import { withLocalParts } from './arch/local.mjs';
 import { norm } from './arch/parse.mjs';
 import { sizesOf } from './arch/sizes.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
@@ -385,7 +386,7 @@ async function buildProject(ctx, { root, items }) {
   const projectId = projectIdOf(root);
   const config = loadConfig(root, smDir);
   const main = await mainBranch(root);
-  const arch = await readArch(root, config, { mainBranch: main });
+  const arch = withLocalParts(await readArch(root, config, { mainBranch: main }), smDir, projectId);
   const topLevel = topLevelOf(root);
   const placeFiles = (files) => partOfFiles(files, arch, { topLevel });
   const memo = await gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso);

@@ -16,9 +16,18 @@ const SKELETON = {
 };
 const README_TITLE = { en: 'Architecture', pt: 'Arquitetura' };
 
+// The parts the Flow draws: the program's own. The registry of requests and the operation part change no code.
+function programOnly(arch) {
+  const out = arch.parts.filter((p) => p.role === 'requests' || p.role === 'operation').map((p) => p.id);
+  if (!out.length) return arch;
+  const left = new Set(out);
+  return { ...arch, parts: arch.parts.filter((p) => !left.has(p.id)), layers: arch.layers.map((l) => ({ ...l, partIds: l.partIds.filter((id) => !left.has(id)) })).filter((l) => l.partIds.length) };
+}
+
 // The map as one flowchart: a subgraph per layer, a box per part (with the README's own id and shape when it drew the
 // part), the README's other boxes and arrows, or, when it drew none, the relations session-map found as dotted arrows.
-export function archFlow(arch) {
+export function archFlow(archIn) {
+  const arch = programOnly(archIn);
   const readme = arch.mermaid ? parseFlow(arch.mermaid) : null;
   const drawn = readme?.ok ? readme : null;
   const drawnPart = drawn ? matchParts(drawn, arch.parts) : new Map();
@@ -94,7 +103,8 @@ function fileFor(name, dir, used) {
 
 // The preview of an import: what the drawing adds, moves, leaves out, and which arrows change, against the map as the
 // export draws it, so exporting and importing again changes nothing. taken(file) says a file already exists.
-export function planImport(arch, text, { dir = arch.dir ?? DEFAULT_DIR[arch.lang] ?? DEFAULT_DIR.en, taken = () => false } = {}) {
+export function planImport(archIn, text, { dir = archIn.dir ?? DEFAULT_DIR[archIn.lang] ?? DEFAULT_DIR.en, taken = () => false } = {}) {
+  const arch = programOnly(archIn);
   const next = parseFlow(text);
   if (!next.ok) return { ok: false, error: next.error };
   if (!next.nodes.length) return { ok: false, error: 'empty-flowchart' };

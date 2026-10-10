@@ -37,6 +37,21 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ## What's missing
 
+### Seeing my requests
+
+- [ ] **in progress:** See every request in the program: what will be done, what is being done, what is done `id76`
+  - Asked: 2026-10-10 04:55 — "isso tem que entrar de alguma forma no programa. assim posso ver tudo o que eu pedi vai ser feito ou está sendo feito isso é o mais urgente no momento, enxergar os meus pedidos"; 2026-10-10 ~05:00 — "pedido entra na arquitetutra e fluxo se for alguma função que venha junto com o pedido ( ideia) dentro do programa, mas tudo o que é feito, que fica ai na sua memoria que voce grava como pedido deve virar uma atividade a ser feita"
+  - What it means: a Requests tab with every request in his words, grouped by where it stands, each with the work it became and how much is done; a request is never only in Claude's memory; every request becomes at least one activity (a feature goes to the architecture and the Flow, the rest to the Operation part); the lists of the other projects built from their old conversations, kept in session-map's folder.
+  - How to confirm it is done: open Requests: every request shows his words and date, its activities with their state and a bar; one with no activity yet shows in red; the other projects show their lists too.
+  - Where it went: `mm38`, `op01`.
+  - Status: in progress (the tab and the lists of the other projects are built on 2026-10-10).
+- [ ] The project box with the whole repository on one side, like VS Code, and the plan on the other `id77`
+  - Asked: 2026-10-10 ~05:12 — "tive uma ideia boa também tem o blão do projeto que é roxo, de um lado vem tem a formação do projeto o que tem que ser feito e como tem que ser feito e do outro lado eu quero o repositorio completo, como é no vscode, pastas etc, realmente como é o repositorio, assim a pessoa vai abrindo e vendo, consegue acompanhar quando um arquivo novo for criado"
+  - What it means: on the mind map, the purple project box opens to one side into the architecture (what has to be done and how) and to the other into the real folders and files of the repository, opened folder by folder like the editor's explorer, with a new file lighting up when it is created.
+  - How to confirm it is done: open the project box: the architecture grows to one side and the folder tree to the other; create a file in the repository: it appears in its folder within seconds, marked new.
+  - Where it went: `mm39`.
+  - Status: accepted.
+
 ### The picture of the project
 
 - [ ] Lines inside a part, showing what is tied to what `id16`
@@ -142,7 +157,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `fl11`, `wa10`, `fd06`, `bi05`.
   - Status: accepted.
 - [ ] A detailed Flow, not a thin one `id48`
-  - Asked: 2026-10-09 13:09 — "achei o fluxo bem magro, acho que tinha que ser mais minuncioso"; 2026-10-09 13:17 — "sim"
+  - Asked: 2026-10-09 13:09 — "achei o fluxo bem magro, acho que tinha que ser mais minuncioso"; 2026-10-09 13:17 — "sim"; 2026-10-10 04:50 — "o fluxo nao ta bem feito"
   - What it means: one model behind every view; level 1 with actors and outside services and labeled arrows; level 2 inside each part; level 3 with numbered end-to-end journeys; declared and detected kept apart.
   - How to confirm it is done: level 1 shows the actors and outside services with a label on every arrow; a double click opens a part's inner flow; the Journeys tab shows 3 to 6 numbered journeys, each step tied to a part.
   - Where it went: `fl07`, `fl08`, `fl09`, `fl10`.
@@ -214,10 +229,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `bi07`, `bi08`, `bi09`, `bi10`.
   - Status: accepted.
 - [ ] Understand the programs first: an exhaustive foundation before new features `id59`
-  - Asked: 2026-10-09 14:54 — "acho que arquitetura montada ficou muito generica, não detalhou bem tudo o que tem no programa, por isso está acontecendo, como tudo deve ser documentado então acaba que ele documentou por cima e nao minunciosamente detalhes e também a mesma coisa com session, como vou fazer para uma ferramente sair reamente trabalhavel nivel de industria dessa forma?"; 2026-10-09 14:58 — "claro que a prioridade é entender os programas, como vai orquestrar em cima de algo inefieciente?"
+  - Asked: 2026-10-09 14:54 — "acho que arquitetura montada ficou muito generica, não detalhou bem tudo o que tem no programa, por isso está acontecendo, como tudo deve ser documentado então acaba que ele documentou por cima e nao minunciosamente detalhes e também a mesma coisa com session, como vou fazer para uma ferramente sair reamente trabalhavel nivel de industria dessa forma?"; 2026-10-09 14:58 — "claro que a prioridade é entender os programas, como vai orquestrar em cima de algo inefieciente?"; 2026-10-10 04:53 — "preciso da fundação primeiro mas voce fica me entregando pedacos dela"; 2026-10-10 04:54 — "preciso de tudo e nao so uma parte"
   - What it means: after the polish package, new features freeze and the foundation comes first: exact facts from the code by deterministic extractors, the AI only explaining and grouping, coverage measured; then the maps are redone and measured; only then the orchestration chat.
   - How to confirm it is done: the Foundation part's items are ticked and the redone maps show their measured coverage before `or01` starts.
-  - Where it went: `fd01`, `fd02`, `fd11`.
+  - Where it went: `fd01`, `fd02`, `fd03`, `fd04`, `fd05`, `fd06`, `fd07`, `fd08`, `fd09`, `fd10`, `fd11`, `fd12`, `fd13`, `fd14`, `fd15`, `op02` (the whole foundation in one delivery, not in pieces).
   - Status: accepted.
 - [ ] A census letter by letter, number by number `id60`
   - Asked: 2026-10-09 15:01 — "o que deve ser feito é se nao tiver documentação para tal coisa e ele enxergar e criar a documentação, mas sim fazer um vasculho completo, letra por letra, numero por numero de cada arquivo, computar isso e deixar isso organizado, programa tem 1000 letras, 100 linhas, 10 arquivos, 2 pastas, assim vamos ter certeza que ele não deixou passar nada,"

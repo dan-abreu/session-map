@@ -169,9 +169,10 @@ function parsePart(dir, name, text) {
   const groups = regions.filter((r) => r.items.length).map((r) => ({ name: r.name, items: r.items.map(stripScan) }));
   const items = groups.flatMap((g) => g.items);
   const open = items.filter((i) => i.status !== 'done');
+  const role = roleOf(base, items);
   return {
     part: {
-      id: slug(base), name: h1 ? h1.text.replace(/[*`]/g, '') : base, file: `${dir}/${name}`,
+      id: slug(base), name: h1 ? h1.text.replace(/[*`]/g, '') : base, file: `${dir}/${name}`, ...(role ? { role } : {}),
       about: h1 ? aboutOf(lines, h1.idx) : '', codePaths: codePathsOf(lines, heads), groups,
       counts: {
         todo: items.filter((i) => i.status === 'todo').length,
@@ -187,6 +188,17 @@ function parsePart(dir, name, text) {
 }
 
 const stripScan = ({ startIdx, endIdx, ...item }) => item;
+
+// Two kinds of part are not pieces of the program. A registry of the owner's requests (most of its items carry an
+// "Asked" line) is read by the Requests tab instead of being drawn as a box; the operation part holds the work that
+// changes no code (research, releases, accounts, documents, the owner's decisions), so the Flow leaves it out.
+const ASKED_RE = /^(asked|pedido(?: em)?)\s*:/i;
+const OPERATION_RE = /^(operacao|operação|operacoes|operações|operation|operations)$/i;
+function roleOf(base, items) {
+  const asked = items.filter((i) => i.detail.some((d) => ASKED_RE.test(d))).length;
+  if (items.length && asked * 2 >= items.length) return 'requests';
+  return OPERATION_RE.test(base) ? 'operation' : null;
+}
 
 // The first mermaid block of the README: the diagram the Flow tab draws and an import rewrites. Both fences sit on
 // their own lines, as in markdown, so a run of backticks inside a line never ends the block.

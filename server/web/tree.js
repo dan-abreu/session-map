@@ -39,8 +39,9 @@ function partNode(part) {
 
 export function archTree(project) {
   const arch = project.arch ?? { layers: [], parts: [] };
-  const parts = new Map(arch.parts.map((p) => [p.id, p]));
-  const layers = arch.layers.map((l) => {
+  // The registry of the owner's requests is read by the Requests tab, not drawn: its items are requests, not work.
+  const parts = new Map(arch.parts.filter((p) => p.role !== 'requests').map((p) => [p.id, p]));
+  const layers = arch.layers.filter((l) => l.partIds.some((id) => parts.has(id))).map((l) => {
     const children = l.partIds.filter((id) => parts.has(id)).map((id) => partNode(parts.get(id)));
     return { id: `l:${l.id}`, kind: 'layer', label: l.name, layerId: l.id, children, counts: sumCounts(children) };
   });

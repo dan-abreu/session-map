@@ -199,3 +199,16 @@ test('a clash chat refuses branches that are not in the project, a pair that doe
   assert.equal(contextOf(apart, { kind: 'clash', workCellIds: ['w1', 'w2'] }).error, 'no-clash');
   assert.equal(contextOf({ ...p, workCells: undefined }, { kind: 'clash', workCellIds: ['w1', 'w2'] }).error, 'unknown-front');
 });
+
+test('with a requests registry, every chat is told to write the request the same day and turn it into work (id76)', () => {
+  const REG = '# Pedidos\n\nO que o dono pediu.\n\n## O que falta\n\n- [ ] Ver os pedidos `rq01`\n  - Pedido: 2026-10-10 05:10 — "enxergar os meus pedidos"\n  - Situação: em andamento.\n';
+  const OP = '# Operação\n\nO que não muda o código.\n\n## O que falta\n\n- [ ] **com a Ana:** Olhar a lista `op01`\n';
+  const local = parseArch('/home/x/.claude/session-map/projects/feira-abc123', { 'pedidos.md': REG, 'operacao.md': OP }, 'local');
+  const withRegistry = project({ ...PT.arch, parts: [...PT.arch.parts, ...local.parts] });
+  const text = all(contextOf(withRegistry, { kind: 'part', partId: 'pagamentos' }));
+  assert.ok(text.includes('/home/x/.claude/session-map/projects/feira-abc123/pedidos.md'), 'the registry file, where it lives');
+  assert.ok(text.includes('/home/x/.claude/session-map/projects/feira-abc123/operacao.md'), 'the operation file for work that changes no code');
+  const fromMain = project({ ...withRegistry.arch, source: 'main-branch' });
+  assert.ok(all(contextOf(fromMain, { kind: 'part', partId: 'pagamentos' })).includes('pedidos.md'), 'also when the map is read from the main branch');
+  assert.ok(!all(contextOf(PT, { kind: 'part', partId: 'pagamentos' })).includes('pedidos.md'), 'no registry, no rule');
+});

@@ -11,6 +11,7 @@ import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createChangesView, freshFor } from './changes.js';
+import { createRequestsView } from './requestsview.js';
 import { createResizer, createSplit } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { conversationsOf, createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
@@ -35,7 +36,7 @@ import {
 const $ = (sel) => document.querySelector(sel);
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
-const VIEWS = ['map', 'flow', 'changes', 'board', 'history', 'costs', 'discover'];
+const VIEWS = ['map', 'requests', 'flow', 'changes', 'board', 'history', 'costs', 'discover'];
 const SEARCH_MAX = 8;
 const CHAT_WIDTH = 460;
 
@@ -563,6 +564,14 @@ function goTo(projectId, sel) {
   } else {
     requestAnimationFrame(() => select(sel));
   }
+}
+
+// An activity of a request, opened from the Requests tab: the map of its project, on its item.
+function openRequestItem(projectId, code) {
+  goTo(projectId);
+  const find = (n) => (n.kind === 'item' && n.item.code === code ? n : (n.children ?? []).map(find).find(Boolean) ?? null);
+  const found = find(tree);
+  if (found) requestAnimationFrame(() => openPoint(found));
 }
 
 function renderWaiting() {
@@ -1839,6 +1848,11 @@ function refreshView(first = false) {
     else changesView.refresh(root);
     return;
   }
+  if (view === 'requests') {
+    if (first) requestsView.render($('#view-requests'));
+    else requestsView.refresh($('#view-requests'));
+    return;
+  }
   if (!['board', 'history', 'costs'].includes(view)) return;
   const root = $(`#view-${view}`);
   if (first) tabs.render(view, root);
@@ -1884,6 +1898,7 @@ let chat = null;
 let files = null;
 let changesView = null;
 let tabs = null;
+let requestsView = null;
 let mindmap = null;
 let outline = null;
 let flow = null;
@@ -2012,6 +2027,7 @@ function wire() {
     h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
+  requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon,
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
