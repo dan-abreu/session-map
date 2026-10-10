@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.4
+
+The chat now sits where you work: under the box you clicked, always at hand, and every project has its own chats
+about the whole project.
+
+- New: project chats. The project box opens the whole project (what is open, its size, what waits for you, what works
+  now) with a "Project chats" list, and "New chat" at the top of the map and of the conversation list starts a chat
+  about the whole project, like "New chat" in Claude. Its first message carries a short summary of the project (never
+  its history), so Claude knows the layers, the parts and what is missing. Many per project; each can be reopened,
+  renamed and archived.
+- New: a click on a box opens its information on top (Summary, Tasks, Conversations, Changes, Files) and the chat
+  about that box right under it, with the box to write in always on screen. While you talk, the information folds to
+  one line with what matters at a glance; a click opens it again. The line between them can be dragged.
+- New: each box keeps its own conversation. Open another box and the first one keeps working; come back and it is
+  there, whole. "New chat" starts a fresh one on any box.
+- New: a new chat offers ready first questions ("What is missing in…?", "Explain … in plain words", "Start the next
+  task of…"). A click writes the question in the box; nothing is sent until you press Send.
+- Changed: the chat looks like Claude's. The way it runs, the model, the effort and the permissions live in one
+  compact button by Send ("Automatic · Opus · high"); the header is one thin line; replies' headings are close to the
+  text size.
+- Fixed: every file in the Files tab opens. The project box shows the whole program as a folder tree, its lists of
+  files with no box open too, and a file row says "opening…" while it loads; the code shows at once.
+- Fixed: a click on a box showed only the chat; its information is back, first.
+- Fixed: Send works on the first click; the "Finished" line and the alerts read as plain words.
+
 ## 0.2.3
 
 session-map now keeps an eye on every conversation for you, shows exactly what each one changed, and reads in plain

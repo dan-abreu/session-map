@@ -253,3 +253,21 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: with a workflow running, every active agent shows as a dot on the right box with its last step, and clicking a changed file shows the request that caused it; see `mm31`.
   - Where it went: `mm31`; what is left in `mm37`.
   - Status: done (released in v0.2.3): each team of helpers shows as a tree from what was asked to every helper with its state, model and place; each team has its own colour with a dot per helper at work on the boxes it touches, in any project; the conversation's panel lists the files, saved changes and version of each helper, and a changed file in Changes shows the request that led to it. A page chat's map point as the request, single helpers and team colours on the Now cards go on in `mm37`.
+- [x] A general chat about the whole project, many of them, opened like Claude's "New chat" `id73`
+  - Asked: 2026-10-09 ~23:30 — paraphrased (the exact words were not recorded): besides the chats on each bubble, he wants a general chat about the whole project that works like Claude: a clear "New chat" button at the top, many chats listed in the project, closing the panel and opening another, reopening any of them; the root bubble should open them too.
+  - What it means: plain project chats, the first step of the orchestration chat: started from the map tools, the conversation list or the root bubble, in the project's root folder, with a compact project summary in the first message; pinned on top of the project's card; resumed, renamed and archived like any chat. The manager's powers (activity chats, reports back) stay in `or01` to `or03`.
+  - How to confirm it is done: see `or13`.
+  - Where it went: `or13` (first step of `or01`).
+  - Status: done (released in v0.2.4, with the screenshots approved by the owner).
+- [x] The chat about a box always at hand, under its information, never lost as the last tab `id74`
+  - Asked: 2026-10-10 — "Eu ainda não me conformei com esse chat perdido no final, o chat tem que ser algo intuitivo, da mesma forma que as informações dos baloes"
+  - What it means: the owner picked "information on top, chat below" from three sketches; while he talks the information folds to one line by itself; another box opens its own chat while the previous one keeps running and comes back whole.
+  - How to confirm it is done: click a box: its Summary on top and its chat under it with the box to write in on screen; send a message: the information folds to one line; click another box and back: the conversation is there.
+  - Where it went: `mm07`.
+  - Status: done (released in v0.2.4, with the screenshots approved by the owner).
+- [x] Every file in a box's Files tab opens with a click `id75`
+  - Asked: 2026-10-10 — "eu nao consigo clicar nos arquivos para ver" (in a box's Files tab)
+  - What it means: the project box listed its files as plain text, and a part's first file took seconds with no sign of life; now the project box shows the whole program as a tree, every listed file opens, and the row says it is opening.
+  - How to confirm it is done: in the project box and in a part, open the Files tab and click a file: "opening…" shows at once and the file opens.
+  - Where it went: `mm26`.
+  - Status: done (released in v0.2.4).

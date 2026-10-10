@@ -1,6 +1,6 @@
 {
   "name": "session-map",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A living mind map of your project's architecture, with every Claude Code conversation and branch hung on its parts.",
   "type": "module",
   "bin": {

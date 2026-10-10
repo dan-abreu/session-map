@@ -31,7 +31,7 @@ Também é preciso ter o Node.js 20 ou mais novo no computador ([nodejs.org](htt
 
 ![O passeio de boas-vindas mostrando o que é o mapa](docs/images/pt-tour.webp)
 
-**4. Clique numa caixa.** Cada caixa é uma parte do seu projeto. O painel dela mostra o que falta ali, as conversas sobre ela, as últimas mudanças salvas e os arquivos, cada coisa no seu bloco e com a sua cor. A aba **Conversa** deixa você pedir algo ao Claude exatamente sobre aquela parte.
+**4. Clique numa caixa.** Cada caixa é uma parte do seu projeto. O painel dela mostra o que falta ali, as conversas sobre ela, as últimas mudanças salvas e os arquivos, cada coisa no seu bloco e com a sua cor. O chat daquela parte fica logo embaixo, sempre à mão: peça algo ao Claude exatamente sobre aquela parte, ou escolha uma das perguntas prontas. Enquanto você conversa, as informações encolhem para uma linha, e cada caixa guarda a sua própria conversa. A caixa do projeto tem os chats sobre o projeto inteiro, como o "Novo chat" do Claude.
 
 ![O painel de uma parte, com um choque entre duas linhas de trabalho explicado em palavras simples](docs/images/pt-part.webp)
 
@@ -124,7 +124,7 @@ Sem o plugin: `node server/main.mjs [--lan] [--port 4001]`, ou `--demo` para dad
 
 ### Arquivos
 
-Abra uma parte, um item ou um ramo e a seção **Arquivos** lista os arquivos, com os novos e alterados marcados. Tocar num deles abre só para leitura (até 1 MB, só texto, nunca `.git`, nunca arquivos `.env`) com as linhas que o ramo mudou em destaque. **Abrir no VS Code** abre o arquivo neste PC, **Abrir terminal nesta pasta** abre um terminal ali, e **VS Code no celular** aparece quando você define `tunnelUrl`. Ler arquivos exige o token, como o chat.
+Abra uma parte, um item ou um ramo e a seção **Arquivos** lista os arquivos, com os novos e alterados marcados; a caixa do projeto mostra o programa inteiro como uma árvore de pastas. Tocar num deles abre só para leitura (até 1 MB, só texto, nunca `.git`, nunca arquivos `.env`) com as linhas que o ramo mudou em destaque. **Abrir no VS Code** abre o arquivo neste PC, **Abrir terminal nesta pasta** abre um terminal ali, e **VS Code no celular** aparece quando você define `tunnelUrl`. Ler arquivos exige o token, como o chat.
 
 ### No celular
 

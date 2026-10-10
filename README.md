@@ -31,7 +31,7 @@ You also need Node.js 20 or newer on the computer ([nodejs.org](https://nodejs.o
 
 ![The welcome tour showing what the map is](docs/images/en-tour.webp)
 
-**4. Click a box.** Each box is a part of your project. Its panel shows what is missing there, the conversations about it, the latest saved changes and its files, each in its own block with its own color. The **Conversation** tab lets you ask Claude for something about exactly that part.
+**4. Click a box.** Each box is a part of your project. Its panel shows what is missing there, the conversations about it, the latest saved changes and its files, each in its own block with its own color. The chat about that part sits right under it, always at hand: ask Claude for something about exactly that part, or pick one of the ready first questions. While you talk, the information folds to one line, and each box keeps its own conversation. The project box has its own chats about the whole project, like "New chat" in Claude.
 
 ![The panel of a part, with a clash between two lines of work explained in plain words](docs/images/en-part.webp)
 
@@ -124,7 +124,7 @@ Without the plugin: `node server/main.mjs [--lan] [--port 4001]`, or `--demo` fo
 
 ### Files
 
-Open a part, an item or a branch and its **Files** section lists the files, new and changed ones marked. Tapping one opens it read-only (up to 1 MB, text only, never `.git`, never `.env` files) with the lines the branch changed highlighted. **Open in VS Code** opens that file on this PC, **Open terminal in this folder** opens a shell there, and **VS Code on your phone** appears when you set `tunnelUrl`. Reading files needs the token, like the chat.
+Open a part, an item or a branch and its **Files** section lists the files, new and changed ones marked; the project box lists the whole program as a folder tree. Tapping one opens it read-only (up to 1 MB, text only, never `.git`, never `.env` files) with the lines the branch changed highlighted. **Open in VS Code** opens that file on this PC, **Open terminal in this folder** opens a shell there, and **VS Code on your phone** appears when you set `tunnelUrl`. Reading files needs the token, like the chat.
 
 ### On your phone
 
