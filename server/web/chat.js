@@ -44,11 +44,14 @@ const browserStorage = () => {
 // redrew the shared draft), beforeSend() (awaited before a message leaves) and showText(text) (what a reply shows).
 // mm22 adds lang() (for times and dates), icon(name, cls), commands() (the "/" list: [{name, description}]), and for tests
 // schedule/cancel (the live mirror's timer), readImage(file) and debounceMs.
+// more(sessionId): what the header's ⋯ menu offers for a conversation with an id, [{label, icon?, run()}]; without it
+// the sheet has no ⋯.
 // The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own; the
-// optional ones (find, tasks, attach, filepick, pending, suggest) are simply left out where a sheet has none.
+// optional ones (find, tasks, attach, filepick, pending, suggest, menu, more, moremenu) are simply left out where a sheet
+// has none.
 export function createChat({
   root, h, t, toast, errorText, onSession, onClose, onPcMode, storage = browserStorage(), savedKey = SAVED, relative = () => '',
-  money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [],
+  money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [], more = null,
   schedule = (fn, ms) => setTimeout(fn, ms), cancel = (id) => clearTimeout(id), readImage = readAsBase64, debounceMs = 150,
 }) {
   const q = (role) => root.querySelector(`[data-chat="${role}"]`);
@@ -70,8 +73,11 @@ export function createChat({
   const fileEl = q('filepick');
   const pendingEl = q('pending');
   const suggestEl = q('suggest');
-  const modeNameEl = q('modename');
   const newEl = q('new');
+  // The compact button by Send opens this menu (the way, the model, the permissions), as Claude's model button does.
+  const menuEl = q('menu') ?? panelEl;
+  const moreEl = q('more');
+  const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
   const uid = root.id || 'chat';
   let context = null;
@@ -288,32 +294,42 @@ export function createChat({
         h('button', { type: 'button', class: 'btn', 'data-run': 'ask-no', onclick: answer('run.ask.noText') }, tt('run.ask.no'))));
   }
 
-  // ---- how the conversation runs: the header line and the Automatic / Manual panel ----
+  // ---- how the conversation runs: the compact button by Send and its menu (Automatic / Manual, permissions) ----
+
+  // One button for the life of the sheet: redrawn in place, so a click or a key leaves the focus on it.
+  const toggleEl = runEl ? h('button', {
+    type: 'button', class: 'run-toggle', 'data-run': 'toggle', 'aria-haspopup': 'dialog', 'aria-expanded': 'false',
+    'aria-controls': menuEl?.id || null, onclick: () => setMenu(!menuOpen()),
+  }) : null;
+  runEl?.replaceChildren(toggleEl);
+  const runHead = h('div', { class: 'run-head' });
+  const menuOpen = () => Boolean(menuEl && !menuEl.hidden);
 
   function renderRun() {
-    if (!runEl) return;
+    if (!toggleEl) return;
     const tt = t();
     const words = runWords(tt, { choice: run, info: log?.run ?? null, mine });
     const cost = log?.costUSD ?? null;
-    const open = Boolean(panelEl && !panelEl.hidden);
-    runEl.replaceChildren(
-      h('button', {
-        type: 'button', class: `run-toggle tone-${words.tone}`, 'data-run': 'toggle', 'aria-expanded': String(open),
-        'aria-controls': panelEl?.id || null, title: tt('run.change'), onclick: togglePanel,
-      },
+    toggleEl.setAttribute('class', `run-toggle tone-${words.tone}`);
+    toggleEl.setAttribute('aria-expanded', String(menuOpen()));
+    toggleEl.setAttribute('title', tt('run.change'));
+    toggleEl.replaceChildren(
       h('span', { class: 'run-way' }, words.way),
       h('span', { class: 'run-model' }, [words.model, words.effort].filter(Boolean).join(' · ')),
-      cost !== null ? h('span', { class: 'run-cost num', title: tt('run.costTitle') }, money(cost)) : null,
-      h('span', { class: 'run-caret', 'aria-hidden': 'true' })),
-      h('p', { class: 'run-why' }, words.why));
+      h('span', { class: 'run-caret', 'aria-hidden': 'true' }));
+    runHead.replaceChildren(
+      h('p', { class: `run-why tone-${words.tone}` }, words.why),
+      cost !== null ? h('p', { class: 'run-cost' }, h('span', {}, tt('run.costTitle')), h('span', { class: 'num' }, money(cost))) : null);
   }
 
-  function togglePanel() {
-    if (!panelEl) return;
-    panelEl.hidden = !panelEl.hidden;
+  // Esc and a press outside close it, as a menu does; Esc gives the focus back to the button.
+  function setMenu(open, { focusBack = false } = {}) {
+    if (!menuEl) return;
+    menuEl.hidden = !open;
     confirmUltra = false;
     renderRun();
     renderPanel();
+    if (!open && focusBack) toggleEl?.focus();
   }
 
   async function pick(next) {
@@ -409,10 +425,11 @@ export function createChat({
   }
 
   function renderPanel() {
-    if (!panelEl || panelEl.hidden) return;
+    if (!panelEl || !menuOpen()) return;
     const tt = t();
     const manual = run.kind !== 'auto';
     panelEl.replaceChildren(
+      runHead,
       h('div', { class: 'seg run-path', role: 'group', 'aria-label': tt('run.pathLabel') },
         h('button', { type: 'button', 'data-run': 'path-auto', 'aria-pressed': String(!manual), onclick: () => { if (manual) pick({ kind: 'auto', selfReinforce: false }); } }, tt('run.path.auto')),
         h('button', { type: 'button', 'data-run': 'path-manual', 'aria-pressed': String(manual), onclick: () => { if (!manual) pick(lastManual); } }, tt('run.path.manual'))),
@@ -433,7 +450,6 @@ export function createChat({
     const tt = t();
     modeEl.replaceChildren(...MODES.map((m) => h('option', { value: m }, m === 'settings' ? tt('chat.mode.settings', { mode: modeName(settings?.mode ?? 'default') }) : modeName(m))));
     modeEl.value = choice;
-    if (modeNameEl) modeNameEl.textContent = modeEl.selectedOptions?.[0]?.textContent ?? '';
     const offer = pcModeOffer(choice, null);
     pcBtn.disabled = !offer.mode;
     pcBtn.title = offer.mode ? tt('pcmode.hint') : tt('pcmode.pickFirst');
@@ -445,10 +461,8 @@ export function createChat({
   // written here. ctx.where() is asked again on each render, so it follows the language.
   function renderWhere() {
     const where = context?.where?.() ?? null;
+    // Nothing is run from here while it is open elsewhere: the box goes, and with it the button of how it runs.
     form.hidden = Boolean(where && !where.canWrite);
-    // Nothing is run from here while it is open elsewhere, so the permission row has nothing to say.
-    const modeRow = modeEl.closest?.('.chat-mode');
-    if (modeRow) modeRow.hidden = form.hidden;
     if (!whereEl) return;
     whereEl.hidden = !where;
     whereEl.replaceChildren(...(where ? [
@@ -608,6 +622,8 @@ export function createChat({
     input.disabled = stuck;
     // A sheet that offers "New chat" (the project chats) shows it once it holds a conversation.
     if (newEl) newEl.hidden = !context?.newChat || (!shownId() && !items.length);
+    // A conversation the page started a moment ago has nothing to offer until the state lists it.
+    if (moreEl) moreEl.hidden = !more || !shownId() || !more(shownId()).length;
     const statusEl = q('status');
     statusEl.textContent = statusText(state);
     statusEl.dataset.state = mirror ? 'mirror' : state.kind;
@@ -717,6 +733,7 @@ export function createChat({
     pending = [];
     renderPending();
     closeSuggest();
+    if (menuOpen()) setMenu(false);
     log = chatLog(log, { type: 'local-send', at: new Date().toISOString(), data: { text, images: shownImages } });
     listEl.hidden = true;
     render();
@@ -894,6 +911,50 @@ export function createChat({
   q('close').addEventListener('click', () => close());
   newEl?.addEventListener('click', () => context?.newChat?.());
 
+  const escMenu = (e) => {
+    if (e.key !== 'Escape' || !menuOpen()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu(false, { focusBack: true });
+  };
+  menuEl?.addEventListener('keydown', escMenu);
+  runEl?.addEventListener('keydown', escMenu);
+
+  // ---- the header's ⋯ menu: what can be done with the conversation (rename, archive, open where it lives) ----
+
+  function setMore(open, { focusBack = false } = {}) {
+    if (!moreEl || !moreMenuEl) return;
+    const id = shownId();
+    const actions = open && id && more ? more(id) : [];
+    moreMenuEl.hidden = !actions.length;
+    moreEl.setAttribute('aria-expanded', String(actions.length > 0));
+    moreMenuEl.replaceChildren(...actions.map((a) => h('button', {
+      type: 'button', role: 'menuitem', class: 'menu-item', onclick: () => { setMore(false); a.run(); },
+    }, a.icon && icon ? icon(a.icon, 'btn-icon') : null, a.label)));
+    if (actions.length) moreMenuEl.children[0].focus();
+    else if (focusBack) moreEl.focus();
+  }
+  moreEl?.addEventListener('click', () => setMore(moreMenuEl.hidden));
+  moreMenuEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setMore(false, { focusBack: true });
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const items = [...moreMenuEl.children];
+    const at = items.indexOf(document.activeElement);
+    items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  });
+
+  // A press anywhere outside an open menu closes it; the menu's own button is left to its click.
+  document.addEventListener('pointerdown', (e) => {
+    if (menuOpen() && !menuEl.contains(e.target) && !runEl?.contains(e.target)) setMenu(false);
+    if (moreMenuEl && !moreMenuEl.hidden && !moreMenuEl.contains(e.target) && !moreEl.contains(e.target)) setMore(false);
+  }, true);
+
   function freshDrawing() {
     cache = new WeakMap();
     byContent = new Map();
@@ -919,7 +980,8 @@ export function createChat({
     findAt = 0;
     pending = [];
     freshDrawing();
-    if (panelEl) panelEl.hidden = true;
+    if (menuEl) menuEl.hidden = true;
+    setMore(false);
     listEl.hidden = true;
     listEl.replaceChildren();
     q('title').textContent = ctx.title;

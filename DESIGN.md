@@ -203,7 +203,9 @@ Each component has every state: default, hover, focus-visible (2 px `--focus` ri
 - **Team of helpers** (`.wf`, `workflows.js`): what was asked (a sunk box with the item it names), then the team indented on a hairline: colour swatch, name, state chip, n/total and a bar in the team colour, the phase now and the phase chips, then each helper with its state in a word, model chip, place and last step; the panel adds its files and saved changes with "Saved" or "Released in vX". Team colours come from eight hues far from amber and red (`--wf-h`), and teams on the page never share one.
 - **Helpers on a box** (`.bx-agents`): one pulsing dot per helper at work in its team's colour, followed by "N helpers"; the tooltip names the helper, the team and its last step.
 - **Sheet** (`.sheet`): panels, chats, lists; a close button, Esc closes, resizable on desktop.
-- **Chat composer**: one line when empty, grows to 40% of the panel, then scrolls; the permission row folds to one line.
+- **Chat composer**: one line when empty, grows to 40% of the panel, then scrolls; under it, attach, the compact button of how the chat runs (`.run-toggle`, "Automatic · Opus · high") and Send. The button opens a menu above the box (`.chat-menu`) with the way, the model, the effort, the permissions and "use this mode in every Claude on this PC"; Esc or a click outside closes it.
+- **Chat header** (`.chat-head`): one thin line, as in Claude: where the conversation is (hidden on a phone), its title cut with an ellipsis, New chat as an icon, ⋯ (`.chat-more-menu`, a `role="menu"` with arrow keys) and close.
+- **Reply text** (`.md`): headings stay close to the text (1.15em, 1.08em, 1em, weight 650, 4 px above), so a reply reads as a reply, not a page.
 
 ## Do's and Don'ts
 

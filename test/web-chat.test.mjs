@@ -23,7 +23,10 @@ class El {
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, ...evt }); }
   replaceChildren(...cs) { this.children = cs; }
-  focus() {}
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  removeAttribute(k) { delete this.attrs[k]; }
+  contains(other) { return walk(this).includes(other); }
+  focus() { globalThis.document.activeElement = this; }
 }
 const h = (tag, attrs, ...kids) => new El(tag, attrs, kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
 const walk = (el, out = []) => {
@@ -36,18 +39,22 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatMode': 'mode', '#chatList': 'list', '#chatNote': 'note', '#chatPcMode': 'pcmode', '[data-close="chat"]': 'close', '#chatWhere': 'where',
-  '#chatRun': 'run', '#chatRunPanel': 'runpanel', '#chatNew': 'new',
+  '#chatRun': 'run', '#chatRunPanel': 'runpanel', '#chatNew': 'new', '#chatMenu': 'menu', '#chatMore': 'more', '#chatMoreMenu': 'moremenu',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
   const byRole = new Map(Object.entries(ROLES).map(([s, role]) => [`[data-chat="${role}"]`, parts.get(s)]));
+  // As in the page, the way's panel sits inside the menu the button opens.
+  parts.get('#chatMenu').children = [parts.get('#chatRunPanel')];
   const root = new El();
   root.hidden = true;
   root.querySelector = (sel) => byRole.get(sel);
   return { root, part: (sel) => parts.get(sel) };
 }
 
-globalThis.document ??= { activeElement: null, contains: () => false };
+// The page: a press anywhere reaches its listeners first (outside a menu, it closes the menu).
+globalThis.document ??= { activeElement: null, contains: () => false, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); } };
+const pointerDown = (target) => { for (const fn of document.listeners.pointerdown ?? []) fn({ target }); };
 
 const S1 = '11111111-1111-4111-8111-111111111111';
 const S2 = '22222222-2222-4222-8222-222222222222';
@@ -341,15 +348,97 @@ const send = async (part, words) => {
   await settle();
 };
 
-test('a new conversation shows Automatic in its header, says what runs and why, and the first message carries that choice', async () => {
+test('a new conversation shows Automatic on its button by Send, says why inside the menu, and the first message carries that choice', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  const head = text(part('#chatRun'));
-  for (const words of ['run.way.auto', 'Opus', 'run.effort.high', 'run.why.auto']) assert.ok(head.includes(words), words);
+  const button = text(part('#chatRun'));
+  for (const words of ['run.way.auto', 'Opus', 'run.effort.high']) assert.ok(button.includes(words), words);
+  assert.ok(!button.includes('run.why.auto'), 'the button stays one short line, like Claude\'s model button');
+  byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  assert.ok(text(part('#chatRunPanel')).includes('run.why.auto'), 'the reason is the first line of the menu');
   await send(part, 'Fix the button');
   assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'auto', selfReinforce: false });
+});
+
+test('the button opens its menu and keeps focus: Esc or a press outside closes it and focus goes back to the button', async () => {
+  server({ 'GET /api/chat/list': () => LIST_RUN });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  const toggle = byRun(part('#chatRun'), 'toggle');
+  assert.equal(part('#chatMenu').hidden, true);
+  assert.equal(toggle.attrs['aria-expanded'], 'false');
+  toggle.attrs.onclick();
+  assert.equal(byRun(part('#chatRun'), 'toggle'), toggle, 'the same button after a redraw, so the keyboard focus is not lost');
+  assert.equal(part('#chatMenu').hidden, false);
+  assert.equal(toggle.attrs['aria-expanded'], 'true');
+  const menu = text(part('#chatRunPanel'));
+  for (const words of ['run.path.auto', 'run.path.manual']) assert.ok(menu.includes(words), words);
+  pointerDown(walk(part('#chatRunPanel')).at(-1));
+  assert.equal(part('#chatMenu').hidden, false, 'a press inside the menu leaves it open');
+  part('#chatMenu').fire('keydown', { key: 'Escape', stopPropagation() {} });
+  assert.equal(part('#chatMenu').hidden, true);
+  assert.equal(toggle.attrs['aria-expanded'], 'false');
+  assert.equal(document.activeElement, toggle, 'Esc gives the focus back to the button');
+  toggle.attrs.onclick();
+  pointerDown(new El());
+  assert.equal(part('#chatMenu').hidden, true, 'a press anywhere else closes it');
+  toggle.attrs.onclick();
+  pointerDown(toggle);
+  assert.equal(part('#chatMenu').hidden, false, 'the button\'s own press is left to its click, which toggles it');
+});
+
+test('both sheets: nothing about how the chat runs sits above the conversation; the button and its menu, with the permissions, sit by Send', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../server/web/index.html', import.meta.url), 'utf8');
+  for (const id of ['chat', 'flowChat']) {
+    const from = html.indexOf(`<aside id="${id}"`);
+    const sheetHtml = html.slice(from, html.indexOf('</aside>', from));
+    const top = sheetHtml.slice(0, sheetHtml.indexOf('data-chat="log"'));
+    for (const role of ['run', 'runpanel', 'menu', 'mode', 'pcmode']) assert.ok(!top.includes(`data-chat="${role}"`), `${id}: no ${role} above the conversation`);
+    assert.ok(!sheetHtml.includes('<details class="chat-mode"'), `${id}: the permissions row at the top is gone`);
+    const bar = sheetHtml.slice(sheetHtml.indexOf('class="chat-bar"'), sheetHtml.indexOf('data-chat="send"'));
+    for (const role of ['run', 'menu', 'runpanel', 'mode', 'pcmode']) assert.ok(bar.includes(`data-chat="${role}"`), `${id}: ${role} sits in the bar, before Send`);
+    assert.ok(bar.indexOf('data-chat="menu"') < bar.indexOf('data-chat="runpanel"') && bar.indexOf('data-chat="runpanel"') < bar.indexOf('data-chat="mode"'), `${id}: the menu holds the way, then the permissions`);
+  }
+});
+
+test('the header is one line: the title, then ⋯ with rename, archive and open, once the conversation has an id', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../server/web/index.html', import.meta.url), 'utf8');
+  const head = html.slice(html.indexOf('<div class="sheet-head chat-head">'), html.indexOf('<div class="seg point-tabs"'));
+  assert.ok(head.includes('data-chat="title"') && head.includes('data-chat="close"') && head.includes('data-chat="new"'));
+  assert.match(head, /data-chat="more"[^>]*aria-haspopup="menu"/, 'the ⋯ button says it opens a menu');
+  assert.match(head, /data-chat="moremenu"[^>]*role="menu"/);
+
+  server({ 'GET /api/chat/list': () => LIST, [`GET /api/chat/history/${S1}`]: () => HISTORY });
+  const done = [];
+  const more = (sessionId) => [{ label: 'Rename', run: () => done.push(['rename', sessionId]) }, { label: 'Archive', run: () => done.push(['archive', sessionId]) }];
+  const { chat, part } = makeChat({ more });
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', start: { node: { kind: 'project' } } });
+  await settle();
+  assert.equal(part('#chatMore').hidden, true, 'nothing to rename before the first message');
+  chat.open({ projectId: 'acme-shop', title: 'Second question', start: { sessionId: S1 } });
+  await settle();
+  assert.equal(part('#chatMore').hidden, false);
+  part('#chatMore').fire('click');
+  assert.equal(part('#chatMoreMenu').hidden, false);
+  assert.equal(part('#chatMore').attrs['aria-expanded'], 'true');
+  const items = walk(part('#chatMoreMenu')).filter((e) => e.attrs.role === 'menuitem');
+  assert.deepEqual(items.map(text), ['Rename', 'Archive']);
+  items[1].attrs.onclick();
+  assert.deepEqual(done, [['archive', S1]]);
+  assert.equal(part('#chatMoreMenu').hidden, true, 'a choice closes it');
+  assert.equal(part('#chatMore').attrs['aria-expanded'], 'false');
+  part('#chatMore').fire('click');
+  part('#chatMoreMenu').fire('keydown', { key: 'Escape', stopPropagation() {} });
+  assert.equal(part('#chatMoreMenu').hidden, true);
+  assert.equal(document.activeElement, part('#chatMore'));
+  part('#chatMore').fire('click');
+  pointerDown(new El());
+  assert.equal(part('#chatMoreMenu').hidden, true, 'a press elsewhere closes it');
 });
 
 test('Manual: each way says when to use it; a fixed model and effort go with the first message and show in the header', async () => {
@@ -358,7 +447,7 @@ test('Manual: each way says when to use it; a fixed model and effort go with the
   openPart(chat);
   await settle();
   byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.equal(part('#chatRunPanel').hidden, false);
+  assert.equal(part('#chatMenu').hidden, false);
   byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
   const panel = text(part('#chatRunPanel'));
   for (const hint of ['run.hint.maestro', 'run.hint.ultracode', 'run.hint.fixed', 'run.hint.settings(Opus 1M,run.effort.xhigh)']) assert.ok(panel.includes(hint), hint);
@@ -391,18 +480,19 @@ test('Ultracode waits for a confirmation that warns about the cost; cancelling k
   assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'ultracode' });
 });
 
-test('on a running conversation a new choice goes to the server at once, and the header follows the run events with the cost', async () => {
+test('on a running conversation a new choice goes to the server at once, and the button and its menu follow the run events with the cost', async () => {
   const live = { ...HISTORY, chatKey: KEY, run: { kind: 'auto', selfReinforce: false }, mine: MINE, reinforce: { limitUSD: null, spentUSD: 0 }, costUSD: 0.2 };
   const { calls, streams } = server({ [`GET /api/chat/history/${S1}`]: () => live, [`POST /api/chat/${KEY}/run`]: (body) => ({ run: body.run }) });
   const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
   const { chat, part } = makeChat({ storage, money: (usd) => `$${usd.toFixed(2)}` });
   chat.restore('acme-shop');
   await settle();
-  assert.ok(text(part('#chatRun')).includes('$0.20'), 'the cost so far, before any event');
-  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 1);
-  const head = text(part('#chatRun'));
-  assert.ok(head.includes('Opus 5.5') && head.includes('run.level.reinforced(mexe no login)') && head.includes('$1.50'));
   byRun(part('#chatRun'), 'toggle').attrs.onclick();
+  assert.ok(text(part('#chatRunPanel')).includes('$0.20'), 'the cost so far, before any event');
+  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 1);
+  assert.ok(text(part('#chatRun')).includes('Opus 5.5'));
+  const menu = text(part('#chatRunPanel'));
+  assert.ok(menu.includes('run.level.reinforced(mexe no login)') && menu.includes('$1.50'), 'the open menu follows the run');
   byRun(part('#chatRunPanel'), 'self').attrs.onchange();
   await settle();
   assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/run`).body, { run: { kind: 'auto', selfReinforce: true } });
@@ -486,8 +576,6 @@ test('a conversation from elsewhere leaves room for its messages on a 900 px scr
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
   const where = css.match(/\n\.chat-where \{([^}]*)\}/)?.[1] ?? '';
   assert.match(where, /display: flex/, 'the note and its button share one row');
-  const short = css.match(/@media \(min-width: 720px\) and \(max-height: 960px\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
-  assert.match(short, /\.run-why \{ display: none; \}/, 'on a short screen the way it runs folds into its one-line button');
 });
 
 test('on a phone a conversation opens tall, below the tabs, not squeezed under the map tools', async () => {

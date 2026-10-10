@@ -152,3 +152,29 @@ test('on a phone the project picker shrinks inside the top bar instead of coveri
   assert.equal(phone('.pp-btn', 'max-width'), '100%', 'and never wider than the room the bar gives it');
   assert.equal(phone('.pp-btn', 'overflow'), 'hidden');
 });
+
+const rule = (where, prop) => plain.filter((d) => d.where === where && d.prop === prop).at(-1)?.value;
+
+test('a reply\'s headings stay close to the text, as in Claude: a little bigger and bolder, with tight margins', () => {
+  assert.equal(rule('.md .md-h1', 'font-size'), '1.15em');
+  assert.equal(rule('.md .md-h2', 'font-size'), '1.08em');
+  assert.equal(rule('.md .md-h3, .md .md-h4, .md .md-h5, .md .md-h6', 'font-size'), '1em');
+  assert.equal(rule('.md .md-h', 'margin-top'), '4px', 'a heading only adds a hairline above the gap every block has');
+  assert.equal(rule('.md', 'gap'), '6px');
+});
+
+test('the chat header is one thin line: the title cut with an ellipsis, never wrapped', () => {
+  assert.equal(rule('.chat-head', 'align-items'), 'center');
+  assert.equal(rule('.chat-head', 'padding'), '6px 8px 6px 16px');
+  assert.equal(rule('.chat-head h2', 'white-space'), 'nowrap');
+  assert.equal(rule('.chat-head h2', 'text-overflow'), 'ellipsis');
+  assert.equal(rule('.chat-head h2', 'font-size'), 'var(--fs-md)');
+});
+
+test('on a phone the map tools give "New chat" and "New idea" one row of two halves, the filters the row below', () => {
+  const phone = (sel, prop) => rule(`@media (max-width: 719px) > ${sel}`, prop);
+  assert.equal(phone('#newChat, #newIdea', 'flex'), '1 1 calc(50% - 4px)', 'each takes half the row');
+  assert.equal(phone('#newChat, #newIdea', 'order'), '1');
+  assert.equal(phone('.mm-changed', 'order'), '2');
+  assert.equal(phone('.live-btn', 'order'), '2');
+});

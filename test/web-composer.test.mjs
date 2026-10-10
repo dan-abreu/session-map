@@ -1,5 +1,5 @@
 // Most of the chat panel is dialogue (mm08): the input starts at one line and grows to about 40% of the panel, the
-// permission row folds away when not in use, the key hints show only while typing, and on a phone the input stays
+// permissions wait folded in the menu of the button by Send, the key hints show only while typing, and on a phone the input stays
 // above the keyboard.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,13 +17,13 @@ test('the input is one line high empty, grows with the text and scrolls past 40%
   assert.deepEqual(composerSize({ scrollHeight: 500, paneHeight: 0, minHeight: 38 }), { height: 38, scroll: true }, 'a hidden panel never collapses the input below one line');
 });
 
-test('both chat sheets start the input at one line and fold the permission row', () => {
+test('both chat sheets start the input at one line and keep the permissions folded in the menu by Send', () => {
   const inputs = [...html.matchAll(/<textarea id="(chatInput|flowChatInput)"[^>]*>/g)];
   assert.equal(inputs.length, 2);
   for (const [tag] of inputs) assert.match(tag, /rows="1"/);
-  const folds = [...html.matchAll(/<details class="chat-mode"[^>]*>\s*<summary[^>]*>([\s\S]*?)<\/summary>/g)];
-  assert.equal(folds.length, 2, 'a folded permission row in each sheet');
-  for (const [, summary] of folds) assert.match(summary, /data-chat="modename"/, 'the folded row still says which permissions apply');
+  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/div>\s*<\/div>/g)];
+  assert.equal(menus.length, 2, 'a closed menu in each sheet');
+  for (const [, menu] of menus) assert.match(menu, /data-chat="mode"/, 'the permissions wait inside it');
 });
 
 test('the key hints show only while typing, and a phone keeps the input above the keyboard', () => {

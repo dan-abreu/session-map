@@ -42,6 +42,7 @@
     <symbol id="i-connect" viewBox="0 0 24 24"><rect x="2.5" y="4" width="7" height="6" rx="1.8"/><rect x="14.5" y="14" width="7" height="6" rx="1.8"/><path d="M9.5 7h3A2.5 2.5 0 0 1 15 9.5V14"/><path d="M12.5 11.5L15 14l2.5-2.5"/></symbol>
     <symbol id="i-layer" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke-dasharray="3 2.4"/><path d="M3.5 9h17"/></symbol>
     <symbol id="i-rename" viewBox="0 0 24 24"><path d="M4.5 19.5h4l10-10-4-4-10 10z"/><path d="M13 7.5l4 4"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.2"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/></symbol>
     <symbol id="i-move" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/><path d="M6 12h10M13.5 9.5L16 12l-2.5 2.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V4.5h5V7M7 7l1 12.5h8L17 7"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5"/></symbol>
@@ -228,13 +229,15 @@
     <!-- The chat sheet sits on the stage itself: on a computer it takes the whole height, beside the map tools (mm33). -->
     <aside id="chat" class="sheet chat" aria-labelledby="chatTitle" hidden>
       <div class="sheet-resize" id="chatResize" data-i18n-aria="resize.chat" data-i18n-title="resize.chat"></div>
-      <div class="sheet-head">
-        <div>
-          <p class="meta crumbs" id="chatContext" data-chat="context"></p>
-          <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
-        </div>
+      <div class="sheet-head chat-head">
+        <p class="chat-crumbs" id="chatContext" data-chat="context"></p>
+        <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
         <div class="sheet-head-tools">
-          <button type="button" class="btn small-btn chat-new" id="chatNew" data-chat="new" data-i18n-title="projchat.newHint" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+          <button type="button" class="btn small-btn chat-new" id="chatNew" data-chat="new" data-i18n-title="projchat.newHint" data-i18n-aria="projchat.new" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+          <div class="chat-more">
+            <button type="button" class="icon-btn" id="chatMore" data-chat="more" aria-haspopup="menu" aria-expanded="false" aria-controls="chatMoreMenu" data-i18n-aria="chat.more" data-i18n-title="chat.more" hidden><svg><use href="#i-more"/></svg></button>
+            <div class="chat-more-menu" id="chatMoreMenu" data-chat="moremenu" role="menu" data-i18n-aria="chat.more" hidden></div>
+          </div>
           <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
       </div>
@@ -243,16 +246,6 @@
         <button type="button" role="tab" id="ptab-details" aria-selected="false" aria-controls="pointDetails" data-i18n="point.details"></button>
       </div>
       <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
-        <div class="chat-run" id="chatRun" data-chat="run"></div>
-        <div class="run-panel" id="chatRunPanel" data-chat="runpanel" hidden></div>
-        <details class="chat-mode">
-          <summary><span data-i18n="chat.modeLabel"></span><span class="chat-mode-now" data-chat="modename"></span><svg class="chat-mode-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-          <div class="chat-mode-body">
-            <label for="chatMode" class="visually-hidden" data-i18n="chat.modeLabel"></label>
-            <select id="chatMode" data-chat="mode"></select>
-            <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
-          </div>
-        </details>
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
         <div class="chat-where" data-chat="where" hidden></div>
         <ul id="chatList" data-chat="list" class="plain rows chat-list" hidden></ul>
@@ -270,7 +263,16 @@
           <div class="chat-bar">
             <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
             <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-            <span class="chat-safety" data-i18n="chat.safety"></span>
+            <div class="chat-run" id="chatRun" data-chat="run"></div>
+            <div class="chat-menu" id="chatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
+              <div class="run-panel" id="chatRunPanel" data-chat="runpanel"></div>
+              <div class="chat-mode">
+                <label for="chatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
+                <select id="chatMode" data-chat="mode"></select>
+                <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
+                <p class="chat-safety" data-i18n="chat.safety"></p>
+              </div>
+            </div>
             <button type="button" class="btn" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
             <button type="submit" class="btn primary" id="chatSend" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
           </div>
@@ -352,24 +354,14 @@
 
       <aside id="flowChat" class="sheet chat fl-chat" aria-labelledby="flowChatTitle" hidden>
         <div class="sheet-resize" id="flowChatResize" data-i18n-aria="resize.chat" data-i18n-title="resize.chat"></div>
-        <div class="sheet-head">
-          <div>
-            <p class="meta crumbs" data-chat="context"></p>
-            <h2 id="flowChatTitle" data-chat="title"></h2>
+        <div class="sheet-head chat-head">
+          <p class="chat-crumbs" data-chat="context"></p>
+          <h2 id="flowChatTitle" data-chat="title"></h2>
+          <div class="sheet-head-tools">
+            <button type="button" class="icon-btn" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
           </div>
-          <button type="button" class="icon-btn" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
         <div class="chat-pane">
-          <div class="chat-run" data-chat="run"></div>
-          <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel" hidden></div>
-          <details class="chat-mode">
-            <summary><span data-i18n="chat.modeLabel"></span><span class="chat-mode-now" data-chat="modename"></span><svg class="chat-mode-chevron" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
-            <div class="chat-mode-body">
-              <label for="flowChatMode" class="visually-hidden" data-i18n="chat.modeLabel"></label>
-              <select id="flowChatMode" data-chat="mode"></select>
-              <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
-            </div>
-          </details>
           <p class="chat-note" data-chat="note" role="status" hidden></p>
           <ul data-chat="list" class="plain rows chat-list" hidden></ul>
           <div class="chat-find" data-chat="find" hidden></div>
@@ -386,7 +378,16 @@
             <div class="chat-bar">
               <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
               <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-              <span class="chat-safety" data-i18n="flow.chatSafety"></span>
+              <div class="chat-run" data-chat="run"></div>
+              <div class="chat-menu" id="flowChatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
+                <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel"></div>
+                <div class="chat-mode">
+                  <label for="flowChatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
+                  <select id="flowChatMode" data-chat="mode"></select>
+                  <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
+                  <p class="chat-safety" data-i18n="flow.chatSafety"></p>
+                </div>
+              </div>
               <button type="button" class="btn" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
               <button type="submit" class="btn primary" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
             </div>

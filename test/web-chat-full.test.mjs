@@ -52,7 +52,7 @@ function sheet() {
   return { root, part: (r) => parts.get(r) };
 }
 
-globalThis.document ??= { activeElement: null, contains: () => false };
+globalThis.document ??= { activeElement: null, contains: () => false, addEventListener() {} };
 
 const S1 = '11111111-1111-4111-8111-111111111111';
 const KEY = 'a'.repeat(32);
@@ -158,7 +158,8 @@ test('a conversation still running in VS Code is mirrored: new steps appear, and
   assert.match(text(part('log')), /One more thing/);
   assert.ok(part('log').children.includes(stepBefore), 'a step that did not change keeps its node, so a step the person opened stays open');
   assert.equal(timers.length, 2, 'it ended: no more asking');
-  assert.match(text(part('run')), /US\$ 0\.75/, 'the total at the top follows');
+  walk(part('run')).find((e) => e.attrs['data-run'] === 'toggle').attrs.onclick();
+  assert.match(text(part('runpanel')), /US\$ 0\.75/, 'the total in the menu follows');
   assert.doesNotMatch(text(part('find')), /chat.mirrorShort/);
   chat.close();
 });

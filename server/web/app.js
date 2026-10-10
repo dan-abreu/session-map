@@ -13,7 +13,7 @@ import { createFiles } from './files.js';
 import { createChangesView, freshFor } from './changes.js';
 import { createResizer } from './resize.js';
 import { createFlowView } from './flowview.js';
-import { createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
+import { conversationsOf, createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
@@ -843,6 +843,26 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   revealNode(node.id, { center: true });
   requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(node.id)));
   convs.render();
+}
+
+// The ⋯ of the chat sheet's header, like the menu of a chat in Claude: rename or move it, archive it, and open it where it
+// lives (VS Code for one born there, a terminal otherwise, unless it is open in one already).
+function chatMore(sessionId) {
+  for (const p of state?.projects ?? []) {
+    const row = conversationsOf(p).find((r) => r.sessionId === sessionId);
+    if (!row) continue;
+    const vscode = row.origin === 'vscode';
+    const archive = row.archived ? 'unarchive' : 'archive';
+    return [
+      { label: t('chat.moreRename'), icon: 'rename', run: () => openPlace({ row, project: p }) },
+      { label: t(`action.${archive}`), icon: 'archive', run: () => runAction({ action: archive, sessionId }, t(`action.${archive}d`)) },
+      vscode || !row.live ? {
+        label: vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: vscode ? 'code' : 'terminal',
+        run: () => runAction({ action: 'open', sessionId }, t(vscode ? 'action.openedVscode' : 'action.openedTerminal')),
+      } : null,
+    ].filter(Boolean);
+  }
+  return [];
 }
 
 // ---- move or rename a conversation (mm21) ----------------------------------------------------------
@@ -1812,6 +1832,7 @@ function wire() {
     root: $('#chat'), h, t: () => t, toast, errorText, relative, money, lang: () => lang, icon, commands: chatCommands,
     onSession: () => { convs.render(); setTimeout(poll, 1200); },
     onPcMode: pcMode,
+    more: chatMore,
     onClose: () => {
       pointNode = null;
       if (selection?.type === 'node') selection = null;
