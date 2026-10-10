@@ -223,6 +223,13 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: tapping a file opens it read-only (never `.git` or `.env`); Open terminal opens a shell in that folder; `node server/cli.mjs --watch` prints the tree and redraws.
   - Where it went: `sv07`, `pt06`.
   - Status: done (released in v0.1.0).
+- [x] The project box with the whole repository on one side, like VS Code, and the plan on the other `id77`
+  - Asked: 2026-10-10 ~05:12 — "tive uma ideia boa também tem o blão do projeto que é roxo, de um lado vem tem a formação do projeto o que tem que ser feito e como tem que ser feito e do outro lado eu quero o repositorio completo, como é no vscode, pastas etc, realmente como é o repositorio, assim a pessoa vai abrindo e vendo, consegue acompanhar quando um arquivo novo for criado"
+  - Asked again: 2026-10-10 — "eu quero os repositorios para ver os arquivos e etc, que sao os arquivos e tudo mais <<<< desse lado do balão principal, assim posso ver todos os arquivos clicar neles e abrir eles"; "eu quero dentro do mapa"; he confirmed the sketch: the folders and files grow to the left of the project box inside the map, the architecture stays on the right.
+  - What it means: on the mind map, the purple project box opens to one side into the architecture (what has to be done and how) and to the other into the real folders and files of the repository, opened folder by folder like the editor's explorer, with a new file lighting up when it is created.
+  - How to confirm it is done: open the project box: the architecture grows to one side and the folder tree to the other; create a file in the repository: it appears in its folder within seconds, marked new.
+  - Where it went: `mm39`; more detail on that side in `id81`.
+  - Status: done (on main, approved by the owner on 2026-10-10: "ficou bom").
 
 ### The Flow
 

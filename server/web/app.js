@@ -10,6 +10,7 @@ import { api } from './api.js';
 import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
+import { createRepoSide } from './reposide.js';
 import { createChangesView, freshFor } from './changes.js';
 import { createRequestsView } from './requestsview.js';
 import { createResizer, createSplit } from './resize.js';
@@ -462,7 +463,7 @@ function mapView() {
   const range = activeRange();
   const lit = range ? changedNodes(shown, tree, range.from, range.to) : null;
   const match = query ? new Set(searchTree(tree, query).map((m) => m.id)) : null;
-  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? splitIgnored(relationLinks(shown), ignoredRel).shown : null, relLit };
+  return { open, selected: selectedNodeId(), live: marks.live, captions: liveCaptions(), lit, match, relations: relationsOn && !PHONE.matches ? splitIgnored(relationLinks(shown), ignoredRel).shown : null, relLit, left: PHONE.matches ? null : repoSide?.view() ?? null };
 }
 
 const activeMap = () => (PHONE.matches ? outline : mindmap);
@@ -1887,6 +1888,7 @@ function renderResults() {
       h('span', { class: 'hit-path' }, m.path.slice(1).map((id) => nodeById(tree, id).label).join(' › ') || project.name)));
   }) : [h('li', { class: 'hit-none' }, t('search.none'))]));
   box.hidden = false;
+let repoSide = null; // the project's folders and files on the left of the map (mm39)
   $('#search').setAttribute('aria-expanded', 'true');
   renderMap();
 }
@@ -2041,6 +2043,12 @@ function wire() {
     b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
   }
   // The box's strip is one tablist: the arrows, Home and End move along it and show the tab they land on.
+  repoSide = createRepoSide({
+    h, t: () => t, lang: () => lang, store, project: () => project, files: () => files, toast, button: $('#filesSide'),
+    visible: () => view === 'map' && !PHONE.matches,
+    onChange: (opts) => { if (!PHONE.matches) renderMap(opts); },
+    onFit: (first) => { if (project && !PHONE.matches && !(first && mindmap.touched())) requestAnimationFrame(() => mindmap.fit(true)); },
+  });
   $('#pointTabs').addEventListener('keydown', (e) => {
     const tabs = [...$('#pointTabs').querySelectorAll('[role="tab"]')];
     const at = tabs.indexOf(document.activeElement);

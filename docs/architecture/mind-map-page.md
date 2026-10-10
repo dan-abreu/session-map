@@ -24,10 +24,20 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - The registry part is no longer drawn on the map; the Operation part (`operation.md` / `operacao.md`) holds the work that changes no code and stays out of the Flow; a project whose repository has neither keeps them in session-map's folder (`projects/<id>/`), shown in a layer "Requests and operation".
   - How to confirm it is done: the tab lists every request of a project with the right counts; a click on an activity opens it on the map; a request with no activity shows in red; the Flow has no box for the registry or the operation.
   - Released in v0.2.5: with the owner's professional terms, requests that close themselves when all their activities are done, and the words of a registry kept translated in session-map's folder.
-- [ ] **important:** The project box opens the whole repository like VS Code on one side, the plan on the other `mm39`
+- [x] **important:** The project box opens the whole repository like VS Code on one side, the plan on the other `mm39`
   - The purple root box: the architecture to one side, and to the other the repository's real folders and files, opening folder by folder, with counts, a new file marked as it appears, and a click that opens the file in the viewer.
   - How to confirm it is done: open the root: both sides grow; a file created in the repository shows up in its folder within seconds, marked new; a click opens it read-only.
 
+  - Done on main (`server/web/reposide.js`): the files grow to the left of the root, mirrored; folders open one level at a time with their count and "N new, changed or removed"; at most 40 boxes per folder and a "Show N more files" box; A/M/D from the Changes rows; a Files button in the map's tools hides the side; never on the phone. A new file of a kind the count leaves out (an image, a dependency file) shows as new but cannot be opened.
+- [ ] **detail:** A file on the left lights its part on the right, and a part lights its files `mm40`
+  - Hovering or focusing a file or folder on the files side lights the architecture box it belongs to; picking a part lights its files on the left (opening the folders on the way). No new text on the boxes.
+  - How to confirm it is done: hover `server/web/reposide.js`: the Mind map page box lights; pick that part: its files light on the left.
+- [ ] **detail:** A dot on the files and folders a conversation is editing now `mm41`
+  - The same live dot the architecture boxes have, on the file and on each folder above it, while a conversation, helper or workflow edits it.
+  - How to confirm it is done: while a chat edits a file, a dot shows on it and on its folders within seconds and goes away when the work stops.
+- [ ] **detail:** The files with no box on the map are marked on the files side `mm42`
+  - A dashed border on each file the root counts as "with no box on the map", so it is clear which ones are missing (`id80`).
+  - How to confirm it is done: the number of dashed files equals the root's "N files with no box on the map".
 ### Views
 
 - [x] **Claude:** Mind map and an outline for phones `mm01`

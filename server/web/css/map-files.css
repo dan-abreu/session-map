@@ -1,0 +1,29 @@
+/* The project's folders and files on the left of the mind map (mind-map-page mm39): mirrored boxes with the round toggle on
+   the side away from the root, quieter than the architecture's boxes, and the Files tab's marks for what is new, changed or
+   removed. Colors only through the tokens of style.css, so light and dark follow. */
+
+.mm-node.is-left .mm-toggle { left: auto; right: 100%; margin: -12px 6px 0 0; }
+.mm-node.is-left .mm-toggle svg { transform: rotate(180deg); }
+.mm-node.is-left .mm-toggle[aria-expanded="true"] svg { transform: none; }
+
+.k-folder > .mm-box { --lv-bg: var(--bg-2); --lv-line: var(--line); --lv-ink: var(--ink); --w: 240px; min-width: 120px; padding: 6px 12px 8px; }
+.k-file > .mm-box { --w: 260px; min-width: 0; gap: 2px; padding: 4px 10px 6px; border-radius: var(--r-md); }
+.k-folder .bx-title { font-family: var(--mono); font-size: var(--fs-sm); }
+.k-file .bx-title { font-family: var(--mono); font-size: var(--fs-xs); font-weight: 500; }
+.k-more > .mm-box { --lv-bg: transparent; --lv-line: var(--line); --lv-ink: var(--ink-2); min-width: 0; padding: 4px 10px 6px; border-style: dashed; border-radius: var(--r-md); box-shadow: none; }
+.k-more .bx-title { font-size: var(--fs-xs); font-weight: 600; }
+.mm-edge.to-file, .mm-edge.to-more { stroke-width: 1.2; }
+.mm-edge.to-more { stroke-dasharray: 3 4; }
+
+.rs-status { display: inline-block; min-width: 16px; margin-right: 6px; border-radius: var(--r-xs); text-align: center; font-family: inherit; font-size: var(--fs-2xs); font-weight: 700; }
+.rs-status.st-A { background: var(--active-fill); color: var(--active-ink); }
+.rs-status.st-M { background: var(--bg-3); color: var(--ink-2); }
+.rs-status.st-D { color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
+.k-file:has(.st-D) .bx-title { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.k-file:has(.st-A) > .mm-box { border-color: color-mix(in srgb, var(--active) 55%, var(--lv-line)); }
+.bx-chip.rs-changed { background: var(--active-fill); color: var(--active-ink); }
+
+/* The phone shows the outline, which has no files side. */
+@media (max-width: 719px) {
+  .mm-files-btn { display: none; }
+}

@@ -39,12 +39,12 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### Seeing my requests
 
-- [ ] The project box with the whole repository on one side, like VS Code, and the plan on the other `id77`
-  - Asked: 2026-10-10 ~05:12 — "tive uma ideia boa também tem o blão do projeto que é roxo, de um lado vem tem a formação do projeto o que tem que ser feito e como tem que ser feito e do outro lado eu quero o repositorio completo, como é no vscode, pastas etc, realmente como é o repositorio, assim a pessoa vai abrindo e vendo, consegue acompanhar quando um arquivo novo for criado"
-  - What it means: on the mind map, the purple project box opens to one side into the architecture (what has to be done and how) and to the other into the real folders and files of the repository, opened folder by folder like the editor's explorer, with a new file lighting up when it is created.
-  - How to confirm it is done: open the project box: the architecture grows to one side and the folder tree to the other; create a file in the repository: it appears in its folder within seconds, marked new.
-  - Where it went: `mm39`.
-  - Status: accepted.
+- [ ] **in progress:** On the files side of the map: which part a file belongs to, who is editing it now, and which files have no box `id81`
+  - Asked: 2026-10-10 — "ficou bom, o que acha que da para detalhar mais? informação de mais não vai ficar legal né nesse lado, preciso de uma opnião"; then "pode fazer esses 3", the three Claude proposed: link the two sides, a dot on what a conversation edits now, mark the files with no box.
+  - What it means: no more text on the file boxes; a file lights its part and a part its files, a live dot shows where a conversation is editing, and the files with no box on the map are marked.
+  - How to confirm it is done: see `mm40`, `mm41`, `mm42`.
+  - Where it went: `mm40`, `mm41`, `mm42`.
+  - Status: in progress.
 
 ### The picture of the project
 

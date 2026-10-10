@@ -1,4 +1,4 @@
-import { layoutTree, edgePath } from './tree.js';
+import { layoutTree, edgePath, joinSides } from './tree.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const TOGGLE = 30; // from a box's right side to the far side of its round toggle, where the curves start
@@ -72,6 +72,7 @@ const lerpBox = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p), w: l
 // ctx: content(node) → DOM children of a box, signature(node) → string that changes when the content must be rebuilt,
 // onPick(node), onToggle(node), onLink(link), toggleLabel(node, open), linkLabel(link), linkTip(link), freeArea() → {left, top, width, height};
 // count(node) → {n, label, pressed} or null: the number of conversations hung on the box, onCount(node) when it is pressed.
+// view.left (mm39): {tree, open, ctx}, a second tree from the same root drawn mirrored on its left, with a ctx of its own.
 export function createMindmap(root, ctx) {
   const world = document.createElement('div');
   world.className = 'mm-world';
@@ -91,13 +92,17 @@ export function createMindmap(root, ctx) {
   let edges = [];
   let rels = [];
   let relLit = null; // the key (a|b) of the line the Relations list lights
+  let left = null; // the tree on the left of the root (mm39), as the last render had it
+  const ctxOf = (node) => (node.side === 'left' && left ? left.ctx : ctx);
   let tween = 0;
   let transform = { x: 0, y: 0, k: 1 };
+  let touched = false; // the person dragged or zoomed since the last fit: a late fit must not undo that (mm39)
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   const zoom = d3.zoom().scaleExtent(SCALE)
     .filter((e) => (e.type === 'wheel' || !e.button) && !e.target.closest?.('.mm-rel-hit'))
     .on('zoom', (e) => {
+      if (e.sourceEvent) touched = true;
       transform = { x: e.transform.x, y: e.transform.y, k: e.transform.k };
       world.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;
     });
@@ -107,23 +112,23 @@ export function createMindmap(root, ctx) {
     let n = nodes.get(node.id);
     if (!n) {
       const el = document.createElement('div');
-      el.className = `mm-node k-${node.kind}`;
+      el.className = `mm-node k-${node.kind}${node.side === 'left' ? ' is-left' : ''}`;
       el.dataset.id = node.id;
       const box = document.createElement('button');
       box.type = 'button';
       box.className = 'mm-box';
-      box.addEventListener('click', () => ctx.onPick(n.node));
+      box.addEventListener('click', () => ctxOf(n.node).onPick(n.node));
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'mm-toggle';
       toggle.append(svg('svg', { 'aria-hidden': 'true' }));
       toggle.firstChild.append(svg('use', { href: '#i-next' }));
-      toggle.addEventListener('click', () => ctx.onToggle(n.node));
+      toggle.addEventListener('click', () => ctxOf(n.node).onToggle(n.node));
       const count = document.createElement('button');
       count.type = 'button';
       count.className = 'mm-count';
       count.hidden = true;
-      count.addEventListener('click', () => ctx.onCount?.(n.node));
+      count.addEventListener('click', () => ctxOf(n.node).onCount?.(n.node));
       const caption = document.createElement('div');
       caption.className = 'mm-caption';
       caption.hidden = true;
@@ -137,20 +142,21 @@ export function createMindmap(root, ctx) {
   }
 
   function paint(n, node, view) {
-    const sig = ctx.signature(node);
+    const c = ctxOf(node);
+    const sig = c.signature(node);
     if (sig !== n.sig) {
-      n.box.replaceChildren(...ctx.content(node));
+      n.box.replaceChildren(...c.content(node));
       n.sig = sig;
     }
-    paintCount(n.count, ctx.count?.(node) ?? null, n);
+    paintCount(n.count, c.count?.(node) ?? null, n);
     paintCaption(n.caption, view.captions?.get(node.id) ?? null, n);
-    const open = view.open.has(node.id);
+    const open = view.open.has(node.id) || Boolean(left?.open.has(node.id));
     const has = node.children.length > 0;
     n.toggle.hidden = !has;
     if (has) {
       n.toggle.setAttribute('aria-expanded', String(open));
-      n.toggle.setAttribute('aria-label', ctx.toggleLabel(node, open));
-      n.toggle.title = ctx.toggleLabel(node, open);
+      n.toggle.setAttribute('aria-label', c.toggleLabel(node, open));
+      n.toggle.title = c.toggleLabel(node, open);
     }
     const cls = n.el.classList;
     cls.toggle('is-open', open);
@@ -158,7 +164,8 @@ export function createMindmap(root, ctx) {
     cls.toggle('is-live', view.live.has(node.id));
     cls.toggle('is-tip', Boolean(view.captions?.get(node.id)?.exact));
     cls.toggle('is-lit', Boolean(view.lit?.has(node.id)));
-    cls.toggle('is-dim', Boolean(view.lit) && !view.lit.has(node.id));
+    // The files side (mm39) is not part of what a period lights.
+    cls.toggle('is-dim', Boolean(view.lit) && !view.lit.has(node.id) && node.side !== 'left');
     cls.toggle('is-match', Boolean(view.match?.has(node.id)));
     n.box.setAttribute('aria-current', view.selected === node.id ? 'true' : 'false');
   }
@@ -175,7 +182,8 @@ export function createMindmap(root, ctx) {
     edgeLayer.replaceChildren(...ordered.flatMap((e) => {
       const a = at.get(e.from), b = at.get(e.to);
       if (!a || !b) return [];
-      const d = edgePath(a, b, TOGGLE);
+      // The root has no toggle on its left: the curves to the files start at its side.
+      const d = e.side === 'left' ? edgePath(a, b, e.fromRoot ? 0 : TOGGLE, { left: true }) : edgePath(a, b, TOGGLE);
       const line = svg('path', { d, class: `mm-edge to-${e.kind}${e.live ? ' is-live' : ''}` });
       return e.live ? [line, svg('path', { d, class: 'mm-flow' })] : [line];
     }));
@@ -215,6 +223,8 @@ export function createMindmap(root, ctx) {
   // hint}). Lays the visible tree out again and moves every box from where it is to where it goes. anchor: the id of a box
   // that must stay still on screen (the one whose toggle was pressed), so the map does not jump under the pointer.
   function render(tree, view, { anchor = null } = {}) {
+    left = view.left ?? null;
+    const isOpen = (id) => view.open.has(id) || Boolean(left?.open.has(id));
     const visible = [];
     const kindOf = new Map();
     const parentOf = new Map();
@@ -222,9 +232,10 @@ export function createMindmap(root, ctx) {
       visible.push(node);
       kindOf.set(node.id, node.kind);
       parentOf.set(node.id, parent);
-      if (view.open.has(node.id)) for (const c of node.children) walk(c, node.id);
+      if (isOpen(node.id)) for (const c of node.children) walk(c, node.id);
     };
     walk(tree, null);
+    for (const c of left?.tree.children ?? []) walk(c, tree.id);
     const ids = new Set(visible.map((n) => n.id));
     for (const [id, n] of nodes) {
       if (!ids.has(id)) {
@@ -238,12 +249,21 @@ export function createMindmap(root, ctx) {
       n.pad = n.caption.hidden ? 0 : n.caption.offsetHeight + CAPTION_GAP;
       return [node.id, { w: n.el.offsetWidth, h: n.el.offsetHeight + 2 * n.pad }];
     }));
-    const next = layoutTree(tree, (id) => view.open.has(id), (node) => sizes.get(node.id), { gapX: GAP_X, gapY: GAP_Y });
-    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: view.live.has(e.to) }));
+    const lay = (t) => layoutTree(t, isOpen, (node) => sizes.get(node.id), { gapX: GAP_X, gapY: GAP_Y });
+    const next = left?.tree.children.length ? joinSides(lay(tree), lay({ ...left.tree, id: tree.id })) : lay(tree);
+    edges = next.edges.map((e) => ({ ...e, kind: kindOf.get(e.to), live: view.live.has(e.to), fromRoot: e.from === tree.id }));
     rels = view.relations ?? [];
     relLit = view.relLit ?? null;
     wires.setAttribute('width', String(next.width + 400));
     wires.setAttribute('height', String(next.height + 40));
+
+    // The files side growing or shrinking on the left (mm39) moves the root sideways: the boxes drawn now are moved by as much
+    // and the view the other way, so nothing jumps on screen.
+    const shift = boxes.has(tree.id) ? next.boxes.get(tree.id).x - boxes.get(tree.id).x : 0;
+    if (shift) {
+      boxes = new Map([...boxes].map(([id, b]) => [id, { ...b, x: b.x + shift }]));
+      sel.call(zoom.translateBy, -shift, 0);
+    }
 
     if (anchor && boxes.has(anchor) && next.boxes.has(anchor)) {
       const was = boxes.get(anchor), now = next.boxes.get(anchor);
@@ -258,7 +278,8 @@ export function createMindmap(root, ctx) {
       else {
         const p = parentOf.get(id);
         const pb = (p && (boxes.get(p) ?? next.boxes.get(p))) || b;
-        from.set(id, { x: pb.x + pb.w * 0.6, y: pb.y + pb.h / 2 - b.h / 2, w: b.w, h: b.h, fresh: true });
+        const x = nodes.get(id).node.side === 'left' ? pb.x + pb.w * 0.4 - b.w : pb.x + pb.w * 0.6;
+        from.set(id, { x, y: pb.y + pb.h / 2 - b.h / 2, w: b.w, h: b.h, fresh: true });
       }
     }
     cancelAnimationFrame(tween);
@@ -311,6 +332,7 @@ export function createMindmap(root, ctx) {
       ? area.top + (area.height - hgt) / 2
       : Math.min(area.top + FIT_PAD, Math.max(area.top + area.height - FIT_PAD - hgt, area.top + area.height / 2 - (root.y + root.h / 2) * k));
     moveTo(x, y, k, animate);
+    touched = false;
   }
 
   // Brings a box into the free area without changing the zoom, unless it is already in view.
@@ -340,8 +362,9 @@ export function createMindmap(root, ctx) {
   // +/− zoom around the middle of the free part of the stage, where the person is looking.
   function zoomBy(factor) {
     const area = ctx.freeArea();
+    touched = true;
     sel.transition().duration(reduced.matches ? 0 : 200).call(zoom.scaleBy, factor, [area.left + area.width / 2, area.top + area.height / 2]);
   }
 
-  return { render, fit, reveal, focus, pulse, zoomBy };
+  return { render, fit, reveal, focus, pulse, zoomBy, touched: () => touched };
 }

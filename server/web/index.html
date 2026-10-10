@@ -7,6 +7,7 @@
   <title>session-map</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2.5' y='12' width='9' height='8' rx='3' fill='%237c6bd6'/%3E%3Crect x='19' y='4' width='10.5' height='8' rx='3' fill='%233f8fd2'/%3E%3Crect x='19' y='20' width='10.5' height='8' rx='3' fill='%232f9a6f'/%3E%3Cpath d='M11.5 16C16 16 15 8 19 8M11.5 16C16 16 15 24 19 24' fill='none' stroke='%2394a3b8' stroke-width='1.8'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/map-files.css">
 </head>
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true">
@@ -151,6 +152,7 @@
         <div class="mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
         <button type="button" class="btn primary" id="newChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+        <button type="button" class="btn mm-files-btn" id="filesSide" aria-pressed="true" data-i18n-title="map.filesSideHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-file"/></svg><span data-i18n="map.filesSide"></span></button>
         <button type="button" class="btn" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
         <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
           <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>

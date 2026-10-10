@@ -126,10 +126,27 @@ export function layoutTree(root, isOpen, size, { gapX = 56, gapY = 14 } = {}) {
   return { boxes: sorted, edges: order.flatMap((id) => edges.filter((e) => e.from === id)), width, height: span(top) };
 }
 
-// From the toggle on the right of a box to the middle of the left side of its child.
-export function edgePath(a, b, toggle = 0) {
-  const x1 = a.x + a.w + toggle, y1 = a.y + a.h / 2;
-  const x2 = b.x, y2 = b.y + b.h / 2;
+// The project's files grow to the left of the root (mm39): a second tree laid out like the first, from the same root, then
+// turned over so each column ends one gap before its parent. The root and the right side keep their places relative to
+// each other; everything moves so the top-left corner is 0,0. Left edges carry side 'left'.
+export function joinSides(right, left) {
+  const [rootId, r0] = right.boxes.entries().next().value;
+  const l0 = left.boxes.get(rootId);
+  const dy = r0.y + r0.h / 2 - (l0.y + l0.h / 2);
+  const all = [...right.boxes];
+  for (const [id, b] of left.boxes) if (id !== rootId) all.push([id, { ...b, x: r0.x + r0.w - (b.x - l0.x) - b.w, y: b.y + dy }]);
+  const minX = Math.min(...all.map(([, b]) => b.x));
+  const minY = Math.min(...all.map(([, b]) => b.y));
+  const boxes = new Map(all.map(([id, b]) => [id, { ...b, x: b.x - minX, y: b.y - minY }]));
+  const edges = [...right.edges, ...left.edges.map((e) => ({ ...e, side: 'left' }))];
+  const ends = [...boxes.values()];
+  return { boxes, edges, width: Math.max(...ends.map((b) => b.x + b.w)), height: Math.max(...ends.map((b) => b.y + b.h)) };
+}
+
+// From the toggle on the right of a box to the middle of the left side of its child; mirrored on the left side (mm39).
+export function edgePath(a, b, toggle = 0, { left = false } = {}) {
+  const x1 = left ? a.x - toggle : a.x + a.w + toggle, y1 = a.y + a.h / 2;
+  const x2 = left ? b.x + b.w : b.x, y2 = b.y + b.h / 2;
   const mx = (x1 + x2) / 2;
   return `M${x1},${y1}C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
 }
