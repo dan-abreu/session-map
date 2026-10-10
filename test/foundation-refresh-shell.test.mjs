@@ -59,7 +59,7 @@ test('one refresh at a time per project, and at least 30 s between two', async (
 test('a refresh with no steps writes nothing anywhere', async () => {
   const smDir = tmp();
   try {
-    const out = await refreshFoundation(project(), smDir);
+    const out = await refreshFoundation(project(), smDir, { steps: [] });
     assert.deepEqual(out, { ran: true, steps: [] });
     assert.equal(existsSync(join(smDir, 'brain')), false);
   } finally { rmSync(smDir, { recursive: true, force: true }); }

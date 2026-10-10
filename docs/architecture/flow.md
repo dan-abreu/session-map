@@ -13,6 +13,10 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 - `server/web/flowview.js`
 - `server/web/flowexport.js`
 - `server/web/vendor/`
+- `server/arch/flowmodel.mjs`
+- `server/arch/flowscan.mjs`
+- `server/arch/flowcatalog.mjs`
+- `server/web/flowlevel.js`
 
 ## Rules that must not break
 
@@ -42,13 +46,15 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 
 ### Detailed Flow
 
-- [ ] **A single model behind every view** `fl07`
+- [ ] **in progress · A single model behind every view** `fl07`
   - One JSON model (nodes, labeled arrows, journeys, a hash of the files of each node); the views are generated from it and mermaid is only the drawing layer (the Structurizr, Ilograph and C4 pattern).
   - Separate "declared" (README and architecture) from "detected" (chats, branches, code), with an "AI" or "confirmed" badge.
   - The AI generates it, caches it in the session-map storage and regenerates only the nodes whose hash changed, per folder, with a cheap model.
-- [ ] **Level 1, the general view, with actors and outside services** `fl08`
+  - Done without the AI: `GET /api/arch/<project>/model` builds it from the README, the part files and the code, in the background, cached in the session-map storage (only changed files are read again); every fact has "declared" and "detected" evidence (file and line). Still to do: the AI enrichment and the owner's "confirmed".
+- [ ] **in progress · Level 1, the general view, with actors and outside services** `fl08`
   - Actors (customer, professional, owner or panel) and outside services (messaging, AI provider, hosting, database, storage, error tracking, e-mail), and a label on each arrow saying what passes.
   - Starts here, with a fixed legend and filters by journey.
+  - Done on the server: actors (browser, phone on the network, terminal, Claude Code, and the people of each app's screens) and outside services found in the code, an arrow per part and service with words from the README or the catalog, and the drawing of the general view, which can never be imported back as parts. The page has the level switch, the legend, the facts list and zoom; the view opens whole. An arrow the README left without words takes them from what its two parts are (a small table of roles in the catalog: readers hand on "data read", a state builder "the current state", a server "what the screen shows" to a page), else "code it shares" when the code shows the link; with nothing known it is drawn without words and counted, never with a placeholder. Arrows to one service with the same words are drawn once, from the part with the most evidence, naming the others. The layers read left to right: who uses it, what they touch, then deeper layers, then this computer and the internet; backward arrows are laid out turned round with their heads kept where the facts say. Still to do: words from the AI (the model keeps an `ai` path for them).
 - [ ] **Level 2, inside a part** `fl09`
   - A double click opens the part's inner flow: components taken from "How it works", "Where in the code" and who it talks to, plus the code itself, with live colors per component.
 - [ ] **Level 3, Journeys tab** `fl10`

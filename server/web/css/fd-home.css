@@ -1,0 +1,79 @@
+/* Styles of block B6 (home). Only the tokens of style.css.
+   The Home is a list that reads at a glance: hairline rows in seven columns on a desktop, a two-line card on a phone.
+   The project's name is the one button of a row; its ::after stretches over the whole row. The heads-up buttons sit above it. */
+.hm-view { --hm-cols: minmax(10rem, 1.7fr) minmax(8rem, 1fr) minmax(11rem, 1.5fr) minmax(6rem, 0.8fr) minmax(6rem, 0.8fr) minmax(6.5rem, 0.8fr) minmax(7rem, 0.9fr); }
+
+/* Totals: one quiet line, not a wall of big numbers. */
+.hm-totals { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); margin: 0 0 var(--sp-5); padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--line); }
+.hm-total { display: inline-flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.hm-total-value { color: var(--ink); font-size: var(--fs-lg); font-weight: 650; }
+.hm-total.is-working .hm-total-value, .hm-total.is-working .hm-icon { color: var(--active-ink); }
+.hm-total.is-waiting .hm-total-value, .hm-total.is-waiting .hm-icon { color: var(--waiting-ink); }
+
+.hm-icon { width: 16px; height: 16px; flex: none; color: var(--ink-2); fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+
+/* Column titles (desktop only; the screen reader gets the same words inside each cell). */
+.hm-head, .hm-row { display: grid; grid-template-columns: var(--hm-cols); align-items: start; gap: var(--sp-1) var(--sp-4); }
+.hm-head { padding: 0 var(--sp-3) var(--sp-2); font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+
+.hm-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.hm-item { position: relative; border-bottom: 1px solid var(--line); transition: background var(--dur-fast); }
+.hm-item:hover { background: var(--bg-2); }
+.hm-row { padding: var(--sp-3); }
+
+.hm-cell { min-width: 0; font-size: var(--fs-sm); color: var(--ink); overflow-wrap: anywhere; }
+.hm-val { display: inline-flex; align-items: flex-start; gap: var(--sp-1); line-height: 1.4; }
+.hm-val .hm-icon { margin-top: 2px; }
+.hm-cell.is-none, .hm-cell.is-zero { color: var(--ink-2); }
+
+.hm-project { display: grid; gap: var(--sp-1); }
+.hm-open {
+  justify-self: start; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.01em; overflow-wrap: anywhere;
+}
+.hm-open::after { content: ""; position: absolute; inset: 0; }
+.hm-open:focus-visible { outline: none; }
+.hm-open:focus-visible::after { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-md); }
+.hm-item:hover .hm-open { text-decoration: underline; text-underline-offset: 3px; }
+.hm-version { font-size: var(--fs-xs); color: var(--ink-2); }
+.hm-version.is-warn { color: var(--waiting-ink); }
+
+/* Tones: the color always travels with an icon and a word. */
+.is-good .hm-val, .is-good .hm-icon { color: var(--active-ink); }
+.is-low .hm-val, .is-low .hm-icon { color: var(--clash-ink); }
+.is-warn .hm-val, .is-warn .hm-icon { color: var(--waiting-ink); }
+.is-working .hm-val, .is-working .hm-icon { color: var(--active-ink); }
+.is-waiting .hm-val, .is-waiting .hm-icon { color: var(--waiting-ink); font-weight: 650; }
+
+/* A project not read yet: one cell over the health and "up to date?" columns. */
+.hm-unread { grid-column: span 2; display: grid; justify-items: start; gap: var(--sp-1); }
+.hm-why { font-size: var(--fs-xs); color: var(--ink-2); }
+.hm-readnow { position: relative; z-index: 1; margin-top: var(--sp-1); }
+
+/* Heads-up lines under a row: what, and the button that goes where it gets solved. */
+.hm-attn { list-style: none; margin: 0; padding: 0 var(--sp-3) var(--sp-3); display: grid; gap: var(--sp-1); pointer-events: none; }
+.hm-attn-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--waiting-fill); color: var(--waiting-ink); font-size: var(--fs-sm); }
+.hm-attn-icon, .hm-attn-icon.hm-icon { color: var(--waiting-ink); }
+.hm-attn-text { flex: 1 1 16rem; min-width: 0; }
+.hm-go { position: relative; z-index: 1; pointer-events: auto; }
+
+.hm-skeleton { padding: var(--sp-4) var(--sp-3); }
+
+@media (max-width: 720px) {
+  .hm-head { display: none; }
+  .hm-totals { gap: var(--sp-2) var(--sp-4); }
+  /* The card: line one is the name and when it was last active, the rest are chips with an icon and a word. */
+  .hm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-2); }
+  .hm-project { order: 0; flex: 1 1 12rem; min-width: 0; }
+  .hm-last { order: 1; flex: 0 0 auto; font-size: var(--fs-xs); color: var(--ink-2); }
+  .hm-health, .hm-uptodate, .hm-working, .hm-waiting, .hm-cost, .hm-unread { order: 2; flex: 0 0 auto; }
+  .hm-unread { flex: 1 1 100%; }
+  .hm-attn { padding-top: 0; }
+  .hm-open { min-height: 44px; display: inline-flex; align-items: center; }
+  .hm-go, .hm-readnow { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-item { transition: none; }
+}

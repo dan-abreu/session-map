@@ -1,0 +1,1150 @@
+{
+ "version": 1,
+ "generatedAt": "2026-10-10T09:30:00.000Z",
+ "rev": 2,
+ "head": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+ "tool": "own",
+ "files": [
+  {
+   "path": ".env",
+   "type": "other",
+   "kind": "secret",
+   "included": false,
+   "reason": "secret",
+   "bytes": 28,
+   "chars": null,
+   "words": null,
+   "lines": null,
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": null,
+   "owner": null
+  },
+  {
+   "path": ".env.example",
+   "type": "other",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 100,
+   "chars": 100,
+   "words": 15,
+   "lines": {
+    "total": 4,
+    "code": 4,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "31276a16425997c8",
+   "owner": null
+  },
+  {
+   "path": ".gitignore",
+   "type": "other",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 13,
+   "chars": 13,
+   "words": 1,
+   "lines": {
+    "total": 1,
+    "code": 1,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "16d30e4462189fb1",
+   "owner": null
+  },
+  {
+   "path": "LICENSE",
+   "type": "other",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 801,
+   "chars": 801,
+   "words": 122,
+   "lines": {
+    "total": 17,
+    "code": 13,
+    "comment": 0,
+    "blank": 4
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "b70ca8e6d7b38c4e",
+   "owner": null
+  },
+  {
+   "path": "README.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 7952,
+   "chars": 7952,
+   "words": 1437,
+   "lines": {
+    "total": 320,
+    "code": 178,
+    "comment": 0,
+    "blank": 142
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "79433c69e9ec7974",
+   "owner": null
+  },
+  {
+   "path": "apps/admin/package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 134,
+   "chars": 134,
+   "words": 15,
+   "lines": {
+    "total": 9,
+    "code": 9,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "b34572c2c3060535",
+   "owner": null
+  },
+  {
+   "path": "apps/admin/pages/api/users.ts",
+   "type": "ts",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 117,
+   "chars": 117,
+   "words": 19,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "e81bd2d23bb55c34",
+   "owner": null
+  },
+  {
+   "path": "apps/admin/pages/dashboard.tsx",
+   "type": "tsx",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 75,
+   "chars": 75,
+   "words": 9,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "cd9d00fa099aae5a",
+   "owner": null
+  },
+  {
+   "path": "apps/api/package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 110,
+   "chars": 110,
+   "words": 13,
+   "lines": {
+    "total": 8,
+    "code": 8,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "49442cdcfc183603",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/api/src/log.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 78,
+   "chars": 78,
+   "words": 8,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "19ed1cfe220b6f4a",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/api/src/routes/orders.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 802,
+   "chars": 800,
+   "words": 103,
+   "lines": {
+    "total": 26,
+    "code": 20,
+    "comment": 2,
+    "blank": 4
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "c4484f806ea8d7b3",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/api/src/server.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 649,
+   "chars": 649,
+   "words": 91,
+   "lines": {
+    "total": 22,
+    "code": 12,
+    "comment": 4,
+    "blank": 6
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "089a5ec232b4a38e",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/api/src/services/notify.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 195,
+   "chars": 195,
+   "words": 30,
+   "lines": {
+    "total": 9,
+    "code": 7,
+    "comment": 0,
+    "blank": 2
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "ffcfb1f1567bc430",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/api/src/services/orders.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 548,
+   "chars": 548,
+   "words": 75,
+   "lines": {
+    "total": 20,
+    "code": 14,
+    "comment": 1,
+    "blank": 5
+   },
+   "mtime": "2026-10-10T09:30:00.000Z",
+   "sha": "1af1b488c31658bb",
+   "owner": "orders"
+  },
+  {
+   "path": "apps/web/app/(shop)/cart/page.tsx",
+   "type": "tsx",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 87,
+   "chars": 87,
+   "words": 11,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "ec4c45d5d3c5a300",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/app/api/health/route.ts",
+   "type": "ts",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 74,
+   "chars": 74,
+   "words": 11,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "4a50eab09549bf26",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/app/orders/[id]/page.tsx",
+   "type": "tsx",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 223,
+   "chars": 223,
+   "words": 30,
+   "lines": {
+    "total": 6,
+    "code": 5,
+    "comment": 0,
+    "blank": 1
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "83e1d7661af94d8d",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/app/page.tsx",
+   "type": "tsx",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 83,
+   "chars": 83,
+   "words": 11,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "483239d0d935ced1",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/lib/api.ts",
+   "type": "ts",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 241,
+   "chars": 241,
+   "words": 29,
+   "lines": {
+    "total": 6,
+    "code": 5,
+    "comment": 0,
+    "blank": 1
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "5f3ec9b734103067",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/package.json",
+   "type": "json",
+   "kind": "screen",
+   "included": true,
+   "reason": null,
+   "bytes": 132,
+   "chars": 132,
+   "words": 15,
+   "lines": {
+    "total": 9,
+    "code": 9,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "d21150803cc08f98",
+   "owner": "web"
+  },
+  {
+   "path": "apps/web/public/logo.png",
+   "type": "other",
+   "kind": "binary",
+   "included": false,
+   "reason": "binary",
+   "bytes": 70,
+   "chars": null,
+   "words": null,
+   "lines": null,
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": null,
+   "owner": null
+  },
+  {
+   "path": "apps/worker/package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 112,
+   "chars": 112,
+   "words": 13,
+   "lines": {
+    "total": 8,
+    "code": 8,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "765e2457457fad85",
+   "owner": "worker"
+  },
+  {
+   "path": "apps/worker/src/digest.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 150,
+   "chars": 150,
+   "words": 23,
+   "lines": {
+    "total": 4,
+    "code": 3,
+    "comment": 1,
+    "blank": 0
+   },
+   "mtime": "2026-10-10T09:30:00.000Z",
+   "sha": "827572134a17e71b",
+   "owner": "worker"
+  },
+  {
+   "path": "apps/worker/src/queues.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 364,
+   "chars": 364,
+   "words": 54,
+   "lines": {
+    "total": 13,
+    "code": 9,
+    "comment": 0,
+    "blank": 4
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "6789c12f7a627bd0",
+   "owner": "worker"
+  },
+  {
+   "path": "apps/worker/src/templates.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 121,
+   "chars": 121,
+   "words": 16,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "8165400c32be871b",
+   "owner": "worker"
+  },
+  {
+   "path": "apps/worker/src/worker.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 385,
+   "chars": 385,
+   "words": 50,
+   "lines": {
+    "total": 13,
+    "code": 10,
+    "comment": 0,
+    "blank": 3
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "c750e077d7a0f949",
+   "owner": "worker"
+  },
+  {
+   "path": "docs/architecture/README.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 260,
+   "chars": 254,
+   "words": 39,
+   "lines": {
+    "total": 16,
+    "code": 9,
+    "comment": 0,
+    "blank": 7
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "370ed3351fa3489a",
+   "owner": null
+  },
+  {
+   "path": "docs/architecture/db.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 258,
+   "chars": 258,
+   "words": 45,
+   "lines": {
+    "total": 17,
+    "code": 9,
+    "comment": 0,
+    "blank": 8
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "73dff4be0aca51cd",
+   "owner": "db"
+  },
+  {
+   "path": "docs/architecture/orders.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 447,
+   "chars": 447,
+   "words": 73,
+   "lines": {
+    "total": 20,
+    "code": 12,
+    "comment": 0,
+    "blank": 8
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "14b3131231516350",
+   "owner": "orders"
+  },
+  {
+   "path": "docs/architecture/web.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 260,
+   "chars": 260,
+   "words": 46,
+   "lines": {
+    "total": 17,
+    "code": 9,
+    "comment": 0,
+    "blank": 8
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "e66914e36b1417a8",
+   "owner": "web"
+  },
+  {
+   "path": "docs/architecture/worker.md",
+   "type": "md",
+   "kind": "doc",
+   "included": true,
+   "reason": null,
+   "bytes": 193,
+   "chars": 193,
+   "words": 36,
+   "lines": {
+    "total": 13,
+    "code": 7,
+    "comment": 0,
+    "blank": 6
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "749051742124cd02",
+   "owner": "worker"
+  },
+  {
+   "path": "package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 183,
+   "chars": 183,
+   "words": 21,
+   "lines": {
+    "total": 10,
+    "code": 10,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "653b5220d92d3c04",
+   "owner": null
+  },
+  {
+   "path": "packages/adapters/package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 115,
+   "chars": 115,
+   "words": 13,
+   "lines": {
+    "total": 8,
+    "code": 8,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "9de8d3f0b0e7ca24",
+   "owner": "orders"
+  },
+  {
+   "path": "packages/adapters/src/mailer.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 356,
+   "chars": 356,
+   "words": 45,
+   "lines": {
+    "total": 10,
+    "code": 9,
+    "comment": 1,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "e6313ff22e46e091",
+   "owner": "orders"
+  },
+  {
+   "path": "packages/adapters/src/payments.ts",
+   "type": "ts",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 270,
+   "chars": 270,
+   "words": 32,
+   "lines": {
+    "total": 8,
+    "code": 6,
+    "comment": 0,
+    "blank": 2
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "a8b595bbb21c3073",
+   "owner": "orders"
+  },
+  {
+   "path": "packages/db/package.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 116,
+   "chars": 116,
+   "words": 13,
+   "lines": {
+    "total": 8,
+    "code": 8,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "196ad7fdd71dd738",
+   "owner": "db"
+  },
+  {
+   "path": "packages/db/prisma/schema.prisma",
+   "type": "prisma",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 668,
+   "chars": 668,
+   "words": 84,
+   "lines": {
+    "total": 38,
+    "code": 28,
+    "comment": 4,
+    "blank": 6
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "5d748baba90673c9",
+   "owner": "db"
+  },
+  {
+   "path": "pnpm-lock.yaml",
+   "type": "yaml",
+   "kind": "generated",
+   "included": false,
+   "reason": "generated",
+   "bytes": 44,
+   "chars": null,
+   "words": null,
+   "lines": null,
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": null,
+   "owner": null
+  },
+  {
+   "path": "pnpm-workspace.yaml",
+   "type": "yaml",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 40,
+   "chars": 40,
+   "words": 5,
+   "lines": {
+    "total": 3,
+    "code": 3,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "08d75840c97ab0e7",
+   "owner": null
+  },
+  {
+   "path": "turbo.json",
+   "type": "json",
+   "kind": "code",
+   "included": true,
+   "reason": null,
+   "bytes": 266,
+   "chars": 266,
+   "words": 21,
+   "lines": {
+    "total": 14,
+    "code": 14,
+    "comment": 0,
+    "blank": 0
+   },
+   "mtime": "2026-10-09T09:00:00.000Z",
+   "sha": "eea2ab94c01837aa",
+   "owner": null
+  }
+ ],
+ "sums": {
+  "total": {
+   "files": 37,
+   "bytes": 16978,
+   "chars": 16970,
+   "words": 2674,
+   "lines": {
+    "total": 698,
+    "code": 468,
+    "comment": 13,
+    "blank": 217
+   }
+  },
+  "folders": {
+   "apps": {
+    "files": 20,
+    "bytes": 4680,
+    "chars": 4678,
+    "words": 626,
+    "lines": {
+     "total": 174,
+     "code": 140,
+     "comment": 8,
+     "blank": 26
+    }
+   },
+   "apps/admin": {
+    "files": 3,
+    "bytes": 326,
+    "chars": 326,
+    "words": 43,
+    "lines": {
+     "total": 15,
+     "code": 15,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/admin/pages": {
+    "files": 2,
+    "bytes": 192,
+    "chars": 192,
+    "words": 28,
+    "lines": {
+     "total": 6,
+     "code": 6,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/admin/pages/api": {
+    "files": 1,
+    "bytes": 117,
+    "chars": 117,
+    "words": 19,
+    "lines": {
+     "total": 3,
+     "code": 3,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/api": {
+    "files": 6,
+    "bytes": 2382,
+    "chars": 2380,
+    "words": 320,
+    "lines": {
+     "total": 88,
+     "code": 64,
+     "comment": 7,
+     "blank": 17
+    }
+   },
+   "apps/api/src": {
+    "files": 5,
+    "bytes": 2272,
+    "chars": 2270,
+    "words": 307,
+    "lines": {
+     "total": 80,
+     "code": 56,
+     "comment": 7,
+     "blank": 17
+    }
+   },
+   "apps/api/src/routes": {
+    "files": 1,
+    "bytes": 802,
+    "chars": 800,
+    "words": 103,
+    "lines": {
+     "total": 26,
+     "code": 20,
+     "comment": 2,
+     "blank": 4
+    }
+   },
+   "apps/api/src/services": {
+    "files": 2,
+    "bytes": 743,
+    "chars": 743,
+    "words": 105,
+    "lines": {
+     "total": 29,
+     "code": 21,
+     "comment": 1,
+     "blank": 7
+    }
+   },
+   "apps/web": {
+    "files": 6,
+    "bytes": 840,
+    "chars": 840,
+    "words": 107,
+    "lines": {
+     "total": 30,
+     "code": 28,
+     "comment": 0,
+     "blank": 2
+    }
+   },
+   "apps/web/app": {
+    "files": 4,
+    "bytes": 467,
+    "chars": 467,
+    "words": 63,
+    "lines": {
+     "total": 15,
+     "code": 14,
+     "comment": 0,
+     "blank": 1
+    }
+   },
+   "apps/web/app/(shop)": {
+    "files": 1,
+    "bytes": 87,
+    "chars": 87,
+    "words": 11,
+    "lines": {
+     "total": 3,
+     "code": 3,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/web/app/(shop)/cart": {
+    "files": 1,
+    "bytes": 87,
+    "chars": 87,
+    "words": 11,
+    "lines": {
+     "total": 3,
+     "code": 3,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/web/app/api": {
+    "files": 1,
+    "bytes": 74,
+    "chars": 74,
+    "words": 11,
+    "lines": {
+     "total": 3,
+     "code": 3,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/web/app/api/health": {
+    "files": 1,
+    "bytes": 74,
+    "chars": 74,
+    "words": 11,
+    "lines": {
+     "total": 3,
+     "code": 3,
+     "comment": 0,
+     "blank": 0
+    }
+   },
+   "apps/web/app/orders": {
+    "files": 1,
+    "bytes": 223,
+    "chars": 223,
+    "words": 30,
+    "lines": {
+     "total": 6,
+     "code": 5,
+     "comment": 0,
+     "blank": 1
+    }
+   },
+   "apps/web/app/orders/[id]": {
+    "files": 1,
+    "bytes": 223,
+    "chars": 223,
+    "words": 30,
+    "lines": {
+     "total": 6,
+     "code": 5,
+     "comment": 0,
+     "blank": 1
+    }
+   },
+   "apps/web/lib": {
+    "files": 1,
+    "bytes": 241,
+    "chars": 241,
+    "words": 29,
+    "lines": {
+     "total": 6,
+     "code": 5,
+     "comment": 0,
+     "blank": 1
+    }
+   },
+   "apps/worker": {
+    "files": 5,
+    "bytes": 1132,
+    "chars": 1132,
+    "words": 156,
+    "lines": {
+     "total": 41,
+     "code": 33,
+     "comment": 1,
+     "blank": 7
+    }
+   },
+   "apps/worker/src": {
+    "files": 4,
+    "bytes": 1020,
+    "chars": 1020,
+    "words": 143,
+    "lines": {
+     "total": 33,
+     "code": 25,
+     "comment": 1,
+     "blank": 7
+    }
+   },
+   "docs": {
+    "files": 5,
+    "bytes": 1418,
+    "chars": 1412,
+    "words": 239,
+    "lines": {
+     "total": 83,
+     "code": 46,
+     "comment": 0,
+     "blank": 37
+    }
+   },
+   "docs/architecture": {
+    "files": 5,
+    "bytes": 1418,
+    "chars": 1412,
+    "words": 239,
+    "lines": {
+     "total": 83,
+     "code": 46,
+     "comment": 0,
+     "blank": 37
+    }
+   },
+   "packages": {
+    "files": 5,
+    "bytes": 1525,
+    "chars": 1525,
+    "words": 187,
+    "lines": {
+     "total": 72,
+     "code": 59,
+     "comment": 5,
+     "blank": 8
+    }
+   },
+   "packages/adapters": {
+    "files": 3,
+    "bytes": 741,
+    "chars": 741,
+    "words": 90,
+    "lines": {
+     "total": 26,
+     "code": 23,
+     "comment": 1,
+     "blank": 2
+    }
+   },
+   "packages/adapters/src": {
+    "files": 2,
+    "bytes": 626,
+    "chars": 626,
+    "words": 77,
+    "lines": {
+     "total": 18,
+     "code": 15,
+     "comment": 1,
+     "blank": 2
+    }
+   },
+   "packages/db": {
+    "files": 2,
+    "bytes": 784,
+    "chars": 784,
+    "words": 97,
+    "lines": {
+     "total": 46,
+     "code": 36,
+     "comment": 4,
+     "blank": 6
+    }
+   },
+   "packages/db/prisma": {
+    "files": 1,
+    "bytes": 668,
+    "chars": 668,
+    "words": 84,
+    "lines": {
+     "total": 38,
+     "code": 28,
+     "comment": 4,
+     "blank": 6
+    }
+   }
+  },
+  "parts": {
+   "_none": {
+    "files": 11,
+    "bytes": 9941,
+    "chars": 9935,
+    "words": 1704,
+    "lines": {
+     "total": 400,
+     "code": 247,
+     "comment": 0,
+     "blank": 153
+    }
+   },
+   "orders": {
+    "files": 10,
+    "bytes": 3570,
+    "chars": 3568,
+    "words": 483,
+    "lines": {
+     "total": 134,
+     "code": 99,
+     "comment": 8,
+     "blank": 27
+    }
+   },
+   "web": {
+    "files": 7,
+    "bytes": 1100,
+    "chars": 1100,
+    "words": 153,
+    "lines": {
+     "total": 47,
+     "code": 37,
+     "comment": 0,
+     "blank": 10
+    }
+   },
+   "worker": {
+    "files": 6,
+    "bytes": 1325,
+    "chars": 1325,
+    "words": 192,
+    "lines": {
+     "total": 54,
+     "code": 40,
+     "comment": 1,
+     "blank": 13
+    }
+   },
+   "db": {
+    "files": 3,
+    "bytes": 1042,
+    "chars": 1042,
+    "words": 142,
+    "lines": {
+     "total": 63,
+     "code": 45,
+     "comment": 4,
+     "blank": 14
+    }
+   }
+  }
+ },
+ "excluded": {
+  "dep": 1,
+  "generated": 1,
+  "binary": 1,
+  "secret": 1
+ }
+}

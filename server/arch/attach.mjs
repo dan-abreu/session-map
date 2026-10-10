@@ -79,7 +79,59 @@ const inPartOrder = (arch, ids) => arch.parts.map((p) => p.id).filter((id) => id
 
 // One owner per file, so the sizes add up (mm25): the part with its deepest path, the first in map order on a tie, or null.
 export function ownersOf(files, arch, { topLevel } = {}) {
-  return bestOf(files, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids)[0] : null));
+  const owners = bestOf(files, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids)[0] : null));
+  return ownersOfTests(files, owners);
+}
+
+// Every part holding a file's deepest path, in map order ([] for none): a folder two parts share belongs to both. The
+// Flow pins a call to each of them (flow.md fl08) instead of guessing one by map order.
+export function ownersAllOf(files, arch, { topLevel } = {}) {
+  return bestOf(files, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids) : []));
+}
+
+const TEST_NAME_RE =/^(.+)\.(test|spec)\.[a-z0-9]+$|^(.+)_test\.[a-z0-9]+$|^test_(.+)\.[a-z0-9]+$/;
+const stemOf = (name) => name.replace(/\.[^.]+$/, '');
+const TEST_DIRS = new Set(['test', 'tests', '__tests__', 'spec', 'specs', 'e2e']);
+const DOC_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/;
+// What a test can test: code, not another test, a test repository under test/ or a document.
+const isCode = (s) => !TEST_NAME_RE.test(s.at(-1)) && !DOC_RE.test(s.at(-1)) && !s.slice(0, -1).some((d) => TEST_DIRS.has(d));
+
+// The part holding more than half of a folder's files, or null: a folder shared by several parts names none of them.
+function majorityOf(ids) {
+  const votes = new Map();
+  for (const id of ids) votes.set(id, (votes.get(id) ?? 0) + 1);
+  for (const [id, n] of votes) if (n * 2 > ids.length) return id;
+  return null;
+}
+
+// A test with no owner takes the part of the file it tests (fd16): its name read as a path, test/arch-parse.test.mjs ->
+// a file ending in arch/parse or named arch-parse; else, dropping words from the end, the folder that path names.
+function ownersOfTests(files, owners) {
+  const paths = files.map((f) => String(f).replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean));
+  const sources = paths.map((s, i) => ({ s, owner: owners[i] })).filter((x) => x.owner && isCode(x.s));
+  const endsWith = (s, words) => words.length <= s.length && words.every((w, i) => s[s.length - words.length + i] === w);
+  const holds = (dirs, words) => {
+    for (let o = 0; o + words.length <= dirs.length; o++) if (words.every((w, i) => dirs[o + i] === w)) return true;
+    return false;
+  };
+  return owners.map((owner, i) => {
+    if (owner) return owner;
+    const m = TEST_NAME_RE.exec(paths[i].at(-1) ?? '');
+    if (!m) return null;
+    const words = (m[1] ?? m[3] ?? m[4]).split(/[-_.]/).filter(Boolean);
+    const joined = words.join('-');
+    const file = sources.find(({ s }) => {
+      const named = [...s.slice(0, -1), stemOf(s.at(-1))];
+      return endsWith(named, words) || named.at(-1) === joined;
+    });
+    if (file) return file.owner;
+    for (let n = words.length; n > 0; n--) {
+      const inFolder = sources.filter(({ s }) => holds(s.slice(0, -1), words.slice(0, n)));
+      const lead = majorityOf(inFolder.map((x) => x.owner));
+      if (lead) return lead;
+    }
+    return null;
+  });
 }
 
 // files: paths relative to the project root. A tie at the top places nothing; votes through a broad path count only

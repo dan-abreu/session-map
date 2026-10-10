@@ -1,0 +1,62 @@
+/* Care mode (fd14): the first-use question, the mode picker, the waiting fixes, the confirmation, and the session-map rows
+   of Changes. Tokens come from style.css; B3-T22 @imports this file from fd-care.css. */
+
+.care-dialog { width: min(560px, calc(100% - 32px)); }
+.care-dialog h2 { text-wrap: balance; }
+
+/* ----- the question ----- */
+.care-q-lede { margin: 0 0 var(--sp-4); max-width: 62ch; color: var(--ink-2); }
+.care-opts { display: grid; gap: var(--sp-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.care-opt {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-3); align-items: start;
+  padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-2); cursor: pointer;
+}
+.care-opt:hover { border-color: var(--ink-2); }
+.care-opt:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, var(--bg-2)); }
+.care-opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.care-opt input { margin: 4px 0 0; accent-color: var(--ink); }
+.care-opt-body { display: grid; gap: 2px; min-width: 0; }
+.care-opt-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-weight: 650; }
+.care-opt-hint { color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.5; max-width: 56ch; }
+.care-rec { padding: 1px 8px; border-radius: var(--r-pill); background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-2xs); font-weight: 650; }
+.care-q-later { margin: var(--sp-3) 0 0; color: var(--ink-2); font-size: var(--fs-xs); }
+.care-q-error { margin: var(--sp-3) 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--clash-fill); color: var(--clash-ink); font-weight: 550; }
+.care-q-error[hidden] { display: none; }
+.care-dialog .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-4); }
+
+/* ----- the picker ----- */
+.care-picker { display: grid; gap: var(--sp-1); justify-items: start; }
+.care-picker-hint { margin: 0; max-width: 60ch; color: var(--ink-2); font-size: var(--fs-xs); }
+
+/* ----- the confirmation ----- */
+.care-paths { margin: var(--sp-1) 0 var(--sp-3); padding-left: var(--sp-5); display: grid; gap: 2px; overflow-wrap: anywhere; }
+.care-kept { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
+
+/* ----- the fixes waiting ----- */
+.care-props h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); }
+.care-prop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--line); overflow: hidden; }
+.care-prop { padding: var(--sp-3) var(--sp-4); background: var(--bg-2); }
+.care-prop-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.care-prop-what { display: grid; gap: 2px; min-width: 0; flex: 1 1 24ch; }
+.care-prop-what p { margin: 0; }
+.care-prop-paths { display: flex; flex-wrap: wrap; gap: 0 var(--sp-3); font: 650 var(--fs-md)/1.4 var(--mono); overflow-wrap: anywhere; }
+.care-prop-why { max-width: 66ch; }
+.care-prop-meta { color: var(--ink-2); font-size: var(--fs-xs); }
+.care-prop-erase { color: var(--clash-ink); font-weight: 650; }
+.care-prop-diff { margin-top: var(--sp-2); }
+.care-prop-diff summary { cursor: pointer; width: fit-content; color: var(--ink-2); font-size: var(--fs-sm); }
+.care-prop-diff summary:hover { color: var(--ink); }
+.care-prop-diff summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-xs); }
+.care-diff { margin-top: var(--sp-2); overflow-x: auto; }
+.care-diff-path { margin: 0 0 var(--sp-1); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-sm); }
+.care-diff-tag { padding: 1px 8px; border-radius: var(--r-pill); background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-2xs); font-weight: 650; }
+.care-diff-tag.is-erase { background: var(--clash-fill); color: var(--clash-ink); }
+
+/* ----- session-map rows in Changes ----- */
+.chg-op .chg-btn { padding-bottom: var(--sp-1); }
+.chg-origin { padding: 1px 8px; border-radius: var(--r-pill); background: var(--bg); border: 1px solid var(--line); color: var(--ink); font-size: var(--fs-2xs); font-weight: 650; }
+.chg-op-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: 0 var(--sp-4) var(--sp-2); background: var(--bg-2); }
+.chg-undone { color: var(--ink-2); font-size: var(--fs-xs); font-weight: 650; }
+.chg-op-note { flex: 1 1 100%; margin: 0; max-width: 66ch; color: var(--ink-2); font-size: var(--fs-sm); }
+.chg-op-note.is-warn { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--waiting-fill); color: var(--waiting-ink); font-weight: 550; }
+.chg-row.is-undone .chg-name, .chg-row.is-undone .chg-folder { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--ink-2); }

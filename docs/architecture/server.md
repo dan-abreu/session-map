@@ -13,6 +13,7 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - `server/actions.mjs`
 - `server/files.mjs`
 - `server/launch.mjs`
+- `server/log.mjs`
 
 ## Rules that must not break
 

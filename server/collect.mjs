@@ -135,7 +135,7 @@ async function groupByRoot(items, placements) {
 // written inside an app.
 export function topLevelOf(root) {
   try {
-    return new Set(readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name.toLowerCase()));
+    return new Set(readdirSync(root).map((name) => name.toLowerCase()));
   } catch {
     return undefined;
   }
@@ -629,3 +629,6 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
 }
 
 export { settleAi } from './ai/life.mjs';
+
+// The two rules that place a conversation, shared with the measuring bench (server/bench/classify-build.mjs).
+export { placeInPart, placeInWorkCell };

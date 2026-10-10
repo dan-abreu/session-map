@@ -28,6 +28,9 @@ import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
 import { emptyState } from './empty.js';
 import { createTour, tourWanted } from './tour.js';
+import { AREAS, normalizeView } from './nav.js';
+import { createNavbar } from './navbar.js';
+import { createAreas, sectionOf } from './areas.js';
 import { createHelp } from './help.js';
 import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
 import { INFO_KINDS, CHAT_TAB, pointTabs, projectTabs, openingTab, kindDigest } from './kinds.js';
@@ -39,7 +42,6 @@ import {
 const $ = (sel) => document.querySelector(sel);
 const POLL_MS = 5000;
 const PHONE = window.matchMedia('(max-width: 719px)');
-const VIEWS = ['map', 'requests', 'flow', 'changes', 'board', 'history', 'costs', 'discover'];
 const SEARCH_MAX = 8;
 const CHAT_WIDTH = 460;
 
@@ -61,6 +63,7 @@ let tree = null;
 let open = new Set();
 let selection = null;
 let view = 'map';
+let viewSub = null; // the sub-tab asked for with the area (Conversations > Board or History), handed to its view once
 let showArchived = store.get('sm.archived') === '1';
 // The period of the open project (mm06), one for the map's "What changed", History, Costs and the activity lists.
 let rangeSel = { preset: 'all' };
@@ -182,6 +185,7 @@ function applyStaticText() {
   alerts?.relabel();
   aiHelpers?.relabel();
   picker?.relabel();
+  navbar?.render();
 }
 
 let toastTimer = 0;
@@ -1849,41 +1853,28 @@ function poll() {
   return polling;
 }
 
-function showView(name) {
-  view = VIEWS.includes(name) ? name : 'map';
-  for (const v of VIEWS) $(`#tab-${v}`).setAttribute('aria-current', v === view ? 'page' : 'false');
+// Any name, old or new (board, history, a saved sm.view, ?view=), lands on an area of the table (nav.js).
+function showView(name, sub = null) {
+  const to = normalizeView(name);
+  view = to.area;
+  viewSub = sub ?? to.sub;
+  navbar.setCurrent(view);
   document.body.dataset.view = view;
-  for (const sec of document.querySelectorAll('.view')) sec.hidden = sec.id !== `view-${view}`;
-  if (view === 'discover') discover.show();
-  else $('#discover').hidden = true;
+  for (const sec of document.querySelectorAll('.view')) sec.hidden = sec.id !== sectionOf(view);
+  if (view !== 'discover') $('#view-discover').hidden = true;
   if (view !== 'map') { closePanel(false); chat.close(); closeLists(); }
   if (view !== 'flow') flow.hide();
   store.set('sm.view', view);
   refreshView(true);
 }
 
+// The open area draws itself through the registry (areas.js); an area with no view yet shows "being built".
 function refreshView(first = false) {
-  if (!state?.projects.length) return;
-  if (view === 'flow') {
-    if (first) flow.show();
-    else flow.refresh();
-    return;
-  }
-  if (view === 'changes') {
-    const root = $('#view-changes');
-    if (first) changesView.render(root);
-    else changesView.refresh(root);
-    return;
-  }
-  if (view === 'requests') {
-    if (first) requestsView.render($('#view-requests'));
-    else requestsView.refresh($('#view-requests'));
-    return;
-  }
-  if (!['board', 'history', 'costs'].includes(view)) return;
-  const root = $(`#view-${view}`);
-  if (first) tabs.render(view, root);
-  else tabs.refresh(view, root);
+  if (!state) return;
+  if (!state.projects.length && AREAS.find((a) => a.id === view)?.scope !== 'global') return;
+  const sub = first ? viewSub : null;
+  if (first) viewSub = null;
+  areas.draw(view, $(`#${sectionOf(view)}`), { first, sub });
 }
 
 // ---- search ---------------------------------------------------------------------------------
@@ -1914,7 +1905,6 @@ function renderResults() {
       h('span', { class: 'hit-path' }, m.path.slice(1).map((id) => nodeById(tree, id).label).join(' › ') || project.name)));
   }) : [h('li', { class: 'hit-none' }, t('search.none'))]));
   box.hidden = false;
-let repoSide = null; // the project's folders and files on the left of the map (mm39)
   $('#search').setAttribute('aria-expanded', 'true');
   renderMap();
 }
@@ -1924,6 +1914,7 @@ let repoSide = null; // the project's folders and files on the left of the map (
 let discover = null;
 let chat = null;
 let files = null;
+let repoSide = null; // the project's folders and files on the left of the map (mm39)
 let changesView = null;
 let tabs = null;
 let requestsView = null;
@@ -1937,6 +1928,28 @@ let aiHelpers = null;
 let cutPanel = null;
 let now = null;
 let picker = null;
+let navbar = null;
+let areas = null;
+let demoMode = false; // learnt from the server's answer: the demo writes nothing, so Home stops offering "Read now"
+let homeRow = null; // the project of the Home row last clicked, for a heads-up button that leads into that project
+
+// An area opened from somewhere else (Home's heads-up buttons): its project first, then the area and its sub-part.
+function goArea(area, sub = null, projectId = null) {
+  const id = projectId ?? homeRow;
+  if (id && id !== project?.id && state?.projects.some((p) => p.id === id)) setProject(id);
+  showView(area, sub);
+}
+
+// "Read now" on Home: the server reads the project's foundation; the next state brings the numbers.
+async function readFoundation(id) {
+  const res = await api.fdWrite(id, 'refresh', {});
+  if (!res.ok) {
+    if (res.error === 'demo') demoMode = true;
+    toast(errorText(res.error));
+    return;
+  }
+  setTimeout(poll, 1500);
+}
 
 // A click on an alert: its project, then its conversation (one alert) or the waiting list (a clash).
 function openFromAlert(group) {
@@ -1964,12 +1977,17 @@ function wire() {
     });
   }
   document.body.classList.toggle('is-tech', tech);
+  // The bar draws the table of areas (nav.js): Simple shows the five main areas and a "More" menu, Full shows them all.
+  navbar = createNavbar({
+    h, icon, root: $('#navbar'), t: () => t, tech: () => tech, phone: () => PHONE.matches, current: view, onPick: (area) => showView(area),
+  });
   tour = createTour({ h, t: () => t, phone: () => PHONE.matches, onEnd: (how) => store.set('sm.tour', how) });
   help = createHelp({
     h, t: () => t, plain: () => translator(lang), tech: () => translator(lang, { tech: true }), getTech: () => tech,
     setTech: (on) => {
       tech = on;
       document.body.classList.toggle('is-tech', tech);
+      navbar.setMode(tech);
       store.set('sm.tech', on ? '1' : '0');
       t = translator(lang, { tech });
       renderAll();
@@ -1992,7 +2010,7 @@ function wire() {
   mindmap = createMindmap($('#mindmap'), mapCtx);
   outline = createOutline($('#outline'), mapCtx);
   discover = createDiscover({
-    root: $('#discover'), h, t: () => t, lang: () => lang, toast, icon,
+    root: $('#view-discover'), h, t: () => t, lang: () => lang, toast, icon,
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
   chat = createChat({
@@ -2064,31 +2082,51 @@ function wire() {
     onApplied: () => setTimeout(poll, 600),
   });
   files = createFiles({ dialog: $('#fileDialog'), h, t: () => t, toast, errorText, project: () => project, phone: () => PHONE.matches });
-  changesView = createChangesView({
-    h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
-    dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
-  });
-  requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
-  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, openers: [$('#aiHelpersOpen')] });
-  tabs = createTabs({
-    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
-    state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
-    prefs: { archived: () => showArchived, setArchived },
-    range: () => activeRange(), rangeButton: () => rangePicker.button(),
-  });
-  for (const v of VIEWS) $(`#tab-${v}`).addEventListener('click', () => showView(v));
-  $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeLists()));
-  $('#liveBtn').addEventListener('click', () => (live.isOpen() ? closeLists() : openLive()));
-  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"], [data-close="rel"]')) {
-    b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
-  }
-  // The box's strip is one tablist: the arrows, Home and End move along it and show the tab they land on.
   repoSide = createRepoSide({
     h, t: () => t, lang: () => lang, store, project: () => project, files: () => files, toast, button: $('#filesSide'),
     visible: () => view === 'map' && !PHONE.matches,
     onChange: (opts) => { if (!PHONE.matches) renderMap(opts); },
     onFit: (first) => { if (project && !PHONE.matches && !(first && mindmap.touched())) requestAnimationFrame(() => mindmap.fit(true)); },
   });
+  changesView = createChangesView({
+    h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
+    dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
+  });
+  requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
+  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, openers: [$('#aiHelpersBar'), $('#aiHelpersOpen')] });
+  tabs = createTabs({
+    h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
+    state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
+    prefs: { archived: () => showArchived, setArchived },
+    range: () => activeRange(), rangeButton: () => rangePicker.button(),
+  });
+  areas = createAreas({
+    h, icon, t: () => t,
+    own: {
+      map: { render() {}, refresh() {} }, // the map draws itself (renderMap) on every state
+      flow: { render: () => flow.show(), refresh: () => flow.refresh() },
+      requests: { render: () => requestsView.render($('#view-requests')), refresh: () => requestsView.refresh($('#view-requests')) },
+      convs: { render: (root, sub) => tabs.render(sub ?? 'convs', root), refresh: (root) => tabs.refresh('convs', root) },
+      changes: { render: (root) => changesView.render(root), refresh: (root) => changesView.refresh(root) },
+      costs: { render: (root) => tabs.render('costs', root), refresh: (root) => tabs.refresh('costs', root) },
+      discover: { render: () => discover.show(), refresh() {} },
+    },
+    home: {
+      h, icon, t: (key, vars) => t(key, vars), fmt: { money, relative }, state: () => state, now: () => (state ? rangeNow() : Date.now()),
+      ignored: () => ignoredClash, demo: () => demoMode,
+      openProject: (id) => { if (id !== project?.id) setProject(id); showView('map'); },
+      goTo: (area, sub, id) => goArea(area, sub, id),
+      refreshFoundation: readFoundation,
+    },
+  });
+  navbar.setReady(areas.ready());
+  $('#view-home').addEventListener('click', (e) => { homeRow = e.target.closest?.('[data-id]')?.dataset.id ?? null; }, true);
+  $('#waitingBtn').addEventListener('click', () => ($('#waitingList').hidden ? openWaiting() : closeLists()));
+  $('#liveBtn').addEventListener('click', () => (live.isOpen() ? closeLists() : openLive()));
+  for (const b of document.querySelectorAll('[data-close="panel"], [data-close="waiting"], [data-close="live"], [data-close="rel"]')) {
+    b.addEventListener('click', () => (b.dataset.close === 'panel' ? closePanel() : closeLists()));
+  }
+  // The box's strip is one tablist: the arrows, Home and End move along it and show the tab they land on.
   $('#pointTabs').addEventListener('keydown', (e) => {
     const tabs = [...$('#pointTabs').querySelectorAll('[role="tab"]')];
     const at = tabs.indexOf(document.activeElement);
@@ -2144,7 +2182,7 @@ function wire() {
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
-  PHONE.addEventListener('change', () => { if (project) { renderMap(); activeMap().fit(false); } });
+  PHONE.addEventListener('change', () => { navbar.render(); if (project) { renderMap(); activeMap().fit(false); } });
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -2238,8 +2276,8 @@ async function main() {
   renderAll();
   if (state.projects.length) {
     const params = new URLSearchParams(location.search);
-    const saved = store.get('sm.view');
-    if (saved && saved !== 'map' && VIEWS.includes(saved) && !params.get('view') && !params.get('select')) showView(saved);
+    const saved = normalizeView(store.get('sm.view'));
+    if (saved.area !== 'map' && !params.get('view') && !params.get('select')) showView(saved.area, saved.sub);
     applyDeepLink();
     // A reload keeps the conversation that was open in the sheet.
     if (view === 'map' && !params.get('select')) chat.restore(project.id);

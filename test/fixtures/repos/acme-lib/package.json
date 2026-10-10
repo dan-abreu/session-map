@@ -1,0 +1,16 @@
+{
+  "name": "acme-slug",
+  "version": "1.2.0",
+  "description": "Tiny helpers to turn titles into URL slugs.",
+  "author": "Ana",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": ["src"],
+  "scripts": {
+    "test": "node --test"
+  }
+}

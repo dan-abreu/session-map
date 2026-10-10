@@ -16,6 +16,7 @@ import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, sear
 import { readConversation, readImage } from './sources/claude-conversation.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
 import { readArch } from './arch/detect.mjs';
+import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
 import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
@@ -52,8 +53,16 @@ const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-la
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
-const FLOW_ERRORS = { 'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409 };
+const FLOW_ERRORS = {
+  'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
+  // what care.applyOp may answer (fd14)
+  'look-only': 409, 'needs-confirm': 409, 'already-applied': 409, 'changed-since': 409, 'too-big': 413, 'write-failed': 500,
+};
 const FLOW_TEXT_MAX = 60_000;
+// The Flow's model (fl07): a build younger than this is answered as it is; a GET waits this long for a build before it
+// answers with the last model it has, marked building.
+const MODEL_FRESH_MS = 5000;
+const MODEL_WAIT_MS = 1500;
 const SKIP_MAX = 500;
 const PLACE_TITLE_MAX = 200;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -393,7 +402,8 @@ export function createApp({
   }
 
   // The Flow tab (plano-v02 § v0.2.1): export, the import preview and apply, and the workshop draft. The demo answers from
-  // its invented state and keeps drafts in memory; only apply writes to the project, inside its architecture folder.
+  // its invented state and keeps drafts in memory; only apply writes to the project, inside its architecture folder and
+  // through the project's care mode (fd14).
   const demoDrafts = new Map();
   const flowText = (body) => {
     if (typeof body?.text !== 'string' || !body.text.trim()) throw new HttpError(400, 'bad-text');
@@ -403,6 +413,32 @@ export function createApp({
   // The map as it is on disk now, with the relations collect found: the baseline both the preview and apply compare against.
   // A map the state read from the main branch stays refused even if a folder appeared since: apply never guesses.
   const currentArch = async (project) => (demo || project.arch.source === 'main-branch' ? project.arch : { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch.links ?? [] });
+  // The single model of the Flow (fl07, fl08): one build per project at a time, in the background (the build yields to
+  // the server as it reads), kept in session-map's storage only. The demo has no folder: what its README declares.
+  const modelRuns = new Map();
+  async function flowModelOf(project) {
+    if (demo) return { model: await buildFlowModel({ root: null, arch: project.arch, source: 'demo', projectId: project.id }), building: false, stale: false };
+    const arch = await currentArch(project);
+    const run = modelRuns.get(project.id) ?? { at: 0, model: null, running: null };
+    modelRuns.set(project.id, run);
+    if (run.model && !run.running && Date.now() - run.at < MODEL_FRESH_MS) return { model: run.model, building: false, stale: false };
+    run.running ??= buildFlowModel({ root: project.root, arch, smDir, projectId: project.id, source: arch.source })
+      .then((model) => Object.assign(run, { model, at: Date.now() }).model)
+      .catch((err) => {
+        log('warn', 'flow-model-failed', { projectId: project.id, error: err.message });
+        return null;
+      })
+      .finally(() => { run.running = null; });
+    let timer;
+    const done = await Promise.race([run.running, new Promise((resolve) => { timer = setTimeout(resolve, MODEL_WAIT_MS, undefined); timer.unref?.(); })]);
+    clearTimeout(timer);
+    if (done) return { model: done, building: false, stale: false };
+    const cached = readModelCache(smDir, project.id)?.model;
+    const last = run.model ?? (cached?.version === MODEL_VERSION ? cached : null);
+    if (last) return { model: last, building: done === undefined, stale: true };
+    const declared = await buildFlowModel({ root: null, arch, source: arch.source, projectId: project.id });
+    return { model: declared, building: done === undefined, stale: false };
+  }
   async function flowRoute(req, res, parts) {
     // A read is open on this PC (authorize already let only a local or keyed one in); every write needs the key.
     if (req.method !== 'GET' && !demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -411,6 +447,7 @@ export function createApp({
     if (!project) throw new HttpError(404, 'unknown-project');
     const route = parts.slice(4).join('/');
     if (req.method === 'GET' && route === 'mermaid') return send(res, 200, { ok: true, text: exportMermaid(await currentArch(project)) });
+    if (req.method === 'GET' && route === 'model') return send(res, 200, { ok: true, ...(await flowModelOf(project)) });
     if (req.method === 'POST' && route === 'mermaid/preview') {
       const plan = planImport(await currentArch(project), flowText(await readBody(req)));
       return send(res, plan.ok ? 200 : FLOW_ERRORS[plan.error] ?? 400, plan);
@@ -419,9 +456,10 @@ export function createApp({
       if (demo) throw new HttpError(403, 'demo');
       const body = await readBody(req);
       const skip = Array.isArray(body?.skip) ? body.skip.filter((x) => typeof x === 'string').slice(0, SKIP_MAX) : [];
-      const out = applyImport({ root: project.root, arch: await currentArch(project), text: flowText(body), skip });
+      // The project's own care mode (care.json), never one from the body: the click is the accept, look writes nothing.
+      const out = applyImport({ root: project.root, arch: await currentArch(project), text: flowText(body), skip, care: { id: project.id, smDir } });
       const status = out.ok ? 200 : FLOW_ERRORS[out.error] ?? 400;
-      logAction(smDir, { action: 'flow-apply', projectId: project.id, count: out.files?.length ?? 0 }, status);
+      logAction(smDir, { action: 'flow-apply', projectId: project.id, count: out.changed ? out.files.length : 0, mode: out.status }, status);
       fresh();
       return send(res, status, out);
     }

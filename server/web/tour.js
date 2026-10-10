@@ -1,10 +1,10 @@
 // The five-step welcome tour (mm11): it starts once by itself on the first visit, can be skipped, and comes back from the
 // help menu. Each step lights one place of the page and says in one or two sentences what it is for.
 export const TOUR_STEPS = [
+  { id: 'home', target: '#tab-home' },
   { id: 'now', target: '#now' },
-  { id: 'convs', target: '#convs', phoneTarget: '#convsBtn' },
-  { id: 'map', target: '#mindmap', phoneTarget: '#outline' },
-  { id: 'waiting', target: '#waitingBtn' },
+  { id: 'convs', target: '#tab-convs', phoneTarget: '#convsBtn' },
+  { id: 'map', target: '#tab-map', phoneTarget: '#outline' },
   { id: 'help', target: '#helpBtn' },
 ];
 

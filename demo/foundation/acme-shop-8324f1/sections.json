@@ -1,0 +1,384 @@
+{
+ "version": 1,
+ "generatedAt": "2026-10-10T09:30:00.000Z",
+ "censusRev": 2,
+ "parts": {
+  "db": {
+   "routes": [],
+   "screens": [],
+   "tables": [
+    {
+     "id": "table:Customer",
+     "name": "Customer",
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 16,
+     "at": "packages/db/prisma/schema.prisma:16",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "table:Order",
+     "name": "Order",
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 22,
+     "at": "packages/db/prisma/schema.prisma:22",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "table:Tag",
+     "name": "Tag",
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 34,
+     "at": "packages/db/prisma/schema.prisma:34",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "integrations": [],
+   "jobs": [],
+   "configs": []
+  },
+  "orders": {
+   "routes": [
+    {
+     "id": "route:GET /v1/orders/:id",
+     "name": "GET /v1/orders/:id",
+     "file": "apps/api/src/routes/orders.ts",
+     "line": 6,
+     "at": "apps/api/src/routes/orders.ts:6",
+     "origin": "INFERRED"
+    },
+    {
+     "id": "route:POST /v1/orders",
+     "name": "POST /v1/orders",
+     "file": "apps/api/src/routes/orders.ts",
+     "line": 11,
+     "at": "apps/api/src/routes/orders.ts:11",
+     "origin": "INFERRED"
+    },
+    {
+     "id": "route:PUT /v1/orders/:id/note",
+     "name": "PUT /v1/orders/:id/note",
+     "file": "apps/api/src/routes/orders.ts",
+     "line": 17,
+     "at": "apps/api/src/routes/orders.ts:17",
+     "origin": "INFERRED"
+    },
+    {
+     "id": "route:GET /status",
+     "name": "GET /status",
+     "file": "apps/api/src/server.ts",
+     "line": 13,
+     "at": "apps/api/src/server.ts:13",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "route:GET ?ADMIN_PATH",
+     "name": "GET ?ADMIN_PATH",
+     "file": "apps/api/src/server.ts",
+     "line": 16,
+     "at": "apps/api/src/server.ts:16",
+     "origin": "AMBIGUOUS"
+    }
+   ],
+   "screens": [],
+   "tables": [],
+   "integrations": [
+    {
+     "id": "integration:api.mailer.example",
+     "name": "api.mailer.example",
+     "file": "packages/adapters/src/mailer.ts",
+     "line": 4,
+     "at": "packages/adapters/src/mailer.ts:4",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "integration:stripe",
+     "name": "stripe",
+     "file": "packages/adapters/src/payments.ts",
+     "line": 1,
+     "at": "packages/adapters/src/payments.ts:1",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "jobs": [],
+   "configs": [
+    {
+     "id": "env:PORT",
+     "name": "PORT",
+     "file": "apps/api/src/server.ts",
+     "line": 19,
+     "at": "apps/api/src/server.ts:19",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:PAYMENTS_API_KEY",
+     "name": "PAYMENTS_API_KEY",
+     "file": "packages/adapters/src/payments.ts",
+     "line": 3,
+     "at": "packages/adapters/src/payments.ts:3",
+     "origin": "EXTRACTED"
+    }
+   ]
+  },
+  "web": {
+   "routes": [
+    {
+     "id": "route:GET /api/health",
+     "name": "GET /api/health",
+     "file": "apps/web/app/api/health/route.ts",
+     "line": 1,
+     "at": "apps/web/app/api/health/route.ts:1",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "screens": [
+    {
+     "id": "screen:web:/cart",
+     "name": "web:/cart",
+     "file": "apps/web/app/(shop)/cart/page.tsx",
+     "line": 1,
+     "at": "apps/web/app/(shop)/cart/page.tsx:1",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "screen:web:/orders/[id]",
+     "name": "web:/orders/[id]",
+     "file": "apps/web/app/orders/[id]/page.tsx",
+     "line": 3,
+     "at": "apps/web/app/orders/[id]/page.tsx:3",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "screen:web:/",
+     "name": "web:/",
+     "file": "apps/web/app/page.tsx",
+     "line": 1,
+     "at": "apps/web/app/page.tsx:1",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "tables": [],
+   "integrations": [],
+   "jobs": [],
+   "configs": [
+    {
+     "id": "env:API_BASE_URL",
+     "name": "API_BASE_URL",
+     "file": "apps/web/lib/api.ts",
+     "line": 1,
+     "at": "apps/web/lib/api.ts:1",
+     "origin": "EXTRACTED"
+    }
+   ]
+  },
+  "worker": {
+   "routes": [],
+   "screens": [],
+   "tables": [],
+   "integrations": [],
+   "jobs": [
+    {
+     "id": "queue:emails",
+     "name": "emails",
+     "file": "apps/worker/src/queues.ts",
+     "line": 5,
+     "at": "apps/worker/src/queues.ts:5",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "job:emails/welcome",
+     "name": "emails/welcome",
+     "file": "apps/worker/src/queues.ts",
+     "line": 8,
+     "at": "apps/worker/src/queues.ts:8",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "job:emails/digest",
+     "name": "emails/digest",
+     "file": "apps/worker/src/queues.ts",
+     "line": 12,
+     "at": "apps/worker/src/queues.ts:12",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "configs": [
+    {
+     "id": "env:WORKER_CONCURRENCY",
+     "name": "WORKER_CONCURRENCY",
+     "file": "apps/worker/src/worker.ts",
+     "line": 12,
+     "at": "apps/worker/src/worker.ts:12",
+     "origin": "EXTRACTED"
+    }
+   ]
+  },
+  "_none": {
+   "routes": [
+    {
+     "id": "route:ANY /api/users",
+     "name": "ANY /api/users",
+     "file": "apps/admin/pages/api/users.ts",
+     "line": 1,
+     "at": "apps/admin/pages/api/users.ts:1",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "screens": [
+    {
+     "id": "screen:admin:/dashboard",
+     "name": "admin:/dashboard",
+     "file": "apps/admin/pages/dashboard.tsx",
+     "line": 1,
+     "at": "apps/admin/pages/dashboard.tsx:1",
+     "origin": "EXTRACTED"
+    }
+   ],
+   "tables": [],
+   "integrations": [],
+   "jobs": [],
+   "configs": [
+    {
+     "id": "env:DATABASE_URL",
+     "name": "DATABASE_URL",
+     "file": ".env.example",
+     "line": 2,
+     "at": ".env.example:2",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:REDIS_URL",
+     "name": "REDIS_URL",
+     "file": ".env.example",
+     "line": 3,
+     "at": ".env.example:3",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:SESSION_SECRET",
+     "name": "SESSION_SECRET",
+     "file": ".env.example",
+     "line": 4,
+     "at": ".env.example:4",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:MAILER_API_KEY",
+     "name": "MAILER_API_KEY",
+     "file": "turbo.json",
+     "line": 3,
+     "at": "turbo.json:3",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:STRIPE_SECRET_KEY",
+     "name": "STRIPE_SECRET_KEY",
+     "file": "turbo.json",
+     "line": 8,
+     "at": "turbo.json:8",
+     "origin": "EXTRACTED"
+    },
+    {
+     "id": "env:NEXT_PUBLIC_SHOP_URL",
+     "name": "NEXT_PUBLIC_SHOP_URL",
+     "file": "turbo.json",
+     "line": 9,
+     "at": "turbo.json:9",
+     "origin": "EXTRACTED"
+    }
+   ]
+  }
+ },
+ "gaps": [
+  {
+   "kind": "route",
+   "id": "route:ANY /api/users",
+   "file": "apps/admin/pages/api/users.ts",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:PUT /v1/orders/:id/note",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 17,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET ?ADMIN_PATH",
+   "file": "apps/api/src/server.ts",
+   "line": 16,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET /api/health",
+   "file": "apps/web/app/api/health/route.ts",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "screen",
+   "id": "screen:admin:/dashboard",
+   "file": "apps/admin/pages/dashboard.tsx",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "table",
+   "id": "table:Tag",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 34,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "folder",
+   "id": "apps/admin",
+   "file": "apps/admin/",
+   "line": null,
+   "reason": "no-owner"
+  }
+ ],
+ "ownerCheck": {
+  "ok": false,
+  "files": [
+   ".env.example",
+   ".gitignore",
+   "LICENSE",
+   "apps/admin/package.json",
+   "apps/admin/pages/api/users.ts",
+   "apps/admin/pages/dashboard.tsx",
+   "package.json",
+   "pnpm-workspace.yaml",
+   "turbo.json"
+  ],
+  "facts": [
+   "route:ANY /api/users",
+   "screen:admin:/dashboard"
+  ]
+ },
+ "coverage": {
+  "owned": 0.7096774193548387,
+  "routes": 0.42857142857142855,
+  "screens": 0.75,
+  "tables": 0.6666666666666666
+ },
+ "counts": {
+  "owned": {
+   "num": 22,
+   "den": 31
+  },
+  "routes": {
+   "num": 3,
+   "den": 7
+  },
+  "screens": {
+   "num": 3,
+   "den": 4
+  },
+  "tables": {
+   "num": 2,
+   "den": 3
+  }
+ }
+}

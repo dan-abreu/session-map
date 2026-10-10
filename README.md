@@ -1,4 +1,5 @@
 # session-map
+<!-- session-map:version 0.2.5 -->
 
 [![test](https://github.com/dan-abreu/session-map/actions/workflows/test.yml/badge.svg)](https://github.com/dan-abreu/session-map/actions/workflows/test.yml)
 [![release](https://img.shields.io/github/v/release/dan-abreu/session-map)](https://github.com/dan-abreu/session-map/releases)

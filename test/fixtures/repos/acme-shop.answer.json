@@ -1,0 +1,1295 @@
+{
+ "version": 1,
+ "fixture": "acme-shop",
+ "archDir": "docs/architecture",
+ "notes": [
+  "ids of facts the contract leaves open: a route whose path is not a literal is `route:<METHOD> ?<source text of the path expression>` with attrs.path null (AMBIGUOUS); a call with several candidates is `call:<callerFnId>->?<callee name>` with the places of the candidates in `refs` (contract §3) and their fn ids, as an extra, in `candidates`.",
+  "a route registered with { prefix } is INFERRED, its id and attrs.path carry the prefix, and file/line stay at the declaration in the registered file.",
+  "`app.route({ ... })` has its line at the `app.route(` call, not at the `url:` line. A Next pages/api handler has no method: `ANY`.",
+  "screen ids use the folder name of the workspace (`apps/web` -> `web`); attrs.widget is the name of the default-exported component and line is its declaration.",
+  "queue:emails is defined where `new Queue(...)` is; the `new Worker(...)` that consumes it is a ref. Two uses of the same id are one fact, the definition first.",
+  "DATABASE_URL is written twice: at .env.example:2 and in `env(\"DATABASE_URL\")` at packages/db/prisma/schema.prisma:8. No extractor reads prisma `env()` today (T7 skips it, T10 reads only .env.example and turbo.json), so the key has one fact at .env.example:2. Rule for the first extractor that reads prisma `env()`: the .env.example line is the definition and the schema.prisma line is a ref; the key then gains the ref { file: 'packages/db/prisma/schema.prisma', line: 8, needle: 'DATABASE_URL' }.",
+  "a call fact exists only between two functions of the project; a call inside a callback (`app.get(..., async () => { findOrder() })`) belongs to the function that holds it; its line is the first call site.",
+  "a call made outside any function (at the top of a module, like `logStartup(...)` at apps/api/src/server.ts:22 or `app.register(ordersRoutes, ...)`) is not a `call` fact: there is no caller function. A function passed as a value (`new Worker('emails', processEmail)`) is not a `call` fact either: nothing calls it at that place.",
+  "import facts are file to file inside the project; `import ... from \"fastify\"` and the like are not facts. `export ... default` keeps the declared name and sets attrs.default.",
+  "a fact is \"cited\" when a backtick span of an architecture .md holds its route path, its screen route or its table name as a whole word; a route with a null path can never be cited but still counts in the total.",
+  "coverage is { num, den }; owned counts included code and screen files. The unowned files of the root are expected: only a path with a \"/\" in \"Where in the code\" can own a file."
+ ],
+ "traps": [
+  {
+   "file": "apps/api/src/server.ts",
+   "line": 9,
+   "text": "app.get('/legacy-orders'",
+   "why": "route call inside a block comment"
+  },
+  {
+   "file": "apps/api/src/server.ts",
+   "line": 18,
+   "text": "app.get('/ghost-string')",
+   "why": "route call inside a string"
+  },
+  {
+   "file": "apps/api/src/server.ts",
+   "line": 22,
+   "text": "// not a comment",
+   "why": "double slash inside a template literal, after ${}"
+  },
+  {
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 23,
+   "text": "app.delete('/orders/:id')",
+   "why": "route call inside a line comment"
+  },
+  {
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 24,
+   "text": "app.get('/ghost-template')",
+   "why": "route call inside a template literal that also holds ${} with a string"
+  },
+  {
+   "file": "packages/adapters/src/mailer.ts",
+   "line": 6,
+   "text": "fetch('https://ghost.example/x')",
+   "why": "fetch with a URL inside a trailing comment"
+  },
+  {
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 30,
+   "text": "model Ghost",
+   "why": "model inside a comment"
+  }
+ ],
+ "excluded": {
+  "dep": 1,
+  "generated": 1,
+  "binary": 1,
+  "secret": 1
+ },
+ "facts": [
+  {
+   "id": "route:GET /status",
+   "kind": "route",
+   "file": "apps/api/src/server.ts",
+   "line": 13,
+   "origin": "EXTRACTED",
+   "needle": "'/status'",
+   "attrs": {
+    "method": "GET",
+    "path": "/status",
+    "framework": "fastify"
+   }
+  },
+  {
+   "id": "route:GET ?ADMIN_PATH",
+   "kind": "route",
+   "file": "apps/api/src/server.ts",
+   "line": 16,
+   "origin": "AMBIGUOUS",
+   "needle": "ADMIN_PATH",
+   "attrs": {
+    "method": "GET",
+    "path": null,
+    "framework": "fastify"
+   }
+  },
+  {
+   "id": "route:GET /v1/orders/:id",
+   "kind": "route",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 6,
+   "origin": "INFERRED",
+   "needle": "'/orders/:id'",
+   "attrs": {
+    "method": "GET",
+    "path": "/v1/orders/:id",
+    "framework": "fastify"
+   }
+  },
+  {
+   "id": "route:POST /v1/orders",
+   "kind": "route",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 11,
+   "origin": "INFERRED",
+   "needle": "'/orders'",
+   "attrs": {
+    "method": "POST",
+    "path": "/v1/orders",
+    "framework": "fastify"
+   }
+  },
+  {
+   "id": "route:PUT /v1/orders/:id/note",
+   "kind": "route",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 17,
+   "origin": "INFERRED",
+   "needle": "app.route(",
+   "attrs": {
+    "method": "PUT",
+    "path": "/v1/orders/:id/note",
+    "framework": "fastify"
+   }
+  },
+  {
+   "id": "route:GET /api/health",
+   "kind": "route",
+   "file": "apps/web/app/api/health/route.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "GET",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/health",
+    "framework": "next-app"
+   }
+  },
+  {
+   "id": "route:ANY /api/users",
+   "kind": "route",
+   "file": "apps/admin/pages/api/users.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "handler",
+   "attrs": {
+    "method": "ANY",
+    "path": "/api/users",
+    "framework": "next-pages"
+   }
+  },
+  {
+   "id": "screen:web:/",
+   "kind": "screen",
+   "file": "apps/web/app/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "HomePage",
+   "attrs": {
+    "framework": "next-app",
+    "route": "/",
+    "widget": "HomePage"
+   }
+  },
+  {
+   "id": "screen:web:/orders/[id]",
+   "kind": "screen",
+   "file": "apps/web/app/orders/[id]/page.tsx",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "OrderPage",
+   "attrs": {
+    "framework": "next-app",
+    "route": "/orders/[id]",
+    "widget": "OrderPage"
+   }
+  },
+  {
+   "id": "screen:web:/cart",
+   "kind": "screen",
+   "file": "apps/web/app/(shop)/cart/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "CartPage",
+   "attrs": {
+    "framework": "next-app",
+    "route": "/cart",
+    "widget": "CartPage"
+   }
+  },
+  {
+   "id": "screen:admin:/dashboard",
+   "kind": "screen",
+   "file": "apps/admin/pages/dashboard.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "Dashboard",
+   "attrs": {
+    "framework": "next-pages",
+    "route": "/dashboard",
+    "widget": "Dashboard"
+   }
+  },
+  {
+   "id": "table:Customer",
+   "kind": "table",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 16,
+   "origin": "EXTRACTED",
+   "needle": "model Customer",
+   "attrs": {
+    "source": "prisma"
+   }
+  },
+  {
+   "id": "table:Order",
+   "kind": "table",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 22,
+   "origin": "EXTRACTED",
+   "needle": "model Order",
+   "attrs": {
+    "source": "prisma"
+   }
+  },
+  {
+   "id": "table:Tag",
+   "kind": "table",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 34,
+   "origin": "EXTRACTED",
+   "needle": "model Tag",
+   "attrs": {
+    "source": "prisma"
+   }
+  },
+  {
+   "id": "relation:Customer.orders->Order",
+   "kind": "relation",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 19,
+   "origin": "EXTRACTED",
+   "needle": "orders",
+   "attrs": {
+    "from": "Customer",
+    "to": "Order",
+    "field": "orders",
+    "cardinality": "1-n"
+   }
+  },
+  {
+   "id": "relation:Order.customer->Customer",
+   "kind": "relation",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 25,
+   "origin": "EXTRACTED",
+   "needle": "customer",
+   "attrs": {
+    "from": "Order",
+    "to": "Customer",
+    "field": "customer",
+    "cardinality": "1-n"
+   }
+  },
+  {
+   "id": "relation:Order.tags->Tag",
+   "kind": "relation",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 27,
+   "origin": "EXTRACTED",
+   "needle": "tags",
+   "attrs": {
+    "from": "Order",
+    "to": "Tag",
+    "field": "tags",
+    "cardinality": "n-n"
+   }
+  },
+  {
+   "id": "relation:Tag.orders->Order",
+   "kind": "relation",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 37,
+   "origin": "EXTRACTED",
+   "needle": "orders",
+   "attrs": {
+    "from": "Tag",
+    "to": "Order",
+    "field": "orders",
+    "cardinality": "n-n"
+   }
+  },
+  {
+   "id": "queue:emails",
+   "kind": "queue",
+   "file": "apps/worker/src/queues.ts",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "needle": "'emails'",
+   "attrs": {
+    "lib": "bullmq"
+   },
+   "refs": [
+    {
+     "file": "apps/worker/src/worker.ts",
+     "line": 10,
+     "needle": "'emails'"
+    }
+   ]
+  },
+  {
+   "id": "job:emails/welcome",
+   "kind": "job",
+   "file": "apps/worker/src/queues.ts",
+   "line": 8,
+   "origin": "EXTRACTED",
+   "needle": "'welcome'",
+   "attrs": {
+    "queue": "emails",
+    "lib": "bullmq",
+    "role": "producer"
+   }
+  },
+  {
+   "id": "job:emails/digest",
+   "kind": "job",
+   "file": "apps/worker/src/queues.ts",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "needle": "'digest'",
+   "attrs": {
+    "queue": "emails",
+    "lib": "bullmq",
+    "role": "cron"
+   }
+  },
+  {
+   "id": "integration:stripe",
+   "kind": "integration",
+   "file": "packages/adapters/src/payments.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "'stripe'",
+   "attrs": {
+    "via": "sdk",
+    "package": "stripe"
+   }
+  },
+  {
+   "id": "integration:api.mailer.example",
+   "kind": "integration",
+   "file": "packages/adapters/src/mailer.ts",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "needle": "https://api.mailer.example/send",
+   "attrs": {
+    "via": "url",
+    "host": "api.mailer.example"
+   }
+  },
+  {
+   "id": "env:DATABASE_URL",
+   "kind": "env",
+   "file": ".env.example",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "needle": "DATABASE_URL",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:REDIS_URL",
+   "kind": "env",
+   "file": ".env.example",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "REDIS_URL",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:SESSION_SECRET",
+   "kind": "env",
+   "file": ".env.example",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "needle": "SESSION_SECRET",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:MAILER_API_KEY",
+   "kind": "env",
+   "file": "turbo.json",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "MAILER_API_KEY",
+   "attrs": {
+    "source": "turbo"
+   }
+  },
+  {
+   "id": "env:STRIPE_SECRET_KEY",
+   "kind": "env",
+   "file": "turbo.json",
+   "line": 8,
+   "origin": "EXTRACTED",
+   "needle": "STRIPE_SECRET_KEY",
+   "attrs": {
+    "source": "turbo"
+   }
+  },
+  {
+   "id": "env:NEXT_PUBLIC_SHOP_URL",
+   "kind": "env",
+   "file": "turbo.json",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "needle": "NEXT_PUBLIC_SHOP_URL",
+   "attrs": {
+    "source": "turbo"
+   }
+  },
+  {
+   "id": "env:PORT",
+   "kind": "env",
+   "file": "apps/api/src/server.ts",
+   "line": 19,
+   "origin": "EXTRACTED",
+   "needle": "PORT",
+   "attrs": {
+    "source": "code"
+   }
+  },
+  {
+   "id": "env:API_BASE_URL",
+   "kind": "env",
+   "file": "apps/web/lib/api.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "API_BASE_URL",
+   "attrs": {
+    "source": "code"
+   }
+  },
+  {
+   "id": "env:PAYMENTS_API_KEY",
+   "kind": "env",
+   "file": "packages/adapters/src/payments.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "PAYMENTS_API_KEY",
+   "attrs": {
+    "source": "code"
+   }
+  },
+  {
+   "id": "env:WORKER_CONCURRENCY",
+   "kind": "env",
+   "file": "apps/worker/src/worker.ts",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "needle": "WORKER_CONCURRENCY",
+   "attrs": {
+    "source": "code"
+   }
+  },
+  {
+   "id": "fn:apps/api/src/log.ts#logStartup",
+   "kind": "function",
+   "file": "apps/api/src/log.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "logStartup",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/api/src/routes/orders.ts#ordersRoutes",
+   "kind": "function",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "needle": "ordersRoutes",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 26
+   }
+  },
+  {
+   "id": "fn:apps/api/src/services/orders.ts#normalize",
+   "kind": "function",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "needle": "normalize",
+   "attrs": {
+    "exported": false,
+    "async": false,
+    "endLine": 7
+   }
+  },
+  {
+   "id": "fn:apps/api/src/services/orders.ts#placeOrder",
+   "kind": "function",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "needle": "placeOrder",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 14
+   }
+  },
+  {
+   "id": "fn:apps/api/src/services/orders.ts#findOrder",
+   "kind": "function",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 16,
+   "origin": "EXTRACTED",
+   "needle": "findOrder",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 18
+   }
+  },
+  {
+   "id": "fn:apps/api/src/services/notify.ts#Notifier.send",
+   "kind": "function",
+   "file": "apps/api/src/services/notify.ts",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "needle": "send",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 6
+   }
+  },
+  {
+   "id": "fn:packages/adapters/src/payments.ts#chargeCard",
+   "kind": "function",
+   "file": "packages/adapters/src/payments.ts",
+   "line": 6,
+   "origin": "EXTRACTED",
+   "needle": "chargeCard",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 8
+   }
+  },
+  {
+   "id": "fn:packages/adapters/src/mailer.ts#Mailer.send",
+   "kind": "function",
+   "file": "packages/adapters/src/mailer.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "send",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 9
+   }
+  },
+  {
+   "id": "fn:apps/web/lib/api.ts#apiUrl",
+   "kind": "function",
+   "file": "apps/web/lib/api.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "apiUrl",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 1
+   }
+  },
+  {
+   "id": "fn:apps/web/lib/api.ts#fetchOrder",
+   "kind": "function",
+   "file": "apps/web/lib/api.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "fetchOrder",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 6
+   }
+  },
+  {
+   "id": "fn:apps/web/app/page.tsx#HomePage",
+   "kind": "function",
+   "file": "apps/web/app/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "HomePage",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/web/app/orders/[id]/page.tsx#OrderPage",
+   "kind": "function",
+   "file": "apps/web/app/orders/[id]/page.tsx",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "OrderPage",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 6
+   }
+  },
+  {
+   "id": "fn:apps/web/app/(shop)/cart/page.tsx#CartPage",
+   "kind": "function",
+   "file": "apps/web/app/(shop)/cart/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "CartPage",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/web/app/api/health/route.ts#GET",
+   "kind": "function",
+   "file": "apps/web/app/api/health/route.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "GET",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/admin/pages/dashboard.tsx#Dashboard",
+   "kind": "function",
+   "file": "apps/admin/pages/dashboard.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "Dashboard",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/admin/pages/api/users.ts#handler",
+   "kind": "function",
+   "file": "apps/admin/pages/api/users.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "handler",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "fn:apps/worker/src/queues.ts#enqueueWelcome",
+   "kind": "function",
+   "file": "apps/worker/src/queues.ts",
+   "line": 7,
+   "origin": "EXTRACTED",
+   "needle": "enqueueWelcome",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 9
+   }
+  },
+  {
+   "id": "fn:apps/worker/src/queues.ts#scheduleDigest",
+   "kind": "function",
+   "file": "apps/worker/src/queues.ts",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "needle": "scheduleDigest",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 13
+   }
+  },
+  {
+   "id": "fn:apps/worker/src/worker.ts#processEmail",
+   "kind": "function",
+   "file": "apps/worker/src/worker.ts",
+   "line": 6,
+   "origin": "EXTRACTED",
+   "needle": "processEmail",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 8
+   }
+  },
+  {
+   "id": "fn:apps/worker/src/templates.ts#renderWelcome",
+   "kind": "function",
+   "file": "apps/worker/src/templates.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "renderWelcome",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 3
+   }
+  },
+  {
+   "id": "call:fn:apps/api/src/routes/orders.ts#ordersRoutes->fn:apps/api/src/services/orders.ts#findOrder",
+   "kind": "call",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 8,
+   "origin": "EXTRACTED",
+   "needle": "findOrder(",
+   "attrs": {
+    "callee": "findOrder"
+   }
+  },
+  {
+   "id": "call:fn:apps/api/src/routes/orders.ts#ordersRoutes->fn:apps/api/src/services/orders.ts#placeOrder",
+   "kind": "call",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "needle": "placeOrder(",
+   "attrs": {
+    "callee": "placeOrder"
+   }
+  },
+  {
+   "id": "call:fn:apps/api/src/services/orders.ts#placeOrder->fn:apps/api/src/services/orders.ts#normalize",
+   "kind": "call",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 10,
+   "origin": "EXTRACTED",
+   "needle": "normalize(",
+   "attrs": {
+    "callee": "normalize"
+   }
+  },
+  {
+   "id": "call:fn:apps/api/src/services/orders.ts#placeOrder->?send",
+   "kind": "call",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 12,
+   "origin": "AMBIGUOUS",
+   "needle": "notifier.send(",
+   "attrs": {
+    "callee": "send"
+   },
+   "refs": [
+    {
+     "file": "apps/api/src/services/notify.ts",
+     "line": 4,
+     "needle": "send"
+    },
+    {
+     "file": "packages/adapters/src/mailer.ts",
+     "line": 3,
+     "needle": "send"
+    }
+   ],
+   "candidates": [
+    "fn:apps/api/src/services/notify.ts#Notifier.send",
+    "fn:packages/adapters/src/mailer.ts#Mailer.send"
+   ]
+  },
+  {
+   "id": "call:fn:apps/web/lib/api.ts#fetchOrder->fn:apps/web/lib/api.ts#apiUrl",
+   "kind": "call",
+   "file": "apps/web/lib/api.ts",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "needle": "apiUrl(",
+   "attrs": {
+    "callee": "apiUrl"
+   }
+  },
+  {
+   "id": "call:fn:apps/web/app/orders/[id]/page.tsx#OrderPage->fn:apps/web/lib/api.ts#fetchOrder",
+   "kind": "call",
+   "file": "apps/web/app/orders/[id]/page.tsx",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "needle": "fetchOrder(",
+   "attrs": {
+    "callee": "fetchOrder"
+   }
+  },
+  {
+   "id": "call:fn:apps/worker/src/worker.ts#processEmail->fn:apps/worker/src/templates.ts#renderWelcome",
+   "kind": "call",
+   "file": "apps/worker/src/worker.ts",
+   "line": 7,
+   "origin": "EXTRACTED",
+   "needle": "renderWelcome(",
+   "attrs": {
+    "callee": "renderWelcome"
+   }
+  },
+  {
+   "id": "import:apps/api/src/server.ts->apps/api/src/routes/orders.ts",
+   "kind": "import",
+   "file": "apps/api/src/server.ts",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "needle": "./routes/orders"
+  },
+  {
+   "id": "import:apps/api/src/server.ts->apps/api/src/log.ts",
+   "kind": "import",
+   "file": "apps/api/src/server.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "./log"
+  },
+  {
+   "id": "import:apps/api/src/routes/orders.ts->apps/api/src/services/orders.ts",
+   "kind": "import",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "needle": "../services/orders"
+  },
+  {
+   "id": "import:apps/api/src/services/orders.ts->apps/api/src/services/notify.ts",
+   "kind": "import",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "./notify"
+  },
+  {
+   "id": "import:apps/web/app/orders/[id]/page.tsx->apps/web/lib/api.ts",
+   "kind": "import",
+   "file": "apps/web/app/orders/[id]/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "../../../lib/api"
+  },
+  {
+   "id": "import:apps/worker/src/worker.ts->apps/worker/src/templates.ts",
+   "kind": "import",
+   "file": "apps/worker/src/worker.ts",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "needle": "./templates"
+  },
+  {
+   "id": "export:apps/api/src/log.ts#logStartup",
+   "kind": "export",
+   "file": "apps/api/src/log.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "logStartup",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/api/src/routes/orders.ts#ordersRoutes",
+   "kind": "export",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "needle": "ordersRoutes",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/api/src/services/orders.ts#placeOrder",
+   "kind": "export",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "needle": "placeOrder",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/api/src/services/orders.ts#findOrder",
+   "kind": "export",
+   "file": "apps/api/src/services/orders.ts",
+   "line": 16,
+   "origin": "EXTRACTED",
+   "needle": "findOrder",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/api/src/services/notify.ts#Notifier",
+   "kind": "export",
+   "file": "apps/api/src/services/notify.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "Notifier",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/api/src/services/notify.ts#notifier",
+   "kind": "export",
+   "file": "apps/api/src/services/notify.ts",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "needle": "notifier",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:packages/adapters/src/payments.ts#chargeCard",
+   "kind": "export",
+   "file": "packages/adapters/src/payments.ts",
+   "line": 6,
+   "origin": "EXTRACTED",
+   "needle": "chargeCard",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:packages/adapters/src/mailer.ts#Mailer",
+   "kind": "export",
+   "file": "packages/adapters/src/mailer.ts",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "needle": "Mailer",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/web/lib/api.ts#apiUrl",
+   "kind": "export",
+   "file": "apps/web/lib/api.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "apiUrl",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/web/lib/api.ts#fetchOrder",
+   "kind": "export",
+   "file": "apps/web/lib/api.ts",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "fetchOrder",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/web/app/page.tsx#HomePage",
+   "kind": "export",
+   "file": "apps/web/app/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "HomePage",
+   "attrs": {
+    "default": true
+   }
+  },
+  {
+   "id": "export:apps/web/app/orders/[id]/page.tsx#OrderPage",
+   "kind": "export",
+   "file": "apps/web/app/orders/[id]/page.tsx",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "needle": "OrderPage",
+   "attrs": {
+    "default": true
+   }
+  },
+  {
+   "id": "export:apps/web/app/(shop)/cart/page.tsx#CartPage",
+   "kind": "export",
+   "file": "apps/web/app/(shop)/cart/page.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "CartPage",
+   "attrs": {
+    "default": true
+   }
+  },
+  {
+   "id": "export:apps/web/app/api/health/route.ts#GET",
+   "kind": "export",
+   "file": "apps/web/app/api/health/route.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "GET",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/admin/pages/dashboard.tsx#Dashboard",
+   "kind": "export",
+   "file": "apps/admin/pages/dashboard.tsx",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "Dashboard",
+   "attrs": {
+    "default": true
+   }
+  },
+  {
+   "id": "export:apps/admin/pages/api/users.ts#handler",
+   "kind": "export",
+   "file": "apps/admin/pages/api/users.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "handler",
+   "attrs": {
+    "default": true
+   }
+  },
+  {
+   "id": "export:apps/worker/src/queues.ts#emailQueue",
+   "kind": "export",
+   "file": "apps/worker/src/queues.ts",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "needle": "emailQueue",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/worker/src/queues.ts#enqueueWelcome",
+   "kind": "export",
+   "file": "apps/worker/src/queues.ts",
+   "line": 7,
+   "origin": "EXTRACTED",
+   "needle": "enqueueWelcome",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/worker/src/queues.ts#scheduleDigest",
+   "kind": "export",
+   "file": "apps/worker/src/queues.ts",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "needle": "scheduleDigest",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/worker/src/worker.ts#processEmail",
+   "kind": "export",
+   "file": "apps/worker/src/worker.ts",
+   "line": 6,
+   "origin": "EXTRACTED",
+   "needle": "processEmail",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/worker/src/worker.ts#worker",
+   "kind": "export",
+   "file": "apps/worker/src/worker.ts",
+   "line": 10,
+   "origin": "EXTRACTED",
+   "needle": "worker",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:apps/worker/src/templates.ts#renderWelcome",
+   "kind": "export",
+   "file": "apps/worker/src/templates.ts",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "needle": "renderWelcome",
+   "attrs": {
+    "default": false
+   }
+  }
+ ],
+ "counts": {
+  "apps/api/src/server.ts": {
+   "total": 22,
+   "code": 12,
+   "comment": 4,
+   "blank": 6,
+   "bytes": 649,
+   "chars": 649,
+   "words": 91
+  },
+  "apps/api/src/routes/orders.ts": {
+   "total": 26,
+   "code": 20,
+   "comment": 2,
+   "blank": 4,
+   "bytes": 802,
+   "chars": 800,
+   "words": 103
+  },
+  "apps/worker/src/queues.ts": {
+   "total": 13,
+   "code": 9,
+   "comment": 0,
+   "blank": 4,
+   "bytes": 364,
+   "chars": 364,
+   "words": 54
+  },
+  "packages/adapters/src/mailer.ts": {
+   "total": 10,
+   "code": 9,
+   "comment": 1,
+   "blank": 0,
+   "bytes": 356,
+   "chars": 356,
+   "words": 45
+  },
+  "packages/db/prisma/schema.prisma": {
+   "total": 38,
+   "code": 28,
+   "comment": 4,
+   "blank": 6,
+   "bytes": 668,
+   "chars": 668,
+   "words": 84
+  }
+ },
+ "owners": {
+  ".env.example": null,
+  ".gitignore": null,
+  "apps/admin/package.json": null,
+  "apps/admin/pages/api/users.ts": null,
+  "apps/admin/pages/dashboard.tsx": null,
+  "apps/api/package.json": "orders",
+  "apps/api/src/log.ts": "orders",
+  "apps/api/src/routes/orders.ts": "orders",
+  "apps/api/src/server.ts": "orders",
+  "apps/api/src/services/notify.ts": "orders",
+  "apps/api/src/services/orders.ts": "orders",
+  "apps/web/app/(shop)/cart/page.tsx": "web",
+  "apps/web/app/api/health/route.ts": "web",
+  "apps/web/app/orders/[id]/page.tsx": "web",
+  "apps/web/app/page.tsx": "web",
+  "apps/web/lib/api.ts": "web",
+  "apps/web/package.json": "web",
+  "apps/worker/package.json": "worker",
+  "apps/worker/src/queues.ts": "worker",
+  "apps/worker/src/templates.ts": "worker",
+  "apps/worker/src/worker.ts": "worker",
+  "docs/architecture/db.md": "db",
+  "docs/architecture/orders.md": "orders",
+  "docs/architecture/README.md": null,
+  "docs/architecture/web.md": "web",
+  "docs/architecture/worker.md": "worker",
+  "LICENSE": null,
+  "package.json": null,
+  "packages/adapters/package.json": "orders",
+  "packages/adapters/src/mailer.ts": "orders",
+  "packages/adapters/src/payments.ts": "orders",
+  "packages/db/package.json": "db",
+  "packages/db/prisma/schema.prisma": "db",
+  "pnpm-workspace.yaml": null,
+  "README.md": null,
+  "turbo.json": null
+ },
+ "ownerCheck": {
+  "ok": false,
+  "files": [
+   ".env.example",
+   ".gitignore",
+   "LICENSE",
+   "apps/admin/package.json",
+   "apps/admin/pages/api/users.ts",
+   "apps/admin/pages/dashboard.tsx",
+   "package.json",
+   "pnpm-workspace.yaml",
+   "turbo.json"
+  ],
+  "facts": [
+   "route:ANY /api/users",
+   "screen:admin:/dashboard"
+  ]
+ },
+ "coverage": {
+  "owned": {
+   "num": 21,
+   "den": 30
+  },
+  "routes": {
+   "num": 3,
+   "den": 7
+  },
+  "screens": {
+   "num": 3,
+   "den": 4
+  },
+  "tables": {
+   "num": 2,
+   "den": 3
+  }
+ },
+ "gaps": [
+  {
+   "kind": "route",
+   "id": "route:GET ?ADMIN_PATH",
+   "file": "apps/api/src/server.ts",
+   "line": 16,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:PUT /v1/orders/:id/note",
+   "file": "apps/api/src/routes/orders.ts",
+   "line": 17,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET /api/health",
+   "file": "apps/web/app/api/health/route.ts",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:ANY /api/users",
+   "file": "apps/admin/pages/api/users.ts",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "screen",
+   "id": "screen:admin:/dashboard",
+   "file": "apps/admin/pages/dashboard.tsx",
+   "line": 1,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "table",
+   "id": "table:Tag",
+   "file": "packages/db/prisma/schema.prisma",
+   "line": 34,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "folder",
+   "id": "apps/admin",
+   "file": "apps/admin/",
+   "line": null,
+   "reason": "no-owner"
+  }
+ ]
+}

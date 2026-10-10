@@ -1,0 +1,213 @@
+{
+ "version": 1,
+ "fixture": "acme-lib",
+ "archDir": "docs/architecture",
+ "notes": [
+  "ids follow the rules of acme-shop.answer.json. This is a library: there is no screen, route, table, relation, queue, job, integration or env fact on purpose, and the measure must see zero of each (not \"not applicable\": the library has none).",
+  "a function is a fact whether or not it is exported (normalize is the private one); the three exported ones also have an export fact. The call slugify -> normalize sits on the line inside slugify. The arrow `export const isSlug = (value) => ...` is one function on one line. The test file imports the source by a relative path, so its import is the only import fact; its anonymous test callbacks are not functions.",
+  "coverage: routes, screens and tables are null (nothing of the kind exists); owned counts the code and screen files with a part: only src/index.js (test/index.test.js is a test, it takes the part of the file it tests but is not counted). The root files (package.json, LICENSE, .gitignore) are expected to be unowned."
+ ],
+ "traps": [
+  {
+   "file": "src/index.js",
+   "line": 3,
+   "text": "export function ghostHelper() {}",
+   "why": "export declaration inside a block comment"
+  },
+  {
+   "file": "src/index.js",
+   "line": 5,
+   "text": "export function ghostTemplate() {}",
+   "why": "export declaration inside a template literal that holds a // and a ${}"
+  }
+ ],
+ "excluded": {
+  "dep": 1,
+  "generated": 0,
+  "binary": 0,
+  "secret": 1
+ },
+ "facts": [
+  {
+   "id": "fn:src/index.js#normalize",
+   "kind": "function",
+   "file": "src/index.js",
+   "needle": "normalize",
+   "line": 7,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": false,
+    "async": false,
+    "endLine": 9
+   }
+  },
+  {
+   "id": "fn:src/index.js#slugify",
+   "kind": "function",
+   "file": "src/index.js",
+   "needle": "slugify",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 13
+   }
+  },
+  {
+   "id": "fn:src/index.js#truncate",
+   "kind": "function",
+   "file": "src/index.js",
+   "needle": "truncate",
+   "line": 15,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 17
+   }
+  },
+  {
+   "id": "fn:src/index.js#isSlug",
+   "kind": "function",
+   "file": "src/index.js",
+   "needle": "isSlug",
+   "line": 19,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 19
+   }
+  },
+  {
+   "id": "export:src/index.js#slugify",
+   "kind": "export",
+   "file": "src/index.js",
+   "needle": "slugify",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:src/index.js#truncate",
+   "kind": "export",
+   "file": "src/index.js",
+   "needle": "truncate",
+   "line": 15,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "export:src/index.js#isSlug",
+   "kind": "export",
+   "file": "src/index.js",
+   "needle": "isSlug",
+   "line": 19,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "default": false
+   }
+  },
+  {
+   "id": "call:fn:src/index.js#slugify->fn:src/index.js#normalize",
+   "kind": "call",
+   "file": "src/index.js",
+   "needle": "normalize(",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "callee": "normalize"
+   }
+  },
+  {
+   "id": "import:test/index.test.js->src/index.js",
+   "kind": "import",
+   "file": "test/index.test.js",
+   "needle": "../src/index.js",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  }
+ ],
+ "counts": {
+  "src/index.js": {
+   "total": 19,
+   "code": 11,
+   "comment": 4,
+   "blank": 4,
+   "bytes": 521,
+   "chars": 519,
+   "words": 66
+  },
+  "test/index.test.js": {
+   "total": 17,
+   "code": 14,
+   "comment": 0,
+   "blank": 3,
+   "bytes": 526,
+   "chars": 524,
+   "words": 59
+  },
+  "package.json": {
+   "total": 16,
+   "code": 16,
+   "comment": 0,
+   "blank": 0,
+   "bytes": 311,
+   "chars": 311,
+   "words": 36
+  },
+  "README.md": {
+   "total": 9,
+   "code": 6,
+   "comment": 0,
+   "blank": 3,
+   "bytes": 213,
+   "chars": 213,
+   "words": 31
+  },
+  "LICENSE": {
+   "total": 9,
+   "code": 6,
+   "comment": 0,
+   "blank": 3,
+   "bytes": 432,
+   "chars": 432,
+   "words": 65
+  }
+ },
+ "owners": {
+  ".gitignore": null,
+  "docs/architecture/library.md": "library",
+  "docs/architecture/README.md": null,
+  "LICENSE": null,
+  "package.json": null,
+  "README.md": null,
+  "src/index.js": "library",
+  "test/index.test.js": "library"
+ },
+ "ownerCheck": {
+  "ok": false,
+  "files": [
+   ".gitignore",
+   "LICENSE",
+   "package.json"
+  ],
+  "facts": []
+ },
+ "coverage": {
+  "owned": {
+   "num": 1,
+   "den": 4
+  },
+  "routes": null,
+  "screens": null,
+  "tables": null
+ },
+ "gaps": []
+}

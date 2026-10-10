@@ -5,10 +5,11 @@
 // boxes ("+N files +M lines now").
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { changeDetail, changeRows, freshOf, readChanges } from './changes.mjs';
-import { isSecretsFile, readFileForView, worktreeDiff } from './files.mjs';
+import { FILE_MAX, isSecretsFile, readFileForView, safeResolve, worktreeDiff } from './files.mjs';
+import { listUndo } from './foundation/care.mjs';
 import { placer } from './footprint.mjs';
 import { normalizePath } from './paths.mjs';
 import { keepSnapshots, readSnapshot, snapshotDir } from './snapshots.mjs';
@@ -111,16 +112,22 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById, remov
   for (const b of built) {
     const root = b.project.root;
     const snapDir = snapshotDir(smDir, b.project.id);
-    const tree = await workingTree(root);
+    const ops = opRows(smDir, b.project.id, root, nowMs, windowMs);
+    // A folder row that is exactly what an operation left (file not touched since) is the operation's row, not a second one.
+    const mine = new Set(ops.filter((o) => o.undoable).flatMap((o) => o.files));
+    const tree = (await workingTree(root)).filter((w) => !mine.has(w.path));
     const gone = keepSnapshots(snapDir, root, tree, nowMs, windowMs);
     const worktree = [...tree.map((w) => ({ ...w, ts: w.kind === 'delete' ? null : mtimeIso(root, w.path) })), ...gone];
     const base = { events: events.get(b.key), worktree, commits: b.commits ?? [], ownersOf: b.ownersOf, nowIso: now.toISOString() };
     const draft = changeRows(base);
     const hashes = [...new Set(draft.filter((r) => r.hash).map((r) => r.hash))].slice(0, TAGGED_MAX);
-    const rows = changeRows({ ...base, tagOf: await tagsFor(root, hashes, nowMs) }).slice(0, ROWS_MAX);
+    const own = changeRows({ ...base, tagOf: await tagsFor(root, hashes, nowMs) });
+    const owners = b.ownersOf(ops.map((o) => o.path));
+    ops.forEach((o, i) => { o.partId = owners[i] ?? null; });
+    const rows = [...own, ...ops].map((r, i) => [r, i]).sort(([x, i], [y, j]) => y.ts.localeCompare(x.ts) || i - j).map(([r]) => r).slice(0, ROWS_MAX);
     for (const r of rows) if (r.id.startsWith('wt:')) refs.get(b.key).set(r.id, { wt: r.path });
-    store.set(b.project.id, { root, snapDir, rows, refs: refs.get(b.key) });
-    b.project.fresh = freshOf(rows, nowMs);
+    store.set(b.project.id, { root, smDir, projectId: b.project.id, snapDir, rows, refs: refs.get(b.key) });
+    b.project.fresh = freshOf(own, nowMs);
   }
   return store;
 }
@@ -131,6 +138,120 @@ export const changesOf = (state, projectId) => entryOf(state, projectId)?.rows ?
 
 const maskLine = (l) => l.slice(0, 1) + maskSecrets(l.slice(1));
 
+// ---- what the session-map itself wrote (fd14): the Undo records of applyOp, shown beside the conversations' changes ----
+const CONTEXT = 3;
+const LCS_CELLS_MAX = 1_000_000;
+const DETAIL_LINES_MAX = 3000;
+
+const linesOf = (text) => {
+  if (!text) return [];
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+};
+
+// A small line diff: common head and tail trimmed, the middle matched by longest common subsequence. A middle too big
+// for that (ponytail: 1M cells) reads as all removed then all added, which is still true, only longer.
+function lineOps(a, b) {
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+  const x = a.slice(head, a.length - tail);
+  const y = b.slice(head, b.length - tail);
+  const ops = a.slice(0, head).map((l) => [' ', l]);
+  if ((x.length + 1) * (y.length + 1) > LCS_CELLS_MAX) {
+    ops.push(...x.map((l) => ['-', l]), ...y.map((l) => ['+', l]));
+  } else {
+    const w = y.length + 1;
+    const len = new Uint32Array((x.length + 1) * w);
+    for (let i = x.length - 1; i >= 0; i--) {
+      for (let j = y.length - 1; j >= 0; j--) len[i * w + j] = x[i] === y[j] ? len[(i + 1) * w + j + 1] + 1 : Math.max(len[(i + 1) * w + j], len[i * w + j + 1]);
+    }
+    let i = 0;
+    let j = 0;
+    while (i < x.length || j < y.length) {
+      if (i < x.length && j < y.length && x[i] === y[j]) { ops.push([' ', x[i]]); i++; j++; }
+      else if (j >= y.length || (i < x.length && len[(i + 1) * w + j] >= len[i * w + j + 1])) { ops.push(['-', x[i]]); i++; }
+      else { ops.push(['+', y[j]]); j++; }
+    }
+  }
+  ops.push(...a.slice(a.length - tail).map((l) => [' ', l]));
+  return ops;
+}
+
+// before/after: text or null (the file did not exist / does not now) → {hunks: [{oldStart, newStart, lines}], added, removed}.
+export function lineDiff(before, after) {
+  const ops = lineOps(linesOf(before), linesOf(after));
+  const changed = ops.flatMap(([t], i) => (t === ' ' ? [] : [i]));
+  let oldAt = 1;
+  let newAt = 1;
+  const starts = ops.map(([t]) => { const at = [oldAt, newAt]; if (t !== '+') oldAt++; if (t !== '-') newAt++; return at; });
+  const hunks = [];
+  for (let k = 0; k < changed.length;) {
+    const from = Math.max(0, changed[k] - CONTEXT);
+    let last = changed[k];
+    while (k + 1 < changed.length && changed[k + 1] - last <= 2 * CONTEXT) last = changed[++k];
+    k++;
+    const to = Math.min(ops.length, last + CONTEXT + 1);
+    hunks.push({ oldStart: before === null ? 0 : starts[from][0], newStart: starts[from][1], lines: ops.slice(from, to).map(([t, l]) => t + l) });
+  }
+  return { hunks, added: ops.filter(([t]) => t === '+').length, removed: ops.filter(([t]) => t === '-').length };
+}
+
+function currentText(root, rel) {
+  const abs = safeResolve(root, rel);
+  if (!abs) return null;
+  try {
+    const buf = readFileSync(abs);
+    return buf.length > FILE_MAX || buf.includes(0) ? null : buf.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+const opKind = (files) => (files.every((f) => f.before === null) ? 'create' : files.every((f) => f.afterSha === null) ? 'delete' : 'edit');
+
+// One row per operation in the window. While the files are as the operation left them the counts are its own lines; once
+// undone or edited since, the record no longer knows the "after", so they read 0.
+function opRows(smDir, id, root, nowMs, windowMs) {
+  return listUndo(smDir, id, { root, since: new Date(nowMs - windowMs).toISOString() }).map((r) => {
+    const files = (r.files ?? []).filter((f) => f && typeof f.path === 'string');
+    let added = 0;
+    let removed = 0;
+    if (r.undoable) {
+      for (const f of files) {
+        const d = lineDiff(f.before, f.afterSha === null ? null : currentText(root, f.path));
+        added += d.added;
+        removed += d.removed;
+      }
+    }
+    return {
+      id: `op:${String(r.id).replace(/^op:/, '')}`, ts: r.at, kind: opKind(files), path: files[0]?.path ?? '', added, removed,
+      sessionId: null, title: null, agent: null, origin: 'session-map', opId: r.id, mode: r.mode, files: files.map((f) => f.path),
+      undoable: r.undoable === true, undone: r.undone === true, state: 'pending',
+    };
+  }).filter((r) => r.path);
+}
+
+// The Undo record against the file now (the record keeps the "before"; the file is the "after"), secrets masked.
+function opDetail(root, row, record) {
+  let left = DETAIL_LINES_MAX;
+  let cut = false;
+  const hunks = [];
+  for (const f of record.files ?? []) {
+    if (isSecretsFile(f.path)) return { hunks: [], error: 'sensitive' };
+    const d = lineDiff(f.before, currentText(root, f.path));
+    for (const h of d.hunks) {
+      const lines = h.lines.slice(0, Math.max(0, left));
+      if (lines.length < h.lines.length) cut = true;
+      left -= lines.length;
+      if (lines.length) hunks.push({ ...h, path: f.path, lines: lines.map(maskLine) });
+    }
+  }
+  return { hunks, cut, files: row.files, undoable: row.undoable, undone: row.undone };
+}
+
 // The before and after of one change, secrets masked: {hunks, cut} for an edit or a new file; {hunks: [], before} for a
 // removed one, its previous content: the last copy a pass kept (snapshots.mjs), else the version before it was removed,
 // else the text a conversation wrote when no step changed it after; {error: 'not-kept'} when none of them holds it;
@@ -138,8 +259,12 @@ const maskLine = (l) => l.slice(0, 1) + maskSecrets(l.slice(1));
 export async function changeDetailOf(state, projectId, id) {
   const entry = entryOf(state, projectId);
   const ref = entry?.refs.get(id);
-  const row = ref && entry.rows.find((r) => r.id === id);
+  const row = entry && entry.rows.find((r) => r.id === id && (ref || r.origin === 'session-map'));
   if (!row) return null;
+  if (row.origin === 'session-map') {
+    const record = listUndo(entry.smDir, entry.projectId).find((r) => r.id === row.opId);
+    return record ? opDetail(entry.root, row, record) : null;
+  }
   if (isSecretsFile(row.path) || (row.from && isSecretsFile(row.from))) return { hunks: [], error: 'sensitive' };
   if (row.kind === 'delete') {
     const kept = entry.snapDir ? readSnapshot(entry.snapDir, row.path, Date.parse(row.ts)) : null;

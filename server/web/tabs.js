@@ -274,10 +274,73 @@ export function createTabs(ctx) {
           h('span', { style: `width:${Math.min(100, pct)}%` }))));
   }
 
-  const renderers = { board: renderBoard, history: renderHistory, costs: renderCosts };
+  // ----- conversations: Board and History as two sub-tabs (the old board / history names land here) -----
+
+  const SUBS = ['board', 'history'];
+  const STORE_KEY = 'sm.convsTab';
+  const storeOf = () => ctx.store ?? {
+    get(k) { try { return globalThis.localStorage?.getItem(k) ?? null; } catch { return null; } },
+    set(k, v) { try { globalThis.localStorage?.setItem(k, v); } catch { /* storage blocked: the choice just isn't remembered */ } },
+  };
+  const savedSub = () => { const v = storeOf().get(STORE_KEY); return SUBS.includes(v) ? v : 'board'; };
+  const shells = new WeakMap();
+
+  function showSub(shell, sub) {
+    shell.sub = sub;
+    storeOf().set(STORE_KEY, sub);
+    for (const b of shell.buttons) {
+      const on = b.dataset.sub === sub;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.setAttribute('tabindex', on ? '0' : '-1');
+      b.className = `sub-tab${on ? ' is-current' : ''}`;
+    }
+    for (const s of SUBS) shell.panes[s].hidden = s !== sub;
+    // The history is searched once per build; coming back to it keeps the list and the place in it.
+    if (sub === 'history') {
+      if (!shell.historyBuilt) { shell.historyBuilt = true; renderHistory(shell.panes.history); }
+    } else renderBoard(shell.panes.board);
+  }
+
+  function renderConvs(root, sub) {
+    let shell = shells.get(root);
+    if (!shell || shell.lang !== ctx.lang()) {
+      const tt = t();
+      const pane = (s) => h('div', { id: s === 'board' ? 'convsBoard' : 'convsHistory', role: 'tabpanel', 'aria-labelledby': `convs-tab-${s}` });
+      shell = { lang: ctx.lang(), panes: { board: pane('board'), history: pane('history') }, historyBuilt: false, sub: null, buttons: [] };
+      shell.buttons = SUBS.map((s) => h('button', { type: 'button', role: 'tab', id: `convs-tab-${s}`, 'data-sub': s, onclick: () => showSub(shell, s) }, tt(`tab.${s}`)));
+      for (const b of shell.buttons) {
+        b.addEventListener('keydown', (e) => {
+          const at = shell.buttons.indexOf(b);
+          const to = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: SUBS.length - 1 }[e.key];
+          if (to === undefined) return;
+          e.preventDefault?.();
+          const next = shell.buttons[(to + SUBS.length) % SUBS.length];
+          showSub(shell, next.dataset.sub);
+          next.focus();
+        });
+      }
+      root.replaceChildren(h('div', { class: 'convs-tabs', role: 'tablist' }, shell.buttons), shell.panes.board, shell.panes.history);
+      shells.set(root, shell);
+    }
+    showSub(shell, sub ?? savedSub());
+  }
+
+  const renderers = { costs: renderCosts };
+  const convsName = (name) => (name === 'board' || name === 'history' ? { name: 'convs', sub: name } : { name, sub: null });
   return {
-    render(name, root) { renderers[name]?.(root); },
+    render(name, root) {
+      const { name: n, sub } = convsName(name);
+      if (n === 'convs') renderConvs(root, sub);
+      else renderers[n]?.(root);
+    },
     // Polling refreshes the open view, except History, which keeps the person's place.
-    refresh(name, root) { if (name !== 'history' && !root.contains(document.activeElement)) renderers[name]?.(root); },
+    refresh(name, root) {
+      if (root.contains(document.activeElement)) return;
+      const { name: n, sub } = convsName(name);
+      if (n !== 'convs') { renderers[n]?.(root); return; }
+      const shell = shells.get(root);
+      if (!shell) { renderConvs(root, sub); return; }
+      if ((sub ?? shell.sub) === 'board') renderBoard(shell.panes.board);
+    },
   };
 }

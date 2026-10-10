@@ -5,6 +5,8 @@ import { api } from './api.js';
 import { createChat } from './chat.js';
 import { addBox, addLayer, connect, matchParts, moveToLayer, parseFlow, printFlow, removeNode, rename } from './flow.js';
 import { exportFileName, isAutoDraft, markdownOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
+import { drawGrid, gridLayout, pageMeasure } from './flowgrid.js';
+import { boxTitle, exportTextFor, factRows, journeyChoices, legendKeys, legendWords, level1Flow, levelNote, nodeName } from './flowlevel.js';
 import { createResizer } from './resize.js';
 import { nodeById } from './tree.js';
 
@@ -14,6 +16,12 @@ const EDIT_MS = 350;
 const TEXT_MAX = 60_000;
 const CHAT_WIDTH = 460;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const MODEL_RECHECK_MS = 20_000;
+const MODEL_WAIT_MS = 1500;
+const MODEL_WAIT_MAX = 20;
+
+// The tab opens on the general view; the person's last choice is kept on this browser.
+export const levelOf = (saved) => (saved === 'parts' ? 'parts' : '1');
 
 // What a part's box says at a glance: a chat working there now beats items in progress, then all done, then still to do.
 export function partTone(counts, live) {
@@ -115,14 +123,15 @@ export function forLayout(text) {
   return ties.length ? `${text}\n${ties.join('\n')}` : text;
 }
 
-async function renderMermaid(el, text, phone) {
+// spacing: the general view is laid out a little tighter, so its six columns fit the screen at a larger size.
+async function renderMermaid(el, text, phone, spacing = { nodeSpacing: 34, rankSpacing: 54 }) {
   const mermaid = await loadMermaid();
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'base',
     themeVariables: themeVariables(),
-    flowchart: { curve: 'basis', htmlLabels: false, useMaxWidth: true, nodeSpacing: 34, rankSpacing: 54, padding: 14, diagramPadding: 14 },
+    flowchart: { curve: 'basis', htmlLabels: false, useMaxWidth: true, ...spacing, padding: 14, diagramPadding: 14 },
   });
   const id = `flow-svg-${++renderSeq}`;
   const mine = String(renderSeq);
@@ -163,6 +172,24 @@ function fitWidth(svg, area, minZoom = ZOOM_MIN) {
   svg.style.minWidth = minZoom ? `${Math.round(w * minZoom)}px` : '';
 }
 
+// The zoom of the view: null is "the whole drawing fits the area"; a number is how many screen pixels per drawing pixel.
+export const ZOOM_STEP = 1.25;
+export const ZOOM_RANGE = [0.15, 3];
+export function nextZoom(current, dir) {
+  const [lo, hi] = ZOOM_RANGE;
+  const z = dir > 0 ? current * ZOOM_STEP : current / ZOOM_STEP;
+  return Math.min(hi, Math.max(lo, Math.round(z * 1000) / 1000));
+}
+
+// mermaid names an arrow's path "L_<from>_<to>_<n>", n how many links between the same two boxes, in the same
+// direction, come before it in the text. The layout copy of the general view writes a backward arrow the other way
+// round; this is the path id to find it by.
+export function edgePathId(edges, index) {
+  const e = edges[index];
+  const n = edges.slice(0, index).filter((x) => x.from === e.from && x.to === e.to).length;
+  return `L_${e.from}_${e.to}_${n}`;
+}
+
 // Where a drawing wider than its area opens: on the first group written in the text (mermaid may lay it out far right).
 // clusters: {id, left} with left measured from the drawing's left edge; max: how far the area can scroll.
 export function startScroll(layerIds, clusters, { max, pad = FIT_PAD }) {
@@ -175,6 +202,13 @@ const svgEl = (tag, attrs) => {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
   return el;
 };
+
+function safeGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private mode: the choice just is not kept */ }
+}
 
 // ctx: h, t (translator getter), toast, errorText, relative, project(), tree(), live() (the lit node ids), phone
 // (matchMedia), confirm, onOpenPart(partId), onApplied() (files were written), onPcMode.
@@ -206,6 +240,20 @@ export function createFlowView(ctx) {
   let tool = null;
   let textOpen = false;
   let lastModel = null;
+  let lastMeta = null;
+  let level = levelOf(safeGet('sm.flowLevel'));
+  let drawnLevel = 'parts';
+  let flowModel = null;
+  let modelKey = null;
+  let modelAt = 0;
+  let modelStamp = null;
+  let modelWaitTimer = 0;
+  let journey = '';
+  let showHidden = false;
+  let l1 = null;
+  let failedNote = false;
+  let zoom = null;
+  let zoomKey = null;
 
   const project = () => ctx.project();
   const model = () => parseFlow(hist?.now ?? '');
@@ -241,11 +289,12 @@ export function createFlowView(ctx) {
     else words = tt('flow.source.layers');
     src.replaceChildren(words, arch.source === 'main-branch' ? ` ${tt('flow.source.main')}` : '');
     $('#flowAuto').hidden = mode !== 'view' || !isAutoDraft(arch);
+    for (const b of root.querySelectorAll('.fl-levels button')) b.setAttribute('aria-pressed', String(b.dataset.level === level));
     for (const b of root.querySelectorAll('.fl-modes button')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
     root.dataset.mode = mode;
     $('#flowTools').hidden = mode !== 'workshop';
     const none = arch.source === 'none';
-    const nothing = mode === 'view' && (none || !exportText);
+    const nothing = mode === 'view' && (none || !currentText());
     $('#flowCopy').disabled = nothing;
     $('#flowExportBtn').setAttribute('aria-disabled', String(nothing));
     if (nothing) $('#flowExport').open = false;
@@ -269,6 +318,29 @@ export function createFlowView(ctx) {
     exportError = res.ok ? null : res.error;
   }
 
+  // The single model behind the general view. It is built on the server; while it is still being worked out the page
+  // asks again a few times and redraws only when the model really changed (its stamp).
+  async function loadModel(force = false, attempt = 0) {
+    const p = project();
+    const key = archKey(p);
+    if (!force && key === modelKey && flowModel) return;
+    modelKey = key;
+    clearTimeout(modelWaitTimer);
+    if (p.arch.source === 'none') { flowModel = null; return; }
+    const res = await api.flowModel(p.id);
+    if (modelKey !== key) return;
+    modelAt = Date.now();
+    flowModel = res.ok && res.model?.nodes ? res.model : null;
+    if (flowModel && res.building && attempt < MODEL_WAIT_MAX) {
+      modelWaitTimer = setTimeout(async () => {
+        if (!visible || modelKey !== key) return;
+        const before = modelStamp;
+        await loadModel(true, attempt + 1);
+        if (visible && mode === 'view' && level === '1' && flowModel && flowModel.stamp !== before) renderView();
+      }, MODEL_WAIT_MS);
+    }
+  }
+
   function emptyState() {
     const tt = t();
     return h('div', { class: 'fl-empty' },
@@ -285,21 +357,24 @@ export function createFlowView(ctx) {
 
   // Ties each drawn box to its part: colour by situation, marks for blockers and people waiting, a title, and a click
   // (view: open the part beside the diagram; workshop: pick the box for the tools).
-  function decorate(svg, flowModel) {
-    const ids = new Set(flowModel.nodes.map((n) => n.id));
+  function decorate(svg, drawn, meta = null) {
+    const ids = new Set(drawn.nodes.map((n) => n.id));
     const p = project();
-    const match = matchParts(flowModel, p.arch.parts);
+    const match = matchParts(drawn, p.arch.parts);
+    const tt = t();
     const tree = ctx.tree();
     const live = ctx.live();
     const workshop = mode === 'workshop';
     for (const g of svg.querySelectorAll('g.node')) {
       const nodeId = g.dataset.id && ids.has(g.dataset.id) ? g.dataset.id : svgNodeId(g.id, ids);
       if (!nodeId) continue;
-      const node = flowModel.nodes.find((n) => n.id === nodeId);
-      const partId = match.get(nodeId);
+      const node = drawn.nodes.find((n) => n.id === nodeId);
+      const info = meta?.nodes.get(nodeId) ?? null;
+      const partId = meta ? info?.partId : match.get(nodeId);
+      const outside = info && (info.kind === 'actor' || info.kind === 'service');
       const part = partId ? p.arch.parts.find((x) => x.id === partId) : null;
       g.dataset.flowNode = nodeId;
-      g.classList.add(part ? 'fl-part' : 'fl-free');
+      g.classList.add(part ? 'fl-part' : outside ? (info.kind === 'actor' ? 'fl-actor' : info.where === 'this-pc' ? 'fl-local' : 'fl-svc') : 'fl-free');
       let label = node.label;
       if (part) {
         const counts = nodeById(tree, `pt:${partId}`)?.counts ?? { total: 0, done: 0, doing: 0, withUser: 0, blocks: 0 };
@@ -307,13 +382,16 @@ export function createFlowView(ctx) {
         const flags = partFlags(counts);
         g.classList.add(`fl-${tone}`);
         label = `${part.name}: ${toneWords(tone, flags)}`;
+        if (info) label = `${boxTitle(info, part.name, tt)} · ${toneWords(tone, flags)}`;
         const box = g.getBBox();
         flags.forEach((f, i) => g.append(svgEl('circle', { class: `fl-flag fl-flag-${f}`, cx: box.x + box.width - 2 - i * 13, cy: box.y + 2, r: 5.5 })));
-      } else label = `${node.label}: ${t()('flow.tone.free')}`;
+      } else if (outside) label = boxTitle(info, node.label, tt);
+      else label = `${node.label}: ${t()('flow.tone.free')}`;
       const title = svgEl('title', {});
       title.textContent = label;
       g.prepend(title);
       if (!workshop && !part) continue;
+      if (outside) continue;
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'button');
       g.setAttribute('aria-label', workshop ? t()('flow.pick', { name: node.label }) : t()('flow.open', { name: label }));
@@ -340,27 +418,118 @@ export function createFlowView(ctx) {
 
   function renderLegend() {
     const tt = t();
-    const keys = mode === 'workshop' ? [] : ['live', 'doing', 'todo', 'done', 'blocks', 'waiting', 'free'];
-    legend.replaceChildren(...keys.map((k) => h('li', { class: `lg lg-${k}` }, h('span', { class: 'lg-mark', 'aria-hidden': 'true' }), tt(['blocks', 'waiting'].includes(k) ? `flow.flag.${k}` : `flow.tone.${k}`))));
+    const keys = mode === 'workshop' ? [] : legendKeys(level === '1' && flowModel && !failedNote ? '1' : 'parts');
+    legend.replaceChildren(...keys.map((k) => h('li', { class: `lg lg-${k}` }, h('span', { class: 'lg-mark', 'aria-hidden': 'true' }), legendWords(k, tt))));
     legend.hidden = !keys.length;
   }
 
-  async function draw(text) {
-    const res = await renderMermaid(canvas, text, ctx.phone.matches);
+  // The size of the drawing: the workshop keeps reading size and scrolls; the view opens with the whole drawing in the
+  // area, and the zoom buttons take it from there.
+  function sizeDrawing(svg) {
+    if (mode === 'workshop') return fitWidth(svg, canvas);
+    fitWidth(svg, canvas, 0);
+    if (zoom == null) return undefined;
+    const w = svg.viewBox.baseVal?.width;
+    if (!w) return undefined;
+    svg.setAttribute('width', String(Math.round(w * zoom)));
+    svg.style.maxWidth = 'none';
+    svg.style.minWidth = '';
+    return undefined;
+  }
+
+  function zoomBy(dir) {
+    const svg = canvas.querySelector('svg');
+    const w = svg?.viewBox.baseVal?.width;
+    if (!w) return;
+    const now = svg.getBoundingClientRect().width / w;
+    const cx = (canvas.scrollLeft + canvas.clientWidth / 2) / Math.max(1, canvas.scrollWidth);
+    const cy = (canvas.scrollTop + canvas.clientHeight / 2) / Math.max(1, canvas.scrollHeight);
+    zoom = dir === 0 ? null : nextZoom(zoom ?? now, dir);
+    sizeDrawing(svg);
+    canvas.scrollLeft = dir === 0 ? 0 : cx * canvas.scrollWidth - canvas.clientWidth / 2;
+    canvas.scrollTop = dir === 0 ? 0 : cy * canvas.scrollHeight - canvas.clientHeight / 2;
+  }
+
+  // The general view lays out a copy where backward arrows are written the other way round: their heads go back to
+  // where the facts say. Arrows drawn once for several parts name the others on hover.
+  function finishEdges(svg, drawn, meta) {
+    const tt = t();
+    const labels = [...svg.querySelectorAll('g.edgeLabel')];
+    const squash = (s) => String(s ?? '').replace(/\s+/g, '');
+    const inOrder = labels.length >= drawn.edges.length && drawn.edges.every((e, i) => squash(labels[i].textContent) === squash(e.label));
+    drawn.edges.forEach((e, i) => {
+      const m = meta.edges[i];
+      if (!m) return;
+      const path = svg.querySelector(`path[id="${CSS.escape(edgePathId(drawn.edges, i))}"]`);
+      if (m.reversed && path) {
+        const end = path.getAttribute('marker-end');
+        if (end) {
+          path.setAttribute('marker-start', end.replace(/End\)$/, 'Start)'));
+          path.removeAttribute('marker-end');
+        }
+      }
+      const names = (m.also ?? []).map((id) => nodeNameOf(id)).filter(Boolean);
+      if (!names.length) return;
+      const words = [e.label, tt('flow.l1.also', { names: names.join(', ') })].filter(Boolean).join(' · ');
+      for (const el of [path, inOrder ? labels[i] : null]) {
+        if (!el) continue;
+        const title = svgEl('title', {});
+        title.textContent = words;
+        el.prepend(title);
+      }
+    });
+  }
+  const nodeNameOf = (id) => {
+    const n = flowModel?.nodes?.find((x) => x.id === id);
+    return n ? nodeName(n, t()) : null;
+  };
+
+  async function draw(text, meta = null) {
+    const res = await renderMermaid(canvas, text, ctx.phone.matches, meta ? { nodeSpacing: 24, rankSpacing: 40 } : undefined);
     if (res.stale) return;
     if (!res.ok) {
       canvas.replaceChildren(h('div', { class: 'fl-error', role: 'alert' }, h('p', {}, t()('flow.drawFailed')), h('details', {}, h('summary', {}, t()('tech.details')), h('code', {}, res.error))));
       return;
     }
-    fitWidth(res.svg, canvas);
+    sizeDrawing(res.svg);
     lastModel = parseFlow(text);
-    if (lastModel.ok) decorate(res.svg, lastModel);
+    lastMeta = meta;
+    if (lastModel.ok) decorate(res.svg, lastModel, meta);
+    if (lastModel.ok && meta?.edges) finishEdges(res.svg, lastModel, meta);
     // Only the diagram opens on its first group: the workshop redraws on every edit and keeps where the person scrolled.
     if (lastModel.ok && mode === 'view') {
       const left = canvas.getBoundingClientRect().left - canvas.scrollLeft;
       const clusters = [...res.svg.querySelectorAll('g.cluster')].map((g) => ({ id: g.id, left: g.getBoundingClientRect().left - left }));
       canvas.scrollLeft = startScroll(lastModel.layers.map((l) => l.id), clusters, { max: canvas.scrollWidth - canvas.clientWidth });
     }
+  }
+
+  // The general view is laid out by session-map itself (flowgrid.js), top to bottom like a C4 diagram; if that ever
+  // fails, mermaid draws the same view as before.
+  async function drawGeneral(view) {
+    let svg = null;
+    try {
+      const layout = gridLayout(view.scene, { measure: pageMeasure(getComputedStyle(document.body).fontFamily) });
+      svg = drawGrid(layout, { idPrefix: `flg${++renderSeq}`, titleOf: (p) => edgeWords(p, view.meta) });
+    } catch {
+      svg = null;
+    }
+    if (!svg) return draw(view.drawText, view.meta);
+    canvas.dataset.render = String(renderSeq);
+    canvas.replaceChildren(svg);
+    sizeDrawing(svg);
+    lastModel = { ...view.flow, ok: true };
+    lastMeta = view.meta;
+    decorate(svg, lastModel, view.meta);
+    canvas.scrollLeft = 0;
+    canvas.scrollTop = 0;
+    return undefined;
+  }
+
+  // The hover words of an arrow: its label, and the other parts an arrow drawn once for several stands for.
+  function edgeWords(p, meta) {
+    const names = (meta.edges[p.index]?.also ?? []).map((id) => nodeNameOf(id)).filter(Boolean);
+    return [p.text, names.length ? t()('flow.l1.also', { names: names.join(', ') }) : ''].filter(Boolean).join(' · ');
   }
 
   async function renderView() {
@@ -373,6 +542,31 @@ export function createFlowView(ctx) {
       legend.hidden = true;
       return;
     }
+    failedNote = false;
+    // A drawing opens whole: on a new project, level or mode the zoom goes back to "fit".
+    const zk = `${p.id}|${level}|${mode}`;
+    if (zk !== zoomKey) { zoomKey = zk; zoom = null; }
+    if (level === '1') {
+      if (!flowModel) canvas.replaceChildren(h('p', { class: 'fl-loading' }, t()('flow.loading')));
+      await loadModel();
+      if (mode !== 'view' || level !== '1') return;
+      if (flowModel) {
+        modelStamp = flowModel.stamp ?? null;
+        if (journey && !journeyChoices(flowModel, t()).some((j) => j.id === journey)) journey = '';
+        l1 = level1Flow(flowModel, { journey: journey || null, showHidden, tt: t() });
+        drawnLevel = '1';
+        renderLegend();
+        renderFilters();
+        await drawGeneral(l1);
+        renderHead();
+        return;
+      }
+      failedNote = true;
+      await loadExport();
+    }
+    drawnLevel = 'parts';
+    renderLegend();
+    renderFilters();
     if (exportError) {
       canvas.replaceChildren(h('p', { class: 'fl-error', role: 'alert' }, errorText(exportError)));
       return;
@@ -382,6 +576,49 @@ export function createFlowView(ctx) {
       return;
     }
     await draw(exportText);
+    renderHead();
+  }
+
+  // Above the drawing in the general view: the journey filter, the links seen only in the code, a note, and the facts.
+  function renderFilters() {
+    const tt = t();
+    const box = $('#flowFilters');
+    const on = mode === 'view' && project().arch.source !== 'none' && (level === '1' || failedNote);
+    box.hidden = !on;
+    if (!on) return;
+    const general = drawnLevel === '1' && Boolean(flowModel);
+    for (const el of box.querySelectorAll('.fl-filter-row, .fl-facts')) el.hidden = !general;
+    const select = $('#flowJourney');
+    const choices = flowModel ? journeyChoices(flowModel, tt) : [];
+    select.replaceChildren(h('option', { value: '' }, tt('flow.l1.journey.all')), ...choices.map((c) => h('option', { value: c.id, selected: c.id === journey }, c.label)));
+    select.disabled = !choices.length;
+    select.value = journey;
+    $('#flowJourneyNote').textContent = general && !choices.length ? tt('flow.l1.journey.none') : '';
+    $('#flowShowHidden').checked = showHidden;
+    const notes = [];
+    if (failedNote) notes.push(tt('flow.l1.failed'));
+    if (l1 && general) {
+      const missing = levelNote(l1.meta, tt);
+      if (missing) notes.push(missing);
+      if (l1.meta.more.length) notes.push(tt('flow.l1.more', { names: l1.meta.more.map((x) => x.name).join(', ') }));
+      for (const n of flowModel.notes ?? []) {
+        const key = 'flow.l1.note.' + (n.key ?? n);
+        if (tt(key) !== key) notes.push(tt(key));
+      }
+    }
+    $('#flowLevelNote').textContent = notes.join(' ');
+    if (general && $('#flowFacts').open) fillFacts($('#flowFactsList'));
+  }
+
+  function fillFacts(list) {
+    const rows = factRows(flowModel, l1.meta, t());
+    list.replaceChildren(...rows.map((r) => h('li', {},
+      h('div', { class: 'fl-fact-head' },
+        h('span', { class: 'fl-fact-name' }, r.text),
+        r.label ? h('span', { class: 'fl-fact-label' }, r.label) : null,
+        ...r.badges.map((b) => h('span', { class: 'fl-badge' }, b))),
+      r.also?.length ? h('p', { class: 'fl-fact-also' }, t()('flow.l1.also', { names: r.also.join(', ') })) : null,
+      r.evidence.length ? h('code', { class: 'fl-fact-code' }, r.evidence.join('  ')) : null)));
   }
 
   // ---- the workshop ------------------------------------------------------------------------
@@ -588,7 +825,7 @@ export function createFlowView(ctx) {
 
   // ---- export --------------------------------------------------------------------------------
 
-  const currentText = () => (mode === 'workshop' ? hist?.now : exportText);
+  const currentText = () => (mode === 'workshop' ? hist?.now : exportTextFor(drawnLevel, exportText, l1?.text));
 
   async function copyText() {
     const text = currentText();
@@ -736,6 +973,21 @@ export function createFlowView(ctx) {
 
   for (const b of root.querySelectorAll('.fl-modes button')) b.addEventListener('click', () => setMode(b.dataset.mode));
   for (const b of root.querySelectorAll('.fl-tool[data-tool]')) b.addEventListener('click', () => openTool(b.dataset.tool));
+  for (const b of root.querySelectorAll('.fl-levels button')) {
+    b.addEventListener('click', () => {
+      const next = levelOf(b.dataset.level);
+      if (next === level) return;
+      level = next;
+      safeSet('sm.flowLevel', level);
+      renderView();
+    });
+  }
+  $('#flowZoomIn').addEventListener('click', () => zoomBy(1));
+  $('#flowZoomOut').addEventListener('click', () => zoomBy(-1));
+  $('#flowZoomFit').addEventListener('click', () => zoomBy(0));
+  $('#flowJourney').addEventListener('change', (e) => { journey = e.target.value; renderView(); });
+  $('#flowShowHidden').addEventListener('change', (e) => { showHidden = e.target.checked; renderView(); });
+  $('#flowFacts').addEventListener('toggle', () => { if ($('#flowFacts').open && l1 && flowModel && drawnLevel === '1') fillFacts($('#flowFactsList')); });
   $('#flowCopy').addEventListener('click', copyText);
   const exportMenu = $('#flowExport');
   $('#flowExportBtn').addEventListener('click', (e) => { if ($('#flowExportBtn').getAttribute('aria-disabled') === 'true') e.preventDefault(); });
@@ -794,7 +1046,7 @@ export function createFlowView(ctx) {
   let fitTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(fitTimer);
-    fitTimer = setTimeout(() => { const svg = canvas.querySelector('svg'); if (visible && svg) fitWidth(svg, canvas); }, 150);
+    fitTimer = setTimeout(() => { const svg = canvas.querySelector('svg'); if (visible && svg) sizeDrawing(svg); }, 150);
   });
 
   function rerender() {
@@ -809,6 +1061,7 @@ export function createFlowView(ctx) {
       if (mode === 'view') {
         if (exportKey !== archKey(project())) canvas.replaceChildren(h('p', { class: 'fl-loading' }, t()('flow.loading')));
         await loadExport();
+        if (level === '1') await loadModel(Date.now() - modelAt > MODEL_RECHECK_MS);
         return renderView();
       }
       await loadDraft();
@@ -832,12 +1085,18 @@ export function createFlowView(ctx) {
       if (mode === 'view') {
         const changed = exportKey !== archKey(p);
         await loadExport();
+        if (level === '1') {
+          const stale = Date.now() - modelAt > MODEL_RECHECK_MS;
+          const before = flowModel?.stamp ?? null;
+          await loadModel(stale);
+          if (changed || (stale && (flowModel?.stamp ?? null) !== before)) return renderView();
+        }
         if (changed) return renderView();
         const svg = canvas.querySelector('svg');
         if (svg && lastModel?.ok) {
           for (const el of svg.querySelectorAll('.fl-flag, g.node > title')) el.remove();
           for (const g of svg.querySelectorAll('g.node')) g.classList.remove('fl-live', 'fl-doing', 'fl-done', 'fl-todo');
-          decorate(svg, lastModel);
+          decorate(svg, lastModel, lastMeta);
         }
         return undefined;
       }

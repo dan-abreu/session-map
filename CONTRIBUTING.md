@@ -23,6 +23,20 @@ node --test "test/*.test.mjs"   # the whole suite
 
 Small and focused. Say what and why; the template has the checklist. CI runs the suite on Linux and Windows with Node 20 and 24.
 
+## Publishing a release
+
+Publishing is guarded by a gate that checks versions, links, the README screenshots and the invention limits of the code readers.
+
+```text
+git config core.hooksPath .githooks   # once per clone: turns on the pre-push hook
+npm run gate                          # the cheap checks; run it whenever you like
+npm run shots                         # retakes the README screenshots (needs Chrome and Node 22+)
+```
+
+- The hook runs the full gate when you push a `v*` tag, and does nothing for an ordinary branch.
+- `npm run shots` starts the demo on a free port and writes twelve images (six screens, English and Portuguese) plus `shots.json`, which records the version, the day and the hash of each image. A release needs shots taken that same day.
+- `CHROME_PATH` points to a Chrome that is not in the usual place; `--out <folder>` shoots somewhere else to try it out (the default is `docs/images/`).
+
 ## Security
 
 Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).

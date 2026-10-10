@@ -1,0 +1,9 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "next": "^16.0.1",
+    "react": "^19.0.0"
+  }
+}

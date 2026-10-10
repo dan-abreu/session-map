@@ -13,6 +13,21 @@ The `map` command starts the server and prints the links. `board` makes the curr
 - `hooks/hooks.json`
 - `scripts/`
 - `server/cli.mjs`
+- `./package.json`
+- `./README.md`
+- `./README.pt-BR.md`
+- `./CHANGELOG.md`
+- `./CONTRIBUTING.md`
+- `./SECURITY.md`
+- `./CODE_OF_CONDUCT.md`
+- `./LICENSE`
+- `./.gitignore`
+- `./.gitattributes`
+- `.github/`
+- `.githooks/`
+- `docs/README.md`
+- `docs/images/`
+- `demo/`
 
 ## Rules that must not break
 

@@ -13,6 +13,7 @@ import { workflowHue } from './workflows.js';
 export const CHANGE_KINDS = ['create', 'edit', 'delete', 'rename'];
 const KIND_ICON = { create: 'plus', edit: 'code', delete: 'trash', rename: 'rename' };
 const NONE = '-';
+const UNDO_ERRORS = ['changed-since', 'not-found', 'already-undone'];
 
 // f: {projectId, partId, sessionId, kind, range {from, to}, day}; '' or undefined is "every"; '-' is "none" (no box, no conversation).
 export function filterChanges(rows, f = {}) {
@@ -74,6 +75,24 @@ export function whoWords(tt, row) {
   return [who, title, model].filter(Boolean).join(' · ');
 }
 
+// What session-map itself did to a project (fd14): a row with origin 'session-map', its care mode and, while it still can, Undo.
+export const isOwnRow = (row) => row?.origin === 'session-map';
+export const canUndo = (row) => isOwnRow(row) && row.undoable === true && row.undone !== true;
+// The id a route takes: a row's opId may carry the 'op:' of the operation id, which a route segment cannot.
+export const bareOpId = (id) => String(id ?? '').replace(/^op:/, '');
+
+export function opWho(tt, row) {
+  const mode = ['auto', 'suggest', 'look'].includes(row.mode) ? tt(`care.mode.${row.mode}`) : tt('care.mode.unset');
+  return tt('changes.op.who', { mode });
+}
+
+// What the undo route answered, as { ok, restored } or { ok: false, error }. An empty answer is never a success.
+export function undoVerdict(res) {
+  const body = res?.data;
+  if (res?.ok && body && body.ok !== false) return { ok: true, restored: Array.isArray(body.restored) ? body.restored.length : 0 };
+  return { ok: false, error: (res?.ok ? body?.error : res?.error ?? body?.error) || 'unknown' };
+}
+
 export function freshFor(fresh, node) {
   if (!fresh) return null;
   if (node.kind === 'project') return { files: fresh.files, lines: fresh.lines };
@@ -101,7 +120,7 @@ const splitPath = (path) => {
 };
 
 // ctx: h, t (getter), lang (getter), icon, state(), project(), range(), rangeButton(), dialog (the file dialog), files (the
-// navigator: open(path)), go(projectId, sel), toast, errorText, relative(ts), number(n).
+// navigator: open(path)), go(projectId, sel), toast, errorText, relative(ts), number(n); confirm(text, label) -> Promise<boolean> (optional, for an Undo that asks first).
 export function createChangesView(ctx) {
   const { h } = ctx;
   const t = () => ctx.t();
@@ -111,14 +130,20 @@ export function createChangesView(ctx) {
   let seen = new Set();
   let run = 0;
   let els = null;
+  const undoing = new Set();
+  const notes = new Map();
 
   const projectById = (id) => ctx.state().projects.find((p) => p.id === id);
   const partName = (row) => projectById(row.projectId)?.arch.parts.find((x) => x.id === row.partId)?.name ?? null;
   const scopeId = () => (pick.scope === '*' ? '*' : ctx.project().id);
 
   function kindChip(kind) {
-    return h('span', { class: `chg-kind ck-${kind}` }, ctx.icon(KIND_ICON[kind], 'chg-kind-icon'), t()(`changes.kind.${kind}`));
+    const k = CHANGE_KINDS.includes(kind) ? kind : 'edit';
+    return h('span', { class: `chg-kind ck-${k}` }, ctx.icon(KIND_ICON[k], 'chg-kind-icon'), t()(`changes.kind.${k}`));
   }
+
+  // Who did it: a conversation or its helper, or session-map itself with its care mode (fd14).
+  const whoLine = (row) => (isOwnRow(row) ? opWho(t(), row) : whoWords(t(), row));
 
   function stateChip(row) {
     const tt = t();
@@ -137,7 +162,8 @@ export function createChangesView(ctx) {
     const { folder, name } = splitPath(row.path);
     const where = [pick.scope === '*' ? projectById(row.projectId)?.name : null, partName(row) ?? tt('changes.noBox')].filter(Boolean).join(' › ');
     const fresh = rowsKey && !seen.has(row.id);
-    return h('li', { class: `chg-row${fresh ? ' is-new' : ''}` }, h('button', { type: 'button', class: 'chg-btn', onclick: () => openChange(row) },
+    const own = isOwnRow(row);
+    return h('li', { class: `chg-row${fresh ? ' is-new' : ''}${own ? ' chg-op' : ''}${row.undone ? ' is-undone' : ''}` }, h('button', { type: 'button', class: 'chg-btn', onclick: () => openChange(row) },
       kindChip(row.kind),
       h('span', { class: 'chg-file' },
         h('span', { class: 'chg-name' }, name),
@@ -146,9 +172,49 @@ export function createChangesView(ctx) {
       linesChip(row),
       h('span', { class: 'chg-meta' },
         h('span', { class: 'chg-where' }, where),
-        h('span', { class: 'chg-who' }, whoWords(t(), row)),
+        h('span', { class: 'chg-who' }, own ? h('span', { class: 'chg-origin' }, tt('changes.op.badge')) : null, own ? ' ' : null, whoLine(row)),
         h('span', { class: 'chg-time num' }, timeOf(ctx.lang(), row.ts))),
-      stateChip(row)));
+      stateChip(row)), own ? opBar(row) : null);
+  }
+
+  // Under an own row: Undo while it can, "Undone" once it was, and the plain-words note after a refusal.
+  function opBar(row) {
+    const tt = t();
+    const note = notes.get(row.id);
+    const busy = undoing.has(row.id);
+    if (!canUndo(row) && !row.undone && !note) return null;
+    return h('div', { class: 'chg-op-bar' },
+      canUndo(row) ? h('button', {
+        type: 'button', class: 'btn small-btn chg-undo', disabled: busy, 'aria-label': tt('changes.op.undo.aria', { path: row.path }), onclick: () => undo(row),
+      }, busy ? tt('changes.op.undoing') : tt('changes.op.undo')) : null,
+      row.undone ? h('span', { class: 'chg-undone' }, tt('changes.op.undone')) : null,
+      note ? h('p', { class: `chg-op-note${note.ok ? '' : ' is-warn'}`, role: 'status' }, note.text) : null);
+  }
+
+  const undoPath = (row, body) => [row.projectId, `op/${bareOpId(row.opId ?? row.id)}/undo`, body];
+
+  async function undo(row) {
+    if (undoing.has(row.id)) return;
+    const tt = t();
+    undoing.add(row.id);
+    notes.delete(row.id);
+    draw();
+    let verdict = undoVerdict(await api.fdWrite(...undoPath(row, {})));
+    if (!verdict.ok && verdict.error === 'needs-confirm') {
+      const yes = ctx.confirm ? await ctx.confirm(tt('changes.op.confirm'), tt('changes.op.confirm.go')) : false;
+      if (yes) verdict = undoVerdict(await api.fdWrite(...undoPath(row, { confirm: true })));
+      else verdict = null;
+    }
+    undoing.delete(row.id);
+    if (verdict?.ok) {
+      const text = tt.count('changes.op.undid', verdict.restored);
+      notes.set(row.id, { ok: true, text });
+      ctx.toast?.(text);
+      await load();
+    } else {
+      if (verdict) notes.set(row.id, { ok: false, text: UNDO_ERRORS.includes(verdict.error) || verdict.error === 'unknown' ? tt(`changes.op.err.${verdict.error}`) : ctx.errorText(verdict.error) });
+      draw();
+    }
   }
 
   function timeline(list) {
@@ -301,7 +367,7 @@ export function createChangesView(ctx) {
       h('div', { class: 'file-title' },
         h('p', { class: 'chg-dialog-kind' }, kindChip(row.kind), stateChip(row)),
         h('h2', { id: 'fileTitle' }, h('code', {}, row.path)),
-        h('p', { class: 'meta' }, [whoWords(t(), row), `${dayName(tt, ctx.lang(), localDay(row.ts))} ${timeOf(ctx.lang(), row.ts)}`, partName(row)].filter(Boolean).join(' · '))),
+        h('p', { class: 'meta' }, [isOwnRow(row) ? tt('changes.op.badge') : null, whoLine(row), `${dayName(tt, ctx.lang(), localDay(row.ts))} ${timeOf(ctx.lang(), row.ts)}`, partName(row)].filter(Boolean).join(' · '))),
       h('div', { class: 'actions' },
         row.kind !== 'delete' && row.projectId === ctx.project().id ? h('button', { type: 'button', class: 'btn primary', onclick: () => ctx.files.open(row.path) }, tt('changes.openFile')) : null,
         row.sessionId ? h('button', { type: 'button', class: 'btn', onclick: () => { dialog.close(); ctx.go(row.projectId, { type: 'chat', id: row.sessionId }); } }, tt('changes.openChat')) : null,

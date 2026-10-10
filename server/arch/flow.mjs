@@ -1,11 +1,13 @@
 // The Flow tab's export and import (plano-v02 § v0.2.1): the map as a mermaid flowchart, the preview of what an imported
-// drawing changes, and the one write it makes: the README's mermaid block plus a skeleton file per new part. Nothing is
-// ever deleted, and every write stays inside the architecture folder.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+// drawing changes, and the one write it makes: the README's mermaid block plus a skeleton file per new part, always
+// through care.applyOp (fd14). Nothing is ever deleted, and every write stays inside the architecture folder.
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { safeResolve } from '../files.mjs';
+import { applyOp } from '../foundation/care.mjs';
 import { brainDir, writeAtomic } from '../store.mjs';
 import { flowKey, matchParts, newId, parseFlow, printFlow } from '../web/flow.js';
+import { isViewText } from '../web/flowlevel.js';
 import { MERMAID_FENCE_RE as FENCE_RE, readmeMermaid, slug } from './parse.mjs';
 
 const DEFAULT_DIR = { en: 'docs/architecture', pt: 'docs/arquitetura' };
@@ -17,7 +19,7 @@ const SKELETON = {
 const README_TITLE = { en: 'Architecture', pt: 'Arquitetura' };
 
 // The parts the Flow draws: the program's own. The registry of requests and the operation part change no code.
-function programOnly(arch) {
+export function programOnly(arch) {
   const out = arch.parts.filter((p) => p.role === 'requests' || p.role === 'operation').map((p) => p.id);
   if (!out.length) return arch;
   const left = new Set(out);
@@ -104,6 +106,8 @@ function fileFor(name, dir, used) {
 // The preview of an import: what the drawing adds, moves, leaves out, and which arrows change, against the map as the
 // export draws it, so exporting and importing again changes nothing. taken(file) says a file already exists.
 export function planImport(archIn, text, { dir = archIn.dir ?? DEFAULT_DIR[archIn.lang] ?? DEFAULT_DIR.en, taken = () => false } = {}) {
+  // The general view (actors, outside services) is a picture of the code, not parts: its boxes must never become part files.
+  if (isViewText(text)) return { ok: false, error: 'view-not-importable' };
   const arch = programOnly(archIn);
   const next = parseFlow(text);
   if (!next.ok) return { ok: false, error: next.error };
@@ -171,9 +175,10 @@ function withBlock(readme, block) {
   return `${readme.replace(/\s*$/, '')}${eol}${eol}${fenced}${eol}`;
 }
 
-// Writes what planImport showed: the README's mermaid block (and nothing else of it) and a skeleton for each new part
-// not in `skip`. A map read from the main branch is not in this folder, so it is refused.
-export function applyImport({ root, arch, text, skip = [] }) {
+// The write planImport showed, as one care operation (fd14): the README's mermaid block (and nothing else of it) and a
+// skeleton for each new part not in `skip`. Builds it only; op is null when there is nothing to write. A map read from
+// the main branch is not in this folder, so it is refused.
+export function importOp({ root, arch, text, skip = [] }) {
   if (arch.source === 'main-branch') return { ok: false, error: 'arch-not-here' };
   const lang = arch.lang === 'pt' ? 'pt' : 'en';
   const dir = arch.source === 'worktree' ? arch.dir : DEFAULT_DIR[lang];
@@ -181,23 +186,30 @@ export function applyImport({ root, arch, text, skip = [] }) {
   if (!readmePath) return { ok: false, error: 'bad-path' };
   const plan = planImport(arch, text, { dir, taken: (file) => existsSync(safeResolve(root, file) ?? join(root, file)) });
   if (!plan.ok) return plan;
-  if (plan.unchanged) return { ok: true, changed: false, files: [] };
+  if (plan.unchanged) return { ok: true, op: null };
   const block = printFlow(parseFlow(text));
-  const creating = plan.partsNew.filter((p) => !skip.includes(p.nodeId)).map((p) => ({ ...p, abs: safeResolve(root, p.file) }));
-  if (creating.some((p) => !p.abs)) return { ok: false, error: 'bad-path' };
+  const creating = plan.partsNew.filter((p) => !skip.includes(p.nodeId));
+  if (creating.some((p) => !safeResolve(root, p.file))) return { ok: false, error: 'bad-path' };
   const readme = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : `# ${README_TITLE[lang]}\n`;
   // The README's diagram keeps the person's own layout when the drawing is the same; otherwise the new one is written.
   const files = [];
-  if (readmeMermaid(readme) !== block) {
-    writeAtomic(readmePath, withBlock(readme, block));
-    files.push(`${dir}/README.md`);
-  }
-  for (const p of creating) {
-    mkdirSync(dirname(p.abs), { recursive: true });
-    writeFileSync(p.abs, SKELETON[lang](p.name), { flag: 'wx' });
-    files.push(p.file);
-  }
-  return { ok: true, changed: files.length > 0, files };
+  if (readmeMermaid(readme) !== block) files.push({ path: `${dir}/README.md`, after: withBlock(readme, block) });
+  for (const p of creating) files.push({ path: p.file, after: SKELETON[lang](p.name) });
+  if (!files.length) return { ok: true, op: null };
+  return { ok: true, op: { kind: 'flow-import', sensitive: false, files, why: { msg: 'flow.op.why', params: { files: files.length } } } };
+}
+
+// Writes the drawing through care.applyOp, the one function that writes in a project. The owner clicking Apply after
+// the preview is the accept (bloco-3 decision 4): auto and suggest write and record an undo; look (or not asked yet)
+// writes nothing. care = { id, smDir, mode? }: mode left out reads the project's care.json.
+export function applyImport({ root, arch, text, skip = [], care }) {
+  if (typeof care?.id !== 'string' || typeof care?.smDir !== 'string') throw new TypeError('applyImport needs the care mode: { id, smDir }');
+  const built = importOp({ root, arch, text, skip });
+  if (!built.ok) return built;
+  if (!built.op) return { ok: true, changed: false, status: 'unchanged', opId: null, files: [] };
+  const out = applyOp({ id: care.id, root }, built.op, { smDir: care.smDir, mode: care.mode, accept: true });
+  const changed = out.status === 'applied';
+  return { ok: out.ok, changed, status: out.status, opId: out.opId, files: out.files, ...(out.ok ? {} : { error: out.error ?? out.status }) };
 }
 
 // ---- the workshop draft: one per project, beside the project's other brain files ------------

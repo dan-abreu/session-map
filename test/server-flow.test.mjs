@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadToken } from '../server/auth.mjs';
 import { parseArch } from '../server/arch/parse.mjs';
+import { listUndo, undoOp, writeCare } from '../server/foundation/care.mjs';
 import { createApp } from '../server/main.mjs';
 
 const FIX = join(import.meta.dirname, 'fixtures', 'arch-pt');
@@ -86,6 +87,7 @@ test('after a restart the Flow answers from the disk copy of the state while the
 
 test('preview then apply: the README block and the new part file are written, logged in actions.log; the same text again changes nothing', async () => {
   await withServer(async ({ call, read, write, root, smDir }) => {
+    writeCare(smDir, 'feira-abc123', 'auto');
     const { text } = (await call('GET', `${P}/mermaid`, { headers: read })).body;
     const drawn = withBox(text);
     assert.ok(drawn.includes('NF["Notas fiscais"]'));
@@ -95,10 +97,11 @@ test('preview then apply: the README block and the new part file are written, lo
     assert.deepEqual(plan.body.partsNew.map((p) => p.file), ['docs/arquitetura/notas-fiscais.md']);
     assert.ok(!existsSync(join(root, DIR, 'notas-fiscais.md')), 'the preview writes nothing');
     const applied = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn } });
-    assert.deepEqual(applied.body, { ok: true, changed: true, files: ['docs/arquitetura/README.md', 'docs/arquitetura/notas-fiscais.md'] });
+    assert.match(applied.body.opId, /^op:/);
+    assert.deepEqual({ ...applied.body, opId: null }, { ok: true, changed: true, status: 'applied', opId: null, files: ['docs/arquitetura/README.md', 'docs/arquitetura/notas-fiscais.md'] });
     assert.match(readFileSync(join(root, DIR, 'README.md'), 'utf8'), /NF\["Notas fiscais"\]/);
     const again = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn } });
-    assert.equal(again.body.changed, false);
+    assert.deepEqual(again.body, { ok: true, changed: false, status: 'unchanged', opId: null, files: [] });
     const logged = readFileSync(join(smDir, 'actions.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepEqual(logged.map((l) => [l.action, l.projectId, l.count, l.status]), [['flow-apply', 'feira-abc123', 2, 200], ['flow-apply', 'feira-abc123', 0, 200]]);
     assert.doesNotMatch(readFileSync(join(smDir, 'actions.log'), 'utf8'), /Notas fiscais/, 'the drawing itself is not logged');
@@ -156,4 +159,47 @@ test('the demo shows the export and keeps a draft in memory, but never applies',
     assert.equal((await call('GET', `${base}/draft`)).body.text, 'flowchart LR\n  z');
     assert.ok(!existsSync(join(smDir, 'brain')), 'nothing on disk');
   }, { demo: true });
+});
+
+// ---- apply goes through the care mode (fd14, B3-T19) ------------------------------------------------
+
+test('look only (or not asked yet): apply answers look-only and the project stays byte-identical', async () => {
+  await withServer(async ({ call, read, write, root, smDir }) => {
+    const before = JSON.stringify(folder(root));
+    const drawn = withBox((await call('GET', `${P}/mermaid`, { headers: read })).body.text);
+    const unasked = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn } });
+    assert.deepEqual([unasked.status, unasked.body.ok, unasked.body.status, unasked.body.error, unasked.body.changed], [409, false, 'look-only', 'look-only', false]);
+    writeCare(smDir, 'feira-abc123', 'look');
+    const look = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn } });
+    assert.deepEqual([look.status, look.body.status], [409, 'look-only']);
+    assert.equal(JSON.stringify(folder(root)), before, 'nothing written');
+    assert.ok(!existsSync(join(root, DIR, 'notas-fiscais.md')));
+    assert.deepEqual(listUndo(smDir, 'feira-abc123'), []);
+    const logged = readFileSync(join(smDir, 'actions.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(logged.map((l) => [l.action, l.count, l.status, l.mode]), [['flow-apply', 0, 409, 'look-only'], ['flow-apply', 0, 409, 'look-only']]);
+  });
+});
+
+test('suggest: the Apply click writes, answers the operation id and leaves an undo that gives the README back', async () => {
+  await withServer(async ({ call, read, write, root, smDir }) => {
+    writeCare(smDir, 'feira-abc123', 'suggest');
+    const before = folder(root);
+    const drawn = withBox((await call('GET', `${P}/mermaid`, { headers: read })).body.text);
+    const applied = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn } });
+    assert.deepEqual([applied.status, applied.body.status, applied.body.changed], [200, 'applied', true]);
+    const [record] = listUndo(smDir, 'feira-abc123', { root });
+    assert.deepEqual([record.id, record.mode, record.kind, record.undoable], [applied.body.opId, 'suggest', 'flow-import', true]);
+    assert.equal(undoOp({ id: 'feira-abc123', root }, applied.body.opId, { smDir, confirm: true }).ok, true);
+    assert.deepEqual(folder(root), before, 'undo gives back every byte and removes the new part file');
+  });
+});
+
+test('the client cannot choose the mode: a mode in the body is ignored', async () => {
+  await withServer(async ({ call, read, write, root, smDir }) => {
+    writeCare(smDir, 'feira-abc123', 'look');
+    const drawn = withBox((await call('GET', `${P}/mermaid`, { headers: read })).body.text);
+    const res = await call('POST', `${P}/mermaid/apply`, { headers: write, body: { text: drawn, mode: 'auto', care: { mode: 'auto' } } });
+    assert.equal(res.body.status, 'look-only');
+    assert.ok(!existsSync(join(root, DIR, 'notas-fiscais.md')));
+  });
 });

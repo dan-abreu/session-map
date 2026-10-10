@@ -166,8 +166,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 13:09 — "achei o fluxo bem magro, acho que tinha que ser mais minuncioso"; 2026-10-09 13:17 — "sim"; 2026-10-10 04:50 — "o fluxo nao ta bem feito"
   - What it means: one model behind every view; level 1 with actors and outside services and labeled arrows; level 2 inside each part; level 3 with numbered end-to-end journeys; declared and detected kept apart.
   - How to confirm it is done: level 1 shows the actors and outside services with a label on every arrow; a double click opens a part's inner flow; the Journeys tab shows 3 to 6 numbered journeys, each step tied to a part.
+  - Asked: 2026-10-10 — "preciso que comece a trabalhar dentro da aba fluxo para deixar o fluxo como pedi"
   - Where it went: `fl07`, `fl08`, `fl09`, `fl10`.
-  - Status: accepted.
+  - Status: in progress (step 1: `fl07`, `fl08`).
 - [ ] Golden rule: map, Flow and architecture move together `id49`
   - Asked: 2026-10-09 13:43 — "outra coisa o que for adicionado no mapa vira fluxo se for função e se for adicionado no fluxo vira arquitetura automaticamente. também pedidos, `quero isso assim assassado` se é fluxo vira fluxo, mas vira também arquitetura, nada de criar coisas sem criar arquitetura e fluxo"
   - What it means: a new feature or part in the map gives a box and arrows in the Flow; a new box in the Flow gives a part in the architecture; a request in any chat does both; a small task is only an item; new code outside the map is flagged or added.
@@ -222,12 +223,12 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### Reading every detail
 
-- [ ] Read everything, every detail of the program `id57`
+- [ ] **in progress:** Read everything, every detail of the program `id57`
   - Asked: 2026-10-09 13:47 — "´ótimo, mas não gostei do que a IA leu" [of one of the owner's projects] "achei que ela não foi minunciosa em tudo, tem que puxar tudo mesmo"; 2026-10-09 13:47 — "tem que ler tudo mesmo, cada detalhe, cada centimetro do programa"
   - What it means: every file read in full and recorded in a read ledger, with "100% read" or the list of what is missing, more rounds until closed, and later only what changed; the shallow first map of that project redone with this method.
   - How to confirm it is done: the report of a study says "100% read" with the per-file ledger; a file left out on purpose is listed with the reason; a second study reads only the changed files.
   - Where it went: `bi04`, `bi05`, `bi06`, `fd01`.
-  - Status: accepted.
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
 - [ ] A perfectionist inspector that sees even the wrong commas `id58`
   - Asked: 2026-10-09 13:49 — [not only about that project, but the program] "ele tem que ser minuncioso, tem que ser detalhista, perfeccionista, tem que ser ver tudo, até as viruglas erradas, precisamos disso"; 2026-10-09 13:50 — "tem que ser um detalhista sem deixar passar nada, a pessoa chata que ver tudo, perfeccionista ao extremo"
   - What it means: an inspection of every file for text, code, defects, security, tests, documentation and UI problems, each finding an item with file and line, weight and "what · why · how to fix"; rounds until one finds nothing; grave findings checked twice; session-map inspected before each release.
@@ -240,57 +241,57 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the Foundation part's items are ticked and the redone maps show their measured coverage before `or01` starts.
   - Where it went: `fd01`, `fd02`, `fd03`, `fd04`, `fd05`, `fd06`, `fd07`, `fd08`, `fd09`, `fd10`, `fd11`, `fd12`, `fd13`, `fd14`, `fd15`, `op02` (the whole foundation in one delivery, not in pieces).
   - Status: in progress (the whole foundation approved by the owner on 2026-10-10 as one delivery, with the project box showing the whole repository, id77).
-- [ ] A census letter by letter, number by number `id60`
+- [ ] **in progress:** A census letter by letter, number by number `id60`
   - Asked: 2026-10-09 15:01 — "o que deve ser feito é se nao tiver documentação para tal coisa e ele enxergar e criar a documentação, mas sim fazer um vasculho completo, letra por letra, numero por numero de cada arquivo, computar isso e deixar isso organizado, programa tem 1000 letras, 100 linhas, 10 arquivos, 2 pastas, assim vamos ter certeza que ele não deixou passar nada,"
   - What it means: a count without AI of characters, words and lines of every file, summed per folder, part and total; the AI's reading checked against the same counts; every file with an owner; missing documentation written from the code.
   - How to confirm it is done: see `fd01`.
   - Where it went: `fd01`.
-  - Status: accepted.
-- [ ] Stop the AI from hallucinating when it reads `id61`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** Stop the AI from hallucinating when it reads `id61`
   - Asked: 2026-10-09 15:51 — "essa questão de leitura de dados é bem forte, uma IA em leitura alucina muito como fazer para ela não fazer isso, realmente entregar o que é proposto?"
   - What it means: seven rules: facts only from deterministic tools; a closed vocabulary of ids; a file-and-line citation checked for every claim; reading with the text present; two readers and an adversarial check on important points; visible badges (confirmed, AI interpretation, not found); accuracy measured on repositories with an answer key.
   - How to confirm it is done: see `fd04`.
   - Where it went: `fd04`.
-  - Status: accepted.
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
 
 ### Everything up to date and professional
 
-- [ ] Nothing outdated, anywhere, in real time `id62`
+- [ ] **in progress:** Nothing outdated, anywhere, in real time `id62`
   - Asked: 2026-10-09 16:28 — "percebi que o readme esta defasado, mesmo depois das atualizações, imagens e etc. Agora nao quero que foque apenas no readme, mas sim em tudo, nada pode ficar desafasado o que esse programa precisa é deixar tudo atualizado na integra em tempo real, organizado sem deixar passar nada e não esquecer de nada"
   - What it means: session-map refuses to publish a release with stale screenshots, mismatched versions, a missing changelog section, a README that cites what does not exist, broken links or unticked done items; and for any project a watcher flags documentation that no longer matches the code.
   - How to confirm it is done: see `fd05` and `fd06`.
   - Where it went: `fd05`, `fd06`.
-  - Status: accepted.
-- [ ] "Tudo em dia?" must really mean everything `id63`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** "Tudo em dia?" must really mean everything `id63`
   - Asked: 2026-10-09 16:29 — "mas nesse teu tudo em dia o que voce está colocando?, tudo mesmo?"
   - What it means: an official checklist of eight groups, each line marked confirmed, warning or not verified, proving what was checked.
   - How to confirm it is done: see `fd07`.
   - Where it went: `fd07`.
-  - Status: accepted.
-- [ ] Everything a professional repository needs, and versions in sight `id64`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** Everything a professional repository needs, and versions in sight `id64`
   - Asked: 2026-10-09 16:30 — "tudo o que um repositorio profissional precisa, eu nao sou profissional, além disso eu nao sei as versoes dos programas que estou trabalhando nao esta bem aparente, não foque em apenas em algo que eu digo, pegue a ideia por completo"; 2026-10-09 16:31 — "mas voce pesquisou para falar isso pra mim é só isso mesmo?"
   - What it means: a repository health score from a researched checklist of 91 items in 8 categories; the version of each project's code (and of what runs live, when configured) always in sight; a Projects home page with all of it.
   - How to confirm it is done: see `fd08`, `fd09` and `fd10`.
   - Where it went: `fd08`, `fd09`, `fd10`.
-  - Status: accepted.
-- [ ] Docs kept at a professional size, with exact pointers to the code `id70`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** Docs kept at a professional size, with exact pointers to the code `id70`
   - Asked: 2026-10-09 ~17:20 — paraphrased (the exact words were not recorded): keep the documents at a professional size and point to the exact place in the code.
   - What it means: session-map warns when a document grows past a researched size, offers to split it by topic without losing a line, and points to code by path and symbol, with the line worked out when it is opened.
   - How to confirm it is done: see `fd13`.
   - Where it went: `fd13`.
-  - Status: accepted.
-- [ ] The rules apply to everything in the program, and tips never touch the person's repository unless accepted `id71`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** The rules apply to everything in the program, and tips never touch the person's repository unless accepted `id71`
   - Asked: 2026-10-09 ~17:30 — paraphrased (the exact words were not recorded): the rules must apply to everything in the program; tips must not touch the person's repository unless accepted, and must be automatic for people who do not know.
   - What it means: one care mode per project (Automatic, Suggest, Look only) that governs every feature that writes; in Suggest nothing is written without an OK, in Automatic everything is done and logged with Undo.
   - How to confirm it is done: see `fd14`.
   - Where it went: `fd14`.
-  - Status: accepted.
-- [ ] Every idea executed at a professional level, without the owner having to learn it all `id72`
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] **in progress:** Every idea executed at a professional level, without the owner having to learn it all `id72`
   - Asked: 2026-10-09 ~18:30 — paraphrased (the exact words were not recorded): he does not want to learn everything; he wants his ideas executed at a professional level, not an amateur one, and felt the earlier summaries were shallow.
   - What it means: a deep specification of what happens to every idea, from "I want this" to live, selling and maintained, in 14 stages (product, design, code, tests, security and LGPD, release, operation and costs, documentation, brand, marketing and video, sales and support, legal, finance, work with AI), each with its steps, roles, models, tools, checks, the owner's decisions and sources; session-map walks every idea through it and proves each step.
   - How to confirm it is done: see `fd15`.
   - Where it went: `fd15`.
-  - Status: accepted.
+  - Status: in progress (part of the foundation delivery started on 2026-10-10).
 
 ### This registry
 
@@ -312,3 +313,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: every box lists the code files it owns; a doc sentence without evidence in the code is flagged; see `fd12`.
   - Where it went: `fd12`.
   - Status: accepted.
+- [ ] Every file mapped, and the program keeps mapping and drawing the Flow on its own `id80`
+  - Asked: 2026-10-10 — "tem muitos arquivos sem mapeamento e fizemos um upgrade para mapear novamente o sistema, veja se está tudo correto para o mapa ficar de maneira correta, e isso deveria ser automatico, sempre o programa mapeando e fazer o fluxo automaticamente"
+  - What it means: check why so many files have no part on the map and fix it; then the program itself, without anyone editing the markdown, gives every new file its part and keeps "Where in the code" and the Flow in step with the code.
+  - How to confirm it is done: the map shows almost every file with an owner part; a new file or test lands in its part by itself; after a change the Flow and "Where in the code" match the code.
+  - Where it went: `fd16`, with `fd01`, `fd12` and `fd14`.
+  - Status: in progress (the check and the first step done on 2026-10-10).

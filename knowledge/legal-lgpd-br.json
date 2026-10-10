@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "id": "legal-lgpd-br",
+  "kind": "legal",
+  "title": {"en":"Personal data and the LGPD (Brazil)","pt-BR":"Dados pessoais e LGPD (Brasil)"},
+  "applies": {"types":[],"stacks":[],"signals":["personal-data"],"countries":["BR"],"money":[],"audience":[],"stages":[]},
+  "checkedAt": "2026-10-10",
+  "status": "confirmed",
+  "disclaimer": {"en":"Technical guidance to organize the work, not legal advice. Every decision with legal effect goes through a lawyer. This list never says a project is in line with the law; it only organizes what to take to your lawyer.","pt-BR":"Orientação técnica para organizar o trabalho, não parecer jurídico. Toda decisão com efeito legal passa por advogado. Esta lista nunca diz que o projeto está em dia com a lei; só organiza o que levar ao advogado."},
+  "items": [
+    {
+      "id": "lgpd.inventory", "front": "legal", "ladder": "N2", "severity": "E", "effort": 3,
+      "title": {"en":"Know which personal data you keep","pt-BR":"Saiba quais dados pessoais você guarda"},
+      "what": {"en":"A table that lists each kind of personal data, whose it is, why you keep it, where it lives, who gets it and for how long.","pt-BR":"Uma tabela com cada tipo de dado pessoal: de quem é, para que serve, onde fica, quem recebe e por quanto tempo."},
+      "why": {"en":"You cannot protect or explain what you have not listed. Every other privacy step starts here.","pt-BR":"Não dá para proteger nem explicar o que não foi listado. Todos os outros passos de privacidade partem daqui."},
+      "how": {"en":"Start from the database tables, list the columns that identify a person, then check each line with the owner of the project.","pt-BR":"Comece pelas tabelas do banco, liste as colunas que identificam uma pessoa e confira cada linha com o dono do projeto."},
+      "doneWhen": {"en":"The table exists, carries a date and the owner has checked it. Take it to your lawyer.","pt-BR":"A tabela existe, tem data e o dono conferiu. Leve-a ao advogado."},
+      "example": {"en":"Start with the table {table}: which of its columns identify a person?","pt-BR":"Comece pela tabela {table}: quais colunas dela identificam uma pessoa?"},
+      "detect": {"kind":"manual"},
+      "standard": ["05.inventario-de-dados-e-bases-legais-validados"],
+      "source": {"name":"Convention (docs/standard/05); the law text is the reading reference","url":"https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm","trust":"C"}
+    },
+    {
+      "id": "lgpd.legal-basis", "front": "legal", "ladder": "N2", "severity": "E", "effort": 2,
+      "title": {"en":"Pick a legal basis for each purpose","pt-BR":"Escolha uma base legal para cada finalidade"},
+      "what": {"en":"For each reason you use personal data, write down which legal basis allows it (consent, contract, legal duty, legitimate interest and others). Sensitive data has stricter rules.","pt-BR":"Para cada motivo de uso de dado pessoal, anote qual base legal o permite (consentimento, contrato, obrigação legal, legítimo interesse e outras). Dado sensível tem regras mais estritas."},
+      "why": {"en":"Using data without a basis is the core mistake the law punishes. The basis also decides what the person may ask of you.","pt-BR":"Usar dado sem base é o erro central que a lei pune. A base também define o que a pessoa pode pedir de você."},
+      "how": {"en":"Add a \"basis\" column to the data table. Do not guess: bring the table to your lawyer, who chooses the basis.","pt-BR":"Acrescente uma coluna \"base\" na tabela de dados. Não adivinhe: leve a tabela ao advogado, que escolhe a base."},
+      "doneWhen": {"en":"Every purpose in the table has a basis chosen with your lawyer, with a date.","pt-BR":"Toda finalidade da tabela tem uma base escolhida com o advogado, com data."},
+      "detect": {"kind":"manual"},
+      "standard": ["05.inventario-de-dados-e-bases-legais-validados"],
+      "source": {"name":"Convention (docs/standard/05); see arts. 7 and 11 of the law","url":"https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm","trust":"C"}
+    },
+    {
+      "id": "lgpd.privacy-policy", "front": "legal", "ladder": "N2", "severity": "E", "effort": 2,
+      "title": {"en":"Publish a privacy policy in plain words","pt-BR":"Publique uma política de privacidade em linguagem simples"},
+      "what": {"en":"A public page, linked from the site and the app, that says who is responsible, why you use data, who you share it with, how long you keep it, the person's rights and a contact.","pt-BR":"Uma página pública, ligada no site e no app, que diz quem é o responsável, por que usa os dados, com quem compartilha, por quanto tempo guarda, os direitos da pessoa e um contato."},
+      "why": {"en":"People have the right to know. A copied policy that promises things your product does not do is worse than none.","pt-BR":"A pessoa tem direito de saber. Uma política copiada, que promete o que o produto não faz, é pior do que nenhuma."},
+      "how": {"en":"Write a draft from the data table with clear placeholders where you do not know. Never invent a contact or a legal clause: your lawyer writes the final text.","pt-BR":"Escreva um rascunho a partir da tabela de dados, com marcadores claros onde você não sabe. Nunca invente contato nem cláusula: o texto final é do advogado."},
+      "doneWhen": {"en":"The page is online, linked in the footer, matches what the code really does and was reviewed by a lawyer (dated).","pt-BR":"A página está no ar, linkada no rodapé, bate com o que o código faz e foi revisada por advogado (com data)."},
+      "appliesIf": {"types":["web","mobile","game"]},
+      "detect": {"kind":"file","anyOf":["**/privacy*","**/privacidade*","**/politica-de-privacidade*","PRIVACY.md"]},
+      "standard": ["05.politica-publicada-e-linkada"],
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.subject-rights", "front": "legal", "ladder": "N2", "severity": "E", "effort": 3,
+      "title": {"en":"Let people see, fix and delete their data","pt-BR":"Deixe a pessoa ver, corrigir e apagar os dados"},
+      "what": {"en":"A way for a person to ask for confirmation, access, correction, deletion and a copy of their data, and a record of each request with its date.","pt-BR":"Um jeito de a pessoa pedir confirmação, acesso, correção, eliminação e cópia dos dados, com registro de cada pedido e da data."},
+      "why": {"en":"The law gives these rights and sets deadlines: a simple answer right away, or a full statement within 15 days of the request.","pt-BR":"A lei dá esses direitos e fixa prazos: resposta simplificada na hora, ou declaração completa em até 15 dias do pedido."},
+      "how": {"en":"Build an export route and a delete-account route, give the support team a place to log requests and count the days.","pt-BR":"Crie uma rota para exportar e outra para excluir a conta, e dê ao atendimento um lugar para registrar pedidos e contar os dias."},
+      "doneWhen": {"en":"Export and delete work end to end, requests are logged with a date, and the deadline is tracked.","pt-BR":"Exportar e excluir funcionam de ponta a ponta, os pedidos são registrados com data e o prazo é acompanhado."},
+      "detect": {"kind":"manual"},
+      "standard": ["05.rota-de-exportar-e-excluir-conta"],
+      "source": {"name":"Lei 13.709/2018 (LGPD), arts. 18 and 19, Planalto","url":"https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm","trust":"V"}
+    },
+    {
+      "id": "lgpd.dpo-channel", "front": "legal", "ladder": "N2", "severity": "E", "effort": 1,
+      "title": {"en":"Name a data contact","pt-BR":"Indique quem responde por dados pessoais"},
+      "what": {"en":"A named person (the \"encarregado\") or, for small businesses, a public channel where people and the authority can reach you about personal data.","pt-BR":"Uma pessoa indicada (o \"encarregado\") ou, para pequenos negócios, um canal público onde as pessoas e a autoridade falam com você sobre dados pessoais."},
+      "why": {"en":"The law asks for a public contact. The authority's Resolution 2/2022 lets small agents use a channel instead, but only if they do not do high-risk processing.","pt-BR":"A lei pede um contato público. A Resolução 2/2022 da autoridade deixa agentes de pequeno porte usarem um canal no lugar, desde que não façam tratamento de alto risco."},
+      "how": {"en":"Ask your lawyer whether your business counts as small and what you may do. Publish the contact in the privacy policy.","pt-BR":"Pergunte ao advogado se o seu negócio conta como pequeno e o que vale para você. Publique o contato na política de privacidade."},
+      "doneWhen": {"en":"A contact is published and your lawyer confirmed the choice (dated).","pt-BR":"Há um contato publicado e o advogado confirmou a escolha (com data)."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Migalhas: Resolução CD/ANPD 2/22 and startups","url":"https://www.migalhas.com.br/depeso/367429/resolucao-cd-anpd-2-22-um-diferenciado-olhar-da-lgpd-para-as-startups","trust":"F"}
+    },
+    {
+      "id": "lgpd.processors", "front": "legal", "ladder": "N2", "severity": "E", "effort": 2,
+      "title": {"en":"List who handles data for you, and where","pt-BR":"Liste quem trata dados por você, e onde"},
+      "what": {"en":"A list of every outside service that touches personal data (cloud, database, messages, payment, e-mail, AI, analytics), with the contract and the country where it processes.","pt-BR":"Uma lista de cada serviço de fora que toca dados pessoais (nuvem, banco, mensagens, pagamento, e-mail, IA, análise), com o contrato e o país onde processa."},
+      "why": {"en":"You answer for the data even when a supplier holds it. The list also feeds the privacy policy and the international transfer check.","pt-BR":"Você responde pelo dado mesmo quando um fornecedor o guarda. A lista também alimenta a política de privacidade e a checagem de transferência internacional."},
+      "how": {"en":"Start from the integrations the code uses, add the missing ones by hand, and mark where each contract is.","pt-BR":"Parta das integrações que o código usa, acrescente à mão as que faltam e marque onde está cada contrato."},
+      "doneWhen": {"en":"Every supplier on the list has a processing contract on file and a confirmed country (dated).","pt-BR":"Todo fornecedor da lista tem contrato de tratamento arquivado e país confirmado (com data)."},
+      "example": {"en":"{integration}: do you have a data processing contract with it, and do you know in which country it processes?","pt-BR":"{integration}: há contrato de tratamento de dados com ele e você sabe em que país ele processa?"},
+      "detect": {"kind":"manual"},
+      "standard": ["05.fornecedores-com-contrato-e-pais"],
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.incident-plan", "front": "legal", "ladder": "N2", "severity": "E", "effort": 2,
+      "title": {"en":"Have a one-page incident plan","pt-BR":"Tenha um plano de incidente de uma página"},
+      "what": {"en":"A short document: who decides, how to contain a leak (revoke keys, take the service down), how to judge the risk, a notice template and the suppliers' contacts.","pt-BR":"Um documento curto: quem decide, como conter um vazamento (revogar chaves, tirar do ar), como avaliar o risco, um modelo de aviso e os contatos dos fornecedores."},
+      "why": {"en":"A leak that may harm people has to be reported to the authority and to the people within 3 working days of knowing it (Resolution 15/2024). Deciding that on the day is too late.","pt-BR":"Um vazamento que possa causar dano precisa ser comunicado à autoridade e às pessoas em até 3 dias úteis do conhecimento (Resolução 15/2024). Decidir isso no dia é tarde."},
+      "how": {"en":"Write the plan now, keep it in the repository docs and rehearse it once. The system prepares the notice; sending it is the owner's decision.","pt-BR":"Escreva o plano agora, guarde-o nos documentos do repositório e ensaie uma vez. O sistema prepara o aviso; enviar é decisão do dono."},
+      "doneWhen": {"en":"The plan exists, names the 3 working days deadline and has been read by the owner (dated).","pt-BR":"O plano existe, cita o prazo de 3 dias úteis e foi lido pelo dono (com data)."},
+      "detect": {"kind":"file","anyOf":["docs/**/incident*","docs/**/incidente*","INCIDENT*.md"]},
+      "standard": ["05.plano-de-incidente-com-o-prazo-de-3-dias-uteis"],
+      "source": {"name":"Mattos Filho: ANPD incident regulation","url":"https://www.mattosfilho.com.br/unico/regulamento-incidente-seguranca/","trust":"F"}
+    },
+    {
+      "id": "lgpd.draft-notice", "front": "legal", "ladder": "N2", "severity": "E", "effort": 1,
+      "title": {"en":"Mark every legal draft as a draft","pt-BR":"Marque todo rascunho jurídico como rascunho"},
+      "what": {"en":"Every privacy text, consent text or inventory made by a tool or an AI says clearly that it is a draft that a lawyer must review.","pt-BR":"Todo texto de privacidade, de consentimento ou inventário feito por ferramenta ou IA diz claramente que é um rascunho e que o advogado precisa revisar."},
+      "why": {"en":"A draft that looks final gets published by mistake. The tools never state that a project follows the law.","pt-BR":"Um rascunho com cara de final acaba publicado por engano. As ferramentas nunca afirmam que o projeto cumpre a lei."},
+      "how": {"en":"Put a visible \"draft for lawyer review\" line at the top of each legal text until your lawyer signs it off.","pt-BR":"Ponha uma linha visível \"rascunho para revisão do advogado\" no topo de cada texto jurídico até o advogado liberar."},
+      "doneWhen": {"en":"Every legal text in the repository either carries the draft notice or has a dated lawyer review.","pt-BR":"Todo texto jurídico do repositório tem o aviso de rascunho ou uma revisão do advogado com data."},
+      "detect": {"kind":"manual"},
+      "standard": ["05.aviso-nao-e-parecer-juridico-em-toda-tela-de-lgpd"],
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.minimization", "front": "legal", "ladder": "N3", "severity": "R", "effort": 2,
+      "title": {"en":"Collect only what you need","pt-BR":"Colete só o necessário"},
+      "what": {"en":"For each field you ask for, check that the product really needs it. Prefer a phone number over a CPF when the phone is enough.","pt-BR":"Para cada campo que você pede, confira se o produto precisa mesmo dele. Prefira o telefone ao CPF quando o telefone basta."},
+      "why": {"en":"Data you never collected cannot leak, and it is less to explain, protect and delete.","pt-BR":"Dado que nunca foi coletado não vaza, e há menos a explicar, proteger e apagar."},
+      "how": {"en":"Walk through the forms and tables, remove or make optional what is not used, and separate identifiers from analysis data.","pt-BR":"Passe pelos formulários e tabelas, remova ou torne opcional o que não é usado e separe identificadores dos dados de análise."},
+      "doneWhen": {"en":"Each personal field in the inventory has a stated use; unused fields were removed.","pt-BR":"Cada campo pessoal do inventário tem um uso declarado; os sem uso foram removidos."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.consent", "front": "legal", "ladder": "N3", "severity": "R", "effort": 2,
+      "title": {"en":"Ask for consent the right way","pt-BR":"Peça consentimento do jeito certo"},
+      "what": {"en":"When consent is your basis: a specific request, no pre-ticked box, a record of who agreed, when and to which text version, and a way to withdraw as easy as agreeing.","pt-BR":"Quando a base é o consentimento: pedido específico, sem caixa já marcada, registro de quem aceitou, quando e qual versão do texto, e saída tão fácil quanto o aceite."},
+      "why": {"en":"Consent that cannot be proved or withdrawn is not worth much if someone questions it.","pt-BR":"Consentimento que não se prova nem se retira vale pouco se alguém questionar."},
+      "how": {"en":"Store the consent with user, date and text version. Give the withdraw button the same size and place as the accept button.","pt-BR":"Guarde o consentimento com usuário, data e versão do texto. Dê ao botão de retirar o mesmo tamanho e lugar do botão de aceitar."},
+      "doneWhen": {"en":"You can show, for one person, when and what they accepted, and they can withdraw in one step.","pt-BR":"Você consegue mostrar, para uma pessoa, quando e o que ela aceitou, e ela retira em um passo."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.retention", "front": "legal", "ladder": "N3", "severity": "R", "effort": 2,
+      "title": {"en":"Decide how long you keep data","pt-BR":"Decida por quanto tempo guarda os dados"},
+      "what": {"en":"A keeping period for each kind of data, a routine that deletes or anonymizes it, and backups that expire. Access logs are a special case: a company running an app for profit must keep them for 6 months (Marco Civil, art. 15).","pt-BR":"Um prazo de guarda para cada tipo de dado, uma rotina que apaga ou anonimiza, e backups que expiram. Registros de acesso são um caso à parte: empresa que mantém aplicação com fins econômicos deve guardá-los por 6 meses (Marco Civil, art. 15)."},
+      "why": {"en":"Keeping data forever is a risk with no benefit. The 6-month duty and the minimization rule live together.","pt-BR":"Guardar dado para sempre é risco sem benefício. A obrigação de 6 meses e a minimização convivem."},
+      "how": {"en":"Add a \"keep for\" column to the inventory, schedule the deletion job and check how long backups live.","pt-BR":"Acrescente uma coluna \"guardar por\" no inventário, agende a rotina de apagar e confira quanto tempo os backups vivem."},
+      "doneWhen": {"en":"Each data kind has a period, and the deletion routine has run at least once (dated).","pt-BR":"Cada tipo de dado tem prazo, e a rotina de apagar rodou ao menos uma vez (com data)."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05); Marco Civil text for reading","url":"https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l12965.htm","trust":"C"}
+    },
+    {
+      "id": "lgpd.international-transfer", "front": "legal", "ladder": "N3", "severity": "R", "effort": 2,
+      "title": {"en":"Check data that leaves Brazil","pt-BR":"Confira o dado que sai do Brasil"},
+      "what": {"en":"Using a cloud or AI service abroad is an international transfer. It needs a legal basis and a mechanism, such as the authority's standard contract clauses (Resolution 19/2024).","pt-BR":"Usar nuvem ou IA no exterior é transferência internacional. Ela precisa de base legal e de um mecanismo, como as cláusulas-padrão da autoridade (Resolução 19/2024)."},
+      "why": {"en":"Most small projects do this without noticing, just by picking a foreign provider.","pt-BR":"A maioria dos projetos pequenos faz isso sem perceber, só por escolher um fornecedor estrangeiro."},
+      "how": {"en":"From the supplier list, mark each one that processes outside Brazil. Prefer a region in Brazil when it exists and take the rest to your lawyer.","pt-BR":"Da lista de fornecedores, marque quem processa fora do Brasil. Prefira uma região no Brasil quando houver e leve o resto ao advogado."},
+      "doneWhen": {"en":"Each foreign supplier has a mechanism chosen with your lawyer (dated).","pt-BR":"Cada fornecedor estrangeiro tem um mecanismo escolhido com o advogado (com data)."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Demarest: ANPD international transfer regulation","url":"https://www.demarest.com.br/anpd-aprova-o-regulamento-de-transferencia-internacional-de-dados/","trust":"F"}
+    },
+    {
+      "id": "lgpd.cookies", "front": "legal", "ladder": "N3", "severity": "R", "effort": 1,
+      "title": {"en":"Treat cookies by purpose","pt-BR":"Trate os cookies pela finalidade"},
+      "what": {"en":"Necessary cookies need no consent. Advertising and tracking cookies do.","pt-BR":"Cookie necessário não pede consentimento. Cookie de publicidade e de rastreio pede."},
+      "why": {"en":"Each tracking script on the site may need consent. Analytics without cookies reduces the problem.","pt-BR":"Cada script de rastreio do site pode exigir consentimento. Análise sem cookie reduz o problema."},
+      "how": {"en":"List the cookies and scripts of your site, mark the necessary ones and take the list and the consent notice to your lawyer.","pt-BR":"Liste os cookies e scripts do site, marque os necessários e leve a lista e o aviso de consentimento ao advogado."},
+      "doneWhen": {"en":"Only necessary cookies load before consent, and a lawyer reviewed the consent notice (dated).","pt-BR":"Só cookies necessários carregam antes do consentimento, e o advogado revisou o aviso de consentimento (com data)."},
+      "appliesIf": {"types":["web"]},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Lefosse: ANPD cookies guide","url":"https://lefosse.com/noticias/anpd-publica-guia-orientativo-sobre-o-uso-de-cookies","trust":"F"}
+    },
+    {
+      "id": "lgpd.children", "front": "legal", "ladder": "N2", "severity": "E", "effort": 3,
+      "title": {"en":"Extra care when children may use it","pt-BR":"Cuidado extra quando crianças podem usar"},
+      "what": {"en":"If the product is aimed at minors, or they are likely to use it, the LGPD (art. 14) and the ECA Digital law (Lei 15.211/2025) apply: protection by default, real age checking, parental tools, limits on targeted ads.","pt-BR":"Se o produto é dirigido a menores, ou eles provavelmente o usam, valem a LGPD (art. 14) e o ECA Digital (Lei 15.211/2025): proteção por padrão, verificação real de idade, ferramentas para os pais, limites à publicidade dirigida."},
+      "why": {"en":"The rules are stricter and the penalties are heavier than for adults' data.","pt-BR":"As regras são mais duras e as sanções, mais pesadas do que para dados de adultos."},
+      "how": {"en":"Treat this as a lawyer-led project: bring the product description, the data table and the age checks you plan.","pt-BR":"Trate como projeto conduzido pelo advogado: leve a descrição do produto, a tabela de dados e a verificação de idade que você pretende usar."},
+      "doneWhen": {"en":"A lawyer reviewed the product for minors and the decisions are recorded (dated).","pt-BR":"O advogado revisou o produto para menores e as decisões estão registradas (com data)."},
+      "appliesIf": {"audience":["kids"]},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Demarest: ECA Digital in force","url":"https://www.demarest.com.br/eca-digital-entrada-em-vigor-em-17-de-marco-de-2026/","trust":"F"}
+    },
+    {
+      "id": "lgpd.automated-decisions", "front": "legal", "ladder": "N4", "severity": "A", "effort": 2,
+      "title": {"en":"Let people question automatic decisions","pt-BR":"Deixe a pessoa questionar decisões automáticas"},
+      "what": {"en":"If the system ranks, approves or refuses people on its own, they can ask for a review by a person and for the criteria used (LGPD art. 20).","pt-BR":"Se o sistema ranqueia, aprova ou recusa pessoas sozinho, elas podem pedir revisão por uma pessoa e os critérios usados (LGPD art. 20)."},
+      "why": {"en":"Without a way to review, a wrong automatic decision has no remedy.","pt-BR":"Sem um jeito de revisar, uma decisão automática errada não tem remédio."},
+      "how": {"en":"List the automatic decisions, write the criteria in plain words and give support a way to send a case to a human.","pt-BR":"Liste as decisões automáticas, escreva os critérios em linguagem simples e dê ao atendimento um jeito de levar o caso a uma pessoa."},
+      "doneWhen": {"en":"Each automatic decision has a written criterion and a path to human review.","pt-BR":"Cada decisão automática tem um critério escrito e um caminho para revisão humana."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05); art. 20 text for reading","url":"https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm","trust":"C"}
+    },
+    {
+      "id": "lgpd.ai-notice", "front": "legal", "ladder": "N3", "severity": "R", "effort": 1,
+      "title": {"en":"Say when a person is talking to an AI","pt-BR":"Avise quando a pessoa fala com uma IA"},
+      "what": {"en":"Tell people they are talking to an AI and what happens with the conversation.","pt-BR":"Avise que a conversa é com uma IA e o que acontece com ela."},
+      "why": {"en":"People decide differently when they know, and the privacy policy must cover what the AI provider receives.","pt-BR":"As pessoas decidem diferente quando sabem, e a política de privacidade deve cobrir o que o provedor de IA recebe."},
+      "how": {"en":"Add a first-message notice and a line in the privacy policy that names the data sent to the provider.","pt-BR":"Ponha um aviso na primeira mensagem e uma linha na política de privacidade que cite os dados enviados ao provedor."},
+      "doneWhen": {"en":"The notice shows before the first AI answer and the policy mentions it.","pt-BR":"O aviso aparece antes da primeira resposta da IA e a política o menciona."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    },
+    {
+      "id": "lgpd.impact-report", "front": "legal", "ladder": "N4", "severity": "A", "effort": 2,
+      "title": {"en":"Write an impact report for high-risk use","pt-BR":"Faça o relatório de impacto para uso de alto risco"},
+      "what": {"en":"A document (RIPD) that describes high-risk processing (sensitive data, large scale, minors, automatic decisions), the risks and what reduces them.","pt-BR":"Um documento (RIPD) que descreve o tratamento de alto risco (dado sensível, larga escala, menores, decisão automática), os riscos e o que os reduz."},
+      "why": {"en":"The authority may ask for it, and writing it shows risks early.","pt-BR":"A autoridade pode pedir, e escrevê-lo mostra os riscos cedo."},
+      "how": {"en":"Ask your lawyer whether your processing counts as high risk. If it does, draft the report from the inventory together.","pt-BR":"Pergunte ao advogado se o seu tratamento é de alto risco. Se for, redijam o relatório juntos a partir do inventário."},
+      "doneWhen": {"en":"Either the lawyer wrote that no report is needed, or the report exists (dated).","pt-BR":"Ou o advogado registrou que não precisa, ou o relatório existe (com data)."},
+      "detect": {"kind":"manual"},
+      "source": {"name":"Convention (docs/standard/05)","url":null,"trust":"C"}
+    }
+  ]
+}

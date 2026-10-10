@@ -120,14 +120,17 @@ test('the map leaves out the registry of requests (the Requests tab shows it) bu
   assert.deepEqual(tree.children.map((l) => [l.label, l.children.map((p) => p.label)]), [['App', ['Flow']], ['Requests and operation', ['Operation']]]);
 });
 
-test('the page has the Requests tab, second after the map, wired to its view', async () => {
+// The tabs are drawn by the navbar from the areas table (nav.js), so their order is read there, not in index.html.
+test('the page has the Requests tab, after the map and the flow, wired to its view', async () => {
   const { readFileSync } = await import('node:fs');
+  const { AREAS } = await import('../server/web/nav.js');
   const web = new URL('../server/web/', import.meta.url);
   const html = readFileSync(new URL('index.html', web), 'utf8');
   const app = readFileSync(new URL('app.js', web), 'utf8');
-  assert.ok(html.indexOf('id="tab-map"') < html.indexOf('id="tab-requests"') && html.indexOf('id="tab-requests"') < html.indexOf('id="tab-flow"'));
+  const ids = AREAS.map((a) => a.id);
+  assert.ok(ids.indexOf('map') < ids.indexOf('flow') && ids.indexOf('flow') < ids.indexOf('requests'));
   assert.ok(html.includes('<section id="view-requests"'));
-  assert.match(app, /const VIEWS = \['map', 'requests',/);
+  assert.match(app, /requests: \{ render: \(\) => requestsView\.render/);
   assert.match(app, /requestsView\.render\(\$\('#view-requests'\)\)/);
   assert.match(app, /openItem: openRequestItem/);
 });

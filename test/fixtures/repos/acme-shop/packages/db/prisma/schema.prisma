@@ -1,0 +1,38 @@
+// Data model for acme-shop.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+}
+
+model Customer {
+  id     Int     @id @default(autoincrement())
+  email  String  @unique
+  orders Order[]
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  status     OrderStatus @default(PENDING)
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  customerId Int
+  tags       Tag[]
+}
+
+// model Ghost {
+//   id Int @id
+// }
+
+model Tag {
+  id     Int     @id @default(autoincrement())
+  label  String
+  orders Order[]
+}

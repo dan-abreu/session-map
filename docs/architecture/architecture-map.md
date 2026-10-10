@@ -9,6 +9,9 @@ The convention that makes a project's architecture a folder of plain markdown: a
 ## Where in the code
 
 - `server/arch/`
+- `docs/architecture/README.md`
+- `test/fixtures/arch-en/`
+- `test/fixtures/arch-pt/`
 
 ## Rules that must not break
 

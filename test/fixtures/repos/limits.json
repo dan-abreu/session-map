@@ -1,0 +1,4 @@
+{
+  "extractors": { "accuracy": 1, "invention": 0 },
+  "ai": { "invention": 0.02 }
+}

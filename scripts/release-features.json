@@ -1,0 +1,28 @@
+{
+  "_note": "Read by scripts/release-gate.mjs. features: every ## or ### title of README.md that describes something the program does, with the code that does it (path, or path#Symbol). skip: titles that describe no feature. flagsSkip: options in the README that belong to other tools. pathsSkip: prefixes of paths that live on the user's side, not in this repository.",
+  "features": [
+    { "readme": "Architecture map", "code": ["server/arch/parse.mjs#parseArch", "server/arch/detect.mjs#detectArch"] },
+    { "readme": "Flow tab", "code": ["server/arch/flow.mjs#archFlow", "server/arch/flow.mjs#applyImport", "server/web/flowview.js#foldMermaid"] },
+    { "readme": "Conversation list", "code": ["server/web/convlist.js#listConversations", "server/web/convlist.js#createConvList"] },
+    { "readme": "Live", "code": ["server/web/live.js#workingIn", "server/web/live.js#createLivePanel"] },
+    { "readme": "Requests tab", "code": ["server/web/requests.js#requestsOf", "server/web/requestsview.js#createRequestsView"] },
+    { "readme": "Changes tab", "code": ["server/changes.mjs", "server/web/changes.js#createChangesView"] },
+    { "readme": "Commands", "code": ["skills/map/SKILL.md", "skills/board/SKILL.md", "skills/history/SKILL.md", "skills/architecture/SKILL.md", "server/cli.mjs"] },
+    { "readme": "Files", "code": ["server/files.mjs#readFileForView", "server/files.mjs#isSecretsFile"] },
+    { "readme": "On your phone", "code": ["server/auth.mjs#authorize", "server/auth.mjs#loadToken"] },
+    { "readme": "Chat from the page", "code": ["server/chat/hub.mjs#createChatHub"] },
+    { "readme": "Costs are estimates", "code": ["server/cost.mjs#costOf", "server/cost.mjs#budgetStatus"] },
+    { "readme": "Configuration", "code": ["server/config.mjs#loadConfig"] }
+  ],
+  "skip": [
+    "Start in 6 steps",
+    "Words on this page",
+    "For people who code",
+    "Internal formats may change",
+    "Privacy",
+    "Contributing",
+    "License"
+  ],
+  "flagsSkip": ["--effort"],
+  "pathsSkip": [".claude/"]
+}

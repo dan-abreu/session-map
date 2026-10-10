@@ -93,3 +93,50 @@ test('a removed file whose content was not kept says so in plain words, in both 
   const { LANGS } = await import('../server/web/i18n.js');
   for (const lang of ['en', 'pt-BR']) assert.ok(LANGS[lang]['err.not-kept'], `${lang} err.not-kept`);
 });
+
+// ----- operations of session-map itself (fd14): the badge, the mode and the Undo button -----
+
+const OP = { id: 'op:7', opId: '7', ts: at(9, 12), kind: 'edit', path: 'docs/api.md', added: 3, removed: 1, sessionId: null, title: null, agent: null, origin: 'session-map', mode: 'auto', files: ['docs/api.md'], undoable: true, undone: false, state: 'pending', projectId: 'p1', partId: null };
+
+test('filterChanges keeps the rows made by session-map and they count like any other change', () => {
+  const all = [...ROWS, OP];
+  assert.deepEqual(filterChanges(all, {}).map((r) => r.id), ['a', 'b', 'c', 'd', 'op:7']);
+  assert.deepEqual(filterChanges(all, { sessionId: '-' }).map((r) => r.id), ['d', 'op:7'], 'no conversation made it');
+  assert.deepEqual(filterChanges(all, { day: localDay(at(9, 0)) }).map((r) => r.id), ['a', 'b', 'op:7']);
+  assert.equal(changeTotals(all).files, 4);
+});
+
+test('the Undo button belongs only to a session-map row that can still be undone', async () => {
+  const { isOwnRow, canUndo } = await import('../server/web/changes.js');
+  assert.equal(isOwnRow(OP), true);
+  assert.equal(isOwnRow(ROWS[0]), false);
+  assert.equal(canUndo(OP), true);
+  assert.equal(canUndo({ ...OP, undoable: false }), false, 'the file changed afterwards');
+  assert.equal(canUndo({ ...OP, undone: true }), false, 'already undone');
+  assert.equal(canUndo({ ...OP, undoable: undefined }), false);
+  assert.equal(canUndo({ ...ROWS[0], undoable: true }), false, 'a conversation change is never undone from here');
+});
+
+test('the words of a session-map row name the program and the care mode, in both languages', async () => {
+  const { opWho } = await import('../server/web/changes.js');
+  const texts = (await import('../server/web/i18n-fd/care-mode.js')).default;
+  for (const lang of ['en', 'pt-BR']) {
+    const t = (key, v) => (texts[lang][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => v[k]);
+    const words = opWho(t, OP);
+    assert.match(words, new RegExp(texts[lang]['care.mode.auto']));
+    assert.ok(!words.includes('changes.op'), 'translated');
+  }
+  assert.match(opWho((k) => k, { ...OP, mode: 'wild' }), /changes\.op\.who/, 'an unknown mode still reads');
+});
+
+test('a refused undo says in plain words why, and a done one says how many files came back', async () => {
+  const { undoVerdict } = await import('../server/web/changes.js');
+  assert.deepEqual(undoVerdict({ ok: true, status: 200, data: { ok: true, restored: ['a.md', 'b.md'] } }), { ok: true, restored: 2 });
+  assert.deepEqual(undoVerdict({ ok: true, status: 200, data: { ok: false, error: 'changed-since' } }), { ok: false, error: 'changed-since' });
+  assert.deepEqual(undoVerdict({ ok: false, status: 409, data: null, error: 'changed-since' }), { ok: false, error: 'changed-since' });
+  assert.deepEqual(undoVerdict({ ok: true, status: 200, data: null }), { ok: false, error: 'unknown' }, 'an empty answer is never a success');
+  const texts = (await import('../server/web/i18n-fd/care-mode.js')).default;
+  for (const lang of ['en', 'pt-BR']) {
+    for (const e of ['changed-since', 'not-found', 'already-undone', 'unknown']) assert.ok(texts[lang][`changes.op.err.${e}`], `${lang} ${e}`);
+  }
+});

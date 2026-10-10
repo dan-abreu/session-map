@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clashItems, collect, settleAi } from '../server/collect.mjs';
+import { clashItems, collect, settleAi, topLevelOf } from '../server/collect.mjs';
 import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
@@ -645,6 +645,17 @@ test('the owner\'s moves teach the AI: its prompt lists them as examples', async
   } finally {
     forgetLife(smDir);
     cleanup(dir, smDir, join(root, '..'));
+  }
+});
+
+test('topLevelOf names the root folders and the root files, so ./README.md in "Where in the code" is read from the root (fd16)', () => {
+  const root = tmp();
+  try {
+    mkdirSync(join(root, 'Server'));
+    writeFileSync(join(root, 'README.md'), '# x\n');
+    assert.deepEqual([...topLevelOf(root)].sort(), ['readme.md', 'server']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

@@ -9,6 +9,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 ## Where in the code
 
 - `server/web/`
+- `./DESIGN.md`
 
 ## Rules that must not break
 
@@ -27,7 +28,6 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **important:** The project box opens the whole repository like VS Code on one side, the plan on the other `mm39`
   - The purple root box: the architecture to one side, and to the other the repository's real folders and files, opening folder by folder, with counts, a new file marked as it appears, and a click that opens the file in the viewer.
   - How to confirm it is done: open the root: both sides grow; a file created in the repository shows up in its folder within seconds, marked new; a click opens it read-only.
-
   - Done on main (`server/web/reposide.js`): the files grow to the left of the root, mirrored; folders open one level at a time with their count and "N new, changed or removed"; at most 40 boxes per folder and a "Show N more files" box; A/M/D from the Changes rows; a Files button in the map's tools hides the side; never on the phone. A new file of a kind the count leaves out (an image, a dependency file) shows as new but cannot be opened.
 - [x] **detail:** A file on the left lights its part on the right, and a part lights its files `mm40`
   - Hovering or focusing a file or folder on the files side lights the architecture box it belongs to; picking a part lights its files on the left (opening the folders on the way). No new text on the boxes.
@@ -38,6 +38,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **detail:** The files with no box on the map are marked on the files side `mm42`
   - A dashed border on each file the root counts as "with no box on the map", so it is clear which ones are missing (`id80`).
   - How to confirm it is done: the number of dashed files equals the root's "N files with no box on the map".
+
 ### Views
 
 - [x] **Claude:** Mind map and an outline for phones `mm01`

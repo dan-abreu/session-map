@@ -15,6 +15,8 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 - `server/parse/`
 - `server/changes.mjs`
 - `server/imports.mjs`
+- `server/catalog-classify.mjs`
+- `test/fixtures/claude/`
 
 ## Rules that must not break
 

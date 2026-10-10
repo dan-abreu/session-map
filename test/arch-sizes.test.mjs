@@ -13,6 +13,16 @@ test('ownersOf gives each file one owner: the deepest path, the first part on a 
   assert.deepEqual(ownersOf(['apps/web/src/checkout/pay.ts', 'apps/web/a.ts', 'shared/x.ts', 'README.md', 'docs/architecture/twin.md'], ARCH), ['checkout', 'web', 'api', null, 'twin']);
 });
 
+test('ownersOf gives a test with no owner the part of the file it tests, else of the folder its name points to when one part holds most of it (fd16)', () => {
+  const arch = { layers: [], parts: [part('arch', ['server/arch/']), part('page', ['server/web/']), part('plugin', ['scripts/']), part('fd', ['server/foundation/'])] };
+  const files = [
+    'server/arch/parse.mjs', 'server/web/tree.js', 'scripts/readme-shots.mjs', 'server/foundation/lex.mjs',
+    'test/arch-parse.test.mjs', 'test/web-tree.test.mjs', 'test/readme-shots.test.mjs', 'test/foundation-uptodate-code.test.mjs',
+    'test/server-arch.test.mjs', 'test/nothing-here.test.mjs', 'test/server.test.mjs', 'test/fixtures/arch-en/README.md', 'server/web/tree.test.js',
+  ];
+  assert.deepEqual(ownersOf(files, arch), ['arch', 'page', 'plugin', 'fd', 'arch', 'page', 'plugin', 'fd', 'arch', null, null, null, 'page']);
+});
+
 test('sizesOf: every part counts its own files, a layer is the sum of its parts and the program holds the files with no box too', () => {
   const counted = {
     files: [
@@ -50,4 +60,10 @@ test('sizesOf with no map counts the whole program as having no box', () => {
   assert.deepEqual(sizes.total, { files: 1, lines: 3 });
   assert.equal(sizes.unowned.files, 1);
   assert.deepEqual(sizes.parts, {});
+});
+
+test('ownersOf reads a test name against the code, never against test repositories or documents (fd16)', () => {
+  const arch = { layers: [], parts: [part('fx', ['test/fixtures/']), part('docs', ['docs/']), part('fd', ['server/foundation/'])] };
+  const files = ['test/fixtures/app/src/lex.ts', 'docs/lex.md', 'server/foundation/lex.mjs', 'test/lex.test.mjs'];
+  assert.deepEqual(ownersOf(files, arch), ['fx', 'docs', 'fd', 'fd']);
 });

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs on git push; the logic lives in the gate, this only hands over git's stdin (the refs being pushed).
+exec node scripts/release-gate.mjs --pre-push "$@"

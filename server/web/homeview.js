@@ -1,0 +1,213 @@
+import { emptyState } from './empty.js';
+import { homeRows, homeTotals } from './home.js';
+
+// The Home screen (fd10): a list that reads at a glance, one row per project with its seven values, and under a row at most
+// two heads-up lines, each with the button that goes to the place that solves it. The whole row opens the project's map
+// through ONE button (the name, stretched over the row in CSS), so no button ever sits inside another.
+// The numbers come from home.js (pure); this file only draws them. Drawing never reads the page: it works on the root it
+// is given, so it runs on a tiny element tree in the tests.
+//
+// ctx: h, t (translator function), icon(name, cls), fmt {money(usd), relative(iso)}, state (object or getter),
+// openProject(id), goTo(area, sub), refreshFoundation(id) (optional; may return a promise), demo (bool or getter, optional),
+// now() and ignored() (optional getters).
+
+const COLUMNS = ['project', 'health', 'uptodate', 'working', 'waiting', 'cost', 'last'];
+const COLUMN_ICON = { health: 'check', uptodate: 'file', working: 'auto', waiting: 'bell', cost: 'coin', last: 'clock' };
+// The bell means "waiting for you" everywhere, so a low score gets the cross.
+const TONE_ICON = { good: 'check', ok: 'clock', low: 'close' };
+const SKELETON_ROWS = 3;
+
+const value = (x) => (typeof x === 'function' ? x() : x);
+
+export function createHomeView(ctx) {
+  const { h } = ctx;
+  const t = (key, vars) => ctx.t(key, vars);
+  const reading = new Set();
+  const cache = new Map(); // project id -> { sig, el }
+  let frame = null; // what the last render built, for the root it was built in
+
+  const canRead = () => !value(ctx.demo) && typeof ctx.refreshFoundation === 'function';
+  const icon = (name, cls = 'hm-icon') => (ctx.icon ? ctx.icon(name, cls) : null);
+
+  async function readNow(id) {
+    if (reading.has(id)) return;
+    reading.add(id);
+    redraw();
+    try {
+      await ctx.refreshFoundation(id);
+    } finally {
+      reading.delete(id);
+      redraw();
+    }
+  }
+
+  const label = (key) => h('span', { class: 'visually-hidden' }, `${t(key)}: `);
+  const cell = (column, extra, ...children) => h('div', { class: `hm-cell hm-${column}${extra ? ` ${extra}` : ''}` }, ...children);
+
+  function healthCell(row) {
+    if (!row.read) return null;
+    if (!row.health) return cell('health', 'is-none', label('home.col.health'), h('span', { class: 'hm-val' }, t('home.unmeasured')));
+    const words = t('home.health.value', { score: row.health.score, tone: t(`home.tone.${row.health.tone}`) });
+    return cell('health', `is-${row.health.tone}`, label('home.col.health'), h('span', { class: 'hm-val num', title: words }, icon(TONE_ICON[row.health.tone]), words));
+  }
+
+  function uptodateCell(row) {
+    if (!row.read) return null;
+    const u = row.uptodate;
+    const parts = u ? [
+      u.warning > 0 ? t('home.uptodate.warning', { n: u.warning }) : null,
+      u.confirmed > 0 ? t('home.uptodate.confirmed', { n: u.confirmed }) : null,
+      u.unverified > 0 ? t('home.uptodate.unverified', { n: u.unverified }) : null,
+    ].filter(Boolean) : [];
+    if (!parts.length) return cell('uptodate', 'is-none', label('home.col.uptodate'), h('span', { class: 'hm-val' }, t('home.unmeasured')));
+    const words = parts.join(' · ');
+    return cell('uptodate', u.warning > 0 ? 'is-warn' : '', label('home.col.uptodate'),
+      h('span', { class: 'hm-val num', title: words }, icon('file'), words));
+  }
+
+  // A project not read yet has no numbers to show: one cell says so (never a zero) and offers the reading.
+  function unreadCell(row) {
+    const busy = reading.has(row.id);
+    return cell('unread', '', h('span', { class: 'hm-val' }, icon('clock'), t('home.unread')),
+      h('span', { class: 'hm-why' }, t('home.unread.why')),
+      canRead() ? h('button', { type: 'button', class: 'btn small-btn hm-readnow', 'data-hm': 'read', disabled: busy, 'aria-busy': busy ? 'true' : null, onclick: () => readNow(row.id) },
+        busy ? t('home.reading') : t('home.readnow')) : null);
+  }
+
+  function projectCell(row) {
+    const v = row.version?.code ? row.version : null;
+    return cell('project', '',
+      h('button', { type: 'button', class: 'hm-open', 'data-hm': 'open', title: t('home.open.title', { name: row.name }), onclick: () => ctx.openProject(row.id) }, row.name),
+      v ? h('span', { class: `hm-version num${v.mismatch ? ' is-warn' : ''}` }, t('home.version', { code: v.code }),
+        v.mismatch ? h('span', { class: 'hm-differs' }, ' · ', t('home.version.differs')) : null) : null);
+  }
+
+  const countCell = (column, n, key, tone) => cell(column, n > 0 ? `is-${tone}` : 'is-zero', label(`home.col.${column}`),
+    h('span', { class: 'hm-val num' }, icon(COLUMN_ICON[column]), n > 0 ? t(key, { n }) : t('home.nothing')));
+
+  function costCell(row) {
+    const money = ctx.fmt.money(row.monthCost.usd);
+    return cell('cost', '', label('home.col.cost'), h('span', { class: 'hm-val num', title: t('home.col.cost') }, icon(COLUMN_ICON.cost), money));
+  }
+
+  function lastCell(row) {
+    return cell('last', row.lastActivity ? '' : 'is-none', label('home.col.last'),
+      h('span', { class: 'hm-val' }, icon(COLUMN_ICON.last), row.lastActivity ? ctx.fmt.relative(row.lastActivity) : t('home.last.none')));
+  }
+
+  function attentionEl(row) {
+    // "Not read yet" is already said by its own cell, with the button; the strip keeps the other heads-ups.
+    const items = row.attention.filter((a) => a.kind !== 'unread');
+    if (!items.length) return null;
+    return h('ul', { class: 'hm-attn', 'aria-label': t('home.attn.aria', { name: row.name }) }, items.map((a) => h('li', { class: 'hm-attn-item' },
+      icon('bell', 'hm-icon hm-attn-icon'),
+      h('span', { class: 'hm-attn-text' }, t(`home.attn.${a.kind}`, a.params)),
+      h('button', { type: 'button', class: 'btn small-btn hm-go', 'data-hm': `go-${a.kind}`, onclick: () => ctx.goTo(a.goes.area, a.goes.sub) }, t(`home.attn.${a.kind}.go`)))));
+  }
+
+  function rowEl(row) {
+    const unread = !row.read;
+    const cls = `hm-item${unread ? ' is-unread' : ''}${row.waiting > 0 ? ' has-waiting' : ''}`;
+    return h('li', { class: cls, 'data-id': row.id },
+      h('div', { class: 'hm-row' },
+        projectCell(row),
+        unread ? unreadCell(row) : [healthCell(row), uptodateCell(row)],
+        countCell('working', row.working, 'home.working.n', 'working'),
+        countCell('waiting', row.waiting, 'home.waiting.n', 'waiting'),
+        costCell(row),
+        lastCell(row)),
+      attentionEl(row));
+  }
+
+  // What would change what the row looks like: its numbers, the words already formatted, the language and the reading state.
+  const signature = (row) => JSON.stringify([row, ctx.fmt.money(row.monthCost.usd), row.lastActivity ? ctx.fmt.relative(row.lastActivity) : null,
+    t('home.unread'), canRead(), reading.has(row.id)]);
+
+  function totalsEl(rows) {
+    const totals = homeTotals(rows);
+    const one = (key, shown, art, cls = '') => h('p', { class: `hm-total ${cls}`.trim() }, icon(art), h('span', { class: 'hm-total-label' }, t(key)), h('strong', { class: 'hm-total-value num' }, shown));
+    return [
+      one('home.total.projects', String(totals.projects), 'box'),
+      one('home.total.working', String(totals.working), 'auto', totals.working > 0 ? 'is-working' : ''),
+      one('home.total.waiting', String(totals.waiting), 'bell', totals.waiting > 0 ? 'is-waiting' : ''),
+      one('home.total.month', ctx.fmt.money(totals.monthUsd), 'coin'),
+      totals.unread > 0 ? one('home.total.unread', String(totals.unread), 'clock') : null,
+    ];
+  }
+
+  const skeleton = () => h('div', { class: 'skeleton hm-skeleton', role: 'status', 'aria-busy': 'true', 'aria-label': t('home.loading') },
+    Array.from({ length: SKELETON_ROWS }, () => h('span', { class: 'sk-bar is-wide' })));
+
+  function build(root) {
+    const list = h('ul', { class: 'hm-list' });
+    frame = {
+      root, list, mode: null, empty: null,
+      totals: h('div', { class: 'hm-totals', role: 'group', 'aria-label': t('home.totals.aria') }),
+      head: h('div', { class: 'hm-head', 'aria-hidden': 'true' }, COLUMNS.map((c) => h('span', { class: `hm-col hm-col-${c}` }, t(`home.col.${c}`)))),
+      body: h('div', { class: 'hm-body', 'aria-live': 'polite' }),
+      title: h('h2', { 'data-help': 'home' }, t('home.title')),
+      lede: h('p', { class: 'view-lede' }, t('home.lede')),
+    };
+    root.replaceChildren(h('div', { class: 'view-wrap wide hm-view' },
+      h('div', { class: 'view-head' }, frame.title), frame.lede, frame.totals, frame.head, frame.body));
+  }
+
+  // Keeps the rows whose signature did not change (same element, so focus and selection survive), builds the others,
+  // and touches the list only when its order or its members changed.
+  function draw() {
+    const state = value(ctx.state);
+    const f = frame;
+    if (!state?.projects) {
+      f.mode = 'loading';
+      f.totals.replaceChildren();
+      f.body.replaceChildren(skeleton());
+      return;
+    }
+    const rows = homeRows(state, { nowMs: value(ctx.now) ?? Date.now(), ignored: value(ctx.ignored) ?? new Set() });
+    f.totals.replaceChildren(...totalsEl(rows).filter(Boolean));
+    if (!rows.length) {
+      f.mode = 'empty';
+      f.body.replaceChildren(emptyState({ h, icon: ctx.icon }, { art: 'home', title: t('home.empty.title'), text: t('home.empty.text') }));
+      return;
+    }
+    const doc = f.root.ownerDocument;
+    const active = doc?.activeElement;
+    const focus = f.root.contains?.(active) ? { id: active.closest?.('[data-id]')?.getAttribute('data-id'), hm: active.getAttribute?.('data-hm') } : null;
+    const next = rows.map((row) => {
+      const sig = signature(row);
+      const hit = cache.get(row.id);
+      if (hit && hit.sig === sig) return hit.el;
+      const el = rowEl(row);
+      cache.set(row.id, { sig, el });
+      return el;
+    });
+    for (const id of [...cache.keys()]) if (!rows.some((r) => r.id === id)) cache.delete(id);
+    const same = f.mode === 'list' && [...f.list.children].length === next.length && [...f.list.children].every((el, i) => el === next[i]);
+    if (!same) f.list.replaceChildren(...next);
+    if (f.mode !== 'list') f.body.replaceChildren(f.list);
+    f.mode = 'list';
+    if (focus?.id && doc && !f.root.contains(doc.activeElement)) {
+      next.find((el) => el.getAttribute?.('data-id') === focus.id)?.querySelector?.(`[data-hm="${focus.hm}"]`)?.focus?.();
+    }
+  }
+
+  function redraw() {
+    if (frame) draw();
+  }
+
+  return {
+    render(root) {
+      build(root);
+      draw();
+    },
+    // Called on every state update: redraws only what changed, and builds the frame if the root is a new one.
+    refresh(root) {
+      if (!frame || frame.root !== root) this.render(root);
+      else draw();
+    },
+    // The language changed: the frame has words in it, so it is built again (the rows follow by their signature).
+    relabel() {
+      if (frame) this.render(frame.root);
+    },
+  };
+}

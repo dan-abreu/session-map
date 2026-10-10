@@ -50,7 +50,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['question', 'item', 'decision', 'clash', 'ends'].flatMap((k) => [`waiting.count.${k}.one`, `waiting.count.${k}.other`]),
     ...['user', 'project', 'plugin'].map((o) => `skills.origin.${o}`),
     ...['clash', 'decision', 'question'].map((k) => `waiting.${k}`),
-    ...['not-flowchart', 'empty-flowchart', 'fence-in-drawing', 'arch-not-here'].map((c) => `flow.err.${c}`),
+    ...['not-flowchart', 'empty-flowchart', 'fence-in-drawing', 'arch-not-here', 'view-not-importable'].map((c) => `flow.err.${c}`),
     ...['working', 'waiting', 'recent'].map((g) => `convs.group.${g}`),
     ...['idea', 'create-arch', 'flow', 'off', 'project'].map((k) => `convs.place.${k}`),
     ...['map', 'vscode', 'terminal', 'sdk'].map((o) => `convs.origin.${o}`),

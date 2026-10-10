@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName, forLayout, startScroll,
+  nextZoom, edgePathId, ZOOM_RANGE,
 } from '../server/web/flowview.js';
 
 const counts = (o = {}) => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, ...o });
@@ -101,4 +102,17 @@ test('startScroll: the drawing opens on its first group, never past the end, and
   assert.equal(startScroll(['base'], clusters, { max: 615 }), 0);
   assert.equal(startScroll(['entrada'], clusters, { max: 0 }), 0);
   assert.equal(startScroll([], clusters, { max: 615 }), 0);
+});
+
+test('nextZoom: steps in and out by a quarter and stays inside the range', () => {
+  assert.equal(nextZoom(1, 1), 1.25);
+  assert.equal(nextZoom(1, -1), 0.8);
+  assert.equal(nextZoom(ZOOM_RANGE[1], 1), ZOOM_RANGE[1]);
+  assert.equal(nextZoom(ZOOM_RANGE[0], -1), ZOOM_RANGE[0]);
+  assert.equal(nextZoom(0.4, 1), 0.5);
+});
+
+test('edgePathId: the id mermaid gives the path of a link counts only the links between the same two boxes before it', () => {
+  const edges = [{ from: 'SB', to: 'RD' }, { from: 'A', to: 'B' }, { from: 'SB', to: 'RD' }, { from: 'RD', to: 'SB' }];
+  assert.deepEqual(edges.map((_, i) => edgePathId(edges, i)), ['L_SB_RD_0', 'L_A_B_0', 'L_SB_RD_1', 'L_RD_SB_0']);
 });

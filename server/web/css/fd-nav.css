@@ -1,0 +1,82 @@
+/* Styles of block B6 (nav). Only the tokens of style.css. */
+
+/* The bar: two groups on one line, wrapping to a second line before anything is cut. */
+.navbar { display: flex; flex-wrap: wrap; align-items: stretch; align-self: stretch; gap: 0 var(--sp-1); min-width: 0; }
+.nav-group { display: flex; align-items: stretch; gap: 2px; }
+.nav-group + .nav-group { margin-left: var(--sp-2); padding-left: var(--sp-2); border-left: 1px solid var(--line); }
+.nav-more { position: relative; display: flex; align-items: stretch; }
+
+.nav-tab {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-md); background: none;
+  color: var(--ink-2); font: inherit; font-weight: 550; white-space: nowrap; cursor: pointer;
+  transition: color var(--dur-fast), background-color var(--dur-fast);
+}
+.nav-tab:hover { color: var(--ink); }
+.nav-tab:active { transform: translateY(1px); }
+.nav-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.nav-tab[aria-current="page"] { color: var(--ink); }
+.nav-tab[aria-current="page"]::after {
+  content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px;
+  border-radius: var(--r-2xs); background: var(--ink);
+}
+.nav-tab[aria-expanded="true"] { color: var(--ink); background: var(--bg-3); }
+
+.nav-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* An area whose view has not arrived: a small hollow dot, with the words for a reader and in the tooltip. */
+.nav-soon { flex: none; width: 6px; height: 6px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.8; }
+.nav-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* The "More" menu: a popover under the button on the desktop. */
+.nav-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 8; display: grid; gap: 2px; min-width: 220px; padding: 6px;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-2); box-shadow: var(--shadow-lg);
+  animation: nav-menu-in var(--dur-base) var(--ease-out);
+}
+.nav-menu .nav-tab { justify-content: flex-start; width: 100%; padding: 0 var(--sp-3); text-align: left; }
+.nav-menu .nav-tab:hover { background: var(--bg-3); }
+.nav-menu .nav-tab[aria-current="page"] { background: var(--bg-3); font-weight: 650; }
+.nav-menu .nav-tab[aria-current="page"]::after { content: none; }
+@keyframes nav-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* The phone: a bar of five at the bottom, "More" opens a sheet above it. */
+.navbar.is-bottom {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
+  min-height: 56px; padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--line); background: var(--bg-2);
+}
+.navbar.is-bottom .nav-more { display: contents; }
+.navbar.is-bottom .nav-tab {
+  flex-direction: column; justify-content: center; gap: 2px; min-width: 0; min-height: 56px; padding: 0 2px;
+  border-radius: 0; font-size: var(--fs-xs);
+}
+.navbar.is-bottom .nav-icon { width: 20px; height: 20px; }
+.navbar.is-bottom .nav-label { max-width: 100%; }
+.navbar.is-bottom .nav-tab[aria-current="page"] { font-weight: 650; }
+.navbar.is-bottom .nav-tab[aria-current="page"]::after { left: 30%; right: 30%; top: -1px; bottom: auto; }
+.navbar.is-bottom .nav-soon { position: absolute; top: 8px; right: calc(50% - 18px); }
+.navbar.is-bottom .nav-menu {
+  top: auto; right: var(--sp-2); bottom: calc(100% + var(--sp-2)); left: var(--sp-2); max-height: 70dvh; overflow-y: auto;
+  border-radius: var(--r-xl); animation: nav-sheet-up var(--dur-base) var(--ease-out);
+}
+.navbar.is-bottom .nav-menu .nav-tab { flex-direction: row; justify-content: flex-start; gap: var(--sp-3); min-height: 44px; padding: 0 var(--sp-3); font-size: var(--fs-md); }
+.navbar.is-bottom .nav-menu .nav-icon { width: 18px; height: 18px; }
+.navbar.is-bottom .nav-menu .nav-soon { position: static; }
+.nav-scrim { position: fixed; inset: 0; z-index: 19; background: var(--scrim); }
+@keyframes nav-sheet-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-menu { animation: none; }
+  .nav-tab { transition: none; }
+  .nav-tab:active { transform: none; }
+}
+
+/* Touch size: the Conversations sub-tabs (style.css) are 40 px; the phone asks for 44. */
+@media (max-width: 719px) {
+  .sub-tab { min-height: 44px; }
+}

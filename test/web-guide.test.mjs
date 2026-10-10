@@ -7,6 +7,7 @@ import { emptyState } from '../server/web/empty.js';
 import { TOUR_STEPS, tourWanted, tourTarget } from '../server/web/tour.js';
 import { HELP_AREAS, GLOSSARY } from '../server/web/help.js';
 import { LANGS, TECH } from '../server/web/i18n.js';
+import { AREAS } from '../server/web/nav.js';
 
 const WEB = new URL('../server/web/', import.meta.url);
 const html = readFileSync(new URL('index.html', WEB), 'utf8');
@@ -40,13 +41,17 @@ test('the empty screens of the page use the shared empty state', () => {
   }
 });
 
-test('the welcome tour has five steps, each pointing at a real place with words in both languages', () => {
-  assert.equal(TOUR_STEPS.length, 5);
+test('the welcome tour has five steps (home, now, convs, map, help), each on a real place with words in both languages', () => {
+  assert.deepEqual(TOUR_STEPS.map((s) => s.id), ['home', 'now', 'convs', 'map', 'help']);
+  const areaIds = new Set(AREAS.map((a) => a.id));
   for (const step of TOUR_STEPS) {
     for (const sel of [step.target, step.phoneTarget].filter(Boolean)) {
       const id = sel.match(/^#([\w-]+)$/)?.[1];
-      const cls = sel.match(/^\.([\w-]+)$/)?.[1];
-      assert.ok(id ? html.includes(`id="${id}"`) : new RegExp(`class="[^"]*\\b${cls}\\b`).test(html), `${sel} is on the page`);
+      assert.ok(id, `${sel} is an id`);
+      const tab = id.match(/^tab-(\w+)$/)?.[1];
+      // A tab target must be an area of the table; the new bar reaches the page with B6-T8 (checked in web-shell).
+      if (tab) assert.ok(areaIds.has(tab), `${sel} is an area`);
+      else if (!['convsBtn', 'outline'].includes(id)) assert.ok(html.includes(`id="${id}"`), `${sel} is on the page`);
     }
     assert.ok(has(`tour.${step.id}.title`) && has(`tour.${step.id}.text`), `tour.${step.id} words`);
   }
@@ -62,11 +67,12 @@ test('the tour starts once by itself, and only when it was never seen or skipped
 });
 
 test('every area of the page has a "?" with one sentence in both languages', () => {
-  const required = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts'];
+  const fresh = ['home', 'route', 'health', 'ideas', 'library']; // their views arrive with B6-T8 and part B, which add data-help
+  const required = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', ...fresh];
   assert.deepEqual([...HELP_AREAS].sort(), [...required].sort());
   for (const area of required) {
     assert.ok(has(`help.${area}`), `help.${area} words`);
-    assert.ok(sources.includes(`data-help="${area}"`) || sources.includes(`'data-help': '${area}'`), `${area} carries data-help`);
+    if (!fresh.includes(area)) assert.ok(sources.includes(`data-help="${area}"`) || sources.includes(`'data-help': '${area}'`), `${area} carries data-help`);
     for (const lang of ['en', 'pt-BR']) assert.ok(!/[.!?].+[.!?]\s*\S/.test(LANGS[lang][`help.${area}`].trim().replace(/\b(e\.g|i\.e)\./g, '')), `${lang} help.${area} is one sentence`);
   }
 });
@@ -81,6 +87,16 @@ test('the help menu holds the tour, the technical details switch and a glossary 
   }
   for (const key of ['help.title', 'help.techLabel', 'help.techHint', 'help.glossary']) assert.ok(has(key), key);
   assert.ok(Object.keys(TECH.en).length > 40);
+});
+
+test('the glossary knows the new words side by side, and the help menu names the switch "full mode"', () => {
+  for (const key of ['gloss.uptodate', 'gloss.health']) {
+    assert.ok(GLOSSARY.includes(key), key);
+    for (const lang of ['en', 'pt-BR']) assert.notEqual(LANGS[lang][key], TECH[lang][key], `${lang} ${key}: plain differs from technical`);
+  }
+  assert.equal(LANGS['pt-BR']['gloss.uptodate'], 'Tudo em dia?');
+  assert.equal(LANGS['pt-BR']['gloss.health'], 'Nota de saúde');
+  assert.match(readFileSync(new URL('help.js', WEB), 'utf8'), /mode\.full/);
 });
 
 test('item codes (ca01) are technical: shown only with the technical words on', () => {

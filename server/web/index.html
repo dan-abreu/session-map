@@ -8,6 +8,11 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2.5' y='12' width='9' height='8' rx='3' fill='%237c6bd6'/%3E%3Crect x='19' y='4' width='10.5' height='8' rx='3' fill='%233f8fd2'/%3E%3Crect x='19' y='20' width='10.5' height='8' rx='3' fill='%232f9a6f'/%3E%3Cpath d='M11.5 16C16 16 15 8 19 8M11.5 16C16 16 15 24 19 24' fill='none' stroke='%2394a3b8' stroke-width='1.8'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="css/map-files.css">
+  <link rel="stylesheet" href="css/fd-model.css">
+  <link rel="stylesheet" href="css/fd-care.css">
+  <link rel="stylesheet" href="css/fd-health.css">
+  <link rel="stylesheet" href="css/fd-guide.css">
+  <link rel="stylesheet" href="css/fd-screens.css">
   <link rel="stylesheet" href="css/ai-helpers.css">
 </head>
 <body>
@@ -58,6 +63,12 @@
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5.5 12.5l4 4 9-9"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="3"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4.5 11L12 4.5l7.5 6.5"/><path d="M6.5 9.5v10h11v-10"/><path d="M10 19.5v-5h4v5"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24"><rect x="3.5" y="4" width="7" height="5" rx="1.5"/><rect x="13.5" y="15" width="7" height="5" rx="1.5"/><path d="M7 9v6.5a2 2 0 0 0 2 2h4.5"/><path d="M11.5 15.5l2 2-2 2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 7h10.5M9 12h10.5M9 17h10.5"/><path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01" stroke-width="3"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.5 9.4c-.5-.9-1.5-1.4-2.6-1.4-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 2.1 2.8.9 2.8 2.2-1.2 2.1-2.8 2.1c-1.2 0-2.3-.6-2.8-1.6M12 6.5V8M12 16.4v1.1"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 5.5h5A2.5 2.5 0 0 1 12 8v11.5a2 2 0 0 0-2-2H4.5z"/><path d="M19.5 5.5h-5A2.5 2.5 0 0 0 12 8v11.5a2 2 0 0 1 2-2h5.5z"/></symbol>
+    <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M5 8.5h3.5a2 2 0 1 1 4 0H16V12a2 2 0 1 1 0 4v3.5H5z"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
   </svg>
 
@@ -74,17 +85,9 @@
       </div>
       <button type="button" class="convs-btn" id="convsBtn" aria-controls="convs" aria-expanded="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-chat"/></svg><span data-i18n="convs.title"></span><span class="convs-btn-n num" id="convsBtnCount"></span></button>
     </div>
-    <nav class="tabs" data-i18n-aria="tabs.label">
-      <button type="button" class="tab" id="tab-map" aria-current="page" data-i18n="tab.map"></button>
-      <button type="button" class="tab" id="tab-requests" aria-current="false" data-i18n="tab.requests"></button>
-      <button type="button" class="tab" id="tab-flow" aria-current="false" data-i18n="tab.flow"></button>
-      <button type="button" class="tab" id="tab-changes" aria-current="false" data-i18n="tab.changes"></button>
-      <button type="button" class="tab" id="tab-board" aria-current="false" data-i18n="tab.board"></button>
-      <button type="button" class="tab" id="tab-history" aria-current="false" data-i18n="tab.history"></button>
-      <button type="button" class="tab" id="tab-costs" aria-current="false" data-i18n="tab.costs"></button>
-      <button type="button" class="tab" id="tab-discover" aria-current="false" data-i18n="tab.discover"></button>
-    </nav>
+    <div class="nav-root" id="navbar"></div>
     <div class="bar-end">
+      <button type="button" class="convs-btn" id="aiHelpersBar" aria-haspopup="dialog" aria-controls="aiHelpersDialog"><svg class="btn-icon" aria-hidden="true"><use href="#i-connect"/></svg><span data-i18n="aih.open"></span></button>
       <button type="button" class="icon-btn bar-icon help-btn" id="helpBtn" popovertarget="helpMenu" aria-haspopup="true" aria-expanded="false" aria-controls="helpMenu" data-i18n-aria="help.title" data-i18n-title="help.title"><span aria-hidden="true">?</span></button>
       <div class="help-menu" id="helpMenu" popover="auto" role="dialog" aria-labelledby="helpMenuTitle">
         <h2 id="helpMenuTitle" data-i18n="help.title"></h2>
@@ -153,9 +156,9 @@
           <ul id="searchResults" class="mm-results" role="listbox" data-i18n-aria="search.results" hidden></ul>
         </div>
         <div class="mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
+        <button type="button" class="btn mm-files-btn" id="filesSide" aria-pressed="true" data-i18n-title="map.filesSideHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-file"/></svg><span data-i18n="map.filesSide"></span></button>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
         <button type="button" class="btn primary" id="newChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
-        <button type="button" class="btn mm-files-btn" id="filesSide" aria-pressed="true" data-i18n-title="map.filesSideHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-file"/></svg><span data-i18n="map.filesSide"></span></button>
         <button type="button" class="btn" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
         <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
           <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>
@@ -176,7 +179,7 @@
       <button type="button" class="btn primary" id="createArch" data-i18n="arch.create"></button>
     </section>
 
-    <div class="mm-area">
+    <div class="mm-area" id="view-map">
     <div class="mm" id="mindmap" data-i18n-aria="map.label" role="group"><div class="skeleton sk-map" aria-hidden="true"><span class="sk-box"></span><span class="sk-col"><span class="sk-box"></span><span class="sk-box"></span></span><span class="sk-col"><span class="sk-box"></span><span class="sk-box"></span><span class="sk-box"></span></span></div></div>
     <div class="ol" id="outline" data-i18n-aria="map.label" role="group"></div>
 
@@ -300,7 +303,7 @@
       </div>
     </aside>
 
-    <section id="view-flow" class="view flow" aria-labelledby="tab-flow" data-mode="view" hidden>
+    <section id="view-flow" class="view flow" data-i18n-aria="tab.flow" data-mode="view" hidden>
       <div class="fl-bar">
         <div class="fl-heading">
           <h2 id="flowTitle" data-help="flow"></h2>
@@ -309,6 +312,10 @@
         <div class="seg fl-modes" role="group" data-i18n-aria="flow.modes">
           <button type="button" data-mode="view" aria-pressed="true" data-i18n="flow.mode.view"></button>
           <button type="button" data-mode="workshop" aria-pressed="false" data-i18n="flow.mode.workshop"></button>
+        </div>
+        <div class="seg fl-levels" id="flowLevel" role="group" data-i18n-aria="flow.level">
+          <button type="button" data-level="1" aria-pressed="true" data-i18n="flow.level.one"></button>
+          <button type="button" data-level="parts" aria-pressed="false" data-i18n="flow.level.parts"></button>
         </div>
         <div class="fl-actions" id="flowActions">
           <button type="button" class="btn" id="flowCopy"><svg class="btn-icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="flow.copy"></span></button>
@@ -357,6 +364,20 @@
           <p class="fl-editor-error" id="flowEditorError" role="status"></p>
         </div>
         <div class="fl-canvas-wrap">
+          <div class="fl-filters" id="flowFilters" hidden>
+            <div class="fl-filter-row">
+              <label class="fl-filter" for="flowJourney"><span data-i18n="flow.l1.journey.label"></span>
+                <select id="flowJourney"><option value="" data-i18n="flow.l1.journey.all"></option></select></label>
+              <label class="fl-check-inline"><input type="checkbox" id="flowShowHidden"><span data-i18n="flow.l1.showHidden"></span></label>
+              <span class="fl-filter-note" id="flowJourneyNote"></span>
+            </div>
+            <p class="fl-level-note" id="flowLevelNote" role="status"></p>
+            <details class="fl-facts" id="flowFacts">
+              <summary data-i18n="flow.l1.facts"></summary>
+              <p class="fl-facts-note" data-i18n="flow.l1.factsNote"></p>
+              <ul id="flowFactsList"></ul>
+            </details>
+          </div>
           <div class="fl-auto" id="flowAuto" role="note" hidden>
             <span class="fl-auto-tag" data-i18n="flow.auto.tag"></span>
             <p data-i18n="flow.auto.text"></p>
@@ -367,6 +388,11 @@
           </div>
           <div class="fl-canvas" id="flowCanvas" role="group" data-i18n-aria="flow.canvas"></div>
           <ul class="fl-legend" id="flowLegend"></ul>
+          <div class="fl-zoom" id="flowZoom" role="group" data-i18n-aria="view.zoom">
+            <button type="button" id="flowZoomIn" class="icon-btn" data-i18n-aria="view.zoomIn" data-i18n-title="view.zoomIn"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+            <button type="button" id="flowZoomOut" class="icon-btn" data-i18n-aria="view.zoomOut" data-i18n-title="view.zoomOut"><svg aria-hidden="true"><use href="#i-minus"/></svg></button>
+            <button type="button" id="flowZoomFit" class="icon-btn" data-i18n-aria="view.fit" data-i18n-title="view.fit"><svg aria-hidden="true"><use href="#i-fit"/></svg></button>
+          </div>
         </div>
       </div>
 
@@ -415,13 +441,17 @@
       </aside>
     </section>
 
-    <section id="view-requests" class="view" aria-labelledby="tab-requests" hidden></section>
-    <section id="view-changes" class="view" aria-labelledby="tab-changes" hidden></section>
-    <section id="view-board" class="view" aria-labelledby="tab-board" hidden></section>
-    <section id="view-history" class="view" aria-labelledby="tab-history" hidden></section>
-    <section id="view-costs" class="view" aria-labelledby="tab-costs" hidden></section>
+    <section id="view-home" class="view" data-i18n-aria="tab.home" hidden></section>
+    <section id="view-route" class="view" data-i18n-aria="tab.route" hidden></section>
+    <section id="view-requests" class="view" data-i18n-aria="tab.requests" hidden></section>
+    <section id="view-convs" class="view" data-i18n-aria="tab.convs" hidden></section>
+    <section id="view-changes" class="view" data-i18n-aria="tab.changes" hidden></section>
+    <section id="view-health" class="view" data-i18n-aria="tab.health" hidden></section>
+    <section id="view-ideas" class="view" data-i18n-aria="tab.ideas" hidden></section>
+    <section id="view-costs" class="view" data-i18n-aria="tab.costs" hidden></section>
+    <section id="view-library" class="view" data-i18n-aria="tab.library" hidden></section>
 
-    <section id="discover" class="discover" aria-labelledby="discoverTitle" hidden>
+    <section id="view-discover" class="discover" aria-labelledby="discoverTitle" hidden>
       <div class="dv-wrap">
         <h2 id="discoverTitle" data-i18n="discover.title" data-help="discover"></h2>
         <p class="dv-lede" data-i18n="discover.lede"></p>

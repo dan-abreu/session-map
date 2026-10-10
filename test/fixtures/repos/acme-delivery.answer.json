@@ -1,0 +1,1020 @@
+{
+ "version": 1,
+ "fixture": "acme-delivery",
+ "archDir": "docs/architecture",
+ "notes": [
+  "ids follow the rules of acme-shop.answer.json (same contract, same notes). What is new here is in the lines below.",
+  "every route of routes/api.php gets the /api prefix the framework adds, so it is INFERRED; a Route::prefix('v1')->group(...) adds /v1 inside it; routes/web.php adds nothing, so its route is EXTRACTED. file/line stay at the Route:: call; the five routes of Route::apiResource('orders', ...) share the line of that call (needle 'orders'), carry attrs.action (index store show update destroy) and the parameter is the singular {order}. `update` is PUT (Laravel also answers PATCH; one fact is expected).",
+  "screens: a Flutter screen is a widget class named in a GoRoute (route = its path); the line is the class declaration; the id uses the folder of the app (apps/customer -> customer). price_tag.dart is a widget but not a screen. A Blade view is a screen with route = widget = the view name (receipt), line 1 (the screen sits on the whole file); the id uses the folder of the workspace (backend).",
+  "functions: the id is fn:<file>#<Class>.<name>; a top-level Dart function has no class; the up/down of an anonymous migration class (return new class extends Migration) have no class either (fn:<file>#up). Only named things are facts: an unnamed Dart constructor (const HomeScreen({super.key})), a closure, a fn () => arrow and function (Blueprint $table) {...} are not. exported: Dart = neither the name nor the class starts with _ ; PHP = public (private function summary is false). endLine = the line of the closing brace (an arrow with => ends on its own line). async = Dart async.",
+  "Dart has no export of a declaration and PHP has none either: there is no export fact in acme-delivery. A relation sits on the method that returns it (public function items()), with cardinality 1-n on both sides like Prisma's 1-n pair. A Dart import is checked only when it is package:acme_customer/... or ./ ../ relative.",
+  "job:mail/SendReceipt is the consumer (the class that implements ShouldQueue); its refs are the producers, the places that call SendReceipt::dispatch(...). queue:mail sits on the onQueue('mail') call. No env name is in two files on purpose.",
+  "extraFacts: the five PHP `use App\\...` imports (file to file by composer.json autoload.psr-4 \"App\\\\\" -> backend/app/). They are expected facts like the others and must be found by the extractors; they live apart ONLY because the sanity test of B1-T1 (test/foundation-fixtures.test.mjs, resolvesTo) knows only ./ ../ and package:<name>/. Whoever owns that test must teach it psr-4; then these move into facts. Until then the measure (B1-T18) and the join (B1-T14) must read facts + extraFacts.",
+  "coverage is { num, den } (acme-shop rules): a fact is cited when a backtick span of docs/architecture holds its route path (the method does not count), its screen route or its table name as a whole word. Here GET and POST /api/v1/orders are both cited by the path. The unowned root file (.gitignore) is expected: only a path with a \"/\" in \"Where in the code\" can own a file."
+ ],
+ "traps": [
+  {
+   "file": "apps/customer/lib/main.dart",
+   "line": 7,
+   "text": "GoRoute(path: '/legacy')",
+   "why": "route declaration inside a block comment"
+  },
+  {
+   "file": "apps/customer/lib/api.dart",
+   "line": 8,
+   "text": "Uri.parse('https://ghost.example/triple')",
+   "why": "URL call inside a multi-line triple-quoted string"
+  },
+  {
+   "file": "apps/customer/lib/api.dart",
+   "line": 9,
+   "text": "String.fromEnvironment('GHOST_KEY')",
+   "why": "variable read inside the same triple-quoted string"
+  },
+  {
+   "file": "apps/customer/lib/api.dart",
+   "line": 22,
+   "text": "Uri.parse(\"https://ghost.example/raw\")",
+   "why": "URL call inside a raw r'...' string, next to a $ that is not an interpolation"
+  },
+  {
+   "file": "backend/routes/api.php",
+   "line": 7,
+   "text": "Route::get('/ghost-hash'",
+   "why": "route call inside a # comment"
+  },
+  {
+   "file": "backend/routes/api.php",
+   "line": 19,
+   "text": "Route::get('/ghost-heredoc'",
+   "why": "route call inside a heredoc"
+  },
+  {
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "line": 21,
+   "text": "Http::get('https://ghost.example/status')",
+   "why": "HTTP call inside a // comment"
+  }
+ ],
+ "excluded": {
+  "dep": 1,
+  "generated": 1,
+  "binary": 0,
+  "secret": 1
+ },
+ "facts": [
+  {
+   "id": "route:GET /api/ping",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'/ping'",
+   "line": 9,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/ping",
+    "framework": "laravel"
+   }
+  },
+  {
+   "id": "route:POST /api/feedback",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'/feedback'",
+   "line": 10,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "POST",
+    "path": "/api/feedback",
+    "framework": "laravel"
+   }
+  },
+  {
+   "id": "route:GET /api/stats",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'/stats'",
+   "line": 11,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/stats",
+    "framework": "laravel"
+   }
+  },
+  {
+   "id": "route:GET /api/v1/menu",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'/menu'",
+   "line": 14,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/v1/menu",
+    "framework": "laravel"
+   }
+  },
+  {
+   "id": "route:GET /api/v1/orders",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'orders'",
+   "line": 15,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/v1/orders",
+    "framework": "laravel",
+    "action": "index"
+   }
+  },
+  {
+   "id": "route:POST /api/v1/orders",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'orders'",
+   "line": 15,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "framework": "laravel",
+    "action": "store"
+   }
+  },
+  {
+   "id": "route:GET /api/v1/orders/{order}",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'orders'",
+   "line": 15,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "GET",
+    "path": "/api/v1/orders/{order}",
+    "framework": "laravel",
+    "action": "show"
+   }
+  },
+  {
+   "id": "route:PUT /api/v1/orders/{order}",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'orders'",
+   "line": 15,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "PUT",
+    "path": "/api/v1/orders/{order}",
+    "framework": "laravel",
+    "action": "update"
+   }
+  },
+  {
+   "id": "route:DELETE /api/v1/orders/{order}",
+   "kind": "route",
+   "file": "backend/routes/api.php",
+   "needle": "'orders'",
+   "line": 15,
+   "origin": "INFERRED",
+   "attrs": {
+    "method": "DELETE",
+    "path": "/api/v1/orders/{order}",
+    "framework": "laravel",
+    "action": "destroy"
+   }
+  },
+  {
+   "id": "route:GET /receipt/{order}",
+   "kind": "route",
+   "file": "backend/routes/web.php",
+   "needle": "'/receipt/{order}'",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "method": "GET",
+    "path": "/receipt/{order}",
+    "framework": "laravel"
+   }
+  },
+  {
+   "id": "screen:customer:/",
+   "kind": "screen",
+   "file": "apps/customer/lib/screens/home_screen.dart",
+   "needle": "HomeScreen",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "framework": "flutter",
+    "route": "/",
+    "widget": "HomeScreen"
+   }
+  },
+  {
+   "id": "screen:customer:/orders/:id",
+   "kind": "screen",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "OrderScreen",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "framework": "flutter",
+    "route": "/orders/:id",
+    "widget": "OrderScreen"
+   }
+  },
+  {
+   "id": "screen:backend:receipt",
+   "kind": "screen",
+   "file": "backend/resources/views/receipt.blade.php",
+   "needle": "receipt",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "framework": "blade",
+    "route": "receipt",
+    "widget": "receipt"
+   }
+  },
+  {
+   "id": "table:orders",
+   "kind": "table",
+   "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+   "needle": "Schema::create('orders'",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "laravel-migration"
+   }
+  },
+  {
+   "id": "table:order_items",
+   "kind": "table",
+   "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+   "needle": "Schema::create('order_items'",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "laravel-migration"
+   }
+  },
+  {
+   "id": "relation:Order.items->OrderItem",
+   "kind": "relation",
+   "file": "backend/app/Models/Order.php",
+   "needle": "items",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "from": "Order",
+    "to": "OrderItem",
+    "field": "items",
+    "cardinality": "1-n",
+    "source": "eloquent"
+   }
+  },
+  {
+   "id": "relation:OrderItem.order->Order",
+   "kind": "relation",
+   "file": "backend/app/Models/OrderItem.php",
+   "needle": "order",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "from": "OrderItem",
+    "to": "Order",
+    "field": "order",
+    "cardinality": "1-n",
+    "source": "eloquent"
+   }
+  },
+  {
+   "id": "queue:mail",
+   "kind": "queue",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "'mail'",
+   "line": 16,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "lib": "laravel"
+   }
+  },
+  {
+   "id": "job:mail/SendReceipt",
+   "kind": "job",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "SendReceipt",
+   "line": 10,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "queue": "mail",
+    "lib": "laravel",
+    "role": "consumer"
+   },
+   "refs": [
+    {
+     "file": "backend/app/Http/Controllers/OrderController.php",
+     "needle": "SendReceipt::dispatch(",
+     "line": 18
+    }
+   ]
+  },
+  {
+   "id": "integration:api.acme-delivery.example",
+   "kind": "integration",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "https://api.acme-delivery.example/orders",
+   "line": 13,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "via": "url",
+    "host": "api.acme-delivery.example"
+   }
+  },
+  {
+   "id": "integration:feedback.acme-delivery.example",
+   "kind": "integration",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "https://feedback.acme-delivery.example/v1/messages",
+   "line": 18,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "via": "url",
+    "host": "feedback.acme-delivery.example"
+   }
+  },
+  {
+   "id": "integration:mail.acme-delivery.example",
+   "kind": "integration",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "https://mail.acme-delivery.example/send",
+   "line": 22,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "via": "url",
+    "host": "mail.acme-delivery.example"
+   }
+  },
+  {
+   "id": "env:APP_KEY",
+   "kind": "env",
+   "file": "backend/.env.example",
+   "needle": "APP_KEY",
+   "line": 1,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:DB_DATABASE",
+   "kind": "env",
+   "file": "backend/.env.example",
+   "needle": "DB_DATABASE",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:QUEUE_CONNECTION",
+   "kind": "env",
+   "file": "backend/.env.example",
+   "needle": "QUEUE_CONNECTION",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "example"
+   }
+  },
+  {
+   "id": "env:MAIL_KEY",
+   "kind": "env",
+   "file": "backend/config/services.php",
+   "needle": "MAIL_KEY",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "config"
+   }
+  },
+  {
+   "id": "env:API_KEY",
+   "kind": "env",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "API_KEY",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "source": "code"
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/main.dart#main",
+   "kind": "function",
+   "file": "apps/customer/lib/main.dart",
+   "needle": "main(",
+   "line": 15,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 17
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/api.dart#fetchOrders",
+   "kind": "function",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "fetchOrders",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 15
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/api.dart#sendFeedback",
+   "kind": "function",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "sendFeedback",
+   "line": 17,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": true,
+    "endLine": 19
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/api.dart#describe",
+   "kind": "function",
+   "file": "apps/customer/lib/api.dart",
+   "needle": "describe",
+   "line": 21,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 23
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/screens/home_screen.dart#HomeScreen.build",
+   "kind": "function",
+   "file": "apps/customer/lib/screens/home_screen.dart",
+   "needle": "build(",
+   "line": 8,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 12
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/screens/order_screen.dart#OrderScreen.createState",
+   "kind": "function",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "createState",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 11
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/screens/order_screen.dart#_OrderScreenState.loadOrder",
+   "kind": "function",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "loadOrder",
+   "line": 17,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": false,
+    "async": true,
+    "endLine": 20
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/screens/order_screen.dart#_OrderScreenState.build",
+   "kind": "function",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "build(",
+   "line": 23,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": false,
+    "async": false,
+    "endLine": 27
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/widgets/price_tag.dart#PriceTag.format",
+   "kind": "function",
+   "file": "apps/customer/lib/widgets/price_tag.dart",
+   "needle": "format(",
+   "line": 8,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 10
+   }
+  },
+  {
+   "id": "fn:apps/customer/lib/widgets/price_tag.dart#PriceTag.build",
+   "kind": "function",
+   "file": "apps/customer/lib/widgets/price_tag.dart",
+   "needle": "build(",
+   "line": 13,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 15
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.index",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "index",
+   "line": 10,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 13
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.store",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "store",
+   "line": 15,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 21
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.show",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "show",
+   "line": 23,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 26
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.update",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "update",
+   "line": 28,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 33
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.destroy",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "destroy",
+   "line": 35,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 40
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.menu",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "menu",
+   "line": 42,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 45
+   }
+  },
+  {
+   "id": "fn:backend/app/Http/Controllers/OrderController.php#OrderController.summary",
+   "kind": "function",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "summary",
+   "line": 47,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": false,
+    "async": false,
+    "endLine": 50
+   }
+  },
+  {
+   "id": "fn:backend/app/Jobs/SendReceipt.php#SendReceipt.__construct",
+   "kind": "function",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "__construct",
+   "line": 14,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 17
+   }
+  },
+  {
+   "id": "fn:backend/app/Jobs/SendReceipt.php#SendReceipt.handle",
+   "kind": "function",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "handle",
+   "line": 19,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 23
+   }
+  },
+  {
+   "id": "fn:backend/app/Models/Order.php#Order.items",
+   "kind": "function",
+   "file": "backend/app/Models/Order.php",
+   "needle": "items",
+   "line": 12,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 15
+   }
+  },
+  {
+   "id": "fn:backend/app/Models/OrderItem.php#OrderItem.order",
+   "kind": "function",
+   "file": "backend/app/Models/OrderItem.php",
+   "needle": "order",
+   "line": 11,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 14
+   }
+  },
+  {
+   "id": "fn:backend/database/migrations/2024_01_01_000000_create_orders_table.php#up",
+   "kind": "function",
+   "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+   "needle": "up",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 16
+   }
+  },
+  {
+   "id": "fn:backend/database/migrations/2024_01_01_000000_create_orders_table.php#down",
+   "kind": "function",
+   "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+   "needle": "down",
+   "line": 18,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 21
+   }
+  },
+  {
+   "id": "fn:backend/database/migrations/2024_01_02_000000_create_order_items_table.php#CreateOrderItemsTable.up",
+   "kind": "function",
+   "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+   "needle": "up",
+   "line": 9,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 16
+   }
+  },
+  {
+   "id": "fn:backend/database/migrations/2024_01_02_000000_create_order_items_table.php#CreateOrderItemsTable.down",
+   "kind": "function",
+   "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+   "needle": "down",
+   "line": 18,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "exported": true,
+    "async": false,
+    "endLine": 21
+   }
+  },
+  {
+   "id": "call:fn:apps/customer/lib/screens/order_screen.dart#_OrderScreenState.loadOrder->fn:apps/customer/lib/api.dart#fetchOrders",
+   "kind": "call",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "fetchOrders(",
+   "line": 18,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "callee": "fetchOrders"
+   }
+  },
+  {
+   "id": "call:fn:apps/customer/lib/widgets/price_tag.dart#PriceTag.build->fn:apps/customer/lib/widgets/price_tag.dart#PriceTag.format",
+   "kind": "call",
+   "file": "apps/customer/lib/widgets/price_tag.dart",
+   "needle": "format(",
+   "line": 14,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "callee": "format"
+   }
+  },
+  {
+   "id": "call:fn:backend/app/Http/Controllers/OrderController.php#OrderController.show->fn:backend/app/Http/Controllers/OrderController.php#OrderController.summary",
+   "kind": "call",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "summary(",
+   "line": 25,
+   "origin": "EXTRACTED",
+   "attrs": {
+    "callee": "summary"
+   }
+  },
+  {
+   "id": "import:apps/customer/lib/main.dart->apps/customer/lib/screens/home_screen.dart",
+   "kind": "import",
+   "file": "apps/customer/lib/main.dart",
+   "needle": "package:acme_customer/screens/home_screen.dart",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:apps/customer/lib/main.dart->apps/customer/lib/screens/order_screen.dart",
+   "kind": "import",
+   "file": "apps/customer/lib/main.dart",
+   "needle": "package:acme_customer/screens/order_screen.dart",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:apps/customer/lib/screens/home_screen.dart->apps/customer/lib/widgets/price_tag.dart",
+   "kind": "import",
+   "file": "apps/customer/lib/screens/home_screen.dart",
+   "needle": "package:acme_customer/widgets/price_tag.dart",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:apps/customer/lib/screens/order_screen.dart->apps/customer/lib/api.dart",
+   "kind": "import",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "../api.dart",
+   "line": 2,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:apps/customer/lib/screens/order_screen.dart->apps/customer/lib/widgets/price_tag.dart",
+   "kind": "import",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "needle": "../widgets/price_tag.dart",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  }
+ ],
+ "extraFacts": [
+  {
+   "id": "import:backend/routes/api.php->backend/app/Http/Controllers/OrderController.php",
+   "kind": "import",
+   "file": "backend/routes/api.php",
+   "needle": "App\\Http\\Controllers\\OrderController",
+   "line": 3,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:backend/routes/api.php->backend/app/Models/Order.php",
+   "kind": "import",
+   "file": "backend/routes/api.php",
+   "needle": "App\\Models\\Order",
+   "line": 4,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:backend/app/Http/Controllers/OrderController.php->backend/app/Jobs/SendReceipt.php",
+   "kind": "import",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "App\\Jobs\\SendReceipt",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:backend/app/Http/Controllers/OrderController.php->backend/app/Models/Order.php",
+   "kind": "import",
+   "file": "backend/app/Http/Controllers/OrderController.php",
+   "needle": "App\\Models\\Order",
+   "line": 6,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  },
+  {
+   "id": "import:backend/app/Jobs/SendReceipt.php->backend/app/Models/Order.php",
+   "kind": "import",
+   "file": "backend/app/Jobs/SendReceipt.php",
+   "needle": "App\\Models\\Order",
+   "line": 5,
+   "origin": "EXTRACTED",
+   "attrs": {}
+  }
+ ],
+ "counts": {
+  "apps/customer/lib/main.dart": {
+   "total": 17,
+   "code": 13,
+   "comment": 2,
+   "blank": 2,
+   "bytes": 601,
+   "chars": 598,
+   "words": 57
+  },
+  "apps/customer/lib/screens/order_screen.dart": {
+   "total": 28,
+   "code": 22,
+   "comment": 0,
+   "blank": 6,
+   "bytes": 611,
+   "chars": 611,
+   "words": 60
+  },
+  "backend/routes/api.php": {
+   "total": 20,
+   "code": 14,
+   "comment": 1,
+   "blank": 5,
+   "bytes": 582,
+   "chars": 582,
+   "words": 53
+  },
+  "backend/app/Jobs/SendReceipt.php": {
+   "total": 24,
+   "code": 18,
+   "comment": 1,
+   "blank": 5,
+   "bytes": 559,
+   "chars": 559,
+   "words": 45
+  },
+  "backend/app/Models/Order.php": {
+   "total": 16,
+   "code": 12,
+   "comment": 0,
+   "blank": 4,
+   "bytes": 261,
+   "chars": 261,
+   "words": 23
+  }
+ },
+ "owners": {
+  ".gitignore": null,
+  "apps/customer/lib/api.dart": "customer",
+  "apps/customer/lib/main.dart": "customer",
+  "apps/customer/lib/screens/home_screen.dart": "customer",
+  "apps/customer/lib/screens/order_screen.dart": "customer",
+  "apps/customer/lib/widgets/price_tag.dart": "customer",
+  "apps/customer/pubspec.yaml": "customer",
+  "backend/.env.example": "backend",
+  "backend/app/Http/Controllers/OrderController.php": "backend",
+  "backend/app/Jobs/SendReceipt.php": "backend",
+  "backend/app/Models/Order.php": "backend",
+  "backend/app/Models/OrderItem.php": "backend",
+  "backend/composer.json": "backend",
+  "backend/config/services.php": "backend",
+  "backend/database/migrations/2024_01_01_000000_create_orders_table.php": "backend",
+  "backend/database/migrations/2024_01_02_000000_create_order_items_table.php": "backend",
+  "backend/resources/views/receipt.blade.php": "backend",
+  "backend/routes/api.php": "backend",
+  "backend/routes/web.php": "backend",
+  "docs/architecture/backend.md": "backend",
+  "docs/architecture/customer.md": "customer",
+  "docs/architecture/README.md": null,
+  "README.md": null
+ },
+ "ownerCheck": {
+  "ok": false,
+  "files": [
+   ".gitignore"
+  ],
+  "facts": []
+ },
+ "coverage": {
+  "owned": {
+   "num": 18,
+   "den": 19
+  },
+  "routes": {
+   "num": 4,
+   "den": 10
+  },
+  "screens": {
+   "num": 2,
+   "den": 3
+  },
+  "tables": {
+   "num": 1,
+   "den": 2
+  }
+ },
+ "gaps": [
+  {
+   "kind": "route",
+   "id": "route:POST /api/feedback",
+   "file": "backend/routes/api.php",
+   "line": 10,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET /api/stats",
+   "file": "backend/routes/api.php",
+   "line": 11,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET /api/v1/orders/{order}",
+   "file": "backend/routes/api.php",
+   "line": 15,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:PUT /api/v1/orders/{order}",
+   "file": "backend/routes/api.php",
+   "line": 15,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:DELETE /api/v1/orders/{order}",
+   "file": "backend/routes/api.php",
+   "line": 15,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "route",
+   "id": "route:GET /receipt/{order}",
+   "file": "backend/routes/web.php",
+   "line": 5,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "screen",
+   "id": "screen:customer:/orders/:id",
+   "file": "apps/customer/lib/screens/order_screen.dart",
+   "line": 5,
+   "reason": "not-cited"
+  },
+  {
+   "kind": "table",
+   "id": "table:order_items",
+   "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+   "line": 11,
+   "reason": "not-cited"
+  }
+ ]
+}

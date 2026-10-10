@@ -175,7 +175,7 @@ button, select, input { font: inherit; color: inherit; }
 .bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 0 16px;
@@ -210,23 +210,21 @@ button, select, input { font: inherit; color: inherit; }
   fill: none; stroke: var(--ink-2); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
 }
 
-.tabs { display: flex; gap: 2px; align-self: stretch; }
-.tab {
-  position: relative;
-  border: 0;
-  background: none;
-  padding: 0 12px;
-  color: var(--ink-2);
-  font-weight: 550;
-  cursor: pointer;
-  white-space: nowrap;
+/* The bar of areas (navbar.js, css/fd-nav.css) sits in the middle column and takes what the two ends leave. */
+.nav-root { display: flex; justify-content: center; align-self: stretch; min-width: 0; }
+/* Full mode shows all twelve areas: the bar takes a row of its own under the two ends instead of running into them. */
+body.is-tech .nav-root {
+  grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; margin: 0 -16px -1px; padding: 0 8px 1px;
+  overflow-x: auto; scrollbar-width: none;
 }
-.tab:hover { color: var(--ink); }
-.tab[aria-current="page"] { color: var(--ink); }
-.tab[aria-current="page"]::after {
-  content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px;
-  border-radius: var(--r-2xs); background: var(--ink);
-}
+body.is-tech .nav-root::-webkit-scrollbar { display: none; }
+
+/* Conversations: Board and History as two sub-tabs (tabs.js), a row of words over the view, the open one underlined. */
+.convs-tabs { display: flex; gap: var(--sp-1); width: min(1180px, 100%); margin: 0 auto; padding: var(--sp-4) var(--sp-4) 0; border-bottom: 1px solid var(--line); }
+.sub-tab { position: relative; min-height: 40px; padding: 0 12px; border: 0; background: none; color: var(--ink-2); font-weight: 550; cursor: pointer; }
+.sub-tab:hover, .sub-tab.is-current { color: var(--ink); }
+.sub-tab:focus-visible { outline-offset: -2px; }
+.sub-tab.is-current::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: var(--r-2xs); background: var(--ink); }
 
 .lang { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-md); padding: 2px; background: var(--bg-2); }
 .lang button {
@@ -798,6 +796,9 @@ body.is-splitting { cursor: row-resize; user-select: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--live-spark); }
 .toast:empty { display: none; }
+@media (max-width: 719px) {
+  .toast { bottom: calc(20px + var(--navbar-space)); }
+}
 
 /* ---------- panel pieces ---------- */
 
@@ -1281,7 +1282,7 @@ body.is-resizing .sheet { animation: none; }
 @media (max-width: 719px) {
   .board { grid-template-columns: minmax(0, 1fr); }
   .history { grid-template-columns: minmax(0, 1fr); }
-  .hist-read { position: fixed; inset: auto 0 0 0; top: 96px; z-index: 5; max-height: none; border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--shadow); animation: sheet-up var(--dur-slow) var(--ease-out); }
+  .hist-read { position: fixed; inset: auto 0 var(--navbar-space, 0) 0; top: 96px; z-index: 5; max-height: none; border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--shadow); animation: sheet-up var(--dur-slow) var(--ease-out); }
   .read-back { display: inline-flex; }
   .chat { max-height: 86%; top: auto; width: auto; }
   .sheet-resize { display: none; }
@@ -1419,6 +1420,11 @@ body.is-resizing .sheet { animation: none; }
   box-shadow: var(--shadow); font-size: var(--fs-xs); color: var(--ink-2);
 }
 .fl-legend[hidden], .fl-legend:empty { display: none; }
+/* Zoom for the drawing: bottom right, clear of the legend, which wraps before it. */
+.fl-zoom { position: absolute; right: 16px; bottom: 14px; z-index: 2; display: flex; flex-direction: column; gap: 6px; }
+.fl-zoom .icon-btn { box-shadow: var(--shadow); background: var(--bg-2); }
+.fl-canvas-wrap:has(.fl-zoom) .fl-legend { max-width: calc(100% - 88px); }
+.flow[data-mode="workshop"] .fl-zoom { display: none; }
 .lg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .lg-mark { width: 14px; height: 10px; border-radius: var(--r-xs); border: 1.5px solid var(--wire); background: var(--bg-2); }
 .lg-live .lg-mark { border-color: var(--active); background: var(--active-fill); box-shadow: 0 0 0 2px color-mix(in srgb, var(--active) 22%, transparent); }
@@ -1449,6 +1455,62 @@ body.is-resizing .sheet { animation: none; }
 .fl-canvas .fl-flag-blocks { fill: var(--clash) !important; }
 .fl-canvas .fl-flag-waiting { fill: var(--waiting) !important; }
 @keyframes fl-live { 50% { stroke-opacity: 0.45; } }
+
+/* The general view (Flow step 1): who uses it, the parts, outside services and what runs on this computer. Three shapes and
+   three quiet tints that are not the status colours of the parts, so a box never reads as "doing" or "done" by mistake. */
+.fl-levels { order: 0; }
+.flow[data-mode="workshop"] .fl-levels { display: none; }
+.fl-canvas g.fl-actor :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--k-branches-fill) !important; stroke: var(--k-branches) !important; stroke-width: 1.75px !important; }
+.fl-canvas g.fl-svc :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--k-changes-fill) !important; stroke: var(--k-changes) !important; stroke-width: 1.75px !important; }
+.fl-canvas g.fl-local :is(rect, polygon, circle, ellipse, path):not(.fl-flag) { fill: var(--k-files-fill) !important; stroke: var(--k-files) !important; stroke-width: 1.75px !important; }
+.lg-actor .lg-mark, .lg-svc .lg-mark, .lg-local .lg-mark { border-width: 1.75px; }
+/* The layer titles carry the story of the general view (who uses it, what they touch, ... the internet): they read
+   first, so they are larger and stronger than the box names. */
+.fl-canvas g.cluster .cluster-label text, .fl-canvas g.cluster .cluster-label tspan { font-size: var(--fs-xl) !important; font-weight: 700 !important; fill: var(--ink-2) !important; letter-spacing: 0.01em; }
+.fl-canvas g.cluster > rect { rx: 10px; ry: 10px; }
+/* The general view as session-map lays it out (flowgrid.js): bands top to bottom, arrows dark enough to follow at the
+   size the whole drawing opens in, and labels on the canvas colour so the line under them stops at the words. */
+.fl-grid { overflow: visible; font-family: inherit; }
+.fl-grid .fl-band > rect { fill: color-mix(in srgb, var(--bg) 72%, transparent); stroke: var(--line); stroke-width: 1px; }
+.fl-grid .fl-band-title { fill: var(--ink-2); font-weight: 700; letter-spacing: 0.01em; }
+.fl-grid .fl-shape { fill: var(--bg-2); stroke: var(--wire); stroke-width: 1.5px; }
+.fl-grid .fl-box-text { fill: var(--ink); }
+.fl-grid .fl-edge { fill: none; stroke: color-mix(in srgb, var(--ink-2) 62%, var(--canvas)); stroke-width: 1.4px; }
+.fl-grid .fl-edge-dotted, .fl-grid .fl-edge-dotted-line { stroke-dasharray: 5 4; }
+.fl-grid .fl-edge-thick { stroke-width: 2.6px; }
+.fl-grid .fl-edge:hover { stroke: var(--link); stroke-width: 2.4px; }
+.fl-grid .fl-head { fill: color-mix(in srgb, var(--ink-2) 75%, var(--canvas)); }
+.fl-grid .fl-label-bg { fill: var(--canvas); }
+.fl-grid .fl-label-text { fill: var(--ink-2); }
+.lg-actor .lg-mark { border-radius: var(--r-pill); border-color: var(--k-branches); background: var(--k-branches-fill); }
+.lg-svc .lg-mark { border-radius: var(--r-xs); clip-path: polygon(18% 0, 82% 0, 100% 50%, 82% 100%, 18% 100%, 0 50%); border-color: var(--k-changes); background: var(--k-changes); opacity: 0.55; }
+.lg-local .lg-mark { border-radius: 40% / 22%; border-color: var(--k-files); background: var(--k-files-fill); }
+.lg-declared .lg-mark, .lg-detected .lg-mark { width: 22px; height: 0; border: 0; border-top: 2px solid var(--wire); border-radius: 0; background: none; }
+.lg-detected .lg-mark { border-top-style: dashed; }
+
+.fl-filters { margin: 12px 16px 0; display: flex; flex-direction: column; gap: 6px; }
+.fl-filters[hidden] { display: none; }
+.fl-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: var(--fs-sm); color: var(--ink-2); }
+.fl-filter { display: inline-flex; align-items: center; gap: 8px; }
+.fl-filter select { max-width: 260px; }
+.fl-filter select:disabled { opacity: 0.5; cursor: not-allowed; }
+.fl-check-inline { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.fl-filter-note, .fl-level-note { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
+.fl-filter-note:empty, .fl-level-note:empty { display: none; }
+.fl-facts { font-size: var(--fs-sm); color: var(--ink-2); }
+.fl-facts > summary { cursor: pointer; width: fit-content; font-weight: 600; color: var(--active-ink); }
+.fl-facts-note { margin: 6px 0; font-size: var(--fs-xs); }
+.fl-facts ul { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); }
+.fl-facts li { display: grid; gap: 2px; padding: 8px 12px; border-top: 1px solid var(--line); }
+.fl-facts li:first-child { border-top: 0; }
+.fl-fact-head { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.fl-fact-name { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.fl-fact-label { overflow-wrap: anywhere; }
+.fl-fact-also { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.fl-badge { padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-pill); font-size: var(--fs-2xs); font-weight: 650; background: var(--bg-2); }
+.fl-badge-detected { border-color: var(--k-changes); color: var(--k-changes-ink); }
+.fl-badge-declared { border-color: var(--active); color: var(--active-ink); }
+.fl-fact-code { font: var(--fs-xs)/1.4 var(--mono); overflow-wrap: anywhere; color: var(--ink-2); }
 
 /* The workshop's chat is a column of the tab: the drawing gives it room instead of hiding under it. */
 .flow .fl-chat {
@@ -1524,15 +1586,11 @@ body.is-resizing .sheet { animation: none; }
 /* ---------- phone ---------- */
 
 @media (max-width: 719px) {
-  .bar { grid-template-columns: 1fr auto; gap: 8px 12px; padding: 8px 16px 0; }
+  .bar { grid-template-columns: 1fr auto; gap: 8px 12px; padding: 8px 16px; }
   .brand { display: none; }
-  .tabs {
-    grid-column: 1 / -1; grid-row: 2;
-    overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 6px; min-height: 40px;
-  }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab { padding: 0 10px; }
-  .tab[aria-current="page"]::after { left: 10px; right: 10px; }
+  /* On a phone the bar of areas is fixed at the bottom: its root takes no cell, and the page ends above it. */
+  .nav-root, body.is-tech .nav-root { display: contents; }
+  body { --navbar-h: 56px; --navbar-space: calc(var(--navbar-h) + env(safe-area-inset-bottom)); padding-bottom: var(--navbar-space); }
 
   .mm-tools { padding: 10px 16px; gap: 8px; }
   .summary { font-size: var(--fs-sm); gap: 2px 10px; }
@@ -1544,7 +1602,7 @@ body.is-resizing .sheet { animation: none; }
   .mm-rel-btn { display: none; }
   /* Two halves for the two ways to start, the filters on the row below. */
   #newChat, #newIdea { order: 1; flex: 1 1 calc(50% - 4px); justify-content: center; }
-  .waiting-btn { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); height: 42px; box-shadow: var(--shadow); z-index: 4; }
+  .waiting-btn { position: fixed; right: 16px; bottom: calc(16px + var(--navbar-space, env(safe-area-inset-bottom))); height: 42px; box-shadow: var(--shadow); z-index: 4; }
   .stage:has(.sheet:not([hidden])) .waiting-btn { display: none; }
   .mm, .fit-btn { display: none; }
   .ol { display: block; }
@@ -1930,7 +1988,7 @@ body.is-empty .convs { display: none; }
 .lr-date.is-cut { color: var(--waiting-ink); font-weight: 600; }
 
 @media (max-width: 719px) {
-  .al-stack { top: auto; bottom: 16px; left: 16px; right: 16px; width: auto; }
+  .al-stack { top: auto; bottom: calc(16px + var(--navbar-space, env(safe-area-inset-bottom))); left: 16px; right: 16px; width: auto; }
   /* One card at a time: the phone keeps the map in view. */
   .al-card:nth-child(n + 2) { display: none; }
   .al-actions .btn { height: 36px; }
@@ -2545,7 +2603,7 @@ li.view-empty, #waitingItems li.empty, .dv-list li.empty { list-style: none; pad
 .tour-dots span.is-on { background: var(--ink); }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px); } }
 @media (max-width: 719px) {
-  .tour-card { left: var(--sp-4); right: var(--sp-4); bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); width: auto; }
+  .tour-card { left: var(--sp-4); right: var(--sp-4); bottom: calc(var(--sp-4) + var(--navbar-space, env(safe-area-inset-bottom))); width: auto; }
 }
 /* A "?" sits right after its title; whatever follows in the row moves to the far side. */
 [data-help] + .help-dot { margin-right: auto; }

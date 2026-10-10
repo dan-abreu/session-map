@@ -21,6 +21,7 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/workflows.mjs`
 - `server/store.mjs`
 - `server/hidden.mjs`
+- `server/prices.json`
 
 ## Rules that must not break
 

@@ -1,0 +1,60 @@
+/* The "Everything up to date?" screen (uptodateview.js): eight groups, one hairline row per line, the proof opens under
+   the row. Colors and sizes come from the variables of style.css, so light and dark follow the rest of the app.
+   B3-T22 @imports this file from fd-care.css. */
+.fdu-view { max-width: 920px; }
+.fdu-error { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--clash-fill); color: var(--clash-ink); }
+
+.fdu-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-6);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); background: var(--idle-fill); font-size: var(--fs-md); font-weight: 600;
+}
+.fdu-summary.is-confirmed { background: var(--active-fill); color: var(--active-ink); }
+.fdu-summary.is-warning { background: var(--waiting-fill); color: var(--waiting-ink); }
+
+/* The seals of badges.js, drawn here as plain words with a mark, in the tone of the state. */
+.fdu-view .fd-badge { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: 650; white-space: nowrap; color: var(--ink-2); }
+.fdu-view .fd-badge--confirmed { color: var(--active-ink); }
+.fdu-view .fd-badge--warning { color: var(--waiting-ink); }
+
+.fdu-group { margin: 0 0 var(--sp-8); }
+.fdu-group-title {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.01em;
+}
+.fdu-counts { display: inline-flex; gap: var(--sp-2); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; }
+.fdu-count--warning { color: var(--waiting-ink); }
+
+.fdu-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.fdu-item { border-bottom: 1px solid var(--line); }
+
+.fdu-line > summary {
+  display: grid; grid-template-columns: 9rem minmax(0, 18rem) minmax(0, 1fr); align-items: baseline; gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-3) 0; cursor: pointer; list-style: none;
+}
+.fdu-line > summary::-webkit-details-marker { display: none; }
+.fdu-line > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fdu-line > summary:hover .fdu-name { text-decoration: underline; text-underline-offset: 3px; }
+.fdu-name { font-weight: 600; overflow-wrap: anywhere; }
+.fdu-words { color: var(--ink-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.fdu-line.is-warning .fdu-words { color: var(--waiting-ink); }
+.fdu-line.is-missing .fdu-name { font-weight: 500; }
+
+.fdu-body { padding: 0 0 var(--sp-4) calc(9rem + var(--sp-4)); max-width: 78ch; font-size: var(--fs-sm); }
+.fdu-sub { margin: 0 0 var(--sp-1); font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.fdu-reason { margin: 0 0 var(--sp-3); }
+.fdu-none { margin: 0; color: var(--ink-2); }
+.fdu-proof { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; gap: var(--sp-1); }
+.fdu-proof li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
+.fdu-where {
+  min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; text-align: left;
+  font: var(--fs-xs)/1.4 var(--mono); overflow-wrap: anywhere;
+}
+button.fdu-where:hover code { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.fdu-where code { font: inherit; }
+.fdu-note, .fdu-more { color: var(--ink-2); font-size: var(--fs-xs); }
+.fdu-findings ul { margin: 0 0 var(--sp-3); padding-left: var(--sp-4); }
+
+@media (max-width: 720px) {
+  .fdu-line > summary { grid-template-columns: minmax(0, 1fr); }
+  .fdu-body { padding-left: 0; }
+}

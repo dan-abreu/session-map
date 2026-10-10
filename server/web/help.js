@@ -1,9 +1,9 @@
 // Help that sits where the question comes up (mm11): a "?" next to the title of every area with one sentence, and the
 // help menu in the top bar with the welcome tour, the "Technical details" switch and a glossary of plain and technical words.
-export const HELP_AREAS = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut'];
+export const HELP_AREAS = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', 'home', 'route', 'health', 'ideas', 'library'];
 
 // Plain words whose technical original sits in TECH: the glossary shows them side by side.
-export const GLOSSARY = ['gloss.branch', 'gloss.commit', 'gloss.merge', 'gloss.push', 'gloss.helpers', 'gloss.team', 'gloss.readme', 'gloss.mermaid', 'gloss.cost', 'gloss.git', 'gloss.mcp', 'gloss.hook'];
+export const GLOSSARY = ['gloss.branch', 'gloss.commit', 'gloss.merge', 'gloss.push', 'gloss.helpers', 'gloss.team', 'gloss.readme', 'gloss.mermaid', 'gloss.cost', 'gloss.git', 'gloss.mcp', 'gloss.hook', 'gloss.uptodate', 'gloss.health'];
 
 // ctx: h, t() (translator of the moment), plain() and tech() (translators in each mode), tech flag get/set, onTour().
 export function createHelp(ctx) {
@@ -45,6 +45,12 @@ export function createHelp(ctx) {
     const t = ctx.t();
     for (const dot of document.querySelectorAll('.help-dot')) { dot.setAttribute('aria-label', t('help.button')); dot.title = t('help.button'); }
     toggle.checked = ctx.getTech();
+    // The switch is the "Full mode" of the new organisation (mode.* texts); until those texts exist the old words stay.
+    const label = toggle.closest('label');
+    for (const [sel, key] of [['strong', 'mode.full'], ['small', 'mode.hint']]) {
+      const el = label?.querySelector(sel);
+      if (el && t(key) !== key) el.textContent = t(key);
+    }
     const plain = ctx.plain();
     const tech = ctx.tech();
     document.getElementById('helpGlossary').replaceChildren(...GLOSSARY.map((key) => ctx.h('li', {},
