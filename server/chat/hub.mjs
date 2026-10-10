@@ -51,10 +51,17 @@ const LINGER_MS = 5 * 60_000;
 // A piece of a streamed text, and the events that end the run of pieces a whole text replaces (page-chat pc13).
 const isPiece = (evt) => evt.type === 'text' && evt.data?.partial === true;
 const PIECE_BOUNDS = new Set(['user', 'text', 'tool', 'turn-end']);
-// Everything of a transcript (its items or its messages, in order) before the person's first message sent at or after `at`.
-const beforeMessage = (at) => {
+// claude stamps its transcript with its own clock, a few ms off ours: times are compared with this much room (pc13).
+const CLOCK_SLACK_MS = 1000;
+const shiftIso = (iso, ms) => new Date(Date.parse(iso) + ms).toISOString();
+// Everything of a transcript (its items or its messages, in order) before the person's message of a turn sent at `at`:
+// the first one stamped after the halfway point to the turn before, or to the process's start (prevAt), and at most
+// CLOCK_SLACK_MS before `at`.
+const beforeMessage = ({ at, prevAt }) => {
+  const room = Math.min(CLOCK_SLACK_MS, Math.max(0, (Date.parse(at) - Date.parse(prevAt)) / 2));
+  const from = shiftIso(at, -room);
   let past = false;
-  return (m) => !(past ||= (m.type === 'user' || m.role === 'user') && Boolean(m.ts) && m.ts >= at);
+  return (m) => !(past ||= (m.type === 'user' || m.role === 'user') && Boolean(m.ts) && m.ts >= from);
 };
 const DENIED = 'Denied by the person in session-map.';
 const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
@@ -164,9 +171,12 @@ export function createChatHub({
   function replayFrom(chat) {
     const oldest = chat.events[0];
     const kept = chat.turns.find((turn) => turn.eventId >= (oldest?.id ?? Infinity));
-    if (kept) return { fromEventId: kept.eventId - 1, keep: () => beforeMessage(kept.at) };
-    if (oldest && chat.turns.length) return { fromEventId: oldest.id - 1, keep: () => (m) => !m.ts || m.ts < oldest.at };
-    return { fromEventId: 0, keep: () => beforeMessage(chat.startedAt) };
+    if (kept) return { fromEventId: kept.eventId - 1, keep: () => beforeMessage(kept) };
+    if (oldest && chat.turns.length) {
+      const until = shiftIso(oldest.at, CLOCK_SLACK_MS);
+      return { fromEventId: oldest.id - 1, keep: () => (m) => !m.ts || m.ts <= until };
+    }
+    return { fromEventId: 0, keep: () => beforeMessage({ at: chat.startedAt, prevAt: chat.startedAt }) };
   }
 
   function ask(chat, args) {
@@ -416,9 +426,11 @@ ${prompt}`;
     // The first message is saved with the rest when claude announces the session.
     if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });
     emit(chat, 'user', auto ? { text: shown, auto } : { text: shown, ...(images.length ? { images: images.length } : {}) });
-    // Only the marks whose message the events still hold matter, and the newest (replayFrom).
+    // Only the marks whose message the events still hold matter, and the newest (replayFrom); each knows when the one
+    // before it left (the first, when the process started), which bounds how far back its message may be stamped.
+    const prevAt = chat.turns.at(-1)?.at ?? chat.startedAt;
     chat.turns = chat.turns.filter((turn) => turn.eventId >= chat.events[0].id);
-    chat.turns.push({ eventId: chat.lastId, at: now() });
+    chat.turns.push({ eventId: chat.lastId, at: now(), prevAt });
     chat.driver.send(prompt, images);
   }
 
