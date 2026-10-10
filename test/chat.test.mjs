@@ -580,6 +580,10 @@ test('a chat opened on an item reads its place, its text and its code; the page 
     assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth', code: 'au07' }, state).body.chats.length, 1);
     assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth', code: 'au08' }, state).body.chats.length, 0);
     assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 1, 'an item chat is a chat of its part too');
+    // The same rule as the project chats: archived, it leaves every list the sheet shows, as it leaves the map.
+    state.projects[0].conversations = [{ sessionId: Object.keys(JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8')))[0], archived: true }];
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth', code: 'au07' }, state).body.chats.length, 0, 'archived, it leaves its item');
+    assert.equal(hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats.length, 0, 'and its part');
   });
 });
 

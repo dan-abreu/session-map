@@ -10,6 +10,8 @@ const DECIDED_CHATS = 8;
 const VERSIONS_MAX = 5;
 // Each list's share of what the fixed texts leave.
 const SHARE = { arch: 0.44, working: 0.13, waiting: 0.13, decided: 0.1, changes: 0.14, versions: 0.06 };
+// The blank line between two sections.
+const SEPARATOR = 2;
 
 const size = (s) => Buffer.byteLength(s, 'utf8');
 const oneLine = (s, max = LINE_MAX) => {
@@ -18,21 +20,25 @@ const oneLine = (s, max = LINE_MAX) => {
 };
 const day = (ts) => (typeof ts === 'string' ? ts.slice(0, 10) : '');
 
-// rows: [{text, counted}]. The rows that fit the budget, then one line saying how many counted rows were left out.
+// rows: [{text, counted}]. The rows that fit the budget and, when some are left out, the line counting them, which fits
+// the budget too: rows give way to it.
 function fit(rows, budget, more) {
-  const out = [];
+  const kept = [];
   let used = 0;
-  for (let i = 0; i < rows.length; i += 1) {
-    const n = size(rows[i].text) + 1;
-    if (used + n > budget) {
-      const left = rows.slice(i).filter((r) => r.counted).length;
-      if (left) out.push(more(left));
-      break;
-    }
-    out.push(rows[i].text);
-    used += n;
+  for (const row of rows) {
+    if (used + size(row.text) + 1 > budget) break;
+    kept.push(row);
+    used += size(row.text) + 1;
   }
-  return out;
+  while (kept.length < rows.length) {
+    const left = rows.slice(kept.length).filter((r) => r.counted).length;
+    if (!left) break;
+    const line = more(left);
+    if (used + size(line) + 1 <= budget) return [...kept.map((r) => r.text), line];
+    if (!kept.length) break;
+    used -= size(kept.pop().text) + 1;
+  }
+  return kept.map((r) => r.text);
 }
 
 function openCount(part) {
@@ -54,7 +60,11 @@ function archRows(arch) {
   return rows;
 }
 
-const section = (title, lines) => (lines.length ? `${title}\n${lines.join('\n')}` : null);
+// A titled list inside its budget, the title included.
+function section(title, rows, budget, more) {
+  const lines = fit(rows, budget - size(title) - 1, more);
+  return lines.length ? `${title}\n${lines.join('\n')}` : null;
+}
 const counted = (texts) => texts.map((text) => ({ text, counted: true }));
 
 // project: the state's project. rule: the upkeep text of the map (context.mjs), or null when there is no map.
@@ -68,7 +78,8 @@ export function projectSections(project, rule) {
     'This is a chat about the whole project, opened at its root folder. What follows is a compact summary from session-map, not the history of its conversations: read the files when you need detail.',
     hasArch ? null : 'This project has no architecture map yet.',
   ].filter(Boolean).join('\n');
-  const fixed = size(head) + (rule ? size(rule) : 0) + 64;
+  // The blank line before each section after the head is counted here, so each share holds only its own section.
+  const fixed = size(head) + (rule ? size(rule) : 0) + SEPARATOR * (Object.keys(SHARE).length + 1);
   const room = Math.max(0, PROJECT_CONTEXT_MAX - fixed);
   const budget = (name) => Math.floor(room * SHARE[name]);
 
@@ -90,11 +101,11 @@ export function projectSections(project, rule) {
 
   return [
     head,
-    hasArch ? section(`Architecture map (${arch.dir}/), by layer, with the open items of each part:`, fit(archRows(arch), budget('arch'), (n) => `… and ${n} more parts (see ${arch.dir}/README.md)`)) : null,
-    section('Working now:', fit(working, budget('working'), more('running'))),
-    section('Waiting for you:', fit(waiting, budget('waiting'), more('waiting'))),
-    section('Recent decisions:', fit(decided, budget('decided'), more('decisions'))),
-    section('Last changes:', fit(changes, budget('changes'), more('changes'))),
+    hasArch ? section(`Architecture map (${arch.dir}/), by layer, with the open items of each part:`, archRows(arch), budget('arch'), (n) => `… and ${n} more parts (see ${arch.dir}/README.md)`) : null,
+    section('Working now:', working, budget('working'), more('running')),
+    section('Waiting for you:', waiting, budget('waiting'), more('waiting')),
+    section('Recent decisions:', decided, budget('decided'), more('decisions')),
+    section('Last changes:', changes, budget('changes'), more('changes')),
     versions.length ? versions.join('\n') : null,
     rule,
   ].filter(Boolean);

@@ -485,8 +485,9 @@ ${prompt}`;
 
   const reinforceState = () => ({ limitUSD: reinforcedLimit(smDir), spentUSD: round6(reinforcedSpend(smDir)) });
 
-  // The page conversations of a part (of one of its items with code), of a kind of point (idea, create-arch) or of a branch,
-  // the one used last first, with the key of those still running.
+  // The page conversations of a part (of one of its items with code), of a kind of point (idea, create-arch, project) or of
+  // a branch, the one used last first, with the key of those still running. An archived one is left out of every one of
+  // these lists, as it leaves the map and the conversation list; "Show archived" there brings it back.
   function listChats(query, state) {
     const project = state.projects.find((p) => p.id === query?.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });

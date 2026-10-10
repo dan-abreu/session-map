@@ -94,6 +94,26 @@ test('the summary stays compact on a huge project: capped in bytes, with what wa
   assert.match(text, /What's missing/, 'the rule always fits');
 });
 
+test('the cap is exact: section titles and the "… and N more" lines count inside it, whatever the line lengths', () => {
+  const base = feira();
+  let fullest = 0;
+  // Lines of one length fill each list's share to the byte, which is where an uncounted title or "more" line spills over.
+  for (let n = 1; n <= 160; n += 1) {
+    const words = (k) => `${'x'.repeat(n)}${k % 10}`;
+    const parts = Array.from({ length: 200 }, (_, k) => ({ id: `p${k}`, name: words(k), about: '', file: `docs/architecture/p${k}.md`, codePaths: [], groups: [] }));
+    const project = feira({
+      arch: { ...base.arch, layers: [{ id: 'all', name: 'Everything', partIds: parts.map((p) => p.id) }], parts },
+      chats: Array.from({ length: 200 }, (_, k) => chat(words(k), { status: 'busy', live: true, card: { decided: [`${words(k)}${k}`] } })),
+      decisions: Array.from({ length: 200 }, (_, k) => ({ kind: 'decision', text: words(k) })),
+      activity: Array.from({ length: 300 }, (_, k) => ({ kind: 'commit', ts: '2026-10-09T08:00:00Z', subject: words(k) })),
+    });
+    const used = bytes(contextOf(project, { kind: 'project' }));
+    assert.ok(used <= PROJECT_CONTEXT_MAX, `lines of about ${n} characters: ${used} bytes`);
+    fullest = Math.max(fullest, used);
+  }
+  assert.ok(fullest > PROJECT_CONTEXT_MAX * 0.9, `most of the room is used, not left to a guessed margin (${fullest} bytes at most)`);
+});
+
 test('a project without a map still gets a project chat, told there is no map yet', () => {
   const bare = feira({ arch: { source: 'none', dir: null, lang: 'en', layers: [], parts: [] }, decisions: [] });
   const ctx = contextOf(bare, { kind: 'project' });
