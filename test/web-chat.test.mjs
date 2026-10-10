@@ -232,16 +232,33 @@ test('"New chat" shows once the sheet holds a conversation, and starts a fresh o
 test('a new project chat takes its first message as its title, as the list shows it; a bubble chat keeps the bubble\'s name', async () => {
   server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
-  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat() {}, start: { node: { kind: 'project' } } });
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat() {}, retitle: true, start: { node: { kind: 'project' } } });
   part('#chatInput').value = '  What is left\nin this project?  ';
   part('#chatForm').fire('submit');
   await settle();
   assert.equal(part('#chatTitle').textContent, 'What is left in this project?');
-  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', newChat() {}, start: { node: { kind: 'part', partId: 'checkout' } } });
   part('#chatInput').value = 'Show the card error';
   part('#chatForm').fire('submit');
   await settle();
   assert.equal(part('#chatTitle').textContent, 'Checkout');
+});
+
+test('a new chat about a box says what to ask in the box to write in, and its ready first messages fill the box without sending', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), [`GET /api/chat/history/${S1}`]: () => HISTORY });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', placeholder: 'Ask about Checkout…', starters: ['What is missing in Checkout?', 'Explain Checkout'], start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  assert.equal(part('#chatInput').placeholder, 'Ask about Checkout…');
+  const starters = walk(part('#chatLog')).filter((e) => e.tag === 'button');
+  assert.deepEqual(starters.map(text), ['What is missing in Checkout?', 'Explain Checkout']);
+  starters[1].attrs.onclick();
+  assert.equal(part('#chatInput').value, 'Explain Checkout');
+  assert.ok(!calls.some((c) => c.path === '/api/chat/start'), 'nothing is sent until the person presses Send');
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', starters: ['Explain Checkout'], start: { sessionId: S1 } });
+  assert.equal(walk(part('#chatLog')).filter((e) => e.tag === 'button').length, 0, 'a conversation picked up again offers none');
+  assert.equal(part('#chatInput').placeholder, 'chat.placeholder', 'and without its own words the box says the usual');
+  await settle();
 });
 
 test('a ready request fills the box and goes with the point in the first message', async () => {

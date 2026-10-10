@@ -241,9 +241,24 @@
           <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
       </div>
-      <!-- A box's tabs: its information by kind, then the chat about it (mm07); app.js draws them. -->
-      <div class="point-tabs" id="pointTabs" hidden></div>
-      <div class="chat-pane" id="chatPane" role="tabpanel" aria-labelledby="ptab-chat">
+      <!-- A box's information on top, in tabs by kind, folding to one line while the person talks; the chat about the box
+           under it, always at hand (mm07). app.js draws them; a chat about no box shows only the chat. -->
+      <section class="point-info" id="pointInfo" aria-labelledby="pointFold" hidden>
+        <button type="button" class="point-fold" id="pointFold" aria-expanded="true" aria-controls="pointBody">
+          <svg class="pf-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+          <span class="pf-text" id="pointFoldText"></span>
+          <span class="pf-hint" id="pointFoldHint"></span>
+        </button>
+        <div class="point-body" id="pointBody">
+          <div class="point-tabs" id="pointTabs"></div>
+          <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-summary"></div>
+        </div>
+      </section>
+      <div class="point-split" id="pointSplit" role="separator" aria-orientation="horizontal" tabindex="0" aria-controls="pointInfo" data-i18n-aria="point.split" data-i18n-title="point.split" hidden>
+        <svg class="ps-icon" aria-hidden="true"><use href="#i-chat"/></svg>
+        <span class="ps-label" id="pointSplitLabel"></span>
+      </div>
+      <div class="chat-pane" id="chatPane" role="region" aria-labelledby="chatTitle">
         <p class="chat-note" id="chatNote" data-chat="note" role="status" hidden></p>
         <div class="chat-where" data-chat="where" hidden></div>
         <ul id="chatList" data-chat="list" class="plain rows chat-list" hidden></ul>
@@ -277,7 +292,6 @@
           <p class="chat-keys" data-i18n="chat.keys"></p>
         </form>
       </div>
-      <div class="panel-body point-details" id="pointDetails" role="tabpanel" aria-labelledby="ptab-summary" hidden></div>
     </aside>
 
     <section id="view-flow" class="view flow" aria-labelledby="tab-flow" data-mode="view" hidden>

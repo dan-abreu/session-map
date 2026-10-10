@@ -102,3 +102,80 @@ export function createResizer({ sheet, handle, target, cssVar, storageKey, defau
   apply(current());
   return { relabel(text) { handle.setAttribute('aria-label', text); }, refresh: () => apply(current()) };
 }
+
+// The split inside a box's sheet, between its information on top and its chat under it: the information keeps a line or
+// two, the chat keeps room for a few messages and the box to write in. room: the height the two share.
+const INFO_MIN = 72;
+const CHAT_KEEP = 200;
+
+export function clampSplit(height, room) {
+  const max = Math.max(INFO_MIN, room - CHAT_KEEP);
+  if (!Number.isFinite(height)) return INFO_MIN;
+  return Math.round(Math.min(Math.max(height, INFO_MIN), max));
+}
+
+// The handle sits between the two: ArrowDown gives the information more, ArrowUp gives the chat more.
+export function keySplit(key, height, room) {
+  if (key === 'ArrowDown') return clampSplit(height + STEP, room);
+  if (key === 'ArrowUp') return clampSplit(height - STEP, room);
+  if (key === 'Home') return clampSplit(INFO_MIN, room);
+  if (key === 'End') return clampSplit(room, room);
+  return null;
+}
+
+// handle: the line between them; info and pane: the information and the chat; target + cssVar: where the information's
+// height is written (the stylesheet caps it there); active(): false while the information is folded to one line.
+export function createSplit({ handle, info, pane, target, cssVar, storageKey, active }) {
+  const room = () => info.getBoundingClientRect().height + pane.getBoundingClientRect().height;
+  const save = (px) => {
+    try {
+      if (px === null) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, String(px));
+    } catch { /* storage blocked: the split is just not remembered */ }
+  };
+  function apply(height, { persist = false } = {}) {
+    const total = room();
+    const px = clampSplit(height, total);
+    target.style.setProperty(cssVar, `${px}px`);
+    handle.setAttribute('aria-valuenow', String(total ? Math.round((px / total) * 100) : 0));
+    if (persist) save(px);
+  }
+  handle.setAttribute('aria-valuemin', '0');
+  handle.setAttribute('aria-valuemax', '100');
+  try {
+    const kept = Number.parseFloat(localStorage.getItem(storageKey) ?? '');
+    if (Number.isFinite(kept)) target.style.setProperty(cssVar, `${kept}px`);
+  } catch { /* storage blocked: the usual share */ }
+
+  let drag = null;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !active()) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    drag = { y: e.clientY, h: info.getBoundingClientRect().height };
+    document.body.classList.add('is-splitting');
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (drag) apply(drag.h + (e.clientY - drag.y));
+  });
+  const end = (e) => {
+    if (!drag) return;
+    drag = null;
+    document.body.classList.remove('is-splitting');
+    if (handle.hasPointerCapture?.(e.pointerId)) handle.releasePointerCapture(e.pointerId);
+    apply(info.getBoundingClientRect().height, { persist: true });
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  handle.addEventListener('dblclick', () => {
+    target.style.removeProperty(cssVar);
+    save(null);
+  });
+  handle.addEventListener('keydown', (e) => {
+    if (!active()) return;
+    const px = keySplit(e.key, info.getBoundingClientRect().height, room());
+    if (px === null) return;
+    e.preventDefault();
+    apply(px, { persist: true });
+  });
+}

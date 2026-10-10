@@ -41,29 +41,32 @@ test('one colour and one icon per kind, defined for light and dark, so every scr
   assert.equal(new Set(INFO_KINDS.map((k) => KIND_LOOK[k].icon)).size, 5, 'no two kinds share an icon');
 });
 
-test('pointTabs shows the Summary, only the tabs that have something, and the chat last: the chat never stands alone', () => {
-  assert.deepEqual(pointTabs({}), ['summary', 'chat']);
-  assert.deepEqual(pointTabs({ files: true, tasks: true }), ['summary', 'tasks', 'files', 'chat']);
-  assert.deepEqual(pointTabs({ tasks: true, chats: true, changes: true, files: true }), [...POINT_TABS, 'chat']);
+test('pointTabs shows the Summary and only the tabs that have something: the chat is not a tab, it sits under them', () => {
+  assert.deepEqual(pointTabs({}), ['summary']);
+  assert.deepEqual(pointTabs({ files: true, tasks: true }), ['summary', 'tasks', 'files']);
+  assert.deepEqual(pointTabs({ tasks: true, chats: true, changes: true, files: true }), POINT_TABS);
 });
 
-test('the root box holds the whole project: its Summary, its own chats always, what changed and its files, then the chat', () => {
-  assert.deepEqual(projectTabs({}), ['summary', 'chats', 'chat']);
-  assert.deepEqual(projectTabs({ changes: true, files: true }), ['summary', 'chats', 'changes', 'files', 'chat']);
+test('the root box holds the whole project: its Summary, its own chats always, what changed and its files', () => {
+  assert.deepEqual(projectTabs({}), ['summary', 'chats']);
+  assert.deepEqual(projectTabs({ changes: true, files: true }), ['summary', 'chats', 'changes', 'files']);
 });
 
-test('a click on a box opens its information first; the chat only when it is asked for by name', () => {
+test('a click on a box opens on its Summary; asking for the chat opens the Summary too (folded, with the chat first)', () => {
   assert.equal(openingTab(), 'summary');
   assert.equal(openingTab('details'), 'summary', 'the old "Details" link lands on the Summary');
   assert.equal(openingTab('nonsense'), 'summary');
   assert.equal(openingTab('files'), 'files');
-  assert.equal(openingTab('chat'), 'chat');
+  assert.equal(openingTab('chat'), 'summary');
 });
 
-test('the chat tab and the project chats tab have their words in both languages', () => {
-  for (const t of Object.values(LANGS)) for (const key of ['ptab.chat', 'ptab.projectChats']) assert.ok(!/^ptab./.test(t(key)), key);
-  assert.equal(LANGS.pt('ptab.chat'), 'Conversar');
+test('the words around the chat under a box are there in both languages', () => {
+  const keys = ['ptab.projectChats', 'point.info', 'point.fold', 'point.unfold', 'point.chatAbout', 'point.split', 'point.placeholder',
+    'point.placeholder.item', 'starter.missing', 'starter.explain', 'starter.next', 'starter.item.explain', 'starter.item.start'];
+  for (const t of Object.values(LANGS)) for (const key of keys) assert.notEqual(t(key), key, key);
   assert.equal(LANGS.pt('ptab.projectChats'), 'Chats do projeto');
+  assert.equal(LANGS.pt('point.chatAbout', { name: 'Painel' }), 'Chat sobre Painel');
+  assert.equal(LANGS.pt('ptab.chat'), 'ptab.chat', 'the old Chat tab is gone');
 });
 
 test('the summary digest of a kind says how many there are, and says so when there are none', () => {

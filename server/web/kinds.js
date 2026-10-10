@@ -14,18 +14,18 @@ export const TAB_OF = { tasks: 'tasks', chats: 'chats', branches: 'chats', chang
 
 export const kindWords = (t, kind, vars = {}) => ({ title: t(`kind.${kind}.title`), from: t(`kind.${kind}.from`, vars) });
 
-// The chat about the box is one more tab of the same sheet, always the last: it never stands in for the information.
+// The chat about the box is not a tab: it sits under the information, always at hand. Asked for by name (a link with
+// tab=chat, "New chat", a conversation from the list), the sheet opens with the information folded and the chat first.
 export const CHAT_TAB = 'chat';
 
-// has: {tasks?, chats?, changes?, files?} → the tabs worth showing: the Summary always, the rest only with something in
-// them, then the chat.
-export const pointTabs = (has) => [...POINT_TABS.filter((tab) => tab === 'summary' || has[tab]), CHAT_TAB];
+// has: {tasks?, chats?, changes?, files?} → the tabs worth showing: the Summary always, the rest only with something in them.
+export const pointTabs = (has) => POINT_TABS.filter((tab) => tab === 'summary' || has[tab]);
 
 // The root box holds the whole project: its own chats are always there, since that tab starts a new one.
-export const projectTabs = (has) => [...['summary', 'chats', 'changes', 'files'].filter((tab) => tab === 'summary' || tab === 'chats' || has[tab]), CHAT_TAB];
+export const projectTabs = (has) => ['summary', 'chats', 'changes', 'files'].filter((tab) => tab === 'summary' || tab === 'chats' || has[tab]);
 
-// The tab a box opens on: its information (the Summary), unless the chat or another tab is asked for by name.
-export const openingTab = (tab) => (tab === CHAT_TAB || POINT_TABS.includes(tab) ? tab : 'summary');
+// The tab a box opens on: its information (the Summary), unless another tab is asked for by name.
+export const openingTab = (tab) => (POINT_TABS.includes(tab) ? tab : 'summary');
 
 // The one line the Summary shows for a kind: counts in plain words, "·" between them.
 export function kindDigest(t, kind, c) {

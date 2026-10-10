@@ -522,24 +522,55 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .ol-box { flex: 1; min-width: 0; padding: 8px 12px; }
 .ol-item.k-item > .ol-row .ol-box { padding: 8px 10px; }
 
-/* ---------- point sheet: a box's information in tabs by kind, its chat as the last tab (mm07) ---------- */
+/* ---------- point sheet: a box's information on top, its chat always under it (mm07) ---------- */
 
-.point-tabs { flex: none; margin: 10px 16px 0; }
+/* The information takes at most --info-h of the sheet (the split line moves it) and scrolls inside; folded, one line. */
+.point-info { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; max-height: var(--info-h, 46%); }
+.point-info[hidden], .point-split[hidden] { display: none; }
+.point-info[data-folded] { flex: none; max-height: none; }
+.point-info[data-folded] .point-body { display: none; }
+.point-body { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.point-body .point-details { overflow: visible; padding-top: 14px; }
+.point-fold {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 16px 6px 18px;
+  border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer;
+}
+.point-fold:hover { background: var(--bg-3); }
+.point-fold:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.pf-chevron {
+  flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.point-fold[aria-expanded="false"] .pf-chevron { transform: rotate(-90deg); }
+.pf-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
+.pf-hint { flex: none; font-size: var(--fs-xs); }
+.point-tabs { flex: none; margin: 0 16px; }
 .point-tabs .ptabs { margin: 0; }
-/* The Summary and the chat are not kinds of information: neutral marks, the chat set a little apart by a hairline. */
-.ptabs .is-talk { position: relative; }
-.ptabs .is-talk::before { content: ""; position: absolute; left: -2px; top: 8px; bottom: 8px; border-left: 1px solid var(--line); }
+/* The line between the information and the chat names the chat and moves the boundary, like a split view. */
+.point-split {
+  position: relative; flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 20px 6px;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg);
+  font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); cursor: row-resize; touch-action: none; user-select: none;
+}
+.point-split::before {
+  content: ""; position: absolute; top: 3px; left: 50%; width: 36px; height: 3px; margin-left: -18px;
+  border-radius: var(--r-xs); background: var(--line); transition: background-color var(--dur-fast);
+}
+.point-split:hover::before, .point-split:focus-visible::before, body.is-splitting .point-split::before { background: var(--focus); }
+.point-split:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.point-info[data-folded] + .point-split { cursor: default; }
+.point-info[data-folded] + .point-split::before { content: none; }
+body.is-splitting { cursor: row-resize; user-select: none; }
+.ps-icon { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.ps-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind-neutral { --k-fill: var(--bg-3); --k-ink: var(--ink); }
-.point-details { padding-top: 14px; }
 .no-files { display: flex; align-items: center; gap: 6px; }
 /* In the project Summary a waiting row is one line of reason, title and place; the full sign is one click away. */
 .wait-rows { gap: 0; margin: 0 -12px; }
 .wait-rows .wi-detail, .wait-rows .wi-do, .wait-rows .wi-go, .wait-rows .wi-actions { display: none; }
 .wait-rows .waiting-item { padding: 8px 12px; }
-.point-tabs[hidden] { display: none; }
-.chat-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.chat-pane[hidden], .point-details[hidden] { display: none; }
-.point-details { flex: 1; }
+/* The chat keeps room for a few lines and the box to write in, however tall the information is. */
+.chat-pane { display: flex; flex-direction: column; flex: 1; min-height: 200px; }
 .crumbs { margin: 0 0 4px; font-size: var(--fs-xs); }
 .item-row {
   display: grid; grid-template-columns: 14px 1fr; gap: 1px 10px; width: calc(100% + 16px); margin: 0 -8px; padding: 8px 8px;
@@ -981,6 +1012,8 @@ body.is-empty .mm-tools, body.is-empty .fit-btn, body.is-empty .mm, body.is-empt
 .msg-permission:not(.state-asked) pre { max-height: 60px; }
 .msg-error { padding: 10px 12px; border-radius: var(--r-lg); background: var(--clash-fill); color: var(--clash-ink); font-weight: 550; }
 .msg-intro { color: var(--ink-2); font-size: var(--fs-md); max-width: 60ch; }
+.msg-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg-starters .btn { height: auto; min-height: 30px; padding: 4px 12px; border-radius: var(--r-pill); font-weight: 500; text-align: left; white-space: normal; }
 
 .ledger { display: grid; margin: 4px 0 0; border-top: 1px solid var(--line); }
 .ledger > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -1451,7 +1484,9 @@ body.is-resizing .sheet { animation: none; }
     margin-left: -18px; border-radius: var(--r-xs); background: var(--line);
   }
   .panel-body { padding: 4px 16px 20px; }
-  .point-tabs { margin: 8px 12px 0; }
+  .point-tabs { margin: 0 12px; }
+  .point-fold { padding: 6px 12px 6px 14px; }
+  .point-split { padding: 10px 16px 6px; }
   .point-tabs .ptabs button { font-size: var(--fs-2xs); }
   .btn { height: 40px; }
 }

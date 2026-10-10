@@ -578,6 +578,18 @@ export function createChat({
     jumpSel.value = '';
   }
 
+  // A new chat about a box offers a few ready first messages under the intro. A click writes one in the box instead of
+  // sending it: the person still sees what goes and presses Send, since some of them start paid work.
+  function startersOf(ctx) {
+    if (!ctx?.starters?.length || ctx.start?.sessionId) return [];
+    const pick = (text) => {
+      input.value = text;
+      fitInput();
+      input.focus();
+    };
+    return [h('li', { class: 'msg-starters' }, ctx.starters.map((text) => h('button', { type: 'button', class: 'btn small-btn', onclick: () => pick(text) }, text)))];
+  }
+
   // ---- the task list Claude keeps, right above the box ----
 
   function renderTasks() {
@@ -603,9 +615,11 @@ export function createChat({
     shown = withDays(items);
     drawn = new Set();
     nodes = shown.map((item) => nodeOf(item, item === items.at(-1)));
-    logEl.replaceChildren(...(items.length ? nodes : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume'))]),
+    logEl.replaceChildren(...(items.length ? nodes : [h('li', { class: 'msg-intro' }, context?.intro ?? tt('chat.introResume')), ...startersOf(context)]),
       ...(state.kind === 'interrupted' ? [cutCard(state)] : []));
-    if (stick || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
+    // An empty conversation reads from its intro down; one with messages follows the newest.
+    if (!items.length) logEl.scrollTop = 0;
+    else if (stick || items.at(-1)?.type === 'user') logEl.scrollTop = logEl.scrollHeight;
     if (findEl) findEl.hidden = !items.length;
     if (liveBadge) {
       liveBadge.hidden = !mirror;
@@ -741,7 +755,7 @@ export function createChat({
     const live = key && !log.ended;
     const start = sessionId ? { sessionId } : context.start;
     // A new project chat is named by its first message, as the list names it, instead of staying "New project chat".
-    if (!live && !sessionId && context.newChat) {
+    if (!live && !sessionId && context.retitle) {
       context.title = text.replace(/\s+/g, ' ').trim().slice(0, 200);
       q('title').textContent = context.title;
     }
@@ -777,7 +791,7 @@ export function createChat({
     listEl.replaceChildren(
       h('li', { class: 'chat-list-head' }, ctx.listTitle ?? tt('chat.openHere')),
       ...chats.map((c) => h('li', {},
-        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle, newChat: ctx.newChat, listTitle: ctx.listTitle }) },
+        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle, newChat: ctx.newChat, listTitle: ctx.listTitle, placeholder: ctx.placeholder }) },
           h('span', { class: 'lr-title' }, c.title || tt('chat.untitled')),
           h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt)),
           Number.isFinite(c.costUSD) ? h('span', { class: 'lr-cost num' }, money(c.costUSD)) : null))));
@@ -962,6 +976,9 @@ export function createChat({
     jumpKey = '';
   }
 
+  // ctx: projectId, title, subtitle, intro, start ({sessionId} or {node}), and optionally placeholder (the box's own words
+  // for the empty input), starters (ready first messages), newChat() ("New chat" in the header), listTitle, retitle (a new
+  // conversation takes its first message as title) and draft.
   function open(ctx) {
     if (root.hidden) returnFocus = document.activeElement;
     detach();
@@ -986,7 +1003,7 @@ export function createChat({
     listEl.replaceChildren();
     q('title').textContent = ctx.title;
     q('context').textContent = ctx.subtitle ?? '';
-    input.placeholder = t()('chat.placeholder');
+    input.placeholder = ctx.placeholder ?? t()('chat.placeholder');
     input.value = ctx.draft ?? '';
     root.hidden = false;
     fitInput();
@@ -1004,6 +1021,7 @@ export function createChat({
     open({
       projectId: entry.projectId, title: entry.title, subtitle: entry.subtitle || t()('chat.resuming'), intro: t()('chat.introResume'), start: { sessionId: entry.sessionId },
       ...(entry.newChat ? { newChat: entry.newChat, listTitle: entry.listTitle } : {}),
+      ...(entry.placeholder ? { placeholder: entry.placeholder } : {}),
     });
   }
 
@@ -1035,7 +1053,7 @@ export function createChat({
     showProject(projectId) { if (context && (context.mapProjectId ?? context.projectId) !== projectId) close(); },
     relabel() {
       if (root.hidden) return;
-      input.placeholder = t()('chat.placeholder');
+      input.placeholder = context?.placeholder ?? t()('chat.placeholder');
       freshDrawing();
       buildFind();
       renderPending();

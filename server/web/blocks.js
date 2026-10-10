@@ -43,15 +43,15 @@ export const kindMark = (ctx, kind) => ctx.h('span', { class: `kind-mark kind-${
 
 const TAB_KIND = { tasks: 'tasks', chats: 'chats', changes: 'changes', files: 'files' };
 
-// The strip at the top of a box's sheet (mm07): one tab per kind of information, then the chat, as one tablist with one
-// tab stop (the arrows move inside). labels: words a tab takes on this sheet instead of its own ({chats: 'Project chats'}).
+// The strip at the top of a box's sheet (mm07): one tab per kind of information, as one tablist with one tab stop (the
+// arrows move inside). labels: words a tab takes on this sheet instead of its own ({chats: 'Project chats'}).
 export function pointStrip(ctx, tabs, active, onPick, labels = {}) {
   const { h, t } = ctx;
-  const plainMark = (name) => h('span', { class: 'kind-mark kind-neutral', 'aria-hidden': 'true' }, mark(ctx, name, 'kind-icon'));
-  const markOf = (tab) => (TAB_KIND[tab] ? kindMark(ctx, TAB_KIND[tab]) : plainMark(tab === 'chat' ? 'send' : 'compass'));
+  const markOf = (tab) => (TAB_KIND[tab] ? kindMark(ctx, TAB_KIND[tab])
+    : h('span', { class: 'kind-mark kind-neutral', 'aria-hidden': 'true' }, mark(ctx, 'compass', 'kind-icon')));
   return h('div', { class: 'seg ptabs', role: 'tablist', 'aria-label': t('ptab.label') }, tabs.map((tab) => h('button', {
-    type: 'button', role: 'tab', id: `ptab-${tab}`, 'data-ptab': tab, class: TAB_KIND[tab] ? `kind-${TAB_KIND[tab]}` : tab === 'chat' ? 'is-talk' : '',
-    'aria-selected': String(tab === active), tabindex: tab === active ? '0' : '-1', 'aria-controls': tab === 'chat' ? 'chatPane' : 'pointDetails',
+    type: 'button', role: 'tab', id: `ptab-${tab}`, 'data-ptab': tab, class: TAB_KIND[tab] ? `kind-${TAB_KIND[tab]}` : '',
+    'aria-selected': String(tab === active), tabindex: tab === active ? '0' : '-1', 'aria-controls': 'pointDetails',
     onclick: () => onPick(tab),
   }, markOf(tab), labels[tab] ?? t(`ptab.${tab}`))));
 }

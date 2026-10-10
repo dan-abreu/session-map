@@ -11,7 +11,7 @@ import { createChat } from './chat.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createChangesView, freshFor } from './changes.js';
-import { createResizer } from './resize.js';
+import { createResizer, createSplit } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { conversationsOf, createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
@@ -731,38 +731,90 @@ function filesSection({ part, workCell, files: fileList, folder = true }) {
   return kblock('files', workCell ? { from: t('kind.files.fromBranch') } : {}, tools, files.tree({ part, workCell, files: fileList }));
 }
 
-// ---- a point of the map: its information in tabs by kind, and the chat about it as one more tab (mm07) -----------------
+// ---- a point of the map: its information in tabs by kind on top, the chat about it always under it (mm07) --------------
 
 let pointNode = null;
-let pointTab = 'summary'; // Summary, Tasks, Conversations, Changes, Files, or the chat
+let pointTab = 'summary'; // Summary, Tasks, Conversations, Changes, Files
+// While the person talks the information folds to one line, so the chat gets the room. Folded or unfolded by hand since
+// the box opened, it stays as the person left it.
+let infoFolded = false;
+let foldByHand = false;
+// The conversation each box showed last on this page: it keeps running when another box opens, and comes back whole when
+// its box is clicked again.
+const boxChats = new Map();
+const boxKey = (nodeId) => `${project.id}|${nodeId}`;
+const keepBoxChat = () => {
+  if (pointNode && chat.current()) boxChats.set(boxKey(pointNode), { sessionId: chat.current(), title: $('#chatTitle').textContent });
+};
 
 function setPointTab(tab) {
   pointTab = tab;
   renderPointDetails();
 }
 
-// The box's sheet shows its tabs; the chat pane is hidden first when it opens elsewhere, so the chat's own focus on its
-// box does not land on a pane about to hide.
-function showPoint(node, tab) {
+function showPoint(node, tab, { folded = false } = {}) {
   pointNode = node.id;
   pointTab = tab;
-  $('#pointTabs').hidden = false;
+  infoFolded = folded;
+  foldByHand = false;
+  $('#pointInfo').hidden = false;
+  $('#pointSplit').hidden = false;
   renderPointDetails();
 }
 
-// A click on a box: its information first (the Summary), the chat one tab away in the same sheet. The root box holds the
-// whole project and its project chats (orchestration or01).
-function openPoint(node, { tab } = {}) {
+function setFolded(folded, { byHand = false } = {}) {
+  if (!pointNode) return;
+  infoFolded = folded;
+  if (byHand) foldByHand = true;
+  renderFold(nodeById(tree, pointNode));
+}
+
+// Folded, the line keeps what matters at a glance (open items, how many wait for the person, what blocks); open, it is
+// the title of the information and the way to fold it.
+function renderFold(node) {
+  if (!node) return;
+  const c = node.counts;
+  const glance = node.kind === 'item' ? t('point.info')
+    : [countText(c), c.withUser ? t.count('box.withYou', c.withUser) : null, c.blocks ? t.count('box.blocks', c.blocks) : null].filter(Boolean).join(' · ');
+  $('#pointInfo').toggleAttribute('data-folded', infoFolded);
+  $('#pointFold').setAttribute('aria-expanded', String(!infoFolded));
+  $('#pointFoldText').textContent = infoFolded ? glance : t('point.info');
+  $('#pointFoldHint').textContent = t(infoFolded ? 'point.unfold' : 'point.fold');
+  $('#pointSplitLabel').textContent = t('point.chatAbout', { name: node.kind === 'project' ? project.name : node.label });
+}
+
+// Sending a message folds the information, unless the person set it by hand since the box opened.
+function foldForTalk() {
+  if (pointNode && !foldByHand && !infoFolded) setFolded(true);
+}
+
+// The words of a chat about a box: what the empty box to write in says, and a few ready first messages.
+function pointWords(node) {
+  if (node.kind === 'item') return { placeholder: t('point.placeholder.item'), starters: [t('starter.item.explain'), t('starter.item.start')] };
+  const name = node.kind === 'project' ? project.name : node.label;
+  return { placeholder: t('point.placeholder', { name }), starters: ['missing', 'explain', 'next'].map((k) => t(`starter.${k}`, { name })) };
+}
+
+// A click on a box: its information on top (the Summary), the chat under it. The chat is the box's last conversation on
+// this page if it had one, else a new one. tab=chat (a link, "New chat") opens with the information folded and the chat
+// first; fresh starts a new conversation even where one was open. The root box holds the whole project and its project
+// chats (orchestration or01).
+function openPoint(node, { tab, fresh = false } = {}) {
+  const chatFirst = tab === CHAT_TAB;
   const first = openingTab(tab);
+  keepBoxChat();
+  if (fresh) boxChats.delete(boxKey(node.id));
+  const last = boxChats.get(boxKey(node.id));
   closePanel(false);
   closeLists();
   selection = { type: 'node', id: node.id };
-  $('#chatPane').hidden = first !== CHAT_TAB;
-  chat.open(node.kind === 'project'
-    ? { projectId: project.id, title: project.name, intro: t('projchat.intro'), start: { node: { kind: 'project' } }, ...projectChatOf() }
-    : { projectId: project.id, title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: chatPointOf(node) } });
-  showPoint(node, first);
-  if (first !== CHAT_TAB) $(`#ptab-${first}`)?.focus({ preventScroll: true });
+  const own = node.kind === 'project'
+    ? { title: project.name, intro: t('projchat.intro'), start: { node: { kind: 'project' } }, ...projectChatOf() }
+    : { title: node.label, subtitle: crumbs(node), intro: t(`point.intro.${node.kind}`, { name: node.label }), start: { node: chatPointOf(node) }, newChat: () => openPoint(node, { tab: CHAT_TAB, fresh: true }) };
+  chat.open({ projectId: project.id, ...own, ...pointWords(node), ...(last ? { intro: t('chat.introResume'), title: last.title || own.title, start: { sessionId: last.sessionId } } : {}) });
+  showPoint(node, first, { folded: chatFirst || Boolean(last) });
+  if (chatFirst) $('#chatInput')?.focus({ preventScroll: true });
+  else (last ? $('#pointFold') : $(`#ptab-${first}`))?.focus({ preventScroll: true });
   revealNode(node.id, { center: true });
 }
 
@@ -774,22 +826,21 @@ const openPartPoint = (partId, opts) => {
 // A chat that belongs to no box (an idea, the map's creation, a clash): the sheet is only that chat.
 function plainPoint() {
   pointNode = null;
-  $('#pointTabs').hidden = true;
+  $('#pointInfo').hidden = true;
+  $('#pointSplit').hidden = true;
   $('#pointTabs').replaceChildren();
-  $('#chatPane').hidden = false;
-  $('#pointDetails').hidden = true;
-  $('#chat').dataset.tab = CHAT_TAB;
+  $('#pointDetails').replaceChildren();
 }
 
 // The chats about the whole project, like a project's chats in Claude: the list and "New project chat" in the root box's
-// tabs, and the chat itself on its Chat tab. The root box, the list and the map tools all open it.
-const projectChatOf = () => ({ listTitle: t('projchat.list'), newChat: openProjectChat });
+// information, the chat itself under it. The root box, the list and the map tools all open it.
+const projectChatOf = () => ({ listTitle: t('projchat.list'), newChat: openProjectChat, retitle: true });
 
 function openProjectChat() {
   if (!project || !tree) return;
   convs.closeDrawer();
   if (view !== 'map') showView('map');
-  openPoint(tree, { tab: 'chat' });
+  openPoint(tree, { tab: CHAT_TAB, fresh: true });
   renderMap();
 }
 
@@ -828,6 +879,7 @@ function whereOf(row) {
 // home: a visitor's own project (mm24); the map stays on the project it works in, the chat runs where it was born.
 function openConversation({ row, project: p, nodeId, place, home }) {
   markSeen(row.sessionId);
+  keepBoxChat();
   convs.closeDrawer();
   closeLists();
   if (view !== 'map') showView('map');
@@ -836,14 +888,13 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   const node = nodeById(tree, nodeId) ?? tree;
   selection = { type: 'node', id: node.id };
   const subtitle = [project.name, ...(place.special ? [t(`convs.place.${place.special}`)] : place.path)].join(' › ');
-  $('#chatPane').hidden = false;
   chat.open({
     projectId: home?.id ?? project.id, mapProjectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
-    where: row.origin === 'map' ? null : () => whereOf(row),
+    where: row.origin === 'map' ? null : () => whereOf(row), placeholder: pointWords(node).placeholder,
     ...(row.node?.kind === 'project' ? projectChatOf() : {}),
   });
-  // The conversation opens on the Chat tab of its box, with the box's information one tab away.
-  showPoint(node, 'chat');
+  // The conversation opens under its box's information, folded to one line so the conversation reads first.
+  showPoint(node, 'summary', { folded: true });
   revealNode(node.id, { center: true });
   requestAnimationFrame(() => requestAnimationFrame(() => activeMap().pulse(node.id)));
   convs.render();
@@ -1016,7 +1067,7 @@ function itemSign(i, part) {
 }
 
 function workOnPoint() {
-  setPointTab(CHAT_TAB);
+  setFolded(true);
   $('#chatInput')?.focus();
 }
 
@@ -1146,7 +1197,6 @@ function projectDetails(node) {
       h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
       sizes?.total ? h('p', { class: 'meta num' }, joinDots([h('span', {}, plural('size.files', sizes.total.files)), h('span', {}, plural('size.lines', sizes.total.lines))]),
         unowned ? linkTo(plural('size.unowned', unowned), () => setPointTab('files'), 'meta-link is-unowned') : null) : null,
-      newChat(),
       waiting.length ? section(t('waiting.title'),
         h('ul', { class: 'plain rows wait-rows' }, waiting.slice(0, WAITING_SHOWN).map((e) => waitingRow(e, { where: (_, partId) => partById(partId)?.name ?? '' }))),
         waiting.length > WAITING_SHOWN ? linkTo(`${t('kind.seeAll')} (${waiting.length})`, openWaiting) : null) : null,
@@ -1171,23 +1221,20 @@ function detailsOf(node) {
   return { tabs: pointTabs({}), body: () => [...head(), sizeFacts(node), section(t('point.parts'), childRows(node.children))] };
 }
 
-// Draws the strip and the open tab: the information, or the chat (whose pane chat.js draws). A strip that held the focus
-// gets it back on the tab now open, so the arrows keep walking it.
+// Draws the fold line, the strip and the open tab of the information (the chat under it is chat.js's). A strip that held
+// the focus gets it back on the tab now open, so the arrows keep walking it.
 function renderPointDetails() {
   const node = pointNode && nodeById(tree, pointNode);
   if (!node) return;
   const { tabs, labels, body } = detailsOf(node);
   if (!tabs.includes(pointTab)) pointTab = 'summary';
-  const talk = pointTab === CHAT_TAB;
+  renderFold(node);
   const strip = $('#pointTabs');
   const focused = strip.contains(document.activeElement);
   strip.replaceChildren(pointStrip({ h, icon, t }, tabs, pointTab, setPointTab, labels));
   if (focused) $(`#ptab-${pointTab}`)?.focus();
-  $('#chatPane').hidden = !talk;
-  $('#pointDetails').hidden = talk;
   $('#pointDetails').setAttribute('aria-labelledby', `ptab-${pointTab}`);
-  $('#chat').dataset.tab = talk ? CHAT_TAB : 'details';
-  if (!talk) $('#pointDetails').replaceChildren(...body().flat().filter(Boolean));
+  $('#pointDetails').replaceChildren(...body().flat().filter(Boolean));
 }
 
 // ---- the side panel: project, conversation, branch, relation -------------------------------
@@ -1903,6 +1950,7 @@ function wire() {
   chat = createChat({
     root: $('#chat'), h, t: () => t, toast, errorText, relative, money, lang: () => lang, icon, commands: chatCommands,
     onSession: () => { convs.render(); setTimeout(poll, 1200); },
+    beforeSend: foldForTalk,
     onPcMode: pcMode,
     more: chatMore,
     onClose: () => {
@@ -1948,6 +1996,8 @@ function wire() {
     pending: () => (jobs ? pendingCount(jobs) : 0),
   });
   createResizer({ sheet: $('#chat'), handle: $('#chatResize'), target: $('#stage'), cssVar: '--chat-w', storageKey: 'sm.chatWidth', defaultWidth: () => CHAT_WIDTH });
+  createSplit({ handle: $('#pointSplit'), info: $('#pointInfo'), pane: $('#chatPane'), target: $('#chat'), cssVar: '--info-h', storageKey: 'sm.infoHeight', active: () => !infoFolded });
+  $('#pointFold').addEventListener('click', () => setFolded(!infoFolded, { byHand: true }));
   flow = createFlowView({
     h, t: () => t, toast, errorText, relative, money, phone: PHONE, onPcMode: pcMode, lang: () => lang, icon, commands: chatCommands,
     project: () => project, tree: () => tree, live: () => marks.live,

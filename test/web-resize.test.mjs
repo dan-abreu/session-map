@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampWidth, createResizer, dragWidth, keyWidth, widthBounds } from '../server/web/resize.js';
+import { clampSplit, clampWidth, createResizer, dragWidth, keySplit, keyWidth, widthBounds } from '../server/web/resize.js';
 
 test('the side sheet stays between 320 px and 70% of the window, and a narrow window wins over the minimum', () => {
   assert.deepEqual(widthBounds(1440), { min: 320, max: 1008 });
@@ -49,4 +49,20 @@ test('keyboard: each press steps from the width last set, even while the page st
   } finally {
     globalThis.window = saved;
   }
+});
+
+test('the split of a box sheet keeps a line or two of information and room for the chat to write in', () => {
+  assert.equal(clampSplit(20, 700), 72, 'the information never goes below a line or two');
+  assert.equal(clampSplit(650, 700), 500, 'the chat keeps 200 px');
+  assert.equal(clampSplit(300.4, 700), 300);
+  assert.equal(clampSplit(Number.NaN, 700), 72);
+  assert.equal(clampSplit(300, 150), 72, 'a sheet too short for both still shows the information line');
+});
+
+test('the split moves with the arrows: down gives the information more, up gives the chat more, Home and End go to the ends', () => {
+  assert.equal(keySplit('ArrowDown', 300, 700), 324);
+  assert.equal(keySplit('ArrowUp', 300, 700), 276);
+  assert.equal(keySplit('Home', 300, 700), 72);
+  assert.equal(keySplit('End', 300, 700), 500);
+  assert.equal(keySplit('a', 300, 700), null);
 });
