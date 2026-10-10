@@ -235,6 +235,29 @@ test('a collect still running is shared by every request, even past the state li
   });
 });
 
+test('a chat opens on the newest finished state, never waiting for the next collect (pc14)', { timeout: 10_000 }, async () => {
+  let runs = 0;
+  let release;
+  const collectFn = () => (++runs === 1 ? DEMO : new Promise((resolve) => { release = () => resolve(DEMO); }));
+  await withServer({ collectFn, stateTtlMs: 10 }, async ({ call, token }) => {
+    try {
+      assert.equal((await call('GET', '/api/state')).status, 200);
+      await new Promise((r) => setTimeout(r, 50));
+      const cookie = `sm_token=${token}`;
+      const late = Symbol('late');
+      const timer = (ms) => new Promise((r) => setTimeout(() => r(late), ms));
+      for (const path of ['/api/chat/history/44444444-4444-4444-8444-444444444444', '/api/chat/list?projectId=nope']) {
+        const res = await Promise.race([call('GET', path, { headers: { cookie } }), timer(1500)]);
+        assert.notEqual(res, late, `${path} waited for the collect`);
+      }
+      assert.equal(runs, 2, 'the next state is still collected meanwhile');
+    } finally {
+      // The server only closes once the requests that wait for the collect have their answer.
+      release?.();
+    }
+  });
+});
+
 test('the disk copy goes out before a collect that holds the event loop starts', { timeout: 20_000 }, async () => {
   const collectFn = () => {
     const end = Date.now() + 2500;

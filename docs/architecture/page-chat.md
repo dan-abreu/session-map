@@ -43,6 +43,10 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Now the pieces go once their whole text arrives (and go first when the events are full), the history ends at the first message the events still hold (by its place in the transcript, or by time for a turn longer than the events) and tells the page where to replay from, and the page draws once per frame.
   - How to confirm it is done: in a page chat with several long replies, reload the page: the whole dialogue shows at once, from the first message.
   - Fixed in the code on 2026-10-10; it reaches the page with the next version.
+- [x] **Claude:** Opening a chat never waits for the map to be worked out again `pc14`
+  - The chat's routes (list, history, image, helper) awaited a fresh collect whenever the state was older than 3 s, and a collect of every project takes 20 to 30 s on this PC (hundreds of git processes): opening a chat froze that long.
+  - They answer with the newest finished state at once while the next one is collected.
+  - How to confirm it is done: with the page open for a while, open a chat: its messages show in under a second.
 
 ### How it runs
 

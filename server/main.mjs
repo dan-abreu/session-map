@@ -120,6 +120,7 @@ export function createApp({
   let ready = false;
   let savedAt = 0;
   let cached = null;
+  let newest = null;
   const state = () => {
     // A collect still running is shared, whatever its age: a second one would only slow both down.
     if (!cached || (cached.done && Date.now() - cached.at >= stateTtlMs)) {
@@ -130,6 +131,7 @@ export function createApp({
       cached = entry;
       promise.then((s) => {
         Object.assign(entry, { done: true, at: Date.now() });
+        newest = s;
         ready = true;
         if (!demo && stateCopy && Date.now() - savedAt >= STATE_SAVE_MS) {
           savedAt = Date.now();
@@ -138,6 +140,12 @@ export function createApp({
       }, () => { if (cached === entry) cached = null; });
     }
     return cached.promise;
+  };
+  // What the chat reads: the newest finished state at once, the next one collected meanwhile. A collect of every project
+  // can take half a minute, and opening a conversation must not wait for it (page-chat pc14).
+  const quickState = () => {
+    const next = state();
+    return newest ?? next;
   };
   const firstAnswer = async () => {
     if (ready || demo || !stateCopy) return state();
@@ -174,23 +182,23 @@ export function createApp({
     }
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
       const query = Object.fromEntries(['projectId', 'partId', 'workCellId', 'code', 'kind'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
-      const result = chat.list(query, await state());
+      const result = chat.list(query, await quickState());
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'history' && parts.length === 5) {
-      const result = chat.history(verb, await state(), { since: url.searchParams.get('since') ?? undefined });
+      const result = chat.history(verb, await quickState(), { since: url.searchParams.get('since') ?? undefined });
       return send(res, result.status, result.body);
     }
     // An image of a conversation (mm22): only the image kinds a browser shows, never anything it could run.
     if (req.method === 'GET' && key === 'image' && parts.length === 6) {
       const n = /^\d{1,6}$/.test(parts[5]) ? Number(parts[5]) : -1;
-      const found = chat.image(verb, n, await state());
+      const found = chat.image(verb, n, await quickState());
       if (!found || !IMAGE_TYPES.has(found.media)) throw new HttpError(404, 'not-found');
       res.writeHead(200, { 'content-type': found.media, 'cache-control': 'private, max-age=86400' });
       return res.end(found.data);
     }
     if (req.method === 'GET' && key === 'helper' && parts.length === 6) {
-      const result = chat.helper(verb, parts[5], await state());
+      const result = chat.helper(verb, parts[5], await quickState());
       return send(res, result.status, result.body);
     }
     if (parts.length !== 5) throw new HttpError(404, 'not-found');
