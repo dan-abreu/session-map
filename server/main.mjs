@@ -120,7 +120,7 @@ export function createApp({
   let cached = null;
   const state = () => {
     // A collect still running is shared, whatever its age: a second one would only slow both down.
-    if (!cached || (cached.done && Date.now() - cached.at > stateTtlMs)) {
+    if (!cached || (cached.done && Date.now() - cached.at >= stateTtlMs)) {
       const promise = demo
         ? readFile(DEMO_STATE, 'utf8').then(JSON.parse)
         : Promise.resolve(collectFn({ dir, smDir, ...(ai ? { ai } : {}) }));
