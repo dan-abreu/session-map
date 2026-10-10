@@ -88,6 +88,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 ~23:30 — paraphrased (the exact words were not recorded): besides the chats on each bubble, he wants a general chat about the whole project that works like Claude: a clear "New chat" button at the top, many chats listed in the project, closing the panel and opening another, reopening any of them; the root bubble should open them too.
   - What it means: plain project chats, the first step of the orchestration chat: started from the map tools, the conversation list or the root bubble, in the project's root folder, with a compact project summary in the first message; pinned on top of the project's card; resumed, renamed and archived like any chat. The manager's powers (activity chats, reports back) stay in `or01` to `or03`.
   - How to confirm it is done: see `or13`.
+  - State: built and checked in the real app (two chats on a test folder, the cheapest model); waits for the owner's approval of the screenshots.
   - Where it went: `or13` (first step of `or01`).
   - Status: built on 2026-10-10 (not released yet); it moves to the closed ideas once the owner confirms it.
 - [ ] Earn some money with it `id28`

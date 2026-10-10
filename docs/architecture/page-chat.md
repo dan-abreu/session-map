@@ -43,3 +43,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Manual: Maestro, Ultracode (after a cost warning), a fixed model and level, Same as my Claude. The header shows the model and effort that really run, the cost and why. Released in v0.2.2.
 - [x] **Claude:** The chat sheet as wide as the owner drags it `pc08`
   - A handle on the edge, arrow keys, the width remembered, a double click resets; on the map and in the Flow workshop. Released in v0.2.1.
+- [x] **Claude:** Send works on the first click, even when the text box is not focused `pc09`
+  - The key hints under the box are hidden but keep their line: before, focus entering the form showed them, Send jumped up under the pointer mid-click and the message never left.
+  - How to confirm it is done: type a message, click anywhere outside the box (or change the model in the header), then click Send once: the message goes and the box empties.
+- [x] **Claude:** The "Finished" line and the alerts read as plain words, without the reply's formatting marks `pc10`
+  - How to confirm it is done: ask for an answer with bold text and a list; when it ends, the line above the box and the alert show "Finished: Short answer: …", never `**` or backticks.

@@ -17,6 +17,12 @@ test('summaryOf: the reply on one line, without the folded blocks, cut at a whol
   assert.equal(summaryOf(''), '');
 });
 
+test('summaryOf: plain words, without the marks of the reply\'s formatting', () => {
+  assert.equal(summaryOf('**Short answer:** 3 items are open.\n\n**Open items:**\n- **`CFG1`: permission.** Decide.\n* [the guide](docs/a.md) _soon_\n## Next\n1. Write it'),
+    'Short answer: 3 items are open. Open items: CFG1: permission. Decide. the guide soon Next Write it');
+  assert.equal(summaryOf('snake_case_name and 2 * 3 stay'), 'snake_case_name and 2 * 3 stay');
+});
+
 test('groupAlerts: same kind in the same project collapse, in the order they came', () => {
   const groups = groupAlerts([done('a'), { ...done('b'), projectId: 'blog-2', projectName: 'blog' }, done('c'), { ...done('d'), kind: 'waiting', reason: 'question' }]);
   assert.deepEqual(groups.map((g) => [g.kind, g.projectName, g.alerts.map((a) => a.sessionId)]), [

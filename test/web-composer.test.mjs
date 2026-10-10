@@ -27,6 +27,9 @@ test('both chat sheets start the input at one line and fold the permission row',
 });
 
 test('the key hints show only while typing, and a phone keeps the input above the keyboard', () => {
-  assert.match(css, /\.chat-form:not\(:focus-within\) \.chat-keys\s*\{\s*display:\s*none;/);
+  // Hidden but keeping their line: a press on Send from outside the form moved focus in, the hints appeared, Send jumped
+  // up under the pointer and the release missed it, so the message never went.
+  assert.match(css, /\.chat-form:not\(:focus-within\) \.chat-keys\s*\{\s*visibility:\s*hidden;/);
+  assert.doesNotMatch(css, /focus-within\)[^{]*\.chat-keys\s*\{[^}]*display:\s*none/, 'focus never adds or removes the line of the hints');
   assert.match(html, /<meta name="viewport" content="[^"]*interactive-widget=resizes-content/);
 });

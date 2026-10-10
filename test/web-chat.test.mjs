@@ -222,6 +222,21 @@ test('"New chat" shows once the sheet holds a conversation, and starts a fresh o
   assert.equal(part('#chatNew').hidden, true, 'a bubble chat keeps its sheet as it was');
 });
 
+test('a new project chat takes its first message as its title, as the list shows it; a bubble chat keeps the bubble\'s name', async () => {
+  server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat() {}, start: { node: { kind: 'project' } } });
+  part('#chatInput').value = '  What is left\nin this project?  ';
+  part('#chatForm').fire('submit');
+  await settle();
+  assert.equal(part('#chatTitle').textContent, 'What is left in this project?');
+  chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  part('#chatInput').value = 'Show the card error';
+  part('#chatForm').fire('submit');
+  await settle();
+  assert.equal(part('#chatTitle').textContent, 'Checkout');
+});
+
 test('a ready request fills the box and goes with the point in the first message', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();

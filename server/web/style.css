@@ -1023,7 +1023,8 @@ body.is-resizing .sheet { animation: none; }
 .chat-form { padding: 10px 14px 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
 .chat-form textarea { resize: none; min-height: 38px; max-height: 40vh; overflow-y: hidden; line-height: 1.45; }
 .chat-form textarea.is-scrolling { overflow-y: auto; }
-.chat-form:not(:focus-within) .chat-keys { display: none; }
+/* Hidden, never removed: a line that came and went with focus moved Send under the pointer mid-click. */
+.chat-form:not(:focus-within) .chat-keys { visibility: hidden; }
 .chat-status { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--active-ink); }
 .chat-status:empty { display: none; }
 .chat-bar { display: flex; align-items: center; gap: 8px; }

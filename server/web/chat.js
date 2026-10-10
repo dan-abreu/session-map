@@ -723,6 +723,11 @@ export function createChat({
     await beforeSend?.();
     const live = key && !log.ended;
     const start = sessionId ? { sessionId } : context.start;
+    // A new project chat is named by its first message, as the list names it, instead of staying "New project chat".
+    if (!live && !sessionId && context.newChat) {
+      context.title = text.replace(/\s+/g, ' ').trim().slice(0, 200);
+      q('title').textContent = context.title;
+    }
     const res = live
       ? await api.chatSend(key, text, images)
       : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text, ...(images.length ? { images } : {}) });

@@ -5,9 +5,17 @@ import { kindMark } from './blocks.js';
 
 const SUMMARY_MAX = 200;
 
+// Markdown's marks off, so a status line or an alert reads as words: headings, list marks, links, bold, code, emphasis.
+const plainWords = (md) => md.split('\n')
+  .map((line) => line.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, ''))
+  .join('\n')
+  .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/\*\*|__|`/g, '')
+  .replace(/(^|[^\w*])[*_](?=\S)([^*_\n]*?\S)[*_](?![\w*])/g, '$1$2');
+
 // The reply's own words on one line, without the blocks the chat folds away, cut at a whole word.
 export function summaryOf(reply) {
-  const text = foldReply(reply).text.replace(/\s+/g, ' ').trim();
+  const text = plainWords(foldReply(reply).text).replace(/\s+/g, ' ').trim();
   if (text.length <= SUMMARY_MAX) return text;
   return `${text.slice(0, SUMMARY_MAX - 1).replace(/\s+\S*$/, '')}…`;
 }
