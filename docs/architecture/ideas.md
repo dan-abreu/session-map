@@ -39,12 +39,6 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### Seeing my requests
 
-- [ ] **in progress:** See every request in the program: what will be done, what is being done, what is done `id76`
-  - Asked: 2026-10-10 04:55 — "isso tem que entrar de alguma forma no programa. assim posso ver tudo o que eu pedi vai ser feito ou está sendo feito isso é o mais urgente no momento, enxergar os meus pedidos"; 2026-10-10 ~05:00 — "pedido entra na arquitetutra e fluxo se for alguma função que venha junto com o pedido ( ideia) dentro do programa, mas tudo o que é feito, que fica ai na sua memoria que voce grava como pedido deve virar uma atividade a ser feita"
-  - What it means: a Requests tab with every request in his words, grouped by where it stands, each with the work it became and how much is done; a request is never only in Claude's memory; every request becomes at least one activity (a feature goes to the architecture and the Flow, the rest to the Operation part); the lists of the other projects built from their old conversations, kept in session-map's folder.
-  - How to confirm it is done: open Requests: every request shows his words and date, its activities with their state and a bar; one with no activity yet shows in red; the other projects show their lists too.
-  - Where it went: `mm38`, `op01`.
-  - Status: in progress (the tab and the lists of the other projects are built on 2026-10-10).
 - [ ] The project box with the whole repository on one side, like VS Code, and the plan on the other `id77`
   - Asked: 2026-10-10 ~05:12 — "tive uma ideia boa também tem o blão do projeto que é roxo, de um lado vem tem a formação do projeto o que tem que ser feito e como tem que ser feito e do outro lado eu quero o repositorio completo, como é no vscode, pastas etc, realmente como é o repositorio, assim a pessoa vai abrindo e vendo, consegue acompanhar quando um arquivo novo for criado"
   - What it means: on the mind map, the purple project box opens to one side into the architecture (what has to be done and how) and to the other into the real folders and files of the repository, opened folder by folder like the editor's explorer, with a new file lighting up when it is created.

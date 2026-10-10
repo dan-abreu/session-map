@@ -23,5 +23,5 @@ Nothing here is code; the part is this file:
 
 ### Releases
 
-- [ ] **Claude:** Publish the Requests tab as the next version, after the owner looks at the screenshots `op05`
+- [x] **Claude:** Publish the Requests tab as the next version, after the owner looks at the screenshots `op05`
   - From the request `id76`.

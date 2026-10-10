@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.5
+
+Everything you asked for, in one place: the Requests tab shows each request in your own words and the work it became.
+
+- New: the Requests tab. Every request with its dates and your words, grouped as In progress, Planned, Deferred,
+  Completed and Discarded, with the activities it became, how many are completed, the version it was released in and
+  its acceptance criteria. Filters for "Waiting on you" and "No linked activity", search, one project or all; a click
+  on an activity opens it on the map. A request whose activities are all done shows as completed, awaiting
+  confirmation.
+- New: the Operation part holds the work that changes no code (research, accounts, releases, your decisions), so every
+  request becomes at least one activity; the Flow draws neither the requests nor the operation.
+- New: chats in Claude Code with the plugin write each new request the same day, in your words, and turn it into work.
+  A project whose repository has no list keeps it in session-map's folder, never in the repository.
+- New: the Board says which request each card came from.
+- New: a list kept in another language shows its words translated for the page's language.
+- Fixed: a test of the kept copies of removed files that failed once the real day passed its date.
+
 ## 0.2.4
 
 The chat now sits where you work: under the box you clicked, always at hand, and every project has its own chats

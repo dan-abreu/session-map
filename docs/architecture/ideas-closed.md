@@ -271,3 +271,9 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: in the project box and in a part, open the Files tab and click a file: "opening…" shows at once and the file opens.
   - Where it went: `mm26`.
   - Status: done (released in v0.2.4).
+- [x] See every request in the program: what will be done, what is being done, what is done `id76`
+  - Asked: 2026-10-10 04:55 — "isso tem que entrar de alguma forma no programa. assim posso ver tudo o que eu pedi vai ser feito ou está sendo feito isso é o mais urgente no momento, enxergar os meus pedidos"; 2026-10-10 ~05:00 — "pedido entra na arquitetutra e fluxo se for alguma função que venha junto com o pedido ( ideia) dentro do programa, mas tudo o que é feito, que fica ai na sua memoria que voce grava como pedido deve virar uma atividade a ser feita"
+  - What it means: a Requests tab with every request in his words, grouped by where it stands, each with the work it became and how much is done; a request is never only in Claude's memory; every request becomes at least one activity (a feature goes to the architecture and the Flow, the rest to the Operation part); the lists of the other projects built from their old conversations, kept in session-map's folder.
+  - How to confirm it is done: open Requests: every request shows his words and date, its activities with their state and a bar; one with no activity yet shows in red; the other projects show their lists too.
+  - Where it went: `mm38`, `op01`.
+  - Status: done (released in v0.2.5, with the screenshots approved by the owner).

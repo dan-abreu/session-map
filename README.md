@@ -105,6 +105,10 @@ The column on the left of the map lists every conversation of the open project f
 
 The **Live** button on the map counts the conversations working now, in every project, and opens **Working now**: one card per conversation, grouped by project, with its way down the map, its latest steps (the newest first), its workflows with done/total and the helper agents still running with their model, and **Show on map** / **Open conversation**. It updates every 5 seconds. On the map itself the way from the project to the box being worked on lights up in green, and a caption under that box names the latest step. A workflow agent that has not moved for 30 minutes is left out, so an interrupted run does not stay "working" for ever.
 
+### Requests tab
+
+The **Requests** tab lists everything you asked for, in your own words and with the dates, grouped as In progress, Planned, Deferred, Completed and Discarded. Each request shows the activities it became, with their state and how many are completed, the version it was released in, and its acceptance criteria; a request with no linked activity is flagged in red. The **Board** says which request each card came from. Chats in Claude Code with the plugin write each new request the same day and turn it into at least one item: work that changes the program goes under its part, the rest (research, accounts, releases, your decisions) under the **Operation** part. A project whose repository has no list of requests keeps it in session-map's folder (`~/.claude/session-map/projects/<project id>/`), so nothing is written into that repository.
+
 ### Changes tab
 
 The **Changes** tab lists, as it happens, every file your conversations and their helpers created, edited, removed or renamed, in this project or in all of them. Filter by part, by who did it (a conversation, a helper of a team, or outside the conversations) and by kind, or pick a day. Each change says whether it is not saved yet, saved or released, and a click shows its before and after, what you asked that led to it, and **Open the file** / **Open the conversation**. Files that hold passwords or keys never show their content.
