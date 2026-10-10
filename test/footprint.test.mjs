@@ -68,6 +68,19 @@ test('gitRootOf finds the repository a file lives in, the main checkout for a wo
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
+test('a network path a step named is never looked up: no stat on another machine, no error for the whole pass', () => {
+  const base = tmp();
+  try {
+    const shop = repo(join(base, 'shop'), { 'src/a.js': 'a\n' });
+    // A text like "a\\n\\g" in a command read as a path became //n/g/…: stat on it threw and every pass failed.
+    assert.equal(gitRootOf('//n/g/x.js'), null);
+    assert.equal(gitRootOf('\\\\n\\g\\x.js'), null);
+    const touch = touchesOf({ root: shop, cwd: shop, edited: [join(shop, 'src', 'a.js'), '//n/g/x.js'], seen: ['\\\\host\\share\\y.js'] });
+    assert.deepEqual([...touch.keys()], [normalizePath(shop)]);
+    assert.deepEqual(touch.get(normalizePath(shop)).edited, ['src/a.js']);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
 test('touchesOf sorts a conversation\'s files by repository: edits and what it only looked at, never libraries, binaries or the Claude folder', () => {
   const base = tmp();
   try {

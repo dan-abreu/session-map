@@ -8,6 +8,8 @@ import { normalizePath, relativeFiles, repoFiles, slash } from './paths.mjs';
 
 const WORKTREE_RE = /^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+[\\/]?$/;
 const ABSOLUTE_RE = /^([a-z]:)?\//i;
+// \\host\share: looking one up makes Windows reach for that machine (seconds, and the user's sign-in sent to it).
+const NETWORK_RE = /^[\\/]{2}/;
 
 // ponytail: folders are remembered for the life of the server; a repository created later under a folder already
 // seen is found after a restart.
@@ -15,7 +17,8 @@ const rootByDir = new Map();
 
 function rootAt(dir) {
   const dotGit = join(dir, '.git');
-  const st = statSync(dotGit, { throwIfNoEntry: false });
+  let st;
+  try { st = statSync(dotGit, { throwIfNoEntry: false }); } catch { /* no access: not a repository we can read */ }
   if (!st) return undefined;
   if (st.isDirectory()) return dir;
   // A linked worktree's .git is a file pointing into the main checkout: its files are that project's.
@@ -29,6 +32,7 @@ function rootAt(dir) {
 
 // The repository a file lives in, written or still to be written; null outside every repository.
 export function gitRootOf(file) {
+  if (NETWORK_RE.test(file)) return null;
   const start = dirname(slash(file));
   if (rootByDir.has(start)) return rootByDir.get(start);
   let found = null;
@@ -52,6 +56,7 @@ export function placer({ root, cwd, skip = [] }) {
   const skipped = skip.filter(Boolean).map((s) => normalizePath(s));
   return (file) => {
     const p = slash(file);
+    if (NETWORK_RE.test(p)) return null;
     if (ABSOLUTE_RE.test(p) && skipped.some((s) => normalizePath(p).startsWith(`${s}/`))) return null;
     const own = repoFiles([p], root, cwd);
     if (own.length) return { home: root, rel: own[0] };
