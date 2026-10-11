@@ -395,6 +395,23 @@ test('when the sandbox broke on this machine, a resumed run tests the stored ans
   }
 });
 
+test('a Node with no sandbox is this machine\'s fault: the item is not called broken and a resume tests again', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'code.json'), 'code', CODE);
+    const unsupported = async () => ({ ok: false, passed: 0, failed: 0, total: 0, timedOut: false, error: 'sandbox-unsupported', ms: 0, tail: 'no permission model' });
+    const first = await runBench(base(env, { kinds: ['code'], only: ['claude:haiku'] }), { call: perfect(), keyedProviders: [], runCode: unsupported });
+    assert.equal(first.results[0].skipped, undefined, 'the reference did not run: the item is not known broken');
+    assert.equal(first.results[0].error, 'sandbox-unsupported');
+    const again = perfect();
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['code'], only: ['claude:haiku'] }, { call: again, keyedProviders: [] });
+    assert.equal(again.calls.length, 0);
+    assert.deepEqual([out.results[0].score, out.results[0].error], [1, null]);
+  } finally {
+    env.done();
+  }
+});
+
 test('a code item whose reference fails its own tests is left out for everyone, with a note', async () => {
   const env = scratch();
   try {
