@@ -130,9 +130,14 @@ export function createStatementStore({ projectsDir, smDir, account = () => accou
     },
     rows(period, filter = {}, offset = 0, limit = 100) {
       if (!covers(period)) return null;
-      const list = ledgerRows(current.st, period, filter).sort((a, b) => b.ts - a.ts);
+      // A statement's running balance: what was spent from the period's start up to and including each line.
+      const list = ledgerRows(current.st, period, filter).sort((a, b) => a.ts - b.ts);
+      let balance = 0;
+      const balances = list.map((r) => (balance += r.cost?.total ?? 0));
+      const newest = list.map((r, i) => [r, balances[i]]).reverse();
       const to = offset + Math.min(PAGE_MAX, Math.max(1, limit));
-      return { total: list.length, offset, rows: list.slice(offset, to).map((r) => rowOut(current.st, r)) };
+      return { total: list.length, offset, sumUsd: Math.round(balance * 1e6) / 1e6,
+        rows: newest.slice(offset, to).map(([r, b]) => ({ ...rowOut(current.st, r), balance: Math.round(b * 1e6) / 1e6 })) };
     },
     csv(period, filter = {}) {
       return covers(period) ? detailCsv(current.st, ledgerRows(current.st, period, filter)) : null;
@@ -145,6 +150,7 @@ export const isStatementPath = (path) => PATHS.has(path);
 
 const filterOf = (url) => ({
   day: /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('day') ?? '') ? url.searchParams.get('day') : '',
+  project: (url.searchParams.get('project') ?? '').slice(0, 200),
   chat: (url.searchParams.get('chat') ?? '').slice(0, 100),
   who: (url.searchParams.get('who') ?? '').slice(0, 300),
   file: (url.searchParams.get('file') ?? '').slice(0, 1000),

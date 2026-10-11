@@ -28,6 +28,7 @@ export function actOf(block) {
 }
 
 const FILE_KINDS = new Set(['create', 'edit', 'read']);
+const WHO_MAX = 30; // helpers carried per chat in the period's tree; the chat's own page lists them all
 export const KINDS = ['answer', 'read', 'edit', 'create', 'run', 'search', 'helper', 'web', 'other'];
 
 // A file named the same way whatever tool wrote it: forward slashes, the drive in lower case.
@@ -99,9 +100,10 @@ export function periodLedger(st, period) {
   for (const r of rows) {
     const s = st.sessions.get(r.sessionId);
     add(total, r);
-    const c = get(chats, r.sessionId, { sessionId: r.sessionId, title: s?.title ?? '', project: s?.project ?? '', helpers: new Set() });
+    const c = get(chats, r.sessionId, { sessionId: r.sessionId, title: s?.title ?? '', project: s?.project ?? '', helpers: new Set(), who: new Map() });
     add(c, r);
     if (!isMain(r.who)) c.helpers.add(r.who);
+    add(get(c.who, r.who, { who: r.who, main: isMain(r.who) }), r);
     add(get(byDay, dayOf(r.ts), { day: dayOf(r.ts) }), r);
     add(get(byProject, s?.project ?? '', { name: s?.project ?? '' }), r);
     add(get(byModel, r.model, { model: r.model }), r);
@@ -116,8 +118,11 @@ export function periodLedger(st, period) {
     from: period.from, to: period.to,
     total: out(total),
     lines,
-    chats: [...chats.values()].sort((a, b) => b.usd - a.usd).map(({ helpers, ...c }) => ({
+    // Each chat carries who worked in it (the chat first, then its most expensive helpers), so the page can open the
+    // cost tree in place: project, chat, helper.
+    chats: [...chats.values()].sort((a, b) => b.usd - a.usd).map(({ helpers, who, ...c }) => ({
       ...out(c), helpers: helpers.size, share: share(c), allTimeUsd: r6(st.allTime?.get(c.sessionId)?.usd ?? c.usd),
+      who: [...who.values()].sort((a, b) => (b.main - a.main) || (b.usd - a.usd)).slice(0, WHO_MAX).map(out),
     })),
     byDay: [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day)).map((b) => ({ ...out(b), share: share(b) })),
     byProject: sorted(byProject),
@@ -196,10 +201,11 @@ export function chatLedger(st, sessionId, period) {
 }
 
 // The replies behind whatever was opened: a chat, who answered, a file, a kind of work, a day, or words.
-export function ledgerRows(st, period, { chat = '', who = '', file = '', kind = '', day = '', q = '' } = {}) {
+export function ledgerRows(st, period, { project = '', chat = '', who = '', file = '', kind = '', day = '', q = '' } = {}) {
   const words = q.trim().toLowerCase();
   const key = file ? fileKey(file) : '';
-  return inPeriod(st.rows, period).filter((r) => (!chat || r.sessionId === chat) && (!who || r.who === who)
+  return inPeriod(st.rows, period).filter((r) => (!project || st.sessions.get(r.sessionId)?.project === project)
+    && (!chat || r.sessionId === chat) && (!who || r.who === who)
     && (!day || dayOf(r.ts) === day)
     && (!key || r.acts?.some((a) => FILE_KINDS.has(a.k) && a.t && fileKey(a.t) === key))
     && (!kind || (kind === 'answer' ? !r.acts?.length : r.acts?.some((a) => a.k === kind)))

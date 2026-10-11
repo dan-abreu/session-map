@@ -1,14 +1,16 @@
-// The spend statement in the Costs tab as guided bookkeeping (sb10, from id98): the period's total first, one line per
-// chat; a chat opened shows who worked, the files it created or changed, what the money went on and its days, each
-// adding up to the same total; anything opened there shows its replies. The server does the sums
-// (statement-route.mjs, ledger.mjs); this section keeps its own element and place, so the tab redrawing keeps them.
+// The spend statement in the Costs tab, laid out the way AI cost tools do their books (sb12, from id98): key figures,
+// spend by day, a cost-center tree (project ▸ chat ▸ helper, plus session-map's own work and the other AIs) and the
+// journal of entries with a running balance. A chat opens to its files and kinds of work; anything opens its entries.
+// The server does the sums (statement-route.mjs, ledger.mjs); this section keeps its own element and place, so the tab
+// redrawing keeps them.
 
 const POLL_MS = 1500;
 const REFRESH_MS = 60_000;
-const PAGE = 100;
-const CHATS_FIRST = 20;
+const PAGE = 50;
 const LIST_FIRST = 15;
+const TREE_WHO = 10;
 const DAY = 86_400_000;
+const MAIN = 'conversa principal';
 
 async function getJson(path) {
   let res;
@@ -38,13 +40,24 @@ export function presetPeriod(id, now = Date.now()) {
   return { from: back(29), to: today };
 }
 
+// Every day of the period, oldest first, with its spend (0 when nothing ran), for the bars.
+export function daysOf(period, byDay, now = Date.now()) {
+  const spent = new Map(byDay.map((d) => [d.day, d]));
+  const out = [];
+  const end = Math.min(period.to, now + 1);
+  for (let d = new Date(period.from); d.getTime() < end; d.setDate(d.getDate() + 1)) {
+    const day = ymd(d.getTime());
+    out.push({ day, usd: spent.get(day)?.usd ?? 0, replies: spent.get(day)?.replies ?? 0 });
+  }
+  return out;
+}
+
 // deps: h, t (getter), lang (getter), errorText(code).
 export function createStatement({ h, t, lang, errorText }) {
-  const ui = { preset: '30', ...presetPeriod('30'), level: 'period', chatId: null, rowsFilter: null, rowsTitle: '', allChats: false, open: new Set() };
+  const ui = { preset: '30', ...presetPeriod('30'), level: 'period', chatId: null, outsideId: null, open: new Set(), expanded: new Set() };
+  const journal = { filter: {}, title: '', rows: [], total: 0, sum: 0 };
   let period = null;
   let book = null;
-  let rows = [];
-  let rowsTotal = 0;
   let reading = null;
   let error = null;
   let started = false;
@@ -61,15 +74,19 @@ export function createStatement({ h, t, lang, errorText }) {
     return x > 0 && x < 0.0005 ? `< ${f.format(0.001)}` : f.format(x ?? 0);
   };
   const date = (ms) => new Intl.DateTimeFormat(lang(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(ms);
+  const short = (ms) => new Intl.DateTimeFormat(lang(), { day: '2-digit', month: '2-digit' }).format(ms);
+  const hour = (ms) => new Intl.DateTimeFormat(lang(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ms);
   const when = (ms) => new Intl.DateTimeFormat(lang(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(ms);
   const dayName = (day) => new Intl.DateTimeFormat(lang(), { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(`${day}T12:00`));
-  const range = () => `from=${ui.from}&to=${ui.to}`;
   const qs = (o) => new URLSearchParams(Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v != null))).toString();
+  const readUsd = (b) => (b.usdRead ?? 0) + (b.usdKeep ?? 0) + (b.usdNew ?? 0);
+
+  // ----- loading -----
 
   async function loadPeriod() {
     const mine = ++run;
     lastTry = Date.now();
-    const res = await getJson(`/api/statement?${range()}`);
+    const res = await getJson(`/api/statement?${qs({ from: ui.from, to: ui.to })}`);
     if (mine !== run) return;
     clearTimeout(pollTimer);
     if (!res.ok) {
@@ -79,10 +96,30 @@ export function createStatement({ h, t, lang, errorText }) {
     }
     error = res.failed && !res.period ? res.failed : null;
     reading = res.reading;
-    if (res.period) period = res.period;
+    const fresh = res.period && res.builtAt !== period?.builtAt;
+    if (res.period) period = { ...res.period, builtAt: res.builtAt };
     // Asked again only while the server says it is reading, and only while the section is on the page.
     if (reading && root.isConnected !== false) pollTimer = setTimeout(loadPeriod, POLL_MS);
+    if (fresh) await loadJournal(false);
     draw();
+  }
+
+  async function loadJournal(more) {
+    const offset = more ? journal.rows.length : 0;
+    const res = await getJson(`/api/statement/rows?${qs({ from: ui.from, to: ui.to, ...journal.filter, offset, limit: PAGE })}`);
+    if (!res.ok) return;
+    journal.rows = more ? journal.rows.concat(res.rows) : res.rows;
+    journal.total = res.total;
+    journal.sum = res.sumUsd ?? 0;
+  }
+
+  // Shows the entries of whatever was picked: in the period's journal, or on their own page (from a chat).
+  async function showEntries(filter, title, own = false) {
+    Object.assign(journal, { filter, title });
+    await loadJournal(false);
+    if (own) ui.level = 'rows';
+    draw();
+    (own ? root : root.querySelector('#stmt-journal'))?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   async function openChat(id) {
@@ -94,89 +131,51 @@ export function createStatement({ h, t, lang, errorText }) {
     root.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
-  async function openRows(filter, title, more = false) {
-    const offset = more ? rows.length : 0;
-    const res = await getJson(`/api/statement/rows?${qs({ from: ui.from, to: ui.to, ...filter, offset, limit: PAGE })}`);
-    if (!res.ok) { error = res.error; draw(); return; }
-    rows = more ? rows.concat(res.rows) : res.rows;
-    rowsTotal = res.total;
-    // Replies opened from the period (a day) belong to no chat: the trail then skips the chat step.
-    Object.assign(ui, { level: 'rows', rowsFilter: filter, rowsTitle: title, chatId: filter.chat ?? null });
+  function openOutside(id) {
+    Object.assign(ui, { level: 'outside', outsideId: id, open: new Set() });
     draw();
-    if (!more) root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    root.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function setPeriod(change) {
     Object.assign(ui, change, { level: 'period', chatId: null });
+    Object.assign(journal, { filter: {}, title: '' });
     period = null;
     book = null;
     draw();
     loadPeriod();
   }
 
+  function backToPeriod() {
+    ui.level = 'period';
+    if (journal.filter.chat && !journal.filter.project) Object.assign(journal, { filter: {}, title: '' });
+    loadJournal(false).then(draw);
+    draw();
+  }
+
   // ----- pieces -----
 
-  const link = (text, onclick) => h('button', { type: 'button', class: 'stmt-link', onclick }, text);
-  // A table of money: head, rows (arrays of cells), a total row; a row may open what it is about.
-  function table(head, list, totalRow = null) {
-    return h('div', { class: 'stmt-table-wrap' }, h('table', { class: 'stmt-table' },
-      h('thead', {}, h('tr', {}, head.map((c, i) => h('th', { class: i ? 'n' : null, scope: 'col' }, c)))),
-      h('tbody', {}, list.map((cells) => h('tr', {}, cells.map((c, i) => h('td', { class: i ? 'n' : null }, c))))),
-      totalRow ? h('tfoot', {}, h('tr', {}, totalRow.map((c, i) => h('td', { class: i ? 'n' : null }, c)))) : null));
+  const link = (text, onclick, title) => h('button', { type: 'button', class: 'stmt-link', onclick, title: title ?? null }, text);
+  const cell = (c, cls) => h('td', { class: cls }, c);
+  function table(head, list, totalRow = null, cls = '') {
+    return h('div', { class: 'stmt-table-wrap' }, h('table', { class: `stmt-table ${cls}` },
+      h('thead', {}, h('tr', {}, head.map((c, i) => (Array.isArray(c) ? h('th', { class: i ? 'n' : null, scope: 'col', title: c[1] }, c[0]) : h('th', { class: i ? 'n' : null, scope: 'col' }, c))))),
+      h('tbody', {}, list.map((cells) => (!Array.isArray(cells) ? cells : h('tr', {}, cells.map((c, i) => cell(c, i ? 'n' : null)))))),
+      totalRow ? h('tfoot', {}, h('tr', {}, totalRow.map((c, i) => cell(c, i ? 'n' : null)))) : null));
   }
-  const bar = (share) => h('span', { class: 'stmt-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${Math.min(100, (share ?? 0) * 100).toFixed(1)}%` }));
+  const firstOf = (key, list) => (ui.open.has(key) ? list : list.slice(0, LIST_FIRST));
+  const showAll = (key, list, tt) => (list.length > LIST_FIRST ? h('button', {
+    type: 'button', class: 'btn small-btn', onclick: () => { if (ui.open.has(key)) ui.open.delete(key); else ui.open.add(key); draw(); },
+  }, ui.open.has(key) ? tt('stmt.showFewer') : tt('stmt.showAll', { n: num(list.length) })) : null);
 
   function crumbs(tt) {
-    const items = [h('li', {}, ui.level === 'period' ? h('span', { 'aria-current': 'page' }, tt('stmt.crumb.period')) : link(tt('stmt.crumb.period'), () => { ui.level = 'period'; draw(); }))];
-    if (ui.level !== 'period' && book && ui.chatId) {
+    const items = [h('li', {}, ui.level === 'period' ? h('span', { 'aria-current': 'page' }, tt('stmt.crumb.period')) : link(tt('stmt.crumb.period'), backToPeriod))];
+    if (ui.level === 'chat' || (ui.level === 'rows' && book && journal.filter.chat === book.sessionId)) {
       items.push(h('li', {}, ui.level === 'chat' ? h('span', { 'aria-current': 'page' }, book.title) : link(book.title, () => { ui.level = 'chat'; draw(); })));
     }
-    if (ui.level === 'rows') items.push(h('li', {}, h('span', { 'aria-current': 'page' }, ui.rowsTitle)));
+    if (ui.level === 'rows') items.push(h('li', {}, h('span', { 'aria-current': 'page' }, journal.title)));
     if (ui.level === 'outside') items.push(h('li', {}, h('span', { 'aria-current': 'page' }, tt(`stmt.spender.${ui.outsideId}`))));
     return h('nav', { class: 'stmt-crumbs', 'aria-label': tt('stmt.crumb.label') }, h('ol', {}, items));
-  }
-
-  function openOutside(id) {
-    Object.assign(ui, { level: 'outside', outsideId: id, chatId: null, open: new Set() });
-    draw();
-    root.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }
-
-  // The names of the other AIs as the person knows them: "openai gpt-6.1-sol" → "OpenAI gpt-6.1-sol".
-  const AI_NAMES = { openai: 'OpenAI', gemini: 'Gemini', deepseek: 'DeepSeek', claude: 'Claude', openrouter: 'OpenRouter' };
-  const aiName = (ai) => ai.replace(/^(\w+)/, (p) => AI_NAMES[p] ?? p);
-  const taskName = (tt, kind) => {
-    const text = tt(`stmt.task.${kind}`);
-    return text === `stmt.task.${kind}` ? tt('stmt.task.unknown', { kind }) : text;
-  };
-
-  // ----- session-map's own work and the other AIs, opened -----
-
-  function outsideView(tt) {
-    const g = period.outside?.groups.find((x) => x.id === ui.outsideId) ?? { usd: 0, count: 0, byAi: [], byKind: [] };
-    const calls = (period.outside?.calls ?? []).filter((c) => (ui.outsideId === 'auto' ? c.source === 'map' : c.source !== 'map'));
-    const share = (v) => (g.usd > 0 ? v / g.usd : 0);
-    const result = (c) => [c.ok ? tt('stmt.call.ok') : tt('stmt.call.failed'), c.accepted === true ? tt('stmt.call.accepted') : c.accepted === false ? tt('stmt.call.refused') : null].filter(Boolean).join(' · ');
-    return [
-      h('p', { class: 'stmt-guide' }, tt(`stmt.guide.${ui.outsideId}`)),
-      h('dl', { class: 'ledger stmt-ledger' },
-        h('div', {}, h('dt', {}, tt('stmt.chat.period', { from: date(period.from), to: date(period.to - 1) })), h('dd', { class: 'num strong' }, usd(g.usd))),
-        h('div', {}, h('dt', {}, tt('stmt.col.times')), h('dd', { class: 'num' }, tt('stmt.nCalls', { n: num(g.count) })))),
-      g.count ? [
-        h('h4', {}, tt('stmt.sec.byAi')),
-        table([tt('stmt.col.ai'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
-          g.byAi.map((x) => [aiName(x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))]),
-          [h('strong', {}, tt('stmt.col.total')), num(g.count), h('strong', {}, usd(g.usd, 4)), pct(1)]),
-        h('h4', {}, tt('stmt.sec.byTask')),
-        table([tt('stmt.col.task'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
-          g.byKind.map((x) => [taskName(tt, x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))])),
-        h('h4', {}, tt('stmt.sec.calls')),
-        table([tt('stmt.col.when'), tt('stmt.col.ai'), tt('stmt.col.task'), tt('stmt.col.result'), tt('stmt.col.cost')],
-          firstOf('calls', calls).map((c) => [when(c.at), aiName(c.ai), taskName(tt, c.kind), result(c), usd(c.usd, 4)])),
-        showAll('calls', calls, tt),
-      ] : h('p', { class: 'view-note' }, tt('stmt.none')),
-      h('p', { class: 'view-note' }, tt(`stmt.note.${ui.outsideId}`)),
-    ].flat();
   }
 
   function periodBar(tt) {
@@ -193,170 +192,213 @@ export function createStatement({ h, t, lang, errorText }) {
       h('button', { type: 'button', class: 'btn small-btn', onclick: () => { if (from.value && to.value) setPeriod({ preset: '', from: from.value, to: to.value }); } }, tt('stmt.p.apply')));
   }
 
-  function accountBox(tt) {
-    const a = period?.account;
-    if (!a) return null;
-    const stopped = a.disabledReason === 'out_of_credits' ? tt('stmt.account.outOfCredits') : a.disabledReason;
-    return h('details', { class: 'stmt-account' },
-      h('summary', {}, h('strong', {}, tt('stmt.account.title')), ' — ', tt('stmt.account.short', { amount: a.extraUsed, why: stopped ?? tt('stmt.account.fine') })),
-      h('ul', { class: 'plain' },
-        h('li', {}, tt('stmt.account.plan', { plan: a.plan })),
-        h('li', {}, tt(a.extraEnabled ? 'stmt.account.extraOn' : 'stmt.account.extraOff')),
-        h('li', {}, tt('stmt.account.extraUsed', { amount: a.extraUsed })),
-        h('li', {}, tt('stmt.account.weekly', { pct: a.weeklyPercent, start: a.weekStart, reset: a.weekReset }))),
-      period.events?.length ? h('div', {}, h('h4', {}, tt('stmt.events')),
-        h('ul', { class: 'plain' }, period.events.slice(-12).reverse().map((e) => h('li', {}, h('span', { class: 'num' }, when(e.at)), ` — ${e.text}`)))) : null,
-      h('p', { class: 'view-note' }, tt('stmt.account.note')));
+  // ----- the period: figures, bars, cost centers, journal -----
+
+  function kpis(tt, grand) {
+    const p = period;
+    const days = daysOf(p, p.byDay);
+    const last7 = days.slice(-7);
+    const pace = last7.reduce((n, d) => n + d.usd, 0) / Math.max(1, last7.length);
+    const chatsUsd = p.chats.reduce((n, c) => n + c.usd, 0);
+    const a = p.account;
+    const tile = (label, value, sub, tone = '', title = null) => h('div', { class: `stmt-kpi ${tone}`, title },
+      h('span', { class: 'stmt-kpi-label' }, label), h('strong', { class: 'num' }, value), sub ? h('span', { class: 'stmt-kpi-sub num' }, sub) : null);
+    return h('div', { class: 'stmt-kpis' },
+      tile(tt('stmt.kpi.total'), usd(grand), `${short(p.from)} – ${short(p.to - 1)}`),
+      tile(tt('stmt.kpi.perDay'), usd(grand / Math.max(1, days.length)), tt('stmt.kpi.perDaySub', { n: num(days.length) })),
+      tile(tt('stmt.kpi.pace'), usd(pace), tt('stmt.kpi.paceSub', { usd: usd(pace * 30) })),
+      tile(tt('stmt.kpi.perChat'), usd(p.chats.length ? chatsUsd / p.chats.length : 0), tt('stmt.kpi.perChatSub', { usd: usd(p.total.replies ? chatsUsd / p.total.replies : 0, 4) })),
+      a ? tile(tt('stmt.kpi.extra'), a.extraUsed, a.disabledReason === 'out_of_credits' ? `⚠ ${tt('stmt.account.outOfCredits')}` : tt('stmt.kpi.weekly', { pct: a.weeklyPercent }), a.disabledReason ? 'is-warn' : '',
+        // The limit notices of the period, on hover: when the plan ran out and the credits stopped.
+        (p.events ?? []).slice(-8).reverse().map((e) => `${when(e.at)} — ${e.text}`).join('\n') || null) : null);
   }
 
-  // ----- level 1: the period -----
+  // One bar per day of the period, the day's total; a bar opens that day's entries.
+  function dayBars(tt) {
+    const days = daysOf(period, period.byDay);
+    const max = Math.max(1e-9, ...days.map((d) => d.usd));
+    const W = 100 / Math.max(1, days.length);
+    const ticks = [max, max / 2];
+    return h('figure', { class: 'stmt-chart' },
+      h('figcaption', {}, tt('stmt.chart.title')),
+      h('div', { class: 'stmt-plot' },
+        h('div', { class: 'stmt-axis num', 'aria-hidden': 'true' }, ticks.map((v) => h('span', {}, usd(v, 0))), h('span', {}, usd(0, 0))),
+        h('div', { class: 'stmt-bars', role: 'list' }, days.map((d) => {
+          const label = tt('stmt.chart.bar', { day: dayName(d.day), usd: usd(d.usd), n: num(d.replies) });
+          return h('button', {
+            type: 'button', role: 'listitem', class: 'stmt-bar-day', style: `width:${W}%`, title: label, 'aria-label': label,
+            onclick: () => showEntries({ day: d.day }, dayName(d.day)),
+          }, h('span', { style: `height:${((d.usd / max) * 100).toFixed(1)}%` }));
+        }))),
+      h('div', { class: 'stmt-xaxis num', 'aria-hidden': 'true' }, h('span', {}, short(new Date(`${days[0]?.day}T12:00`))), h('span', {}, short(new Date(`${days.at(-1)?.day}T12:00`)))));
+  }
+
+  // The cost centers, as a tree: each project, its chats, each chat's helpers; then session-map's own work and the
+  // other AIs. A ▸ opens a level; "Lançamentos" shows that center's entries in the journal below.
+  function costTree(tt, grand) {
+    const p = period;
+    const projects = new Map();
+    for (const c of p.chats) {
+      if (!projects.has(c.project)) projects.set(c.project, { name: c.project, chats: [], usd: 0, replies: 0, usdRead: 0, usdKeep: 0, usdNew: 0, usdWrite: 0 });
+      const g = projects.get(c.project);
+      g.chats.push(c);
+      for (const k of ['usd', 'replies', 'usdRead', 'usdKeep', 'usdNew', 'usdWrite']) g[k] += c[k] ?? 0;
+    }
+    const share = (v) => (grand > 0 ? v / grand : 0);
+    const toggle = (key) => () => { if (ui.expanded.has(key)) ui.expanded.delete(key); else ui.expanded.add(key); draw(); };
+    const arrow = (key) => h('button', { type: 'button', class: 'stmt-toggle', 'aria-expanded': ui.expanded.has(key) ? 'true' : 'false', 'aria-label': tt('stmt.tree.toggle'), onclick: toggle(key) }, ui.expanded.has(key) ? '▾' : '▸');
+    const entries = (filter, title) => link(tt('stmt.col.journal'), () => showEntries(filter, title));
+    const line = (level, name, count, b, action) => h('tr', { class: `lvl-${level}` },
+      cell(h('span', { class: 'stmt-center' }, name)), cell(count, 'n'), cell(usd(readUsd(b)), 'n'), cell(usd(b.usdWrite ?? 0), 'n'),
+      cell(h('strong', {}, usd(b.usd)), 'n'), cell(pct(share(b.usd)), 'n'), cell(action, 'n'));
+    const rows = [];
+    for (const g of [...projects.values()].sort((a, b) => b.usd - a.usd)) {
+      const pk = `p:${g.name}`;
+      rows.push(line(0, [arrow(pk), h('strong', {}, g.name)], tt('stmt.nChats', { n: num(g.chats.length) }), g, entries({ project: g.name }, g.name)));
+      if (!ui.expanded.has(pk)) continue;
+      for (const c of g.chats) {
+        const ck = `c:${c.sessionId}`;
+        rows.push(line(1, [arrow(ck), link(c.title, () => openChat(c.sessionId), tt('stmt.tree.details'))], tt('stmt.nReplies', { n: num(c.replies) }), c, entries({ chat: c.sessionId }, c.title)));
+        if (!ui.expanded.has(ck)) continue;
+        // The ten most expensive who-worked lines; the rest are on the chat's own page.
+        const shown = (c.who ?? []).slice(0, TREE_WHO);
+        for (const w of shown) {
+          const name = w.main ? tt('stmt.tree.main') : w.who;
+          rows.push(line(2, name, tt('stmt.nReplies', { n: num(w.replies) }), w, entries({ chat: c.sessionId, who: w.who }, `${c.title} · ${name}`)));
+        }
+        if (c.helpers + 1 > shown.length) rows.push(h('tr', { class: 'lvl-2' }, h('td', { colspan: '7' }, link(tt('stmt.tree.moreHelpers', { n: num(c.helpers + 1 - shown.length) }), () => openChat(c.sessionId)))));
+      }
+    }
+    for (const g of p.outside?.groups ?? []) {
+      if (!g.count) continue;
+      rows.push(line(0, [h('span', { class: 'stmt-toggle-space' }), h('strong', {}, tt(`stmt.spender.${g.id}`))], tt('stmt.nCalls', { n: num(g.count) }),
+        { usd: g.usd, usdWrite: 0 }, link(tt('stmt.tree.details'), () => openOutside(g.id))));
+    }
+    return h('div', { id: 'stmt-centers' },
+      h('h4', {}, tt('stmt.tree.title')),
+      table([tt('stmt.col.center'), tt('stmt.col.count'), [tt('stmt.col.read'), tt('stmt.tip.read')], [tt('stmt.col.wrote'), tt('stmt.tip.wrote')], tt('stmt.col.cost'), tt('stmt.col.share'), ''],
+        rows, [h('strong', {}, tt('stmt.col.total')), '', '', '', h('strong', {}, usd(grand)), pct(1), ''], 'stmt-tree'));
+  }
+
+  // The journal: one line per reply, newest first, with what it cost and the running balance of what is shown.
+  function journalTable(tt) {
+    const base = (x) => x.split(/[\\/]/).pop();
+    const desc = (r) => {
+      const files = (r.acts ?? []).filter((a) => a.t && ['create', 'edit', 'read'].includes(a.k)).map((a) => (a.k === 'read'
+        ? tt('stmt.row.readFile', { file: base(a.t), n: num(a.lines ?? 0) })
+        : `${a.k === 'create' ? tt('stmt.row.created') : tt('stmt.row.edited')} ${base(a.t)} (+${num(a.add)}${a.del ? ` −${num(a.del)}` : ''})`));
+      return files.length ? files.join(' · ') : r.did || tt('stmt.j.answered', { n: num(r.wroteWords) });
+    };
+    const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+    return h('div', { id: 'stmt-journal' },
+      h('div', { class: 'stmt-rows-head' },
+        h('h4', {}, tt('stmt.j.title')),
+        journal.title ? h('span', { class: 'stmt-chip' }, tt('stmt.j.filter', { name: clip(journal.title, 60) }),
+          h('button', { type: 'button', class: 'stmt-chip-x', 'aria-label': tt('stmt.j.clear'), onclick: () => showEntries({}, '') }, '✕')) : null,
+        h('span', { class: 'muted small num' }, tt('stmt.j.count', { shown: num(journal.rows.length), total: num(journal.total), sum: usd(journal.sum) })),
+        h('a', { class: 'btn small-btn', href: `/api/statement.csv?${qs({ from: ui.from, to: ui.to, ...journal.filter })}`, download: '' }, tt('stmt.download'))),
+      table([tt('stmt.col.date'), tt('stmt.col.center'), tt('stmt.col.desc'), tt('stmt.col.model'), [tt('stmt.col.read'), tt('stmt.tip.read')], [tt('stmt.col.wrote'), tt('stmt.tip.wrote')], tt('stmt.col.debit'), tt('stmt.col.balance')],
+        journal.rows.map((r) => h('tr', {},
+          cell(h('span', { class: 'num' }, `${short(r.ts)} ${hour(r.ts)}`)),
+          cell(h('span', { title: `${r.title} · ${r.who}` }, clip(r.title, 40), h('span', { class: 'stmt-sub' }, r.who === MAIN ? tt('stmt.tree.main') : clip(r.who, 50)))),
+          cell(h('span', { title: [r.ask?.text, desc(r), r.readWords ? tt('stmt.row.read', { n: num(r.readWords), what: r.readWhat }) : ''].filter(Boolean).join('\n') }, clip(desc(r), 90))),
+          cell(r.model.replace(/^claude-/, ''), 'n'),
+          cell(usd(r.usd.input + r.usd.cacheWrite + r.usd.cacheRead, 4), 'n'),
+          cell(usd(r.usd.output, 4), 'n'),
+          cell(h('strong', {}, usd(r.usd.total, 4)), 'n'),
+          cell(usd(r.balance ?? 0), 'n'))), null, 'stmt-journal'),
+      journal.rows.length < journal.total ? h('button', { type: 'button', class: 'btn small-btn', onclick: async () => { await loadJournal(true); draw(); } }, tt('stmt.j.more')) : null);
+  }
 
   function periodView(tt) {
-    const p = period;
-    const t0 = p.total;
-    const parts = [
-      [tt('stmt.part.read'), t0.usdRead], [tt('stmt.part.keep'), t0.usdKeep], [tt('stmt.part.write'), t0.usdWrite],
-      [tt('stmt.part.new'), t0.usdNew], [tt('stmt.part.search'), t0.usdSearch],
-    ].filter(([, v]) => v > 0);
-    const share = (v) => (t0.usd > 0 ? v / t0.usd : 0);
-    const chats = ui.allChats ? p.chats : p.chats.slice(0, CHATS_FIRST);
-    // Who spent: the chats (with their helpers), session-map's automatic work, and the other AIs the chats asked.
-    const out = p.outside ?? { usd: 0, count: 0, groups: [] };
-    const auto = out.groups.find((g) => g.id === 'auto') ?? { usd: 0, count: 0 };
-    const asked = out.groups.find((g) => g.id === 'asked') ?? { usd: 0, count: 0 };
-    const grand = t0.usd + out.usd;
-    const ofGrand = (v) => (grand > 0 ? v / grand : 0);
-    const l = p.lines ?? { read: 0, added: 0, removed: 0 };
-    return [
-      h('p', { class: 'stmt-guide' }, tt('stmt.guide.period')),
-      h('div', { class: 'stmt-hero' },
-        h('span', {}, tt('stmt.hero', { from: date(p.from), to: date(p.to - 1) })),
-        h('strong', { class: 'num' }, usd(grand)),
-        h('span', { class: 'muted' }, tt('stmt.heroSub', { replies: num(t0.replies), chats: num(p.chats.length) })),
-        h('span', { class: 'muted' }, tt('stmt.heroLines', { read: num(l.read), added: num(l.added), removed: num(l.removed) }))),
-      h('h4', {}, tt('stmt.whoSpent')),
-      table([tt('stmt.col.who'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')], [
-        [link(tt('stmt.spender.chats'), () => root.querySelector('#stmt-chats')?.scrollIntoView({ behavior: 'smooth' })), tt('stmt.nReplies', { n: num(t0.replies) }), usd(t0.usd), pct(ofGrand(t0.usd))],
-        [link(tt('stmt.spender.auto'), () => openOutside('auto')), tt('stmt.nCalls', { n: num(auto.count) }), usd(auto.usd), pct(ofGrand(auto.usd))],
-        [link(tt('stmt.spender.asked'), () => openOutside('asked')), tt('stmt.nCalls', { n: num(asked.count) }), usd(asked.usd), pct(ofGrand(asked.usd))],
-      ], [h('strong', {}, tt('stmt.col.total')), '', h('strong', {}, usd(grand)), pct(1)]),
-      h('p', { class: 'view-note' }, tt('stmt.whoSpentNote')),
-      h('h4', {}, tt('stmt.split')),
-      table([tt('stmt.col.what'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        parts.map(([label, v]) => [label, usd(v), pct(share(v))]),
-        [h('strong', {}, tt('stmt.col.total')), h('strong', {}, usd(t0.usd)), pct(1)]),
-      h('p', { class: 'view-note' }, tt('stmt.splitNote')),
-      h('h4', { id: 'stmt-chats' }, tt('stmt.byChat')),
-      p.chats.length ? table([tt('stmt.col.chat'), tt('stmt.col.days'), tt('stmt.col.helpers'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        chats.map((c) => [
-          h('span', {}, link(c.title, () => openChat(c.sessionId)), h('span', { class: 'stmt-sub' }, c.project)),
-          `${date(c.first)} – ${date(c.last)}`,
-          num(c.helpers),
-          h('span', {}, usd(c.usd), c.allTimeUsd > c.usd + 0.005 ? h('span', { class: 'stmt-sub' }, tt('stmt.allTime', { usd: usd(c.allTimeUsd) })) : null),
-          h('span', { class: 'stmt-share' }, pct(c.share), bar(c.share)),
-        ]),
-        [h('strong', {}, tt('stmt.col.total')), '', '', h('strong', {}, usd(t0.usd)), pct(1)])
-        : h('p', { class: 'view-note' }, tt('stmt.none')),
-      p.chats.length > CHATS_FIRST ? h('button', { type: 'button', class: 'btn small-btn', onclick: () => { ui.allChats = !ui.allChats; draw(); } },
-        ui.allChats ? tt('stmt.fewerChats') : tt('stmt.allChats', { n: num(p.chats.length) })) : null,
-      h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.byDay')),
-        table([tt('stmt.col.day'), tt('stmt.col.replies'), tt('stmt.col.cost'), tt('stmt.col.share')],
-          p.byDay.map((d) => [link(dayName(d.day), () => openRows({ day: d.day }, tt('stmt.rows.day', { day: dayName(d.day) }))), num(d.replies), usd(d.usd), pct(d.share)]))),
-      h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.byProject')),
-        table([tt('stmt.col.project'), tt('stmt.col.replies'), tt('stmt.col.cost'), tt('stmt.col.share')], p.byProject.map((x) => [x.name, num(x.replies), usd(x.usd), pct(x.share)]))),
-      h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.byModel')),
-        table([tt('stmt.col.model'), tt('stmt.col.replies'), tt('stmt.col.cost'), tt('stmt.col.share')], p.byModel.map((x) => [x.model, num(x.replies), usd(x.usd), pct(x.share)]))),
-      accountBox(tt),
-    ];
+    const grand = period.total.usd + (period.outside?.usd ?? 0);
+    return [kpis(tt, grand), dayBars(tt), costTree(tt, grand), journalTable(tt)];
   }
 
-  // ----- level 2: one chat -----
-
-  // A chat with hundreds of helpers or files shows the most expensive first; the rest one click away.
-  const firstOf = (key, list) => (ui.open.has(key) ? list : list.slice(0, LIST_FIRST));
-  const showAll = (key, list, tt) => (list.length > LIST_FIRST ? h('button', {
-    type: 'button', class: 'btn small-btn', onclick: () => { if (ui.open.has(key)) ui.open.delete(key); else ui.open.add(key); draw(); },
-  }, ui.open.has(key) ? tt('stmt.showFewer') : tt('stmt.showAll', { n: num(list.length) })) : null);
+  // ----- one chat opened: who worked, files, kinds of work, days -----
 
   function chatView(tt) {
     const b = book;
     const total = b.total.usd;
     const share = (v) => (total > 0 ? v / total : 0);
     const f = b.files;
-    const chatRows = (filter, title) => () => openRows({ chat: b.sessionId, ...filter }, title);
+    const entries = (filter, title) => () => showEntries({ chat: b.sessionId, ...filter }, title, true);
     const what = (x) => [x.created ? tt('stmt.file.created') : null, x.edits ? tt('stmt.file.edited', { n: num(x.edits) }) : null, x.reads ? tt('stmt.file.read', { n: num(x.reads) }) : null].filter(Boolean).join(', ');
     const lines = (x) => (x.add || x.del ? `+${num(x.add)} −${num(x.del)}` : '—');
     const ok = Math.abs(b.check.who - b.check.total) < 0.01 && Math.abs(b.check.kinds - b.check.total) < 0.01;
+    const tile = (label, value, sub) => h('div', { class: 'stmt-kpi' }, h('span', { class: 'stmt-kpi-label' }, label), h('strong', { class: 'num' }, value), sub ? h('span', { class: 'stmt-kpi-sub num' }, sub) : null);
     return [
-      h('p', { class: 'stmt-guide' }, tt('stmt.guide.chat')),
       h('h4', { class: 'stmt-chat-title' }, b.title, h('span', { class: 'stmt-sub' }, b.project)),
-      h('dl', { class: 'ledger stmt-ledger' },
-        h('div', {}, h('dt', {}, tt('stmt.chat.period', { from: date(b.from), to: date(b.to - 1) })), h('dd', { class: 'num strong' }, usd(total))),
-        h('div', {}, h('dt', {}, tt('stmt.chat.allTime', { since: date(b.allTime.first) })), h('dd', { class: 'num' }, usd(b.allTime.usd))),
-        h('div', {}, h('dt', {}, tt('stmt.chat.when')), h('dd', { class: 'num' }, `${when(b.total.first)} – ${when(b.total.last)}`)),
-        h('div', {}, h('dt', {}, tt('stmt.chat.work')), h('dd', { class: 'num' }, tt('stmt.chat.workValue', { replies: num(b.total.replies), helpers: num(b.helpers) }))),
-        h('div', {}, h('dt', {}, tt('stmt.chat.files')), h('dd', { class: 'num' }, tt('stmt.chat.filesValue', { created: num(f.created), edited: num(f.edited), add: num(f.add), del: num(f.del) }))),
-        h('div', {}, h('dt', {}, tt('stmt.chat.reading')), h('dd', { class: 'num' }, tt('stmt.chat.readingValue', { files: num(f.readFiles ?? 0), lines: num(f.readLines ?? 0) })))),
+      h('div', { class: 'stmt-kpis' },
+        tile(tt('stmt.kpi.total'), usd(total), `${short(b.total.first)} – ${short(b.total.last)}`),
+        tile(tt('stmt.chat.allTime', { since: short(b.allTime.first) }), usd(b.allTime.usd), tt('stmt.nReplies', { n: num(b.allTime.replies) })),
+        tile(tt('stmt.chat.work'), tt('stmt.nReplies', { n: num(b.total.replies) }), tt('stmt.nHelpers', { n: num(b.helpers) })),
+        tile(tt('stmt.chat.files'), `+${num(f.add)} −${num(f.del)}`, tt('stmt.kpi.filesSub', { created: num(f.created), edited: num(f.edited) })),
+        tile(tt('stmt.chat.reading'), tt('stmt.nLines', { n: num(f.readLines ?? 0) }), tt('stmt.nFiles', { n: num(f.readFiles ?? 0) }))),
 
       h('h4', {}, tt('stmt.sec.who')),
-      table([tt('stmt.col.who'), tt('stmt.col.replies'), tt('stmt.col.read'), tt('stmt.col.wrote'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        firstOf('who', b.who).map((w) => [link(w.who, chatRows({ who: w.who }, w.who)), num(w.replies), usd(w.usdRead + w.usdKeep + w.usdNew), usd(w.usdWrite), usd(w.usd), pct(share(w.usd))]),
+      table([tt('stmt.col.who'), tt('stmt.col.replies'), [tt('stmt.col.read'), tt('stmt.tip.read')], [tt('stmt.col.wrote'), tt('stmt.tip.wrote')], tt('stmt.col.cost'), tt('stmt.col.share')],
+        firstOf('who', b.who).map((w) => [link(w.main ? tt('stmt.tree.main') : w.who, entries({ who: w.who }, w.who)), num(w.replies), usd(readUsd(w)), usd(w.usdWrite), usd(w.usd), pct(share(w.usd))]),
         [h('strong', {}, tt('stmt.col.total')), num(b.total.replies), '', '', h('strong', {}, usd(b.check.who)), pct(1)]),
       showAll('who', b.who, tt),
 
       h('h4', {}, tt('stmt.sec.files')),
-      f.changed.length ? table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.lines'), tt('stmt.col.linesRead'), tt('stmt.col.cost')],
-        firstOf('changed', f.changed).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), lines(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)]))
+      f.changed.length ? table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.lines'), tt('stmt.col.linesRead'), [tt('stmt.col.cost'), tt('stmt.files.note')]],
+        firstOf('changed', f.changed).map((x) => [link(x.name, entries({ file: x.file }, x.name)), what(x), lines(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)]))
         : h('p', { class: 'view-note' }, tt('stmt.files.none')),
       showAll('changed', f.changed, tt),
       f.onlyRead.length ? h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.files.read', { n: num(f.onlyRead.length), usd: usd(f.readUsd) })),
-        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.linesRead'), tt('stmt.col.cost')], firstOf('read', f.onlyRead).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)])),
+        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.linesRead'), tt('stmt.col.cost')], firstOf('read', f.onlyRead).map((x) => [link(x.name, entries({ file: x.file }, x.name)), what(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)])),
         showAll('read', f.onlyRead, tt)) : null,
-      h('p', { class: 'view-note' }, tt('stmt.files.note')),
 
       h('h4', {}, tt('stmt.sec.kinds')),
-      table([tt('stmt.col.activity'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        b.kinds.map((k) => [link(tt(`stmt.kind.${k.kind}`), chatRows({ kind: k.kind }, tt(`stmt.kind.${k.kind}`))), num(k.count), usd(k.usd), pct(share(k.usd))]),
+      table([tt('stmt.col.activity'), tt('stmt.col.times'), [tt('stmt.col.cost'), tt('stmt.kinds.note')], tt('stmt.col.share')],
+        b.kinds.map((k) => [link(tt(`stmt.kind.${k.kind}`), entries({ kind: k.kind }, tt(`stmt.kind.${k.kind}`))), num(k.count), usd(k.usd), pct(share(k.usd))]),
         [h('strong', {}, tt('stmt.col.total')), '', h('strong', {}, usd(b.check.kinds)), pct(1)]),
-      h('p', { class: 'view-note' }, tt('stmt.kinds.note')),
 
       h('h4', {}, tt('stmt.sec.days')),
       table([tt('stmt.col.day'), tt('stmt.col.replies'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        b.byDay.map((d) => [link(dayName(d.day), chatRows({ day: d.day }, dayName(d.day))), num(d.replies), usd(d.usd), pct(share(d.usd))])),
+        b.byDay.map((d) => [link(dayName(d.day), entries({ day: d.day }, dayName(d.day))), num(d.replies), usd(d.usd), pct(share(d.usd))])),
 
       h('p', { class: `stmt-check${ok ? ' is-ok' : ''}` }, tt(ok ? 'stmt.check.ok' : 'stmt.check.off', { total: usd(b.check.total), who: usd(b.check.who), kinds: usd(b.check.kinds) })),
-      h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn', onclick: chatRows({}, tt('stmt.rows.all')) }, tt('stmt.rows.all'))),
+      h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn', onclick: entries({}, tt('stmt.rows.all')) }, tt('stmt.rows.all'))),
     ];
   }
 
-  // ----- level 3: the replies -----
+  // ----- session-map's own work and the other AIs, opened -----
 
-  function rowsView(tt) {
-    const base = (t) => t.split(/[\\/]/).pop();
-    const files = (r) => (r.acts ?? []).filter((a) => a.t && ['create', 'edit', 'read'].includes(a.k))
-      .map((a) => (a.k === 'read'
-        ? tt('stmt.row.readFile', { file: base(a.t), n: num(a.lines ?? 0) })
-        : `${a.k === 'create' ? tt('stmt.row.created') : tt('stmt.row.edited')} ${base(a.t)} (+${num(a.add)}${a.del ? ` −${num(a.del)}` : ''})`)).join(' · ');
+  const AI_NAMES = { openai: 'OpenAI', gemini: 'Gemini', deepseek: 'DeepSeek', claude: 'Claude', openrouter: 'OpenRouter' };
+  const aiName = (ai) => ai.replace(/^(\w+)/, (p) => AI_NAMES[p] ?? p);
+  const taskName = (tt, kind) => {
+    const text = tt(`stmt.task.${kind}`);
+    return text === `stmt.task.${kind}` ? tt('stmt.task.unknown', { kind }) : text;
+  };
+
+  function outsideView(tt) {
+    const g = period.outside?.groups.find((x) => x.id === ui.outsideId) ?? { usd: 0, count: 0, byAi: [], byKind: [] };
+    const calls = (period.outside?.calls ?? []).filter((c) => (ui.outsideId === 'auto' ? c.source === 'map' : c.source !== 'map'));
+    const share = (v) => (g.usd > 0 ? v / g.usd : 0);
+    const result = (c) => [c.ok ? tt('stmt.call.ok') : tt('stmt.call.failed'), c.accepted === true ? tt('stmt.call.accepted') : c.accepted === false ? tt('stmt.call.refused') : null].filter(Boolean).join(' · ');
+    const tile = (label, value, sub) => h('div', { class: 'stmt-kpi' }, h('span', { class: 'stmt-kpi-label' }, label), h('strong', { class: 'num' }, value), sub ? h('span', { class: 'stmt-kpi-sub num' }, sub) : null);
     return [
-      h('p', { class: 'stmt-guide' }, tt('stmt.guide.rows')),
-      h('div', { class: 'stmt-rows-head' },
-        h('span', { class: 'muted num' }, tt('stmt.count', { shown: num(rows.length), total: num(rowsTotal) })),
-        h('a', { class: 'btn small-btn', href: `/api/statement.csv?${qs({ from: ui.from, to: ui.to, ...ui.rowsFilter })}`, download: '' }, tt('stmt.download'))),
-      h('ol', { class: 'plain rows stmt-rows' }, rows.map((r) => h('li', { class: 'stmt-row' },
-        h('div', { class: 'stmt-row-head' },
-          h('span', { class: 'num' }, when(r.ts)),
-          h('span', { class: 'stmt-row-title' }, `${r.who} · ${r.model}`),
-          h('strong', { class: 'num' }, usd(r.usd.total, 4))),
-        h('div', { class: 'stmt-row-money num small' },
-          tt('stmt.row.in', { usd: usd(r.usd.input + r.usd.cacheWrite + r.usd.cacheRead, 4), n: num(r.input + r.cacheWrite + r.cacheRead) }), ' · ',
-          tt('stmt.row.out', { usd: usd(r.usd.output, 4), n: num(r.output) })),
-        // The chat itself was asked by the person; a helper was handed its task by the chat or its team.
-        r.ask ? h('div', { class: 'small' }, tt(r.who === 'conversa principal' ? 'stmt.row.ask' : 'stmt.row.task', { text: r.ask.text })) : null,
-        r.readWords ? h('div', { class: 'small' }, tt('stmt.row.read', { n: num(r.readWords), what: r.readWhat })) : null,
-        files(r) ? h('div', { class: 'small strong' }, files(r)) : null,
-        h('div', { class: 'small muted' }, r.did ? tt('stmt.row.did', { what: r.did }) : tt('stmt.row.wrote', { n: num(r.wroteWords) }))))),
-      rows.length < rowsTotal ? h('button', { type: 'button', class: 'btn small-btn', onclick: () => openRows(ui.rowsFilter, ui.rowsTitle, true) }, tt('stmt.more')) : null,
-    ];
+      h('div', { class: 'stmt-kpis' },
+        tile(tt('stmt.kpi.total'), usd(g.usd, 4), `${short(period.from)} – ${short(period.to - 1)}`),
+        tile(tt('stmt.col.times'), tt('stmt.nCalls', { n: num(g.count) }), g.count ? tt('stmt.kpi.perCall', { usd: usd(g.usd / g.count, 4) }) : null)),
+      g.count ? [
+        h('h4', {}, tt('stmt.sec.byAi')),
+        table([tt('stmt.col.ai'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
+          g.byAi.map((x) => [aiName(x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))]),
+          [h('strong', {}, tt('stmt.col.total')), num(g.count), h('strong', {}, usd(g.usd, 4)), pct(1)]),
+        h('h4', {}, tt('stmt.sec.byTask')),
+        table([tt('stmt.col.task'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
+          g.byKind.map((x) => [taskName(tt, x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))])),
+        h('h4', {}, tt('stmt.j.title')),
+        table([tt('stmt.col.date'), tt('stmt.col.ai'), tt('stmt.col.task'), tt('stmt.col.result'), tt('stmt.col.debit')],
+          firstOf('calls', calls).map((c) => [when(c.at), aiName(c.ai), taskName(tt, c.kind), result(c), usd(c.usd, 4)])),
+        showAll('calls', calls, tt),
+      ] : h('p', { class: 'view-note' }, tt('stmt.none')),
+      h('p', { class: 'view-note' }, tt(`stmt.note.${ui.outsideId}`)),
+    ].flat();
   }
 
   function draw() {
@@ -370,11 +412,12 @@ export function createStatement({ h, t, lang, errorText }) {
     if (error) body = [h('p', { class: 'view-note', role: 'status' }, error === 'token-required' || error === 'look-only' ? tt('stmt.private') : errorText(error))];
     else if (!period) body = [h('p', { class: 'stmt-status', role: 'status' }, tt('stmt.starting'))];
     else if (ui.level === 'chat' && book) body = chatView(tt);
-    else if (ui.level === 'rows') body = rowsView(tt);
+    else if (ui.level === 'rows') body = [journalTable(tt)];
     else if (ui.level === 'outside') body = outsideView(tt);
     else body = periodView(tt);
     // replaceChildren writes a null as the text "null": the parts that may be missing are left out first.
-    root.replaceChildren(...[head, status, period && !error ? crumbs(tt) : null, ...body, h('p', { class: 'view-note' }, tt('stmt.how', { asOf: period?.pricesAsOf ?? '?' }))].filter(Boolean));
+    root.replaceChildren(...[head, status, period && !error ? crumbs(tt) : null, ...body,
+      h('p', { class: 'view-note small' }, tt('stmt.how', { asOf: period?.pricesAsOf ?? '?' }))].filter(Boolean));
   }
 
   return {

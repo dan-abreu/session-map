@@ -123,3 +123,17 @@ test('the statement texts exist in both languages with the same keys', () => {
   assert.equal(translator('pt-BR')('stmt.title'), 'Extrato');
   assert.equal(translator('pt-BR')('stmt.kind.helper'), 'Chamar ajudantes');
 });
+
+test('the entries carry a running balance, newest first, and filter by project; each chat lists who worked in it', async () => {
+  const store = storeOf(fixture());
+  await store.build(TODAY);
+  const page = store.rows(TODAY, {}, 0, 10);
+  assert.equal(page.rows.length, 3);
+  const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
+  close(page.rows[0].balance, page.sumUsd);
+  close(page.rows[0].balance - page.rows[0].usd.total, page.rows[1].balance);
+  assert.equal(store.rows(TODAY, { project: 'demo' }).total, 3);
+  assert.equal(store.rows(TODAY, { project: 'other' }).total, 0);
+  const chat = store.status(TODAY).period.chats[0];
+  assert.deepEqual(chat.who.map((w) => w.who), ['conversa principal', 'ajudante: Ler o código']);
+});
