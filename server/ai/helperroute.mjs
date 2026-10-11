@@ -45,9 +45,11 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
     const config = readConfig(smDir) ?? {};
     const keys = listKeys(smDir);
     // projectClass: the classes chosen so far, by normalized root; any project not in it is projectClassDefault.
+    // pathRule: how this server spells a folder (paths.mjs normalizePath), so the page matches roots the same way.
     return {
       ok: true, providers: publicCatalog(), keys, others: othersSettings(config.ai, keys.map((k) => k.provider)), status: aiStatus(life()),
       projectClass: projectClasses(config.ai), projectClassDefault: DEFAULT_PROJECT_CLASS, projectClasses: [...PROJECT_CLASSES],
+      pathRule: process.platform === 'win32' ? 'windows' : 'posix',
     };
   };
 
