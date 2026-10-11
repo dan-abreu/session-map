@@ -53,7 +53,7 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 ### New projects
 
-- [ ] **in progress:** Create a new project's folder and show it as a project before any conversation runs there `sv14`
+- [x] Create a new project's folder and show it as a project before any conversation runs there `sv14`
   - From `id95`. `POST /api/projects/new` creates the folder (a safe name, inside a folder that exists, never over one that exists) and remembers it in the person's `config.json`; the map lists it until its first conversation makes it a project like the others.
 
 ### Later (ideas, not committed)

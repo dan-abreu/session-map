@@ -39,7 +39,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - A dashed border on each file the root counts as "with no box on the map", so it is clear which ones are missing (`id80`).
   - How to confirm it is done: the number of dashed files equals the root's "N files with no box on the map".
 
-- [ ] **in progress:** "New project" in the project picker and on the empty page: a name, where to create it, and the map opens on it with its project chat `mm50`
+- [x] "New project" in the project picker and on the empty page: a name, where to create it, and the map opens on it with its project chat `mm50`
   - From `id95`.
 
 ### Speed

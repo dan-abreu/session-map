@@ -296,4 +296,4 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a "New project" button on the page asks for the project's name and where to put it, creates that folder on the computer and shows the new project on the map at once, with its project chat ready to start, without opening Claude Code in a terminal first.
   - How to confirm it is done: in the project picker, click "New project", type a name, keep the suggested place and confirm: the folder exists on the disk, the map opens on the new project and its chat starts there.
   - Where it went: `sv14`, `mm50`.
-  - Status: in progress (started on 2026-10-11).
+  - Status: built on main on 2026-10-11 (`sv14`, `mm50` done and tested; checked on the running session-map); waiting for the owner to try it.
