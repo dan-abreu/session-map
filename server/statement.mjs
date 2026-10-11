@@ -114,6 +114,7 @@ export async function readTranscript(file, { since = 0 } = {}) {
   const events = [];
   const byKey = new Map();
   const toolById = new Map();
+  const actById = new Map();
   let pendingRead = { words: 0, items: [] };
   let pendingAsk = null;
   const titles = {};
@@ -138,8 +139,12 @@ export async function readTranscript(file, { since = 0 } = {}) {
       if (Array.isArray(c) && c.some((b) => b?.type === 'tool_result')) {
         for (const b of c) {
           if (b?.type !== 'tool_result') continue;
-          const n = words(resultText(b.content));
+          const text = resultText(b.content);
+          const n = words(text);
           pendingRead.words += n;
+          // A file read: how many lines came back (the reply that asked for it keeps the count, sb11).
+          const act = actById.get(b.tool_use_id);
+          if (act?.k === 'read') act.lines = text ? text.split('\n').length : 0;
           pendingRead.items.push(`${toolById.get(b.tool_use_id) ?? 'resultado'} (${n.toLocaleString('pt-BR')} palavras)`);
         }
       } else if (!o.isMeta) {
@@ -181,7 +186,11 @@ export async function readTranscript(file, { since = 0 } = {}) {
       if (r.model === 'unknown' && msg.model) r.model = msg.model;
     }
     r.did.push(...tools.map(toolLabel));
-    r.acts.push(...tools.map(actOf));
+    for (const t of tools) {
+      const act = actOf(t);
+      actById.set(t.id, act);
+      r.acts.push(act);
+    }
     r.wroteWords += words(texts);
   }
   const kept = replies.filter((r) => r.keep && r.model !== '<synthetic>').map(({ keep, ...r }) => ({

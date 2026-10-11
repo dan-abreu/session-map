@@ -8,11 +8,11 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { accountSnapshot, buildStatement, detailCsv, rowOut } from './statement.mjs';
-import { chatLedger, ledgerRows, periodLedger, periodOf } from './ledger.mjs';
+import { chatLedger, ledgerRows, outsideLedger, periodLedger, periodOf } from './ledger.mjs';
 import { loadPrices } from './cost.mjs';
 
 const CACHE_FILE = 'statement-cache.json';
-const CACHE_VERSION = 2; // 2: each reply keeps what it did (files, lines), for the books
+const CACHE_VERSION = 3; // 2: each reply keeps what it did (files, lines); 3: and the lines of each file it read
 const FRESH_MS = 60_000; // a statement younger than this is served as is
 const DAY = 86_400_000;
 const WINDOW_DAYS = 90; // read at least this far back, so any period in it is answered at once
@@ -26,6 +26,29 @@ function readCache(smDir) {
     if (o?.version === CACHE_VERSION && o.files && typeof o.files === 'object') return new Map(Object.entries(o.files).filter(([, e]) => ok(e)));
   } catch { /* none yet, or broken: start over */ }
   return new Map();
+}
+
+// The activity file (ai-activity.jsonl): one line per call to another AI and, since sb11, per session-map Claude call,
+// plus the owner's verdict lines, joined to their call. A broken line is skipped.
+export function readActivity(smDir) {
+  let text = '';
+  try { text = readFileSync(join(smDir, 'ai-activity.jsonl'), 'utf8'); } catch { return []; }
+  const calls = new Map();
+  for (const raw of text.split('\n')) {
+    let o;
+    try { o = JSON.parse(raw); } catch { continue; }
+    if (!o || typeof o.id !== 'string') continue;
+    if (o.type === 'result') {
+      const c = calls.get(o.id);
+      if (c) c.accepted = o.accepted === true;
+      continue;
+    }
+    const at = Date.parse(o.at);
+    if (!Number.isFinite(at) || typeof o.provider !== 'string') continue;
+    calls.set(o.id, { at, source: o.source === 'map' ? 'map' : 'chat', provider: o.provider, model: typeof o.model === 'string' ? o.model : '',
+      kind: typeof o.kind === 'string' ? o.kind : 'other', costUSD: Number.isFinite(o.costUSD) && o.costUSD > 0 ? o.costUSD : 0, ok: o.ok === true });
+  }
+  return [...calls.values()];
 }
 
 function writeCache(smDir, cache) {
@@ -98,6 +121,7 @@ export function createStatementStore({ projectsDir, smDir, account = () => accou
           events: (ready.st.events ?? []).filter((e) => e.at >= period.from && e.at < period.to),
           pricesAsOf: ready.pricesAsOf,
           readSince: ready.since,
+          outside: outsideLedger(smDir ? readActivity(smDir) : [], period),
         } : null,
       };
     },

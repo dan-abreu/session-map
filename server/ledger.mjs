@@ -94,6 +94,7 @@ export function periodLedger(st, period) {
   const byDay = new Map();
   const byProject = new Map();
   const byModel = new Map();
+  const lines = { read: 0, added: 0, removed: 0 };
   const get = (m, k, extra) => { if (!m.has(k)) m.set(k, { ...cents(), ...extra }); return m.get(k); };
   for (const r of rows) {
     const s = st.sessions.get(r.sessionId);
@@ -104,12 +105,17 @@ export function periodLedger(st, period) {
     add(get(byDay, dayOf(r.ts), { day: dayOf(r.ts) }), r);
     add(get(byProject, s?.project ?? '', { name: s?.project ?? '' }), r);
     add(get(byModel, r.model, { model: r.model }), r);
+    for (const a of r.acts ?? []) {
+      if (a.k === 'read') lines.read += a.lines ?? 0;
+      if (a.k === 'create' || a.k === 'edit') { lines.added += a.add ?? 0; lines.removed += a.del ?? 0; }
+    }
   }
   const share = (b) => (total.usd > 0 ? r6(b.usd / total.usd) : 0);
   const sorted = (m) => [...m.values()].sort((a, b) => b.usd - a.usd).map((b) => ({ ...out(b), share: share(b) }));
   return {
     from: period.from, to: period.to,
     total: out(total),
+    lines,
     chats: [...chats.values()].sort((a, b) => b.usd - a.usd).map(({ helpers, ...c }) => ({
       ...out(c), helpers: helpers.size, share: share(c), allTimeUsd: r6(st.allTime?.get(c.sessionId)?.usd ?? c.usd),
     })),
@@ -144,11 +150,12 @@ export function chatLedger(st, sessionId, period) {
       k.usd += part;
       if (!a.t || !FILE_KINDS.has(a.k)) continue;
       const key = fileKey(a.t);
-      if (!files.has(key)) files.set(key, { file: key, name: fileName(key, s.cwd), created: 0, edits: 0, reads: 0, add: 0, del: 0, usd: 0, first: r.ts, last: r.ts });
+      if (!files.has(key)) files.set(key, { file: key, name: fileName(key, s.cwd), created: 0, edits: 0, reads: 0, readLines: 0, add: 0, del: 0, usd: 0, first: r.ts, last: r.ts });
       const f = files.get(key);
       if (a.k === 'create') f.created++;
       if (a.k === 'edit') f.edits++;
       if (a.k === 'read') f.reads++;
+      f.readLines += a.lines ?? 0;
       f.add += a.add ?? 0;
       f.del += a.del ?? 0;
       f.usd += part;
@@ -178,6 +185,8 @@ export function chatLedger(st, sessionId, period) {
       add: changed.reduce((n, f) => n + f.add, 0),
       del: changed.reduce((n, f) => n + f.del, 0),
       readUsd: sum(onlyRead),
+      readFiles: fileList.filter((x) => x.reads).length,
+      readLines: fileList.reduce((n, x) => n + x.readLines, 0),
     },
     kinds: kindList,
     byDay: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).map(out),
@@ -195,4 +204,37 @@ export function ledgerRows(st, period, { chat = '', who = '', file = '', kind = 
     && (!key || r.acts?.some((a) => FILE_KINDS.has(a.k) && a.t && fileKey(a.t) === key))
     && (!kind || (kind === 'answer' ? !r.acts?.length : r.acts?.some((a) => a.k === kind)))
     && (!words || `${r.did} ${r.readWhat} ${r.ask?.text ?? ''}`.toLowerCase().includes(words)));
+}
+
+// What was spent outside the chats' own replies (sb11): session-map's automatic work (source "map": placing chats on the
+// map, explaining links, with Claude or another AI) and the second opinions the chats asked of other AIs (source
+// "chat"). entries: the activity file's lines, each {at, source, provider, model, kind, costUSD, ok, accepted?}.
+export function outsideLedger(entries, period) {
+  const list = entries.filter((e) => e.at >= period.from && e.at < period.to).sort((a, b) => b.at - a.at);
+  const group = (id) => {
+    const mine = list.filter((e) => (id === 'auto' ? e.source === 'map' : e.source !== 'map'));
+    const by = (key) => {
+      const m = new Map();
+      for (const e of mine) {
+        const k = key(e);
+        const g = m.get(k) ?? { key: k, count: 0, usd: 0, failed: 0 };
+        g.count++;
+        g.usd += e.costUSD ?? 0;
+        if (!e.ok) g.failed++;
+        m.set(k, g);
+      }
+      return [...m.values()].sort((a, b) => b.usd - a.usd || b.count - a.count).map((g) => ({ ...g, usd: r6(g.usd) }));
+    };
+    return {
+      id, count: mine.length, usd: r6(mine.reduce((n, e) => n + (e.costUSD ?? 0), 0)),
+      byAi: by((e) => `${e.provider} ${e.model}`.trim()),
+      byKind: by((e) => e.kind || 'other'),
+    };
+  };
+  return {
+    usd: r6(list.reduce((n, e) => n + (e.costUSD ?? 0), 0)),
+    count: list.length,
+    groups: [group('auto'), group('asked')],
+    calls: list.slice(0, 300).map((e) => ({ at: e.at, source: e.source, ai: `${e.provider} ${e.model}`.trim(), kind: e.kind || 'other', usd: r6(e.costUSD ?? 0), ok: e.ok, accepted: e.accepted ?? null })),
+  };
 }

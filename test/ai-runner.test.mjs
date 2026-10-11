@@ -221,3 +221,20 @@ test('AiQueue keeps today\'s spend per project as well as in total, also after a
     assert.equal(new AiQueue({ smDir, bin: 'claude', run, now: () => NOON }).status('shop').spentUSDToday, 0.05);
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
+
+test('each of session-map\'s own Claude calls is noted with its task and cost, for the statement (sb11)', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-note-'));
+  try {
+    const noted = [];
+    const run = async () => ({ ok: true, value: { part: 'x' }, costUSD: 0.0123 });
+    const q = new AiQueue({ smDir, bin: 'claude', run, onOutside: (call) => noted.push(call) });
+    await q.ask({ key: { kind: 'place', id: 'one' }, prompt: 'where?' });
+    assert.equal(noted.length, 1);
+    assert.equal(noted[0].provider, 'claude');
+    assert.equal(noted[0].kind, 'place');
+    assert.equal(noted[0].costUSD, 0.0123);
+    assert.equal(noted[0].ok, true);
+  } finally {
+    rmSync(smDir, { recursive: true, force: true });
+  }
+});

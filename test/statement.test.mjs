@@ -120,3 +120,16 @@ test('the plan is named the way the person knows it', () => {
   assert.equal(planName('claude_pro', 'default_claude_pro'), 'Pro');
   assert.equal(planName('something_new', 'tier_x'), 'something_new tier_x');
 });
+
+test('a file read keeps how many lines came back', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'stmt-lines-'));
+  const proj = join(root, 'C--dev-demo');
+  mkdirSync(proj, { recursive: true });
+  const at = '2026-10-11T12:00:00.000Z';
+  writeFileSync(join(proj, 's9.jsonl'), [
+    { type: 'assistant', sessionId: 's9', timestamp: at, requestId: 'r1', message: { id: 'm1', model: 'claude-a', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: 'a.txt' } }], usage: { input_tokens: 1, output_tokens: 1 } } },
+    { type: 'user', sessionId: 's9', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'one\ntwo\nthree' }] } },
+  ].map(line).join(''));
+  const st = await buildStatement({ projectsDir: root, since: 0, prices });
+  assert.deepEqual(st.rows[0].acts, [{ k: 'read', t: 'a.txt', lines: 3 }]);
+});

@@ -259,8 +259,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a statement with one line per reply of every chat and every agent: day and hour, which chat, who answered, what it read (words, files) and did, tokens and dollars spent on input and on output, at the real prices checked online; sums by day, chat and agent; and where the credit that vanished went.
   - How to confirm it is done: in session-map, Costs tab, section "Detailed statement" (or Documents/Extrato-Claude/extrato.html and extrato-detalhado.csv): each reply has its own line with date, hour, chat, agent, input and output in tokens and dollars; the page shows the account's own extra-usage counter and the hours the limits were hit.
   - Asked again: 2026-10-11 19:30 — "não achei simples, achei completo, bem complexo mesmo, é uma contabilidade, tudo tem que ser bem guiado se tenho 1000 dolares de gasto eu abro aqueles 1000 dolares de gasto e vou destrinchando ele de acordo com cada saida que foi feita, tem que ser vamos dizer essa conversa aqui me custou quanto o chat, quantos arquivos e que arquivos ela criou esse arquivo teve quantas linhas, foi gasto quanto por cada coisa que foi usado, se a conversa gastou 20 dolares do perido de tal dia a até tal dia, foi 10 dolares, mas criou tais coisas, sub agentes trabalhando, agentes, tudo isso mas com uma linha organizada"
-  - Where it went: `sb08`, `sb09`, `sb10`.
-  - Status: built on main on 2026-10-11: `sb08`, `sb09`, then `sb10` (the guided bookkeeping, checked on the running page: the sums of a chat add up to its total); waiting for the owner to try it.
+  - Asked again: 2026-10-11 20:10 — "você colocou também além das conversas os agentes independetes do programa consultando, relendo verificando, mostrar quantas linhas leu, custo das atividades que fez, os documentos que leu, sei que é complexo, mas preciso do que é complexo visivel de forma pratica e facil"
+  - Where it went: `sb08`, `sb09`, `sb10`, `sb11`.
+  - Status: built on main on 2026-10-11: `sb08`, `sb09`, `sb10` (the guided bookkeeping) and `sb11` (session-map's own work and the other AIs, lines read); waiting for the owner to try it.
 
 ### This registry
 

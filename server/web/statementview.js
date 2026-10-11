@@ -96,7 +96,8 @@ export function createStatement({ h, t, lang, errorText }) {
     if (!res.ok) { error = res.error; draw(); return; }
     rows = more ? rows.concat(res.rows) : res.rows;
     rowsTotal = res.total;
-    Object.assign(ui, { level: 'rows', rowsFilter: filter, rowsTitle: title });
+    // Replies opened from the period (a day) belong to no chat: the trail then skips the chat step.
+    Object.assign(ui, { level: 'rows', rowsFilter: filter, rowsTitle: title, chatId: filter.chat ?? null });
     draw();
     if (!more) root.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -127,7 +128,51 @@ export function createStatement({ h, t, lang, errorText }) {
       items.push(h('li', {}, ui.level === 'chat' ? h('span', { 'aria-current': 'page' }, book.title) : link(book.title, () => { ui.level = 'chat'; draw(); })));
     }
     if (ui.level === 'rows') items.push(h('li', {}, h('span', { 'aria-current': 'page' }, ui.rowsTitle)));
+    if (ui.level === 'outside') items.push(h('li', {}, h('span', { 'aria-current': 'page' }, tt(`stmt.spender.${ui.outsideId}`))));
     return h('nav', { class: 'stmt-crumbs', 'aria-label': tt('stmt.crumb.label') }, h('ol', {}, items));
+  }
+
+  function openOutside(id) {
+    Object.assign(ui, { level: 'outside', outsideId: id, chatId: null, open: new Set() });
+    draw();
+    root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  // The names of the other AIs as the person knows them: "openai gpt-6.1-sol" → "OpenAI gpt-6.1-sol".
+  const AI_NAMES = { openai: 'OpenAI', gemini: 'Gemini', deepseek: 'DeepSeek', claude: 'Claude', openrouter: 'OpenRouter' };
+  const aiName = (ai) => ai.replace(/^(\w+)/, (p) => AI_NAMES[p] ?? p);
+  const taskName = (tt, kind) => {
+    const text = tt(`stmt.task.${kind}`);
+    return text === `stmt.task.${kind}` ? tt('stmt.task.unknown', { kind }) : text;
+  };
+
+  // ----- session-map's own work and the other AIs, opened -----
+
+  function outsideView(tt) {
+    const g = period.outside?.groups.find((x) => x.id === ui.outsideId) ?? { usd: 0, count: 0, byAi: [], byKind: [] };
+    const calls = (period.outside?.calls ?? []).filter((c) => (ui.outsideId === 'auto' ? c.source === 'map' : c.source !== 'map'));
+    const share = (v) => (g.usd > 0 ? v / g.usd : 0);
+    const result = (c) => [c.ok ? tt('stmt.call.ok') : tt('stmt.call.failed'), c.accepted === true ? tt('stmt.call.accepted') : c.accepted === false ? tt('stmt.call.refused') : null].filter(Boolean).join(' · ');
+    return [
+      h('p', { class: 'stmt-guide' }, tt(`stmt.guide.${ui.outsideId}`)),
+      h('dl', { class: 'ledger stmt-ledger' },
+        h('div', {}, h('dt', {}, tt('stmt.chat.period', { from: date(period.from), to: date(period.to - 1) })), h('dd', { class: 'num strong' }, usd(g.usd))),
+        h('div', {}, h('dt', {}, tt('stmt.col.times')), h('dd', { class: 'num' }, tt('stmt.nCalls', { n: num(g.count) })))),
+      g.count ? [
+        h('h4', {}, tt('stmt.sec.byAi')),
+        table([tt('stmt.col.ai'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
+          g.byAi.map((x) => [aiName(x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))]),
+          [h('strong', {}, tt('stmt.col.total')), num(g.count), h('strong', {}, usd(g.usd, 4)), pct(1)]),
+        h('h4', {}, tt('stmt.sec.byTask')),
+        table([tt('stmt.col.task'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')],
+          g.byKind.map((x) => [taskName(tt, x.key), num(x.count), usd(x.usd, 4), pct(share(x.usd))])),
+        h('h4', {}, tt('stmt.sec.calls')),
+        table([tt('stmt.col.when'), tt('stmt.col.ai'), tt('stmt.col.task'), tt('stmt.col.result'), tt('stmt.col.cost')],
+          firstOf('calls', calls).map((c) => [when(c.at), aiName(c.ai), taskName(tt, c.kind), result(c), usd(c.usd, 4)])),
+        showAll('calls', calls, tt),
+      ] : h('p', { class: 'view-note' }, tt('stmt.none')),
+      h('p', { class: 'view-note' }, tt(`stmt.note.${ui.outsideId}`)),
+    ].flat();
   }
 
   function periodBar(tt) {
@@ -171,18 +216,33 @@ export function createStatement({ h, t, lang, errorText }) {
     ].filter(([, v]) => v > 0);
     const share = (v) => (t0.usd > 0 ? v / t0.usd : 0);
     const chats = ui.allChats ? p.chats : p.chats.slice(0, CHATS_FIRST);
+    // Who spent: the chats (with their helpers), session-map's automatic work, and the other AIs the chats asked.
+    const out = p.outside ?? { usd: 0, count: 0, groups: [] };
+    const auto = out.groups.find((g) => g.id === 'auto') ?? { usd: 0, count: 0 };
+    const asked = out.groups.find((g) => g.id === 'asked') ?? { usd: 0, count: 0 };
+    const grand = t0.usd + out.usd;
+    const ofGrand = (v) => (grand > 0 ? v / grand : 0);
+    const l = p.lines ?? { read: 0, added: 0, removed: 0 };
     return [
       h('p', { class: 'stmt-guide' }, tt('stmt.guide.period')),
       h('div', { class: 'stmt-hero' },
         h('span', {}, tt('stmt.hero', { from: date(p.from), to: date(p.to - 1) })),
-        h('strong', { class: 'num' }, usd(t0.usd)),
-        h('span', { class: 'muted' }, tt('stmt.heroSub', { replies: num(t0.replies), chats: num(p.chats.length) }))),
+        h('strong', { class: 'num' }, usd(grand)),
+        h('span', { class: 'muted' }, tt('stmt.heroSub', { replies: num(t0.replies), chats: num(p.chats.length) })),
+        h('span', { class: 'muted' }, tt('stmt.heroLines', { read: num(l.read), added: num(l.added), removed: num(l.removed) }))),
+      h('h4', {}, tt('stmt.whoSpent')),
+      table([tt('stmt.col.who'), tt('stmt.col.times'), tt('stmt.col.cost'), tt('stmt.col.share')], [
+        [link(tt('stmt.spender.chats'), () => root.querySelector('#stmt-chats')?.scrollIntoView({ behavior: 'smooth' })), tt('stmt.nReplies', { n: num(t0.replies) }), usd(t0.usd), pct(ofGrand(t0.usd))],
+        [link(tt('stmt.spender.auto'), () => openOutside('auto')), tt('stmt.nCalls', { n: num(auto.count) }), usd(auto.usd), pct(ofGrand(auto.usd))],
+        [link(tt('stmt.spender.asked'), () => openOutside('asked')), tt('stmt.nCalls', { n: num(asked.count) }), usd(asked.usd), pct(ofGrand(asked.usd))],
+      ], [h('strong', {}, tt('stmt.col.total')), '', h('strong', {}, usd(grand)), pct(1)]),
+      h('p', { class: 'view-note' }, tt('stmt.whoSpentNote')),
       h('h4', {}, tt('stmt.split')),
       table([tt('stmt.col.what'), tt('stmt.col.cost'), tt('stmt.col.share')],
         parts.map(([label, v]) => [label, usd(v), pct(share(v))]),
         [h('strong', {}, tt('stmt.col.total')), h('strong', {}, usd(t0.usd)), pct(1)]),
       h('p', { class: 'view-note' }, tt('stmt.splitNote')),
-      h('h4', {}, tt('stmt.byChat')),
+      h('h4', { id: 'stmt-chats' }, tt('stmt.byChat')),
       p.chats.length ? table([tt('stmt.col.chat'), tt('stmt.col.days'), tt('stmt.col.helpers'), tt('stmt.col.cost'), tt('stmt.col.share')],
         chats.map((c) => [
           h('span', {}, link(c.title, () => openChat(c.sessionId)), h('span', { class: 'stmt-sub' }, c.project)),
@@ -231,7 +291,8 @@ export function createStatement({ h, t, lang, errorText }) {
         h('div', {}, h('dt', {}, tt('stmt.chat.allTime', { since: date(b.allTime.first) })), h('dd', { class: 'num' }, usd(b.allTime.usd))),
         h('div', {}, h('dt', {}, tt('stmt.chat.when')), h('dd', { class: 'num' }, `${when(b.total.first)} – ${when(b.total.last)}`)),
         h('div', {}, h('dt', {}, tt('stmt.chat.work')), h('dd', { class: 'num' }, tt('stmt.chat.workValue', { replies: num(b.total.replies), helpers: num(b.helpers) }))),
-        h('div', {}, h('dt', {}, tt('stmt.chat.files')), h('dd', { class: 'num' }, tt('stmt.chat.filesValue', { created: num(f.created), edited: num(f.edited), add: num(f.add), del: num(f.del) })))),
+        h('div', {}, h('dt', {}, tt('stmt.chat.files')), h('dd', { class: 'num' }, tt('stmt.chat.filesValue', { created: num(f.created), edited: num(f.edited), add: num(f.add), del: num(f.del) }))),
+        h('div', {}, h('dt', {}, tt('stmt.chat.reading')), h('dd', { class: 'num' }, tt('stmt.chat.readingValue', { files: num(f.readFiles ?? 0), lines: num(f.readLines ?? 0) })))),
 
       h('h4', {}, tt('stmt.sec.who')),
       table([tt('stmt.col.who'), tt('stmt.col.replies'), tt('stmt.col.read'), tt('stmt.col.wrote'), tt('stmt.col.cost'), tt('stmt.col.share')],
@@ -240,12 +301,12 @@ export function createStatement({ h, t, lang, errorText }) {
       showAll('who', b.who, tt),
 
       h('h4', {}, tt('stmt.sec.files')),
-      f.changed.length ? table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.lines'), tt('stmt.col.cost')],
-        firstOf('changed', f.changed).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), lines(x), usd(x.usd)]))
+      f.changed.length ? table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.lines'), tt('stmt.col.linesRead'), tt('stmt.col.cost')],
+        firstOf('changed', f.changed).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), lines(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)]))
         : h('p', { class: 'view-note' }, tt('stmt.files.none')),
       showAll('changed', f.changed, tt),
       f.onlyRead.length ? h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.files.read', { n: num(f.onlyRead.length), usd: usd(f.readUsd) })),
-        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.cost')], firstOf('read', f.onlyRead).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), usd(x.usd)])),
+        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.linesRead'), tt('stmt.col.cost')], firstOf('read', f.onlyRead).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), x.readLines ? num(x.readLines) : '—', usd(x.usd)])),
         showAll('read', f.onlyRead, tt)) : null,
       h('p', { class: 'view-note' }, tt('stmt.files.note')),
 
@@ -267,8 +328,11 @@ export function createStatement({ h, t, lang, errorText }) {
   // ----- level 3: the replies -----
 
   function rowsView(tt) {
-    const files = (r) => (r.acts ?? []).filter((a) => a.t && (a.k === 'create' || a.k === 'edit'))
-      .map((a) => `${a.k === 'create' ? tt('stmt.row.created') : tt('stmt.row.edited')} ${a.t.split(/[\\/]/).pop()} (+${num(a.add)}${a.del ? ` −${num(a.del)}` : ''})`).join(' · ');
+    const base = (t) => t.split(/[\\/]/).pop();
+    const files = (r) => (r.acts ?? []).filter((a) => a.t && ['create', 'edit', 'read'].includes(a.k))
+      .map((a) => (a.k === 'read'
+        ? tt('stmt.row.readFile', { file: base(a.t), n: num(a.lines ?? 0) })
+        : `${a.k === 'create' ? tt('stmt.row.created') : tt('stmt.row.edited')} ${base(a.t)} (+${num(a.add)}${a.del ? ` −${num(a.del)}` : ''})`)).join(' · ');
     return [
       h('p', { class: 'stmt-guide' }, tt('stmt.guide.rows')),
       h('div', { class: 'stmt-rows-head' },
@@ -303,6 +367,7 @@ export function createStatement({ h, t, lang, errorText }) {
     else if (!period) body = [h('p', { class: 'stmt-status', role: 'status' }, tt('stmt.starting'))];
     else if (ui.level === 'chat' && book) body = chatView(tt);
     else if (ui.level === 'rows') body = rowsView(tt);
+    else if (ui.level === 'outside') body = outsideView(tt);
     else body = periodView(tt);
     // replaceChildren writes a null as the text "null": the parts that may be missing are left out first.
     root.replaceChildren(...[head, status, period && !error ? crumbs(tt) : null, ...body, h('p', { class: 'view-note' }, tt('stmt.how', { asOf: period?.pricesAsOf ?? '?' }))].filter(Boolean));

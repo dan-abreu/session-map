@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actOf, chatLedger, fileKey, fileName, ledgerRows, periodLedger, periodOf } from '../server/ledger.mjs';
+import { actOf, chatLedger, fileKey, fileName, ledgerRows, outsideLedger, periodLedger, periodOf } from '../server/ledger.mjs';
 
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 const T = (h, d = 11) => Date.parse(`2026-10-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00`);
@@ -104,4 +104,38 @@ test('the replies behind anything opened: a file, a kind of work, who answered, 
   assert.deepEqual(ledgerRows(st, p, { kind: 'answer' }).map((r) => r.key), ['b', 'd']);
   assert.deepEqual(ledgerRows(st, p, { who: 'ajudante: revisar' }).map((r) => r.key), ['c']);
   assert.deepEqual(ledgerRows(st, p, { day: '2026-10-09' }).map((r) => r.key), ['d']);
+});
+
+test('lines read come from each file read, per file, per chat and per period', () => {
+  const st = fixture();
+  st.rows[0].acts[1].lines = 120;
+  const b = chatLedger(st, 's1', periodOf({ from: '2026-10-11', to: '2026-10-11' }));
+  assert.equal(b.files.readLines, 120);
+  assert.equal(b.files.readFiles, 1);
+  assert.equal(b.files.onlyRead[0].readLines, 120);
+  const p = periodLedger(st, periodOf({ from: '2026-10-11', to: '2026-10-11' }));
+  assert.deepEqual(p.lines, { read: 120, added: 3 + 2, removed: 1 });
+});
+
+test('outside the chats: session-map own work and the second opinions, by AI, by task and call by call', () => {
+  const at = (h) => T(h);
+  const entries = [
+    { at: at(9), source: 'map', provider: 'openai', model: 'gpt-6-luna', kind: 'place', costUSD: 0.001, ok: true },
+    { at: at(10), source: 'map', provider: 'claude', model: 'haiku', kind: 'place', costUSD: 0.02, ok: true },
+    { at: at(11), source: 'chat', provider: 'openai', model: 'gpt-6.1-sol', kind: 'review', costUSD: 0.015, ok: true, accepted: true },
+    { at: at(12), source: 'chat', provider: 'gemini', model: 'flash', kind: 'review', costUSD: 0, ok: false },
+    { at: T(9, 1), source: 'chat', provider: 'openai', model: 'x', kind: 'review', costUSD: 5, ok: true },
+  ];
+  const o = outsideLedger(entries, periodOf({ from: '2026-10-11', to: '2026-10-11' }));
+  close(o.usd, 0.036);
+  assert.equal(o.count, 4);
+  const [auto, asked] = o.groups;
+  assert.equal(auto.count, 2);
+  close(auto.usd, 0.021);
+  assert.deepEqual(auto.byAi.map((x) => x.key), ['claude haiku', 'openai gpt-6-luna']);
+  assert.deepEqual(auto.byKind.map((x) => [x.key, x.count]), [['place', 2]]);
+  assert.equal(asked.count, 2);
+  assert.equal(asked.byAi.find((x) => x.key === 'gemini flash').failed, 1);
+  assert.equal(o.calls[0].kind, 'review');
+  assert.equal(o.calls.find((c) => c.ai === 'openai gpt-6.1-sol').accepted, true);
 });

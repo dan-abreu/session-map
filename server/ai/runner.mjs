@@ -291,9 +291,13 @@ export class AiQueue {
   }
 
   // Run directly: only from a job already in Claude's line.
-  async #askClaude(prompt, schemaHint, now, projectId) {
+  // Each of session-map's own Claude calls is also written to the activity file (sb11), like the other AIs': it leaves
+  // no transcript (--no-session-persistence), so this line is the only trace of what it cost, for the statement.
+  async #askClaude(prompt, schemaHint, now, projectId, kind = 'other') {
+    const t0 = this.#now();
     const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
     this.#spend(now, projectId, 'claude', res.costUSD);
+    this.#noteOutside({ kind, sensitivity: 'client', provider: 'claude', model: this.model, ms: this.#now() - t0, costUSD: res.costUSD ?? 0, ok: Boolean(res.ok), ...(res.ok ? {} : { error: res.error }) });
     return res;
   }
 
@@ -341,7 +345,7 @@ export class AiQueue {
   // valid: the caller's check of an answer (place: a listed part id or null). An answer that fails it is a wrong
   // answer, not a success: Claude answers instead and the miss counts against that AI.
   async #answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity) {
-    const viaClaude = () => this.#onClaude(() => this.#askClaude(prompt, schemaHint, now, projectId));
+    const viaClaude = () => this.#onClaude(() => this.#askClaude(prompt, schemaHint, now, projectId, kind));
     const s = this.#settings();
     const { provider } = target;
     if (!s || !(s.keys ?? []).includes(provider) || (s.off ?? []).includes(provider) || pausedFor(this.#state.helper, provider, kind)) return viaClaude();
@@ -382,7 +386,7 @@ export class AiQueue {
     }
     const res = target
       ? await this.#answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity)
-      : await this.#askClaude(prompt, schemaHint, now, projectId);
+      : await this.#askClaude(prompt, schemaHint, now, projectId, kind);
     if (res.ok) this.#state.cache[hash] = { value: res.value, at: now };
     this.#save();
     return res;
