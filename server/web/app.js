@@ -1142,6 +1142,57 @@ function openPlace({ row, project: home }) {
   nameInput.select();
 }
 
+// A new project (sv14, mm50): its name and where its folder goes; session-map creates the folder, the map opens on it and
+// its project chat waits for the first message.
+async function openNewProject() {
+  const dialog = $('#newProjectDialog');
+  const place = await api.newProjectPlace();
+  if (!place.ok) return toast(errorText(place.error));
+  const nameInput = h('input', { type: 'text', id: 'newProjectName', maxlength: '80', autocomplete: 'off', required: true, 'aria-describedby': 'newProjectPath' });
+  const parentInput = h('input', { type: 'text', id: 'newProjectParent', value: place.parent ?? '', autocomplete: 'off', required: true, spellcheck: 'false', 'aria-describedby': 'newProjectParentHint' });
+  const pathLine = h('p', { class: 'np-path', id: 'newProjectPath', 'aria-live': 'polite' });
+  const submit = h('button', { type: 'submit', class: 'btn primary' }, icon('plus', 'btn-icon'), t('newproject.create'));
+  const showPath = () => {
+    const parent = parentInput.value.trim();
+    const sep = parent.includes('\\') ? '\\' : '/';
+    const name = nameInput.value.trim();
+    pathLine.textContent = name && parent ? t('newproject.willBe', { path: `${parent.replace(/[\\/]+$/, '')}${sep}${name}` }) : '';
+  };
+  nameInput.addEventListener('input', showPath);
+  parentInput.addEventListener('input', showPath);
+  const save = async (e) => {
+    e.preventDefault();
+    submit.disabled = true;
+    const res = await api.createProject({ parent: parentInput.value.trim(), name: nameInput.value.trim() });
+    if (!res.ok) {
+      submit.disabled = false;
+      toast(errorText(res.error));
+      return (res.error === 'bad-parent' ? parentInput : nameInput).focus();
+    }
+    dialog.close();
+    toast(t('newproject.done'));
+    // The server reads the projects again: the new one shows within a few seconds.
+    for (let i = 0; i < 30 && !state?.projects.some((p) => p.id === res.projectId); i++) {
+      await poll();
+      if (!state?.projects.some((p) => p.id === res.projectId)) await new Promise((r) => { setTimeout(r, 1000); });
+    }
+    if (!state?.projects.some((p) => p.id === res.projectId)) return toast(t('newproject.slow'));
+    setProject(res.projectId);
+    return openProjectChat();
+  };
+  dialog.replaceChildren(h('form', { class: 'confirm pl-form', onsubmit: save },
+    h('h2', { id: 'newProjectTitle' }, t('newproject.title')),
+    h('p', { class: 'pl-lede' }, t('newproject.lede')),
+    h('div', { class: 'pl-field' }, h('label', { for: 'newProjectName' }, t('newproject.name')), nameInput, pathLine),
+    h('div', { class: 'pl-field' }, h('label', { for: 'newProjectParent' }, t('newproject.parent')), parentInput,
+      h('p', { class: 'pl-hint', id: 'newProjectParentHint' }, t('newproject.parentHint'))),
+    h('div', { class: 'actions' },
+      h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, t('confirm.cancel')),
+      submit)));
+  dialog.showModal();
+  return nameInput.focus();
+}
+
 function boxCount(node) {
   const n = convCounts.get(node.id);
   return n ? { n, label: t.count('convs.count', n), pressed: convs?.filterNode() === node.id } : null;
@@ -1915,7 +1966,8 @@ function setArchived(on) {
 function renderNoProjects() {
   $('#summary').replaceChildren();
   renderNow();
-  $('#notice').replaceChildren(h('strong', {}, t('state.noProjectsTitle')), h('span', {}, t('state.noProjects')));
+  $('#notice').replaceChildren(h('strong', {}, t('state.noProjectsTitle')), h('span', {}, t('state.noProjects')),
+    ...(lookMode ? [] : [h('button', { type: 'button', class: 'btn primary', onclick: openNewProject }, icon('plus', 'btn-icon'), t('project.new'))]));
   $('#notice').hidden = false;
   document.body.classList.add('is-empty');
 }
@@ -2262,6 +2314,7 @@ function wire() {
   picker = createProjectPicker({
     root: $('#projectPicker'), button: $('#project'), list: $('#projectList'), name: $('#projectName'), h, t: () => t, icon,
     onPick: (id) => setProject(id),
+    onNew: openNewProject, canNew: () => !lookMode,
   });
   live = createLivePanel({
     root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,

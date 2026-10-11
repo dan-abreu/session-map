@@ -24,6 +24,8 @@ import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.
 import { authorize, cookieToken, dropLookKey, isLocal, loadLookKey, loadToken, lookAllows, newLookKey, sameToken } from './auth.mjs';
 import { lookState } from './lookstate.mjs';
 import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
+import { createProject, suggestParent } from './newproject.mjs';
+import { projectIdOf } from './paths.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
@@ -63,6 +65,7 @@ const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
 const TIDY_ERRORS = { 'bad-tidy': 400, 'config-unreadable': 409 };
+const NEW_PROJECT_ERRORS = { 'bad-name': 400, 'bad-parent': 400, 'folder-exists': 409, 'config-unreadable': 409, 'folder-failed': 500 };
 const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
@@ -414,6 +417,20 @@ export function createApp({
     if (result.ok) cached = null;
     logAction(smDir, { action: 'project-background', projectId: project.id, always: result.ok ? result.always : null }, status);
     return send(res, status, result);
+  }
+
+  // A new project (sv14): GET says where new projects usually go, POST {parent, name} creates its folder; the next read
+  // of the projects lists it.
+  async function newProjectRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method === 'GET') return send(res, 200, { ok: true, parent: suggestParent((await quickState()).projects.map((p) => p.root)) });
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const result = createProject(smDir, await readBody(req));
+    const status = result.ok ? 200 : NEW_PROJECT_ERRORS[result.error];
+    if (result.ok) cached = null;
+    logAction(smDir, { action: 'new-project', projectId: result.ok ? projectIdOf(result.root) : null }, status);
+    return send(res, status, result.ok ? { ...result, projectId: projectIdOf(result.root) } : result);
   }
 
   // "Organizar sozinho" (or18): the orchestrator's tidy pass on a project, on unless the person turns it off.
@@ -789,6 +806,7 @@ export function createApp({
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
+    if (path === '/api/projects/new') return newProjectRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
     if (path === '/api/settings/look-key') return lookRoute(req, res);

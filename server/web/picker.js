@@ -2,9 +2,14 @@
 // marks: a pulsing green dot when something works there, an amber number waiting for the person, a check for finished and
 // not seen yet. A native <select> cannot hold those marks, so this is a small listbox with the same keys.
 
+// No project id holds a ':' (paths.mjs projectIdOf), so this one never meets a project.
+const NEW = ':new';
+
 // The button names the open project only (mm47): its amber count is the pill's and its work the map header's, so the marks
 // wait in the list, one look away; its label still says them.
-// ctx: root, button, list, name (the name span), h, t (translator getter), icon(name, cls), onPick(id).
+// The list ends with "New project" (sv14, mm50) when the page may create one: ctx.onNew opens its dialog.
+// ctx: root, button, list, name (the name span), h, t (translator getter), icon(name, cls), onPick(id), onNew() (optional),
+// canNew() (optional: false hides "New project", as with the look-only link).
 export function createProjectPicker(ctx) {
   const { root, button, list, h } = ctx;
   let projects = [];
@@ -46,7 +51,8 @@ export function createProjectPicker(ctx) {
 
   function pick(id) {
     close();
-    if (id !== current) ctx.onPick(id);
+    if (id === NEW) ctx.onNew();
+    else if (id !== current) ctx.onPick(id);
   }
 
   function render() {
@@ -62,7 +68,10 @@ export function createProjectPicker(ctx) {
     list.replaceChildren(...projects.map((x) => h('li', {
       role: 'option', 'data-id': x.id, 'aria-selected': String(x.id === current), tabindex: '-1', class: 'pp-option', style: `--p-h:${x.hue}`,
       onclick: () => pick(x.id),
-    }, h('span', { class: 'pp-swatch', 'aria-hidden': 'true' }), h('span', { class: 'pp-option-name' }, x.name), h('span', { class: 'pp-marks' }, marksView(badges.get(x.id))))));
+    }, h('span', { class: 'pp-swatch', 'aria-hidden': 'true' }), h('span', { class: 'pp-option-name' }, x.name), h('span', { class: 'pp-marks' }, marksView(badges.get(x.id))))),
+    ...(ctx.onNew && ctx.canNew?.() !== false ? [h('li', {
+      role: 'option', 'data-id': NEW, 'aria-selected': 'false', tabindex: '-1', class: 'pp-option pp-new', onclick: () => pick(NEW),
+    }, ctx.icon('plus', 'pp-new-icon'), h('span', { class: 'pp-option-name' }, tt('project.new')))] : []));
     if (focusedId) focusOption(options().find((o) => o.dataset.id === focusedId));
   }
 

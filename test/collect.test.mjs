@@ -8,6 +8,7 @@ import { clashItems, collect, settleAi, topLevelOf } from '../server/collect.mjs
 import { forgetLife } from '../server/ai/life.mjs';
 import { appendEvents, readEvents } from '../server/brain/events.mjs';
 import { AiQueue } from '../server/ai/runner.mjs';
+import { createProject } from '../server/newproject.mjs';
 import { normalizePath, projectIdOf } from '../server/paths.mjs';
 import { isoDay } from '../server/web/range.js';
 
@@ -115,6 +116,23 @@ test('collect with no conversations returns a valid empty state', async () => {
     assert.deepEqual(state.currency, { code: 'USD', rate: 1 });
     assert.equal(state.budget, null);
   } finally { cleanup(dir, smDir); }
+});
+
+test('a folder the page created is a project before any conversation runs there; a removed one is not (sv14)', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const parent = tmp();
+  try {
+    const made = createProject(smDir, { parent, name: 'novo' });
+    const gone = createProject(smDir, { parent, name: 'apagado' });
+    rmSync(gone.root, { recursive: true });
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    assert.deepEqual(state.projects.map((p) => p.id), [projectIdOf(made.root)]);
+    const [p] = state.projects;
+    assert.equal(p.name, 'novo');
+    assert.equal(normalizePath(p.root), normalizePath(made.root));
+    assert.equal(p.chats.length, 0);
+  } finally { cleanup(dir, smDir, parent); }
 });
 
 test('collect reads the architecture and hangs chats on its parts: an item code first, then the files edited', async () => {
