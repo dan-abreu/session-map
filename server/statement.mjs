@@ -415,6 +415,14 @@ ${st.unpriced.size ? `<section class="card"><h2>Modelos sem preço conhecido (n�
 </body></html>`;
 }
 
+// "claude_max" + "default_claude_max_20x" → "Max 20x"; an unknown pair is shown as it came.
+export function planName(type, tier) {
+  const name = { claude_max: 'Max', claude_pro: 'Pro', claude_team: 'Team', claude_enterprise: 'Enterprise' }[type];
+  if (!name) return [type, tier].filter(Boolean).join(' ') || '?';
+  const size = /(\d+x)$/.exec(tier ?? '')?.[1];
+  return size ? `${name} ${size}` : name;
+}
+
 // What Claude Code cached about the account on this PC (no ids, no e-mail, no tokens).
 export function accountSnapshot(claudeJsonPath = join(homedir(), '.claude.json')) {
   let o;
@@ -427,7 +435,7 @@ export function accountSnapshot(claudeJsonPath = join(homedir(), '.claude.json')
   const money = (minor, cur, dp = 2) => (Number.isFinite(minor) ? `${cur === 'BRL' ? 'R$' : cur} ${brNum(minor / 10 ** dp, dp)}` : 'indisponível');
   return {
     fetchedAt: u.fetchedAtMs,
-    plan: `${o.oauthAccount?.organizationType ?? '?'} (${o.oauthAccount?.organizationRateLimitTier ?? '?'})`,
+    plan: planName(o.oauthAccount?.organizationType, o.oauthAccount?.organizationRateLimitTier),
     extraEnabled: x.is_enabled === true,
     disabledReason: x.disabled_reason ?? null,
     extraUsed: money(x.used_credits, x.currency, x.decimal_places ?? 2),

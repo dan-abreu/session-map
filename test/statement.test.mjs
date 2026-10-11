@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildStatement, chatsCsv, detailCsv, ownWords, priceReply, statementHtml, toolLabel, usageOf } from '../server/statement.mjs';
+import { buildStatement, chatsCsv, detailCsv, ownWords, planName, priceReply, statementHtml, toolLabel, usageOf } from '../server/statement.mjs';
 import { costOf, loadPrices } from '../server/cost.mjs';
 
 const M = 1_000_000;
@@ -113,4 +113,10 @@ test('a reply written over several lines takes the final counts and a speed give
 test('a chat opened by session-map is named by the words of the person, not by the context block', () => {
   assert.equal(ownWords('Context from session-map (x)\nWhen you finish a step, run /session-map:board.\n\nquero um extrato'), 'quero um extrato');
   assert.equal(ownWords('quero um extrato'), 'quero um extrato');
+});
+
+test('the plan is named the way the person knows it', () => {
+  assert.equal(planName('claude_max', 'default_claude_max_20x'), 'Max 20x');
+  assert.equal(planName('claude_pro', 'default_claude_pro'), 'Pro');
+  assert.equal(planName('something_new', 'tier_x'), 'something_new tier_x');
 });

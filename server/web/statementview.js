@@ -199,13 +199,14 @@ export function createStatement({ h, t, lang, errorText }) {
       root.replaceChildren(head, lede, status ?? h('p', { class: 'stmt-status', role: 'status' }, tt('stmt.starting')));
       return;
     }
-    root.replaceChildren(head, lede, status, accountBox(tt), totals(tt),
+    // replaceChildren writes a null as the text "null": the parts that may be missing are left out first.
+    root.replaceChildren(...[head, lede, status, accountBox(tt), totals(tt),
       h('h4', {}, tt('stmt.byDay')), bars(summary.byDay, (d) => dayName(d.day), (d) => setFilter({ day: d.day, chat: '', who: '' }), tt),
       summary.byHour.length ? h('details', {}, h('summary', {}, tt('stmt.byHour')), bars(summary.byHour, (x) => x.hour.split(' ').map((p, i) => (i === 0 ? dayName(p) : p)).join(' '), null, tt)) : null,
       h('h4', {}, tt('stmt.byProject')), bars(summary.byProject, (x) => x.name, null, tt),
       h('h4', {}, tt('stmt.byModel')), bars(summary.byModel, (x) => x.model, null, tt),
       chats(tt), lines(tt),
-      h('p', { class: 'view-note' }, tt('stmt.how', { asOf: summary.pricesAsOf ?? '?' })));
+      h('p', { class: 'view-note' }, tt('stmt.how', { asOf: summary.pricesAsOf ?? '?' }))].filter(Boolean));
   }
 
   return {
