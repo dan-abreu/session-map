@@ -96,18 +96,21 @@ const tooBig = (err) => err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXB
 
 // `-- .` with `--relative`: a project in a subfolder of a bigger repository sees only its own commits and files, with
 // paths relative to its root (the census's paths), never the keys of the projects beside it.
+// timeoutMs is one limit for the whole search, not for each git run: an answer that came after it is too-big as well,
+// so a fast machine cannot slip a run past the kill timer and turn an over-time search into a pass.
 async function searchHistory(root, maxCommits, timeoutMs) {
-  const count = await git(root, ['rev-list', '--count', '--all', '--', '.'], { timeout: timeoutMs });
+  const started = Date.now();
+  const left = () => Math.max(1, timeoutMs - (Date.now() - started));
+  const late = () => Date.now() - started >= timeoutMs;
+  const count = await git(root, ['rev-list', '--count', '--all', '--', '.'], { timeout: left() });
   if (count.err) return { state: tooBig(count.err) ? 'too-big' : gitFailure(count.err) };
-  if (Number(count.out.trim()) > maxCommits) return { state: 'too-big' };
-  const found = await git(root, ['log', '--all', '--no-textconv', '--no-ext-diff', '--relative', '--format=@@%H', '--name-only', `-G${KEY_ERE}`, '--', '.'], { timeout: timeoutMs });
-  if (found.err) {
-    if (tooBig(found.err)) {
-      log('warn', 'health-history-too-big', { timeoutMs });
-      return { state: 'too-big' };
-    }
-    return { state: gitFailure(found.err) };
+  if (late() || Number(count.out.trim()) > maxCommits) return { state: 'too-big' };
+  const found = await git(root, ['log', '--all', '--no-textconv', '--no-ext-diff', '--relative', '--format=@@%H', '--name-only', `-G${KEY_ERE}`, '--', '.'], { timeout: left() });
+  if (found.err ? tooBig(found.err) : late()) {
+    log('warn', 'health-history-too-big', { timeoutMs });
+    return { state: 'too-big' };
   }
+  if (found.err) return { state: gitFailure(found.err) };
   const hits = [];
   const seen = new Set();
   let commit = null;
