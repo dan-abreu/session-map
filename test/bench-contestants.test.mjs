@@ -11,7 +11,7 @@ test('the three Claude levels always take part, then each keyed provider with it
     'claude:haiku', 'claude:sonnet', 'claude:opus',
     'deepseek:deepseek-flash', 'deepseek:deepseek-v4-pro',
     'gemini:gemini-3.1-flash-lite', 'gemini:gemini-3.8-flash',
-    'openai:gpt-6-luna', 'openai:gpt-6.1-sol',
+    'openai:gpt-6-luna', 'openai:gpt-6.1-sol', 'openai:gpt-6-astra',
     'openrouter:deepseek/deepseek-v4.1-flash',
   ]);
   assert.deepEqual(contestantsFor([]).map((c) => c.id), ['claude:haiku', 'claude:sonnet', 'claude:opus']);
@@ -29,7 +29,9 @@ test('--only keeps the order of the full list and names what it could not find',
   const { chosen, missing } = selectContestants(all, ['openai:gpt-6-luna', 'claude:haiku', 'gemini:gemini-3.8-flash']);
   assert.deepEqual(chosen.map((c) => c.id), ['claude:haiku', 'openai:gpt-6-luna']);
   assert.deepEqual(missing, ['gemini:gemini-3.8-flash']);
-  assert.equal(selectContestants(all, null).chosen.length, all.length);
+  assert.equal(selectContestants(all, null).chosen.length, all.length - 1, 'GPT-6 Astra costs five times Sol: it takes part only when named');
+  assert.deepEqual(selectContestants(all, ['openai:gpt-6-astra']).chosen.map((c) => c.id), ['openai:gpt-6-astra']);
+  assert.equal(selectContestants(all, null).chosen.some((c) => c.id === 'openai:gpt-6-astra'), false);
 });
 
 test('DeepSeek never sees the owner\'s own conversations unless asked for', () => {

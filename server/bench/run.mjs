@@ -4,6 +4,10 @@
 //
 //   node server/bench/run.mjs [--kinds classify,code,review,pt] [--only claude:haiku,openai:gpt-6-luna] [--limit N]
 //                             [--max-usd 8] [--max-usd-each N] [--dry-run] [--resume <runId>] [--allow-deepseek-personal]
+//                             [--redo <contestants>] [--new-money]
+//   --redo asks again every answer of these contestants (their request settings changed); --new-money makes the caps count
+//   only what this run spends, so a resumed run is not stopped by what it already cost. openai:gpt-6-astra takes part only
+//   when named in --only.
 //                             [--sets-dir <dir>] [--sm-dir <dir>]
 //
 // Results go to <smDir>/bench/runs/<runId>/: results.json, report.md, pt-blind.md and pt-key.json.
@@ -172,7 +176,7 @@ const skippedEntry = (contestant, kind, itemId, reason) => ({ contestant: contes
 export async function runBench(options = {}, deps = {}) {
   const {
     smDir, setsDir = DEFAULT_SETS_DIR, kinds = KINDS, only = null, limit = null, maxUSD = DEFAULT_MAX_USD,
-    dryRun = false, resume = null, allowDeepseekPersonal = false,
+    dryRun = false, resume = null, allowDeepseekPersonal = false, redo = null, newMoney = false,
   } = options;
   if (!smDir) throw new Error('runBench needs smDir');
   const { call, runCode = runCodeItem, keyedProviders = [], buildClassify = null, onProgress = () => {} } = deps;
@@ -185,6 +189,9 @@ export async function runBench(options = {}, deps = {}) {
   // By default no single contestant may take more than half the money, so one dear model cannot starve the rest.
   const maxUSDEach = options.maxUSDEach ?? (chosen.length > 1 ? maxUSD / 2 : maxUSD);
   for (const id of missing) notes.push(`Participante ${id} não está disponível: falta a chave dessa empresa ou o nome está errado.`);
+  // --redo: what these contestants answered before is thrown away and asked again (their cost stays in the books).
+  const redoIds = new Set(Array.isArray(redo) ? redo : []);
+  for (const id of redoIds) if (!chosen.some((c) => c.id === id)) notes.push(`--redo ${id}: esse participante não está nesta rodada (falta a chave, o nome está errado ou ficou de fora do --only); nada foi refeito para ele.`);
 
   const sets = [];
   for (const kind of KINDS.filter((k) => kinds.includes(k))) {
@@ -204,7 +211,7 @@ export async function runBench(options = {}, deps = {}) {
 
   const earlierFile = resume ? readJson(join(runDir, 'results.json'), {}) : {};
   const earlier = Array.isArray(earlierFile.results) ? earlierFile.results : [];
-  const reusable = new Map(earlier.filter((r) => !retryable(r)).map((r) => [keyOf(r.contestant, r.kind, r.itemId), r]));
+  const reusable = new Map(earlier.filter((r) => !retryable(r) && !redoIds.has(r.contestant)).map((r) => [keyOf(r.contestant, r.kind, r.itemId), r]));
 
   if (dryRun) {
     const plan = { calls: 0, worstUSD: 0, byKind: {}, contestants: chosen.map((c) => c.id) };
@@ -224,7 +231,7 @@ export async function runBench(options = {}, deps = {}) {
   }
 
   writeAtomic(join(runDir, 'run.json'), `${JSON.stringify({
-    runId, kinds: sets.map((s) => s.kind), contestants: chosen.map((c) => c.id), limit, maxUSD, maxUSDEach, allowDeepseekPersonal,
+    runId, kinds: sets.map((s) => s.kind), contestants: chosen.map((c) => c.id), limit, maxUSD, maxUSDEach, allowDeepseekPersonal, ...(redoIds.size ? { redo: [...redoIds] } : {}), ...(newMoney ? { newMoney } : {}),
     sets: Object.fromEntries(sets.map((s) => [s.kind, s.items.map((i) => i.id)])), startedAt: new Date().toISOString(),
   }, null, 2)}\n`);
 
@@ -247,7 +254,11 @@ export async function runBench(options = {}, deps = {}) {
     if (Number.isFinite(v) && v > (spentEach.get(id) ?? 0)) spentEach.set(id, round6(v));
   }
   const chosenIds = new Set(chosen.map((c) => c.id));
-  const notCounted = only?.length ? round6([...spentEach].filter(([id]) => !chosenIds.has(id)).reduce((s, [, v]) => s + v, 0)) : 0;
+  // --new-money: the caps count only what this run spends from here on, not what the run already cost.
+  const spentBefore = newMoney ? spent : 0;
+  const eachBefore = newMoney ? new Map(spentEach) : new Map();
+  if (newMoney) notes.push(`O limite de ${usd(maxUSD)} vale só o gasto desta rodada (--new-money): a medição já tinha custado ${usd(spent)} antes.`);
+  const notCounted = only?.length && !newMoney ? round6([...spentEach].filter(([id]) => !chosenIds.has(id)).reduce((s, [, v]) => s + v, 0)) : 0;
 
   // Each code item's reference is run once, before any answer is tested: it proves the tests are right and gives the
   // number of tests a true run reports. null: not known (no reference, or the sandbox broke); 'broken': the set is wrong.
@@ -303,8 +314,8 @@ export async function runBench(options = {}, deps = {}) {
         if (!allowedFor(c, kind, { allowDeepseekPersonal })) { counts.privacy++; slots.push(skippedEntry(c, kind, item.id, 'privacy')); continue; }
         if (stopped) { counts.budget++; slots.push(skippedEntry(c, kind, item.id, 'budget')); continue; }
         const est = estimateUSD(c, prompt, seen.get(`${c.id}\u0000${kind}`) ?? []);
-        const overEach = stoppedEach.has(c.id) || (spentEach.get(c.id) ?? 0) + est > maxUSDEach + 1e-9;
-        const overTotal = Math.max(0, spent - notCounted) + reserved + est > maxUSD + 1e-9;
+        const overEach = stoppedEach.has(c.id) || (spentEach.get(c.id) ?? 0) - (eachBefore.get(c.id) ?? 0) + est > maxUSDEach + 1e-9;
+        const overTotal = Math.max(0, spent - spentBefore - notCounted) + reserved + est > maxUSD + 1e-9;
         // A contestant over its own, tighter cap is set aside alone: its estimate must not stop everyone else.
         if (overEach && (maxUSDEach < maxUSD || !overTotal)) {
           stoppedEach.add(c.id);
@@ -361,6 +372,8 @@ export function parseCli(argv) {
       'dry-run': { type: 'boolean', default: false },
       resume: { type: 'string' },
       'allow-deepseek-personal': { type: 'boolean', default: false },
+      redo: { type: 'string' },
+      'new-money': { type: 'boolean', default: false },
       'sets-dir': { type: 'string' },
       'sm-dir': { type: 'string' },
     },
@@ -389,6 +402,8 @@ export function parseCli(argv) {
     dryRun: values['dry-run'],
     resume: values.resume ?? null,
     allowDeepseekPersonal: values['allow-deepseek-personal'],
+    redo: list(values.redo),
+    newMoney: values['new-money'],
     setsDir: values['sets-dir'],
     smDir: values['sm-dir'],
   };

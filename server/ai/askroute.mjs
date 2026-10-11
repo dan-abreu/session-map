@@ -12,6 +12,7 @@ import { lifeOf } from './life.mjs';
 import { othersSettings } from './others.mjs';
 import { HELPER_KINDS } from './review.mjs';
 import { PROVIDERS } from './providers.mjs';
+import { versionView } from './versions.mjs';
 import { SENSITIVITIES, bulkModelOf } from './router.mjs';
 import { usageSummary } from './usage.mjs';
 
@@ -23,7 +24,7 @@ import { usageSummary } from './usage.mjs';
 // the token or a prompt, that this really is session-map (another program could hold the port while it is down).
 
 // GET or POST /api/ai/recommend: the conductor's recommendation (conductor.mjs), same token and loopback rules.
-export const ASK_PATHS = Object.freeze(['/api/ai/ask', '/api/ai/others', '/api/ai/hello', '/api/ai/recommend', '/api/ai/activity', '/api/ai/usage']);
+export const ASK_PATHS = Object.freeze(['/api/ai/ask', '/api/ai/others', '/api/ai/hello', '/api/ai/recommend', '/api/ai/activity', '/api/ai/usage', '/api/ai/versions/check']);
 // GET /api/ai/usage -> the other AIs measured by real use (usage.mjs): the panel of the "Other AIs" dialog.
 // GET /api/ai/activity?limit= lists what the other AIs did (activity.mjs); POST /api/ai/activity/<id> {accepted, why} is Claude
 // saying whether it accepted that work. Same token and loopback rules.
@@ -86,7 +87,7 @@ async function readJson(req) {
 // ai: the test doubles collect also gets ({bin, run, apiRun, keyOf}); backend: the keys' lock; apiRun/textRun: the
 // providers' call (tests); ask: askOthers itself (tests). rootOf(sessionId): the project root of the page chat with that
 // key, or null (the hub's), so an outside call's cost counts in that project's monthly budget (or07).
-export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, apiRun, textRun, ask = askOthers, now = Date.now, rootOf = () => null } = {}) {
+export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, apiRun, textRun, ask = askOthers, now = Date.now, rootOf = () => null, checkVersions } = {}) {
   const asks = [];
   const keyOf = ai.keyOf ?? (backend ? (provider) => getKey(smDir, provider, { backend }) : undefined);
   const queue = () => lifeOf(smDir, readConfig(smDir), ai).queue;
@@ -122,7 +123,7 @@ export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, 
     const spent = Number(st?.spentUSDToday) || 0;
     return {
       ok: true, enabled: s.enabled, dailyUSD: s.dailyUSD, spentUSDToday: spent, capReached: st?.capReached ?? spent >= s.dailyUSD,
-      providers, kinds: [...ASK_KINDS], sensitivities: [...SENSITIVITIES],
+      providers, kinds: [...ASK_KINDS], sensitivities: [...SENSITIVITIES], versions: versionView(smDir),
     };
   }
 
@@ -238,6 +239,12 @@ export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, 
     if (url.pathname === '/api/ai/recommend' && (req.method === 'GET' || req.method === 'POST')) return recommendRoute(req, url);
     if (url.pathname === '/api/ai/activity' && req.method === 'GET') return activityList(url);
     if (url.pathname === '/api/ai/usage' && req.method === 'GET') return { status: 200, body: { ok: true, ...usageSummary({ smDir, now: now() }) } };
+    // "Check now" (or15): the model lists once more, whatever the day's wait; never more than one look a minute.
+    if (url.pathname === '/api/ai/versions/check' && req.method === 'POST') {
+      if (!checkVersions) return fail(404, 'not-found');
+      const out = await checkVersions({ force: true });
+      return { status: 200, body: { ok: true, checked: out.checked, versions: versionView(smDir) } };
+    }
     const one = ACTIVITY_ONE.exec(url.pathname);
     if (one && req.method === 'POST') return activityResult(req, one[1]);
     return fail(404, 'not-found');

@@ -44,6 +44,44 @@ const MUTANTS = [
   ['rank-conversations', 'localeCompare instead of <', [['(a.id < b.id ? -1 : a.id > b.id ? 1 : 0)', 'a.id.localeCompare(b.id)']]],
   ['frontmatter', 'the word null is text', [["v === '' || v === 'null' || v === '~'", "v === '' || v === '~'"]]],
   ['glob', 'brace alternatives not escaped', [[".split(',').map(escapeText)", ".split(',')"]]],
+  ['age-text', 'rounds instead of down', [['Math.floor(ms / 1000)', 'Math.round(ms / 1000)']]],
+  ['age-text', 'minutes rounded up early', [['Math.floor(ms / 60_000)', 'Math.round(ms / 60_000)']]],
+  ['age-text', 'a negative age is shown', [[' || ms < 0', '']]],
+  ['slugify', 'a dash left by the cut', [["s.slice(0, 40).replace(/-+$/, '')", 's.slice(0, 40)']]],
+  ['slugify', 'accents dropped as letters', [[".normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')", '']]],
+  ['slugify', 'an empty result is kept', [[" || 'untitled'", '']]],
+  ['merge-ranges', 'ranges that touch stay apart', [['a <= last[1] + 1', 'a <= last[1]']]],
+  ['merge-ranges', 'a pair the wrong way round is kept', [['.map(([a, b]) => (a <= b ? [a, b] : [b, a]))', '.map(([a, b]) => [a, b])']]],
+  ['merge-ranges', 'the end of a bigger range is overwritten', [['last[1] = Math.max(last[1], b)', 'last[1] = b']]],
+  ['budget-state', 'the level comes from the rounded percentage', [['share >= 0.8 ?', 'Math.round(share * 100) >= 80 ?']]],
+  ['budget-state', 'the percentage is rounded', [['Math.floor(share * 100)', 'Math.round(share * 100)']]],
+  ['budget-state', 'exactly the limit is not over', [['share >= 1 ?', 'share > 1 ?']]],
+  ['semver-compare', 'numbers in a pre-release compared as text', [['if (pn && qn) return sign(Number(p) - Number(q));', 'if (pn && qn) return p < q ? -1 : 1;']]],
+  ['semver-compare', 'a pre-release is newer than its release', [['if (!x.pre) return 1;\n  if (!y.pre) return -1;', 'if (!x.pre) return -1;\n  if (!y.pre) return 1;']]],
+  ['semver-compare', 'more identifiers are older', [['return sign(x.pre.length - y.pre.length);', 'return sign(y.pre.length - x.pre.length);']]],
+  ['semver-compare', 'a numeric identifier is newer than a text one', [['if (pn) return -1;\n    if (qn) return 1;', 'if (pn) return 1;\n    if (qn) return -1;']]],
+  ['plan-order', 'ready items go first-come first-served instead of first in the input', `export function planOrder(items) {
+  if (!Array.isArray(items)) return { ok: true, order: [] };
+  const list = [];
+  const seen = new Set();
+  for (const it of items) if (it && typeof it === 'object' && typeof it.id === 'string' && !seen.has(it.id)) { seen.add(it.id); list.push(it); }
+  const left = new Map(list.map((it) => [it.id, new Set((Array.isArray(it.after) ? it.after : []).filter((x) => seen.has(x)))]));
+  const queue = list.filter((it) => left.get(it.id).size === 0).map((it) => it.id);
+  const order = [];
+  while (queue.length) {
+    const id = queue.shift();
+    order.push(id);
+    for (const it of list) { const s = left.get(it.id); if (s.delete(id) && s.size === 0) queue.push(it.id); }
+  }
+  if (order.length === list.length) return { ok: true, order };
+  return { ok: false, stuck: list.filter((it) => !order.includes(it.id)).map((it) => it.id) };
+}`],
+  ['plan-order', 'an unknown id blocks the item', [['.filter((x) => known.has(x))', '']]],
+  ['plan-order', 'a repeated id counts twice', [[' && !known.has(it.id)', '']]],
+  ['wrap-text', 'a line may be one character too long', [['<= width) current +=', '<= width + 1) current +=']]],
+  ['wrap-text', 'empty lines are dropped', [["    if (!words.length) {\n      out.push('');\n      continue;\n    }", '    if (!words.length) continue;']]],
+  ['wrap-text', 'a long word joins the line before it', [["        if (current) {\n          out.push(current);\n          current = '';\n        }\n", '']]],
+  ['wrap-text', 'a long word is not cut', [['while (word.length > width)', 'while (false)']]],
   ['short-title', 'no fallback when the head is left empty', [['(head || s.slice(0, max - 1))', '(sp > 0 ? head : s.slice(0, max - 1))']]],
 ];
 

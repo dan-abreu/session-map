@@ -12,6 +12,9 @@ import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
 import { createAskRoutes, hasHeaderToken, headerAuth } from './ai/askroute.mjs';
 import { createHelperRoutes } from './ai/helperroute.mjs';
+import { getKey } from './ai/keys.mjs';
+import { othersSettings } from './ai/others.mjs';
+import { createVersionWatch } from './ai/versions.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
 import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
@@ -55,6 +58,8 @@ const STATE_SAVE_MS = 60_000;
 // Reading the transcripts holds the event loop for a while: the copy's bytes leave the socket first.
 const COLLECT_AFTER_COPY_MS = 300;
 const SWEEP_MS = 5 * 60_000;
+const VERSIONS_FIRST_MS = 30_000;
+const VERSIONS_EVERY_MS = 60 * 60_000;
 // How often the watcher looks at every session on the PC, page open or not.
 const WATCH_MS = 10_000;
 const BODY_MAX = 64 * 1024;
@@ -171,7 +176,7 @@ export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
   catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
-  lanUrl = null, restart = {}, newProjectExec,
+  lanUrl = null, restart = {}, newProjectExec, versions = {},
 } = {}) {
   let watcher = null;
   // The look-only key (sv04): null while the owner has none; read once here, then changed only by lookRoute.
@@ -528,7 +533,15 @@ export function createApp({
   // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
   const helperRoutes =demo || !smDir ? null : createHelperRoutes({ smDir, ai, roots: async () => ((await quickState()).projects ?? []).map((p) => p.root), ...helpers });
   // Claude asks the other AIs itself (or14): the page's cookie or the stdio tool's header token, loopback only.
-  const askRoutes = createAskRoutes({ smDir, demo, token, ai, rootOf: (key) => chat?.rootOf?.(key) ?? null, ...helpers, ...askAi });
+  // The outside AIs' versions (or15): each provider with a key is asked for its model list at most once a day, and every
+  // change goes out as one alert. "Check now" (POST /api/ai/versions/check) skips the wait of a day, never the minute.
+  const versionWatch = demo || !smDir ? null : createVersionWatch({
+    smDir, ...versions, onAlerts: (alerts) => watcher?.push(alerts),
+    keyOf: ai?.keyOf ?? ((provider) => getKey(smDir, provider, helpers.backend ? { backend: helpers.backend } : {})),
+    pinned: () => othersSettings((readJsonFile(join(smDir, 'config.json'), {}) ?? {}).ai, []).models,
+  });
+  const checkVersions = (options) => versionWatch.run(options);
+  const askRoutes = createAskRoutes({ smDir, demo, token, ai, checkVersions: versionWatch ? checkVersions : undefined, rootOf: (key) => chat?.rootOf?.(key) ?? null, ...helpers, ...askAi });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -914,6 +927,14 @@ export function createApp({
     : Promise.resolve(null));
   // The orchestrator's tidy scheduler (or18), every 5 minutes: started by start() only, never in a test's app.
   server.startOrchestra = () => chat?.orchestra?.start?.();
+  // The version watch (or15), started by start() only: a look 30 s after the start, then every hour. The once-a-day rule
+  // per provider decides whether a request is really made.
+  server.startVersionWatch = () => {
+    if (!versionWatch) return;
+    const look = () => checkVersions().catch((err) => log('warn', 'ai-versions-failed', { error: err.message }));
+    setTimeout(look, VERSIONS_FIRST_MS).unref();
+    setInterval(look, VERSIONS_EVERY_MS).unref();
+  };
   server.on('close', () => watcher?.stop());
   return server;
 }
@@ -964,6 +985,7 @@ export function start(argv = process.argv.slice(2)) {
     setInterval(sweep, SWEEP_MS).unref();
     app.watcher.start(WATCH_MS);
     app.startOrchestra();
+    app.startVersionWatch();
   }
   return app;
 }

@@ -7,6 +7,7 @@ import { normalizePath } from '../paths.mjs';
 import { DEFAULT_PROJECT_CLASS, PROJECT_CLASSES, mergeProjectClasses, othersConfig, othersSettings, projectClasses } from './others.mjs';
 import { estimateCostUSD, providerOf, publicCatalog, runApiJSON } from './providers.mjs';
 import { bulkModelOf } from './router.mjs';
+import { versionView } from './versions.mjs';
 
 // What the "Other AIs" dialog reads and writes (or14): the keys, a switch per provider and ONE daily cap for all of
 // them together. Which AI does which task is the router's decision (router.mjs), never the owner's.
@@ -50,6 +51,7 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
       ok: true, providers: publicCatalog(), keys, others: othersSettings(config.ai, keys.map((k) => k.provider)), status: aiStatus(life()),
       projectClass: projectClasses(config.ai), projectClassDefault: DEFAULT_PROJECT_CLASS, projectClasses: [...PROJECT_CLASSES],
       pathRule: process.platform === 'win32' ? 'windows' : 'posix',
+      versions: versionView(smDir),
     };
   };
 

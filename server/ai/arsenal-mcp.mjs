@@ -227,7 +227,24 @@ async function ask(args) {
   return result(lines.join('\n'));
 }
 
-function providerLine(p) {
+// One provider's version warnings from the version watch (or15), in words. Names come from a provider's list, so only plain
+// names and dates get in. '' when the server sent none.
+const VERSION_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
+function versionsText(v) {
+  if (!v || typeof v !== 'object' || !Array.isArray(v.notes)) return '';
+  const notes = v.notes.filter((n) => n && VERSION_NAME_RE.test(String(n.model))).slice(0, 5).map((n) => {
+    if (n.type === 'gone') return `${n.model} is no longer listed for this key`;
+    if (n.type === 'retiring' && /^\d{4}-\d{2}-\d{2}$/.test(String(n.date))) return `${n.model} retires ${n.date}`;
+    if (n.type === 'new') return `new model of the same line: ${n.model}${VERSION_NAME_RE.test(String(n.like)) ? ` (like ${n.like})` : ''}`;
+    return null;
+  }).filter(Boolean);
+  if (notes.length) return ` Versions: ${notes.join('; ')}.`;
+  if (v.ok === false) return ` Versions: the last check failed (${/^[a-z0-9-]{1,30}$/.test(String(v.error)) ? v.error : 'error'}).`;
+  const day = String(v.checkedAt ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? ` Versions: checked ${day}, nothing to warn about.` : '';
+}
+
+function providerLine(p, versions) {
   let state;
   if (!p.hasKey) state = 'no key';
   else if (!p.on) state = 'switched off by the owner';
@@ -235,7 +252,7 @@ function providerLine(p) {
     const w = p.pausedWhy;
     state = w?.code === 'disagreed' ? `paused${w.kind === 'place' ? ' for bulk work' : ''} after disagreeing with Claude on ${w.disagreed} of ${w.of} checks` : 'paused';
   } else state = 'ready';
-  return `- ${p.id}, model ${p.model}: ${state} (spent today ${usd(p.spentUSDToday, 2)}, ${Number(p.calls) || 0} calls)`;
+  return `- ${p.id}, model ${p.model}: ${state} (spent today ${usd(p.spentUSDToday, 2)}, ${Number(p.calls) || 0} calls).${versionsText(versions?.[p.id])}`;
 }
 
 async function list() {
@@ -250,7 +267,7 @@ async function list() {
     j.enabled
       ? `Other AIs: on. One daily cap for all of them together: ${usd(j.dailyUSD, 2)}; spent today: ${usd(j.spentUSDToday, 2)}${j.capReached ? ' (cap reached: nothing more can be asked today)' : ''}.`
       : 'Other AIs: switched off by the owner. Nothing can be asked.',
-    ...(Array.isArray(j.providers) ? j.providers.map(providerLine) : []),
+    ...(Array.isArray(j.providers) ? j.providers.map((p) => providerLine(p, j.versions)) : []),
     ROUTING,
   ];
   if (Array.isArray(j.kinds)) lines.push(`Kinds: ${j.kinds.join(', ')}. Sensitivities: ${(j.sensitivities ?? []).join(', ')}.`);

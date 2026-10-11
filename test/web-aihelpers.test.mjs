@@ -209,3 +209,41 @@ test('the dialog says Claude may also send pieces of code or text from chats, an
   const dialog = await openDialog({ view: baseView(), posts: [] });
   assert.ok(textOf(dialog).includes(LANGS.en['aih.chatUse']));
 });
+
+// ---- the versions line of each AI (or15) ----
+
+test('each AI\'s versions line: nothing before the first check, "all good", a failed check, or the warnings', async () => {
+  const { versionLine } = await import('../server/web/aihelpers.js');
+  assert.equal(versionLine(undefined), null);
+  assert.deepEqual(versionLine({ checkedAt: '2026-10-11T12:00:00.000Z', ok: true, notes: [] }), { state: 'ok', day: '2026-10-11', notes: [] });
+  assert.deepEqual(versionLine({ checkedAt: '2026-10-11T12:00:00.000Z', ok: false, error: 'http-503', notes: [] }), { state: 'failed', day: '2026-10-11', error: 'http-503', notes: [] });
+  const warn = versionLine({ checkedAt: '2026-10-11T12:00:00.000Z', ok: true, notes: [{ type: 'new', model: 'gpt-6.2-sol' }, { type: 'gone', model: 'gpt-6-astra' }, { type: 'retiring', model: 'x\ny', date: '2027-01-01' }, { type: 'retiring', model: 'gpt-6-luna', date: 'later' }] });
+  assert.equal(warn.state, 'warn');
+  assert.deepEqual(warn.notes.map((n) => n.model), ['gpt-6-astra', 'gpt-6.2-sol'], 'gone first; a bad name or date is left out');
+});
+
+test('the dialog shows one short versions line under each AI that was checked, in plain words', async () => {
+  const versions = {
+    openai: { checkedAt: '2026-10-11T12:00:00.000Z', ok: true, notes: [{ type: 'gone', model: 'gpt-6-astra' }, { type: 'retiring', model: 'gpt-6-luna', date: '2027-02-01' }] },
+    gemini: { checkedAt: '2026-10-11T12:00:00.000Z', ok: true, notes: [] },
+    deepseek: { checkedAt: '2026-10-10T12:00:00.000Z', ok: false, error: 'http-503', notes: [] },
+  };
+  const dialog = await openDialog({ view: baseView({ versions }), posts: [] });
+  const line = (id) => find(dialog, (n) => n.props['data-ah-versions'] === id)[0];
+  assert.match(textOf(line('openai')), /Versions/);
+  assert.match(textOf(line('openai')), /gpt-6-astra is no longer on the company’s list/);
+  assert.match(textOf(line('openai')), /gpt-6-luna will be switched off on 2027-02-01/);
+  assert.match(textOf(line('gemini')), /checked 2026-10-11, nothing to warn about/);
+  assert.match(textOf(line('deepseek')), /did not work/);
+  assert.equal(find(dialog, (n) => n.props['data-ah-versions'] === 'openrouter').length, 0, 'never checked: no line');
+  const none = await openDialog({ view: baseView(), posts: [] });
+  assert.equal(find(none, (n) => n.props['data-ah-versions'] !== undefined).length, 0, 'an older server sends none');
+});
+
+test('the words of the versions line and of the model alerts exist in both languages', () => {
+  for (const lang of Object.values(LANGS)) {
+    for (const key of ['aih.ver.label', 'aih.ver.ok', 'aih.ver.failed', 'aih.ver.gone', 'aih.ver.retiring', 'aih.ver.new',
+      'alert.what.aiv-gone', 'alert.why.aiv-gone', 'alert.do.aiv-gone', 'alert.what.aiv-retiring', 'alert.why.aiv-retiring', 'alert.do.aiv-retiring',
+      'alert.what.aiv-new', 'alert.why.aiv-new', 'alert.do.aiv-new', 'alert.many.aiversion']) assert.ok(key in lang, key);
+  }
+});

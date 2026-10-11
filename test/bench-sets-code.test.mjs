@@ -1,4 +1,4 @@
-// The bench's "code" set (or12): fifteen small functions in session-map's own style, each with a spec, a signature,
+// The bench's "code" set (or12, grown in or15): small functions in session-map's own style, each with a spec, a signature,
 // a node:test file that imports './solution.mjs' and a known-good reference. This checks the file's shape only;
 // it never runs the set's code (the bench does that, in its sandbox).
 import { test } from 'node:test';
@@ -28,13 +28,13 @@ test('the set says what it is', () => {
   assert.ok(Array.isArray(set.items));
 });
 
-test('fifteen items with unique ids, five of each level, easy to hard', () => {
-  assert.equal(set.items.length, 15);
+test('at least twenty items (the routing needs 20 answers per kind) with unique ids, five or more of each level, easy to hard', () => {
+  assert.ok(set.items.length >= 20, `${set.items.length} items`);
   const ids = set.items.map((i) => i.id);
   assert.equal(new Set(ids).size, ids.length, 'ids are unique');
   for (const id of ids) assert.match(id, /^[a-z][a-z0-9-]*$/);
   const levels = set.items.map((i) => i.level);
-  for (const level of ['easy', 'medium', 'hard']) assert.equal(levels.filter((l) => l === level).length, 5, level);
+  for (const level of ['easy', 'medium', 'hard']) assert.ok(levels.filter((l) => l === level).length >= 5, level);
   assert.deepEqual(levels, [...levels].sort((a, b) => ['easy', 'medium', 'hard'].indexOf(a) - ['easy', 'medium', 'hard'].indexOf(b)), 'in order of difficulty');
 });
 

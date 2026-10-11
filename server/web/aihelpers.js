@@ -110,6 +110,27 @@ export function whenText(iso, lang = 'en', now = Date.now()) {
   return new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(at);
 }
 
+// ---- the versions line of each AI (pure) -----------------------------------------------------------------------
+
+const VERSION_ORDER = { gone: 0, retiring: 1, new: 2 };
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// One AI's entry of the version watch (GET /api/settings/ai-helpers' versions) -> what its line says, or null when it was
+// never checked (or the server is older). Warnings come gone first; a name or a date that is not plain is left out.
+export function versionLine(v) {
+  if (!v || typeof v !== 'object') return null;
+  const day = String(v.checkedAt ?? '').slice(0, 10);
+  if (!DAY_RE.test(day)) return null;
+  const notes = (Array.isArray(v.notes) ? v.notes : []).filter((n) => n && Object.hasOwn(VERSION_ORDER, n.type) && NAME_RE.test(String(n.model))
+    && (n.type !== 'retiring' || DAY_RE.test(String(n.date))))
+    .map((n) => ({ type: n.type, model: n.model, ...(n.type === 'retiring' ? { date: n.date } : {}) }))
+    .sort((a, b) => VERSION_ORDER[a.type] - VERSION_ORDER[b.type]);
+  if (notes.length) return { state: 'warn', day, notes };
+  if (v.ok === false) return { state: 'failed', day, error: typeof v.error === 'string' ? v.error : '', notes: [] };
+  return { state: 'ok', day, notes: [] };
+}
+
 // ---- the panel: the AIs measured by real use (pure) ------------------------------------------------------------
 
 export const pctText = (x, lang = 'en') => new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 }).format(Number.isFinite(x) ? x : 0);
@@ -174,6 +195,22 @@ export function createAiHelpers(ctx) {
   };
   const keyOf = (id) => data?.keys?.find((k) => k.provider === id) ?? null;
   const stateOf = (id) => data?.status?.others?.providers?.find((p) => p.id === id) ?? null;
+
+  // One short line under each AI that was checked: all good, the check failed, or what to look at.
+  function versionsPart(id) {
+    const line = versionLine(data?.versions?.[id]);
+    if (!line) return null;
+    const t = tt();
+    if (line.state === 'warn') {
+      return h('p', { class: 'dv-warning ah-versions', role: 'status', 'data-ah-versions': id }, h('strong', {}, `${t('aih.ver.label')}: `),
+        line.notes.map((n) => t(`aih.ver.${n.type}`, { model: n.model, date: n.date ?? '' })).join(' '));
+    }
+    if (line.state === 'failed') {
+      const key = whyKey(line.error, 502);
+      return h('p', { class: 'al-opt-hint ah-versions', 'data-ah-versions': id }, t('aih.ver.failed', { day: line.day, why: key ? t(key) : t('aih.act.failedGeneric') }));
+    }
+    return h('p', { class: 'al-opt-hint ah-versions', 'data-ah-versions': id }, t('aih.ver.ok', { day: line.day }));
+  }
 
   const now = () => (typeof ctx.now === 'function' ? ctx.now() : Date.now());
 
@@ -286,6 +323,7 @@ export function createAiHelpers(ctx) {
       st?.paused ? h('p', { class: 'dv-warning', role: 'status' }, `${t('aih.paused', { disagreed: st.pausedWhy?.disagreed ?? 0, of: st.pausedWhy?.of ?? 0 })} `,
         h('button', { type: 'button', class: 'btn small-btn', 'data-ah-resume': p.id, disabled: !canEdit, onclick: async () => { await giveAnotherChance(p.id); render(`[data-ah-on="${p.id}"]`); } }, t('aih.resume'))) : null,
       spentLine ? h('p', { class: 'al-opt-hint ah-today', 'data-ah-spent': p.id }, spentLine) : null,
+      versionsPart(p.id),
       h('div', { class: 'dv-field ah-field' },
         h('label', { for: fieldId }, saved ? t('aih.keyReplace') : t('aih.keyLabel')),
         h('div', { class: 'ah-key-row' },

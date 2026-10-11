@@ -33,19 +33,24 @@ export function parseContestant(id) {
   return { id, via: provider === 'claude' ? 'claude' : 'api', provider, model };
 }
 
+// Dearer models that take part only when named in --only (GPT-6 Astra costs five times Sol): measured on purpose, never by
+// accident in a full run.
+export const OPT_IN_MODELS = Object.freeze({ openai: ['gpt-6-astra'] });
+
 export function contestantsFor(keyedProviders = []) {
   const list = CLAUDE_LEVELS.map((level) => parseContestant(`claude:${level}`));
   const keyed = [...new Set(keyedProviders)].filter((p) => providerOf(p)).sort();
   for (const provider of keyed) {
     const models = [PROVIDERS[provider].defaultModel, MID_MODELS[provider]].filter(Boolean);
     for (const model of [...new Set(models)]) list.push(parseContestant(`${provider}:${model}`));
+    for (const model of OPT_IN_MODELS[provider] ?? []) list.push({ ...parseContestant(`${provider}:${model}`), optIn: true });
   }
   return list;
 }
 
 // --only: the full list's order is kept, so a run reads the same however the names were typed.
 export function selectContestants(all, only) {
-  if (!only?.length) return { chosen: [...all], missing: [] };
+  if (!only?.length) return { chosen: all.filter((c) => !c.optIn), missing: [] };
   const wanted = new Set(only);
   return { chosen: all.filter((c) => wanted.has(c.id)), missing: only.filter((id) => !all.some((c) => c.id === id)) };
 }

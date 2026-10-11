@@ -338,6 +338,30 @@ export function recordDecision(smDir, input, rec) {
 
 const CONTESTANT_RE = /^[a-z]+:[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/;
 
+// The version watch's warnings (versions.mjs, or15) as one short line: a model in use that is gone, one announced to
+// retire, a new one of the same line. Only plain names and dates get in (they come from a provider's list); more than
+// four are counted, not listed. A failed check is not a warning here. '' when nothing is wrong.
+const VERSION_ORDER = { gone: 0, retiring: 1, new: 2 };
+const VERSION_NOTES_MAX = 4;
+function versionLine(versions) {
+  if (!isObject(versions)) return '';
+  const notes = [];
+  for (const [provider, v] of Object.entries(versions)) {
+    if (!Object.hasOwn(PROVIDERS, provider) || !isObject(v) || !Array.isArray(v.notes)) continue;
+    for (const n of v.notes) {
+      if (!isObject(n) || !Object.hasOwn(VERSION_ORDER, n.type) || !cleanModel(n.model)) continue;
+      const date = typeof n.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(n.date) ? n.date : null;
+      if (n.type === 'retiring' && !date) continue;
+      notes.push({ type: n.type, order: VERSION_ORDER[n.type], text: n.type === 'gone' ? `${provider} ${n.model} is no longer listed` : n.type === 'retiring' ? `${provider} ${n.model} retires ${date}` : `${provider} has a new ${n.model}` });
+    }
+  }
+  if (!notes.length) return '';
+  notes.sort((a, b) => a.order - b.order);
+  const shown = notes.slice(0, VERSION_NOTES_MAX).map((n) => n.text);
+  const rest = notes.length - shown.length;
+  return `- Model versions (check before routing to them): ${shown.join('; ')}${rest > 0 ? `; and ${rest} more (list_other_ais)` : ''}.`;
+}
+
 // The day's facts, appended to the conductor prompt at chat start: who is ready, the cap left, and per measured kind
 // the best Claude level and the best outside AI (up to 12 lines).
 // Pure, and built from named fields only: nothing else of its inputs (a key, say) can reach the prompt.
@@ -356,6 +380,8 @@ export function conductorTail({ others, stats = [] } = {}) {
     ].join(', ');
     lines.push(`- Outside AIs ready: ${who}. Cap left today: ${usd(st.capLeftUSD)} of ${usd(st.dailyUSD)}.`);
   }
+  const versions = versionLine(others?.versions);
+  if (versions) lines.push(versions);
   const good = (Array.isArray(stats) ? stats : []).filter((e) => isObject(e) && typeof e.kind === 'string' && /^[a-z]{1,20}$/.test(e.kind)
     && typeof e.contestant === 'string' && CONTESTANT_RE.test(e.contestant) && redact(e.contestant) === e.contestant
     && Number.isFinite(e.accuracy) && Number.isFinite(e.costPerCorrectUSD) && Number.isInteger(e.n));

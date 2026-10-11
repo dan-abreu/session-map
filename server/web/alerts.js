@@ -2,6 +2,7 @@
 // alerts share. The pure part on top is what node:test and the server load; the DOM part only runs when the page calls it.
 import { foldReply } from './chatfold.js';
 import { kindMark } from './blocks.js';
+import { providerName } from './aihelpers.js';
 
 const SUMMARY_MAX = 200;
 
@@ -51,11 +52,11 @@ const dollars = (t, usd) => (Number.isFinite(usd) ? new Intl.NumberFormat(t.lang
 export function alertText(t, group, { content = true } = {}) {
   const [first] = group.alerts;
   const many = group.alerts.length > 1;
-  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '', pct: first.pct ?? '', used: dollars(t, first.usedUSD), limit: dollars(t, first.limitUSD) };
+  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '', model: first.model ?? '', provider: first.provider ? providerName(first.provider) : '', date: first.date ?? '', pct: first.pct ?? '', used: dollars(t, first.usedUSD), limit: dollars(t, first.limitUSD) };
   const what = many ? t(`alert.many.${group.kind}`, { n: group.alerts.length }) : t(`alert.what.${first.reason}`);
   const why = many ? t('alert.why.many') : t(`alert.why.${first.reason}`, vars);
   const todo = many ? t('alert.do.many') : t(`alert.do.${first.reason}`);
-  const action = group.kind === 'clash' ? t('alert.openMap') : group.kind === 'limit' ? t('alert.openApp') : group.kind === 'budget' ? t('alert.openBudget') : t('alert.open');
+  const action = group.kind === 'clash' ? t('alert.openMap') : group.kind === 'limit' || group.kind === 'aiversion' ? t('alert.openApp') : group.kind === 'budget' ? t('alert.openBudget') : t('alert.open');
   // A plan limit belongs to the account, not to a project.
   const project = group.projectName ? ` · ${group.projectName}` : '';
   if (!content) return { what, why, todo, action, title: `session-map${project}`, body: what };
@@ -83,7 +84,7 @@ const CARDS_MAX = 3;
 const FRESH_MS = 10 * 60_000;
 const SEEN_KEY = 'sm.alerts.seen';
 const KINDS = ['finished', 'waiting', 'error', 'clash'];
-const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash', limit: 'waiting', budget: 'waiting' };
+const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash', limit: 'waiting', aiversion: 'waiting', budget: 'waiting' };
 const DEFAULTS = { browser: true, desktop: true, sound: false, ntfy: { enabled: false, topic: null }, perProject: {} };
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 
@@ -160,7 +161,7 @@ export function createAlerts(ctx) {
     const tt = ctx.t();
     const words = alertText(tt, g);
     // A plan limit has nothing to open: it is read, not answered.
-    const test = g.alerts[0].reason === 'test' || g.kind === 'limit';
+    const test = g.alerts[0].reason === 'test' || g.kind === 'limit' || g.kind === 'aiversion';
     const el = h('li', { class: `al-card tone-${TONE[g.kind] ?? 'active'}`, role: 'group', 'aria-label': words.title },
       h('span', { class: 'al-dot', 'aria-hidden': 'true' }),
       h('div', { class: 'al-text' },

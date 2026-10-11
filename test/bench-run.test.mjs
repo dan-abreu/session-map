@@ -562,3 +562,88 @@ test('routing.json keeps a measure from a later run over one from the run being 
     env.done();
   }
 });
+
+// ---- re-measuring on top of an old run (or15) ----
+
+test('a resumed run asks only the new items and the new contestants, and never again what it has', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0]]);
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: perfect(), keyedProviders: [] });
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0], REVIEW[1]]); // one new item
+    const again = perfect();
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku', 'openai:gpt-6-astra'], maxUSD: 8 }, { call: again, keyedProviders: ['openai'] });
+    assert.deepEqual(again.calls.map((c) => `${c.contestant}`).sort(), ['claude:haiku', 'openai:gpt-6-astra', 'openai:gpt-6-astra'], 'haiku: the new item only; Astra: both');
+    assert.equal(out.results.length, 4);
+    assert.ok(out.results.every((r) => r.score === 1));
+  } finally {
+    env.done();
+  }
+});
+
+test('--redo throws away one contestant\'s stored answers and asks them all again, keeping what they cost', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0], REVIEW[1]]);
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku', 'openai:gpt-6-luna'] }), { call: perfect({ cost: 0.01 }), keyedProviders: ['openai'] });
+    const again = perfect({ cost: 0.02 });
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku', 'openai:gpt-6-luna'], redo: ['openai:gpt-6-luna'], maxUSD: 8 }, { call: again, keyedProviders: ['openai'] });
+    assert.deepEqual(again.calls.map((c) => c.contestant), ['openai:gpt-6-luna', 'openai:gpt-6-luna'], 'only the redone contestant is asked');
+    assert.equal(out.results.length, 4);
+    const luna = out.results.filter((r) => r.contestant === 'openai:gpt-6-luna');
+    assert.ok(luna.every((r) => r.costUSD === 0.02), 'the new answers replace the old');
+    assert.equal(out.spentUSD, 0.08, '0.04 before + 0.04 now: the first answers\' cost is not forgotten');
+    const saved = JSON.parse(readFileSync(join(env.smDir, 'bench', 'runs', 'run-a', 'results.json'), 'utf8'));
+    assert.equal(saved.spentEachUSD['openai:gpt-6-luna'], 0.06);
+    // an id that is not taking part is named, not ignored in silence
+    const named = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku'], redo: ['gemini:gemini-3.8-flash'], maxUSD: 8 }, { call: perfect(), keyedProviders: [] });
+    assert.ok(named.notes.some((n) => /gemini:gemini-3\.8-flash/.test(n) && /--redo/.test(n)));
+  } finally {
+    env.done();
+  }
+});
+
+test('--new-money counts against the cap only what this run spends, not what the run already cost', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', [REVIEW[0], REVIEW[1]]);
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: perfect({ cost: 3 }), keyedProviders: [] });
+    // 6 dollars are already in the run. Without the switch a cap of 1 stops at once.
+    const stopped = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku', 'openai:gpt-6-luna'], maxUSD: 1 }, { call: perfect({ cost: 0.1 }), keyedProviders: ['openai'] });
+    assert.ok(stopped.results.some((r) => r.skipped === 'budget'));
+    const again = perfect({ cost: 0.1 });
+    const out = await runBench({ smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku', 'openai:gpt-6-luna'], maxUSD: 1, newMoney: true }, { call: again, keyedProviders: ['openai'] });
+    assert.deepEqual(again.calls.map((c) => c.contestant), ['openai:gpt-6-luna', 'openai:gpt-6-luna']);
+    assert.ok(out.results.every((r) => !r.skipped));
+    assert.equal(out.spentUSD, 6.2, 'the run still reports everything it cost');
+    assert.ok(out.notes.some((n) => /só o gasto desta rodada/.test(n)), 'and says what the cap counts');
+  } finally {
+    env.done();
+  }
+});
+
+test('--new-money still stops at the cap, counting only the new money, also for a contestant redone', async () => {
+  const env = scratch();
+  try {
+    writeSet(join(env.setsDir, 'review.json'), 'review', Array.from({ length: 5 }, (_, i) => ({ ...REVIEW[1], id: `r${i}` })));
+    await runBench(base(env, { kinds: ['review'], only: ['claude:haiku'] }), { call: perfect({ cost: 0.1 }), keyedProviders: [] });
+    const resume = { smDir: env.smDir, setsDir: env.setsDir, resume: 'run-a', kinds: ['review'], only: ['claude:haiku'], redo: ['claude:haiku'], maxUSD: 0.35 };
+    const old = perfect({ cost: 0.1 });
+    await runBench(resume, { call: old, keyedProviders: [] });
+    assert.equal(old.calls.length, 0, 'without the switch the 0.50 it already cost is over the cap of 0.35');
+    const again = perfect({ cost: 0.1 });
+    const out = await runBench({ ...resume, newMoney: true }, { call: again, keyedProviders: [] });
+    assert.equal(again.calls.length, 3, 'three calls fit in 0.35 of new money (0.15 reserved for the next)');
+    assert.equal(out.results.filter((r) => r.skipped).length, 2);
+  } finally {
+    env.done();
+  }
+});
+
+test('the command line reads --redo and --new-money', () => {
+  const o = parseCli(['--redo', 'gemini:gemini-3.8-flash,openai:gpt-6-luna', '--new-money']);
+  assert.deepEqual(o.redo, ['gemini:gemini-3.8-flash', 'openai:gpt-6-luna']);
+  assert.equal(o.newMoney, true);
+  assert.deepEqual(parseCli([]).redo, null);
+  assert.equal(parseCli([]).newMoney, false);
+});

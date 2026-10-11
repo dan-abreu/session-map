@@ -91,3 +91,24 @@ test('wa09: a plan limit alert has no project, says when it comes back and what 
   assert.equal(alertText(pt, groupAlerts([limit('session')])[0]).what, 'Limite das 5 horas atingido');
   assert.equal(alertText(en, groupAlerts([limit('weekly'), limit('session')])[0]).what, '2 plan limits reached');
 });
+
+test('or15: an AI model alert has no project, names the model and the company, and reads plainly in both languages', () => {
+  const note = (type, extra = {}) => ({ id: 9, kind: 'aiversion', reason: `aiv-${type}`, projectId: null, projectName: '', sessionId: null, provider: 'openai', model: 'gpt-6-astra', ...extra });
+  const gone = alertText(en, groupAlerts([note('gone')])[0]);
+  assert.equal(gone.what, 'An AI model is no longer offered');
+  assert.match(gone.why, /gpt-6-astra/);
+  assert.match(gone.why, /OpenAI/);
+  assert.equal(gone.action, 'Open session-map');
+  assert.match(alertText(en, groupAlerts([note('retiring', { date: '2027-02-01' })])[0]).why, /2027-02-01/);
+  assert.match(alertText(en, groupAlerts([note('new', { model: 'gpt-6.2-sol' })])[0]).why, /gpt-6\.2-sol/);
+  assert.equal(alertText(en, groupAlerts([note('gone'), note('new')])[0]).what, '2 changes in the AI models');
+  for (const t of [en, pt]) {
+    for (const type of ['gone', 'retiring', 'new']) {
+      const x = alertText(t, groupAlerts([note(type, { date: '2027-02-01' })])[0]);
+      for (const part of [x.what, x.why, x.todo]) assert.ok(part && !/^alert\./.test(part), `${type}: ${part}`);
+      assert.doesNotMatch(x.why, /\{\w+\}/, 'no blank left');
+    }
+  }
+  assert.equal(alertText(pt, groupAlerts([note('gone')])[0]).what, 'Um modelo de IA deixou de ser oferecido');
+  assert.equal(alertText(en, groupAlerts([note('gone')])[0], { content: false }).title, 'session-map');
+});

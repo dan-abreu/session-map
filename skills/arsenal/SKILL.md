@@ -9,7 +9,7 @@ Claude conducts; the other AIs (OpenAI, Gemini, DeepSeek) are subagents that ans
 
 ## Before delegating
 
-1. `list_other_ais`: who is ready, the daily cap left (the owner's cap is shared by every chat).
+1. `list_other_ais`: who is ready, the daily cap left (the owner's cap is shared by every chat), and a "Versions" line per AI when a model the routing counts on is gone, announced to retire or has a newer sibling (session-map asks each company for its model list once a day). Do not send work to a model that line says is gone.
 2. For a medium or larger piece, `pick_worker` with its kind, size and sensitivity. It names the worker, the reviewer and the reason from the bench and real-use results; the table below is only the usual default. Privacy and "another family reviews" always win over both. With no eligible outside AI, use Claude and say so. State the choice in one line.
 
 ## Who does what
