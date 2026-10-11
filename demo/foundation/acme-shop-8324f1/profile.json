@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-10T09:40:00.000Z",
+  "detected": {
+    "types": [
+      "web",
+      "api"
+    ],
+    "stacks": [
+      {
+        "name": "bullmq",
+        "version": "5.0.0",
+        "file": "apps/worker/package.json",
+        "line": 6
+      },
+      {
+        "name": "fastify",
+        "version": "5.1.0",
+        "file": "apps/api/package.json",
+        "line": 6
+      },
+      {
+        "name": "next",
+        "version": "16.0.1",
+        "file": "apps/admin/package.json",
+        "line": 6
+      },
+      {
+        "name": "prisma",
+        "version": "6.0.0",
+        "file": "packages/db/package.json",
+        "line": 6
+      },
+      {
+        "name": "react",
+        "version": "19.0.0",
+        "file": "apps/admin/package.json",
+        "line": 7
+      }
+    ],
+    "signals": [
+      {
+        "kind": "personal-data",
+        "evidence": [
+          {
+            "file": "packages/db/prisma/schema.prisma",
+            "line": 18,
+            "sha": "5d748baba90673c9",
+            "factId": "table:Customer"
+          }
+        ]
+      },
+      {
+        "kind": "payments",
+        "evidence": [
+          {
+            "file": "packages/adapters/package.json",
+            "line": 6,
+            "sha": "9de8d3f0b0e7ca24"
+          },
+          {
+            "file": "packages/adapters/src/payments.ts",
+            "line": 1,
+            "sha": "a8b595bbb21c3073",
+            "factId": "integration:stripe"
+          }
+        ]
+      }
+    ],
+    "team": {
+      "kind": "solo",
+      "authors": 1
+    },
+    "deploy": []
+  },
+  "owner": {
+    "country": "BR",
+    "laws": [],
+    "money": "subscription",
+    "audience": [],
+    "stage": null,
+    "types": [],
+    "team": null
+  },
+  "askedAt": "2026-10-10T09:40:00.000Z"
+}

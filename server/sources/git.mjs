@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { lineCount } from './count.mjs';
-import { log } from '../log.mjs';
+import { runGit } from './gitqueue.mjs';
 
 const TIMEOUT_MS = 5000;
 const REC = '\x01';
@@ -11,13 +10,8 @@ const END = '\x02';
 const CO_AUTHOR_RE = /^co-authored-by:\s*(.*?)\s*(?:<[^>]*>)?\s*$/im;
 
 // Any failure (no git, not a repo, timeout) becomes '' so callers see "nothing" instead of an exception.
-function git(cwd, args) {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
-      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
-      resolve(err ? '' : stdout);
-    });
-  });
+async function git(cwd, args) {
+  return (await runGit(cwd, args, { timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 })).stdout;
 }
 
 const lines = (s) => s.split(/\r?\n/).filter(Boolean);
@@ -46,7 +40,23 @@ export async function listWorktrees(root) {
   });
 }
 
-export async function mainBranch(root) {
+// root → {stamp, at, value}. Making, removing or renaming a branch touches refs/heads or packed-refs, and origin/HEAD is
+// its own file: while none of them moved the last answer stands, asked again at most every MAIN_TTL_MS anyway.
+const MAIN_TTL_MS = 60_000;
+const mainMemo = new Map();
+const REF_MARKS = ['HEAD', 'packed-refs', 'refs/heads', 'refs/remotes/origin/HEAD'];
+const refsStamp = (root) => REF_MARKS.map((m) => statSync(join(root, '.git', m), { throwIfNoEntry: false })?.mtimeMs ?? '-').join('|');
+
+export async function mainBranch(root, { nowMs = Date.now() } = {}) {
+  const stamp = refsStamp(root);
+  const hit = mainMemo.get(root);
+  if (hit && hit.stamp === stamp && nowMs - hit.at < MAIN_TTL_MS) return hit.value;
+  const value = await findMainBranch(root);
+  mainMemo.set(root, { stamp, at: nowMs, value });
+  return value;
+}
+
+async function findMainBranch(root) {
   for (const name of ['main', 'master']) {
     if ((await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`])).trim()) return name;
   }
@@ -172,9 +182,11 @@ function untrackedLines(root, path) {
 
 // What is not saved yet in the project's folder (mm30): every edited, new, removed or renamed file, with its lines.
 export async function workingTree(root) {
-  const status = await git(root, ['-c', 'core.quotepath=off', 'status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  // --no-optional-locks: a read must never take index.lock while the project's own chats commit in the same folder.
+  const status = await git(root, ['--no-optional-locks', '-c', 'core.quotepath=off', 'status','--porcelain=v1', '-z', '--untracked-files=all']);
   if (!status) return [];
-  const stats = numstat(await git(root, ['-c', 'core.quotepath=off', 'diff', 'HEAD', '--numstat', '-z', '-M']));
+  // diff-index, not diff: git diff rewrites the index when a file was only touched, even with --no-optional-locks.
+  const stats = numstat(await git(root, ['--no-optional-locks', '-c', 'core.quotepath=off', 'diff-index', 'HEAD', '--numstat', '-z', '-M']));
   const out = [];
   const fields = status.split('\0');
   for (let i = 0; i < fields.length && out.length < WORKTREE_MAX; i++) {

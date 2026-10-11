@@ -256,3 +256,98 @@ test('a Workflow step names the team it starts, from the script or its file, ins
   assert.deepEqual(stepOf({ name: 'Workflow', input: { scriptPath: 'C:/x/workflows/scripts/shop-launch-wf_1a2b3c4d-5e6.js' } }, '/work/a', true), { kind: 'team', target: 'shop-launch' });
   assert.deepEqual(stepOf({ name: 'Workflow', input: {} }, '/work/a', true), { kind: 'team', target: '' });
 });
+
+// ---- the rest of the traceable workflows (mind-map-page mm37) ----
+
+const AG = 'a1b2c3d4e5f60718';
+// A helper started on its own: the Agent tool call and the answer that carries the helper's id (async ones also say what it was asked).
+const agentUse = (min) => JSON.stringify({ type: 'assistant', sessionId: 's', cwd: '/work/a', timestamp: at(min), message: { id: `m${min}`, model: 'claude-fake-1', role: 'assistant', content: [{ type: 'tool_use', id: `t${min}`, name: 'Agent', input: { description: 'Check the tax table', prompt: 'long prompt' } }], usage: { input_tokens: 1, output_tokens: 1 } } });
+const agentResult = (min, toolUseResult) => JSON.stringify({ type: 'user', sessionId: 's', cwd: '/work/a', timestamp: at(min), toolUseResult, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${min - 1}`, content: 'ok' }] } });
+
+test('a launch also keeps the words the conversation gave the team: its summary', () => {
+  withTempDir((dir) => {
+    const file = join(dir, 's.jsonl');
+    writeFileSync(file, [
+      human('Build it', 1),
+      launchUse(2),
+      launchResult(3, { status: 'async_launched', runId: RUN, workflowName: 'trace', summary: 'Trace the workflows from the request to the files' }),
+    ].join('\n') + '\n');
+    const s = readTranscript(file);
+    assert.deepEqual(s.launches[RUN], { text: 'Build it', ts: at(1), codes: [], words: 'Trace the workflows from the request to the files' });
+  });
+});
+
+test('a helper started on its own gets the request before its launch, keyed by its id, with its description as the words', () => {
+  withTempDir((dir) => {
+    const file = join(dir, 's.jsonl');
+    writeFileSync(file, [
+      human('Fix the tax table (bi07)', 1),
+      agentUse(2),
+      agentResult(3, { isAsync: true, status: 'async_launched', agentId: AG, description: 'Check the tax table', prompt: 'long prompt' }),
+      human('and now something else', 4),
+      agentUse(5),
+      agentResult(6, { status: 'completed', agentId: 'ffff0000ffff0000', prompt: 'long prompt', content: [] }),
+    ].join('\n') + '\n');
+    const s = readTranscript(file);
+    assert.deepEqual(s.launches[AG], { text: 'Fix the tax table (bi07)', ts: at(1), codes: ['bi07'], words: 'Check the tax table' });
+    assert.deepEqual(s.launches.ffff0000ffff0000, { text: 'and now something else', ts: at(4), codes: [] }, 'an answer that carries no description adds no words');
+  });
+});
+
+test('a helper launched far before the tail it reads is still tied to its request', () => {
+  withTempDir((dir) => {
+    const file = join(dir, 's.jsonl');
+    writeFileSync(file, [
+      human('Polish the list (mm33)', 1),
+      agentUse(2),
+      agentResult(3, { isAsync: true, status: 'async_launched', agentId: AG, description: 'List polish', prompt: 'p' }),
+      ...Array.from({ length: 40 }, (_, i) => filler(10 + (i % 40))),
+    ].join('\n') + '\n');
+    const s = readTranscript(file, { tailBytes: 1500 });
+    assert.deepEqual(s.launches[AG], { text: 'Polish the list (mm33)', ts: at(1), codes: ['mm33'], words: 'List polish' });
+  });
+});
+
+test('helperAgents gives each helper its own id, so its launch can be found', () => {
+  withTempDir((dir) => {
+    const s = session(dir);
+    writeFileSync(join(s, 'subagents', 'agent-h1.jsonl'), '');
+    const ids = Object.fromEntries(helperAgents(s).map((a) => [a.file.split(/[\\/]/).pop(), a.agentId]));
+    assert.deepEqual(ids, { 'agent-h1.jsonl': 'h1', 'agent-a1.jsonl': 'a1', 'agent-a3.jsonl': 'a3' });
+  });
+});
+
+test('workflowView carries the team\'s words, and names the point a page chat was opened on when the words carry no item code', () => {
+  const launch = { text: 'about the currency', ts: at(2), codes: [], words: 'Taxes per city' };
+  const point = { projectId: 'a', partId: 'pay', code: null };
+  const view = workflowView(raw(), { launch, items: ITEMS, place, commitOf: () => null, point });
+  assert.deepEqual(view.request, { text: 'about the currency', ts: at(2), words: 'Taxes per city', item: point });
+  const coded = workflowView(raw(), { launch: { ...launch, codes: ['mm31'] }, items: ITEMS, place, commitOf: () => null, point });
+  assert.equal(coded.request.item.code, 'mm31', 'an item the words name wins over the point the chat was opened on');
+  assert.equal(workflowView(raw(), { launch, items: ITEMS, place, commitOf: () => null }).request.item, null, 'no point, no code: no item');
+  assert.equal('words' in workflowView(raw(), { launch: { text: 'x', ts: at(1), codes: [] }, items: ITEMS, place, commitOf: () => null }).request, false);
+});
+
+test('hangWorkflows names the box a page chat was opened on as the request item', async () => {
+  const { hangWorkflows } = await import('../server/workflows.mjs');
+  const { normalizePath } = await import('../server/paths.mjs');
+  const arch = { parts: [{ id: 'pay', groups: [{ items: [{ code: 'pa02' }] }] }, { id: 'docs', groups: [] }] };
+  const make = (node, partId) => {
+    const chat = { sessionId: A, workflows: [raw()] };
+    const built = [{ project: { id: 'a', name: 'shop', root: '/work/a', arch, chats: [chat] }, key: normalizePath('/work/a'), ownersOf: () => [], commits: [], pageOf: () => (node ? { projectId: 'a', partId, node } : null) }];
+    const groups = [{ root: '/work/a', items: [{ summary: { sessionId: A, cwd: '/work/a', launches: { [RUN]: { text: 'about the currency', ts: at(2), codes: [] } } } }] }];
+    return { chat, built, groups };
+  };
+  const item = async (node, partId) => {
+    const { chat, built, groups } = make(node, partId);
+    await hangWorkflows(built, groups, { skip: [], nowMs: Date.parse(at(40)) });
+    return chat.workflows[0].request.item;
+  };
+  assert.deepEqual(await item({ kind: 'part' }, 'docs'), { projectId: 'a', partId: 'docs', code: null }, 'a box');
+  assert.deepEqual(await item({ kind: 'group', group: 'Later' }, 'docs'), { projectId: 'a', partId: 'docs', code: null }, 'a group is its box');
+  assert.deepEqual(await item({ kind: 'item', code: 'pa02' }, 'pay'), { projectId: 'a', partId: 'pay', code: 'pa02' }, 'an item keeps its code');
+  assert.deepEqual(await item({ kind: 'item', code: 'zz99' }, 'pay'), { projectId: 'a', partId: 'pay', code: null }, 'a code the map lost leaves the box');
+  assert.equal(await item({ kind: 'layer', layerId: 'x' }, null), null, 'a layer is no box');
+  assert.equal(await item({ kind: 'part' }, 'gone'), null, 'a part the map no longer has');
+  assert.equal(await item(null, null), null, 'a chat the page did not open');
+});

@@ -11,11 +11,13 @@ import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
 import { waitingFor } from '../parse/waiting.mjs';
 import { archivedPath } from '../archive.mjs';
-import { bootTime, claudeDir, listLiveSessions, readFullTranscript } from '../sources/claude.mjs';
+import { bootTime, claudeDir, listLiveSessions, readTranscript } from '../sources/claude.mjs';
+import { pageTurnCut } from '../collect.mjs';
 import { readRemoved } from '../hidden.mjs';
 import { helperPath, maskSecrets, readConversation, readImage, toolDetails, versionOf } from '../sources/claude-conversation.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
+import { FOCUS_KINDS, focusInputs } from '../foundation/practices-focus.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
@@ -68,8 +70,32 @@ const IDLE_MS = 30 * 60_000;
 // The walk over a conversation's helper files only stats: a workflow can leave thousands, and the answer needs the newest one.
 const HELPER_WALK_MAX = 5000;
 const HELPER_DEPTH_MAX = 8;
+// A walk that hit the cap has not seen every file, so it is no proof of quiet: the close is postponed this many more times.
+const HELPER_CUT_RECHECKS = 2;
 // An ended chat keeps its events a while, so a page that reconnects still sees how it ended.
 const LINGER_MS = 5 * 60_000;
+// A conversation opens on its newest items and gives older ones a page at a time (pc15): a long one opens at once.
+// The page is rounded back to where its first turn starts, unless that turn alone is longer than this much more.
+const PAGE_ITEMS = 100;
+const PAGE_ROUND_MAX = 50;
+// A mirror asks again from the start of the last turn it has, since its last items may still change (a step's result,
+// the reply's cost), but never more than this many items back.
+const RESEND_MAX = 50;
+const isIndex = (n) => Number.isInteger(n) && n >= 0;
+
+// Where the page of items that ends before `end` starts.
+function pageStart(items, end) {
+  const start = Math.max(0, end - PAGE_ITEMS);
+  for (let i = start; i >= Math.max(0, start - PAGE_ROUND_MAX); i--) if (items[i]?.type === 'user') return i;
+  return start;
+}
+
+// Where a mirror that holds the items before `from` gets them again from.
+function resendStart(items, from) {
+  const floor = Math.max(0, from - RESEND_MAX);
+  for (let i = from - 1; i >= floor; i--) if (items[i]?.type === 'user') return i;
+  return floor;
+}
 // A piece of a streamed text, and the events that end the run of pieces a whole text replaces (page-chat pc13).
 const isPiece = (evt) => evt.type === 'text' && evt.data?.partial === true;
 const PIECE_BOUNDS = new Set(['user', 'text', 'tool', 'turn-end']);
@@ -144,6 +170,7 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
 // helperWrite(sessionId): when (ms) the conversation's background helpers last wrote, 0 for never; tests inject it.
+// helperWalkMax: how many helper entries one look may list; tests make it small.
 // eventsMax: how many events a chat keeps for a page that reconnects; tests make it small.
 // onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
 // arsenalUrl: where the arsenal tool of a page chat finds this server (main.mjs's baseUrl); without it, its default port.
@@ -154,7 +181,7 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // show; orchestra ({now, every, stopEvery, tickMs, namedMs}): the orchestrator's clock and timer (orchestra.mjs), for tests.
 // chatsMax: how many chats may run at once; tests make it larger.
 export function createChatHub({
-  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, eventsMax = EVENTS_MAX,
+  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
   readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX,
 } = {}) {
@@ -208,9 +235,19 @@ export function createChatHub({
     return alert(chat, 'finished', 'answer', { summary: summaryOf(reply) });
   }
 
-  // Cut off: a turn was running when the process went away with the server, and nothing runs the conversation now.
+  // Cut off: a turn was running when the process went away with the server, and nothing runs the conversation now. The
+  // transcript is read last, only for those: a turn it shows closed after the page's last turn end finished elsewhere,
+  // the rule collect's list follows (pageTurnCut).
   const cutOff = (sessionId, page, state) => page?.running === true && !drivenNow(sessionId)
-    && !(state?.projects ?? []).some((p) => (p.conversations ?? []).some((c) => c.sessionId === sessionId && c.live));
+    && !(state?.projects ?? []).some((p) => (p.conversations ?? []).some((c) => c.sessionId === sessionId && c.live))
+    && pageTurnCut(page, ...lastTurnOf(sessionId));
+  // [summary, when its last line was written] as collect dates a row: the last line's time, else the file's.
+  const lastTurnOf = (sessionId) => {
+    const file = transcriptOf(sessionId);
+    const summary = file ? readTranscript(file) : null;
+    if (!summary) return [null, null];
+    return [summary, summary.endedAt ?? new Date(statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? 0).toISOString()];
+  };
 
   // at: when the hub took it, where the history stops for a turn whose own message no longer fits (replayFrom).
   const emit = (chat, type, data) => {
@@ -475,31 +512,41 @@ export function createChatHub({
   function armIdle(chat, ms) {
     chat.idleTimer = setTimeout(() => {
       if (chat.ended) return;
-      const wait = chat.sessionId ? idleMs - (Date.now() - (helperWrite ?? newestHelperWrite)(chat.sessionId)) : 0;
+      const { at, cut } = chat.sessionId ? helpersLook(chat.sessionId) : { at: 0, cut: false };
+      let wait = chat.sessionId ? idleMs - (Date.now() - at) : 0;
+      if (wait > 0) chat.cutRechecks = 0;
+      else if (cut && (chat.cutRechecks ?? 0) < HELPER_CUT_RECHECKS) { chat.cutRechecks = (chat.cutRechecks ?? 0) + 1; wait = idleMs; }
       if (wait > 0) armIdle(chat, Math.min(wait, idleMs));
       else { chat.closing = true; chat.driver.end(); }
     }, ms);
     chat.idleTimer.unref?.();
   }
 
+  // at: when the helpers last wrote; cut: the walk stopped at the cap, so a newer file may be unseen.
+  function helpersLook(sessionId) {
+    if (helperWrite) return { at: helperWrite(sessionId), cut: false };
+    return newestHelperWrite(sessionId);
+  }
+
   // claude keeps what a conversation's background work writes under projects/<folder>/<sessionId>/subagents/.
   function newestHelperWrite(sessionId) {
     const file = transcriptOf(sessionId);
-    if (!file) return 0;
+    if (!file) return { at: 0, cut: false };
     let newest = 0;
     let seen = 0;
+    let cut = false;
     const walk = (folder, depth) => {
       let names = [];
       try { names = readdirSync(folder, { withFileTypes: true }); } catch { return; }
       for (const entry of names) {
-        if (++seen > HELPER_WALK_MAX) return;
+        if (++seen > helperWalkMax) { cut = true; return; }
         const path = join(folder, entry.name);
         if (entry.isDirectory()) { if (depth < HELPER_DEPTH_MAX) walk(path, depth + 1); continue; }
         try { newest = Math.max(newest, statSync(path).mtimeMs); } catch { /* gone between the listing and the stat */ }
       }
     };
     walk(join(dirname(file), sessionId, 'subagents'), 0);
-    return newest;
+    return { at: newest, cut };
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
@@ -610,7 +657,9 @@ ${prompt}`;
       if (node === undefined && partId !== undefined) node = { kind: 'part', partId };
       if (node === undefined && mother && find(project, 'part', mother.partId)) node = { kind: 'part', partId: mother.partId };
       if (node?.kind === 'flow') flow = { seen: readDraft(smDir, project.id) ?? exportMermaid(project.arch ?? { layers: [], parts: [] }), reply: '' };
-      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen });
+      // The good practices of the point are read once, here, when the conversation starts; nothing on disk means nothing added.
+      const practices = FOCUS_KINDS.includes(node?.kind) ? focusInputs(smDir, project.id) : null;
+      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen, practices });
       if (context.error) return reply(context.status, { error: context.error });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
@@ -745,6 +794,8 @@ ${prompt}`;
   // transcript Claude Code may already have deleted (the archive keeps a copy). null: not one the page knows.
   function sourceOf(sessionId, state) {
     if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return null;
+    // One removed from session-map (mm43) shows nowhere: not its history, its images or its helpers.
+    if (readRemoved(smDir).has(sessionId)) return null;
     const page = readPageChats()[sessionId];
     if (page) return { page, file: transcriptOf(sessionId), cwd: page.cwd ?? page.root ?? '' };
     const project = state?.projects.find((p) => p.conversations?.some((c) => c.sessionId === sessionId));
@@ -754,34 +805,40 @@ ${prompt}`;
     return { project, row, file: transcriptOf(sessionId) ?? archivedPath(smDir, sessionId), cwd };
   }
 
-  // The whole conversation as the chat screen shows it (mm22). since: the version the page already has.
+  // The conversation as the chat screen shows it (mm22), a page of it (pc15). since: the version the page already has.
   // The version is compared before anything is read: the live mirror asks every 3 s, mostly to hear "nothing new".
-  function itemsOf(src, since, keep = () => true) {
+  // before: the page that ends there (older items); from: what is new after the items the page holds (the mirror);
+  // neither: the newest page. start and total place the page among all the items.
+  function itemsOf(src, since, keep = () => true, { before, from } = {}) {
     const version = src.file ? versionOf(src.file) : '0';
     if (since && since === version) return { same: true, version };
     const read = src.file ? readConversation(src.file, { cwd: src.cwd }) : { items: [], version };
+    const all = read.items.filter(keep);
+    const total = all.length;
+    const end = isIndex(before) ? Math.min(before, total) : total;
+    const start = end === total && isIndex(from) && from > 0 && from <= total ? resendStart(all, from) : pageStart(all, end);
     // The read is shared with the next ask: new objects, never edits to its items.
-    const items = read.items.filter(keep).map((i) => (i.type === 'user' ? { ...i, text: personsWords(i.text) } : i));
-    return { items, version: read.version };
+    const items = all.slice(start, end).map((i) => (i.type === 'user' ? { ...i, text: personsWords(i.text) } : i));
+    return { items, start, total, version: read.version };
   }
 
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
   // holds as events (those arrive by subscribing, after fromEventId), with the first prompt as the person wrote it.
-  function history(sessionId, state, { since } = {}) {
+  // The page reads items only: the transcript is read once, never a second time for plain messages (pc15).
+  function history(sessionId, state, { since, before, from } = {}) {
     if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
+    if (readRemoved(smDir).has(sessionId)) return reply(404, { error: 'unknown-session' });
     const page = readPageChats()[sessionId];
-    if (!page) return listedHistory(sessionId, state, since);
+    if (!page) return listedHistory(sessionId, state, since, { before, from });
     const driven = drivenNow(sessionId);
     const { fromEventId, keep } = driven ? replayFrom(driven) : { fromEventId: 0, keep: () => () => true };
     const src = sourceOf(sessionId, state);
-    const rich = itemsOf(src, since, keep());
+    const rich = itemsOf(src, since, keep(), { before, from });
     if (rich.same) return reply(200, rich);
-    const messages = (src.file ? readFullTranscript(src.file) : []).filter(keep());
-    for (const m of messages) if (m.role === 'user') m.text = personsWords(m.text);
     const folder = page.root ?? page.cwd;
     const row = state?.projects.find((p) => p.id === page.projectId)?.conversations?.find((c) => c.sessionId === sessionId);
     return reply(200, {
-      sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), messages, ...rich, chatKey: driven?.key ?? null,
+      sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), ...rich, chatKey: driven?.key ?? null,
       fromEventId, running: Boolean(driven?.running),
       run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
       costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state), live: false,
@@ -791,14 +848,13 @@ ${prompt}`;
   // A conversation of the list the page did not start (VS Code, a terminal): read here, written where it lives, unless
   // the person resumes a closed one, which makes it a page conversation. live: still running elsewhere, so the page
   // mirrors it by asking again with the version it has.
-  function listedHistory(sessionId, state, since) {
+  function listedHistory(sessionId, state, since, cursor) {
     const src = sourceOf(sessionId, state);
     if (!src) return reply(404, { error: 'unknown-session' });
-    const rich = itemsOf(src, since);
+    const rich = itemsOf(src, since, undefined, cursor);
     if (rich.same) return reply(200, rich);
-    const messages = src.file ? readFullTranscript(src.file) : [];
     return reply(200, {
-      sessionId, title: src.row.title ?? '', mode: 'settings', settings: settingsMode(src.project.root, dir), messages, ...rich, chatKey: null, readOnly: true,
+      sessionId, title: src.row.title ?? '', mode: 'settings', settings: settingsMode(src.project.root, dir), ...rich, chatKey: null, readOnly: true,
       run: { kind: 'settings' }, mine: settingsRun(src.project.root, dir), reinforce: reinforceState(), costUSD: Number(src.row.costUSD) || 0,
       live: Boolean(src.row.live),
     });

@@ -10,12 +10,17 @@ export function loadPrices(overrides = {}) {
 }
 
 // "claude-opus-5-5-20261001" matches key "claude-opus-5-5"; the longest key wins over "claude-opus-5".
-export function priceFor(model, prices) {
+export function priceKeyFor(model, prices) {
   let best = null;
   for (const key of Object.keys(prices)) {
     if ((model === key || model.startsWith(`${key}-`)) && (best === null || key.length > best.length)) best = key;
   }
-  return best === null ? null : prices[best];
+  return best;
+}
+
+export function priceFor(model, prices) {
+  const key = priceKeyFor(model, prices);
+  return key === null ? null : prices[key];
 }
 
 export function costOf(rows, prices) {

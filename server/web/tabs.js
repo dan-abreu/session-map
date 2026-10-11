@@ -1,7 +1,9 @@
 import { api } from './api.js';
 import { boardItems } from './tree.js';
+import { createHandBoard } from './handboard.js';
 import { createTranscript, dayName, timeOf, withDays } from './transcript.js';
-import { costRows, estimateTone, budgetTone, aiSpend } from './views.js';
+import { costRows, estimateTone, budgetTone, aiSpend, savingsReport } from './views.js';
+import { modelName } from './live.js';
 import { costInRange } from './range.js';
 import { signalCard } from './blocks.js';
 import { costSignal } from './signals.js';
@@ -20,6 +22,12 @@ export function createTabs(ctx) {
   const pick = { board: null, historyProject: '', historyQuery: '', reading: null };
   let historyTimer = 0;
   let historyRun = 0;
+  let boardRoot = null;
+  // The cards the owner makes by hand (mm14); a change to them draws the Board again where it is.
+  const hand = createHandBoard({
+    h, t, toast: (m) => ctx.toast(m), errorText: (c) => ctx.errorText(c), confirm: (text, label, opts) => ctx.confirm(text, label, opts),
+    project: () => ctx.project(), redraw: () => { if (boardRoot) renderBoard(boardRoot, false); },
+  });
 
   const partName = (p, id) => p.arch.parts.find((x) => x.id === id)?.name ?? '';
   const empty = (art, title, text, compact = false) => emptyState({ h, icon: ctx.icon }, { art, title, text, compact });
@@ -38,13 +46,15 @@ export function createTabs(ctx) {
         item.code ? h('code', { class: 'code-chip' }, item.code) : null)));
   }
 
-  function renderBoard(root) {
+  // reload: ask the server for the hand-made cards too (the filter and the form redraw without asking).
+  function renderBoard(root, reload = true) {
+    boardRoot = root;
     const tt = t();
     const state = ctx.state();
     const chosen = pick.board ?? ctx.project().id;
     const projects = chosen === '*' ? state.projects : state.projects.filter((p) => p.id === chosen);
     const filter = h('label', { class: 'dv-field' }, h('span', {}, tt('board.filter')),
-      h('select', { name: 'board-project', onchange: (e) => { pick.board = e.target.value; renderBoard(root); } },
+      h('select', { name: 'board-project', onchange: (e) => { pick.board = e.target.value; renderBoard(root, false); } },
         h('option', { value: '*' }, tt('board.all')),
         state.projects.map((p) => h('option', { value: p.id, selected: p.id === chosen }, p.name))));
     const columns = { todo: [], doing: [], done: [] };
@@ -55,16 +65,19 @@ export function createTabs(ctx) {
       for (const k of Object.keys(columns)) columns[k].push(...cols[k].map((entry) => ({ p, entry, origin: origin.get(entry.item.code) ?? null })));
     }
     const noMap = projects.filter((p) => !p.arch.parts.length);
-    const column = (k) => h('section', { class: `col col-${k}`, 'aria-labelledby': `col-${k}` },
-      h('h3', { id: `col-${k}` }, tt(`board.${k}`), h('span', { class: 'col-count num' }, String(columns[k].length))),
-      columns[k].length
-        ? h('ul', { class: 'cards' }, columns[k].map(({ p, entry, origin }) => itemCard(p, entry, origin)))
+    const column = (k) => h('section', { class: `col col-${k}`, 'aria-labelledby': `col-${k}`, ...hand.columnDrop(k) },
+      h('h3', { id: `col-${k}` }, tt(`board.${k}`), h('span', { class: 'col-count num' }, String(columns[k].length + hand.count(projects, k)))),
+      columns[k].length || hand.count(projects, k)
+        ? h('ul', { class: 'cards' }, hand.columnCards(projects, k), columns[k].map(({ p, entry, origin }) => itemCard(p, entry, origin)))
         : empty({ todo: 'check', doing: 'clock', done: 'check' }[k], tt(`board.${k}.empty`), null, true));
     root.replaceChildren(h('div', { class: 'view-wrap wide' },
       h('div', { class: 'view-head' }, h('h2', { 'data-help': 'board' }, tt('board.title')), filter),
       h('p', { class: 'view-lede' }, tt('board.lede')),
+      h('p', { class: 'view-lede' }, tt('hand.lede')),
+      hand.toolbar(chosen, projects),
       noMap.length ? h('p', { class: 'view-note' }, tt('board.noMap', { names: noMap.map((p) => p.name).join(', ') })) : null,
       h('div', { class: 'board' }, ['todo', 'doing', 'done'].map(column))));
+    if (reload) hand.load().then((changed) => { if (changed && boardRoot === root) renderBoard(root, false); });
   }
 
   function estimateBar(cost, estimate, tone) {
@@ -218,6 +231,7 @@ export function createTabs(ctx) {
           h('span', { class: 'br-name' }, p.name),
           h('span', { class: 'br-value num' }, fmt.money(spent(p))),
           h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((spent(p) / maxProject) * 100).toFixed(1)}%` })))))),
+      savingsSection(),
       h('section', { class: 'tree-block', id: 'aiCosts' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList, providerList(tt)),
       estimates.length ? h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.estimates')),
         h('ul', { class: 'plain rows' }, estimates.map(({ p, w }) => h('li', {},
@@ -230,6 +244,35 @@ export function createTabs(ctx) {
             h('span', { class: 'lr-date num strong' }, fmt.money(chat.costUSD)),
             h('span', { class: 'lr-line' }, [project.name, partName(project, chat.partId), fmt.relative(chat.updatedAt)].filter(Boolean).join(' · '))))))
           : empty('chat', tt('costs.none'), tt('costs.noneText')))));
+  }
+
+  // The savings report (sb05): what each model cost, what each line of work cost, and the conversations where a simple rule
+  // sees a saving. The rules run on the server; the page only words them, in the configured currency.
+  function savingsSection() {
+    const tt = t();
+    const r = savingsReport(ctx.state(), ctx.range());
+    const maxModel = Math.max(1e-9, ...r.byModel.map((x) => x.usd));
+    const tipWords = (tip, chat) => (tip.kind === 'newChat'
+      ? tt('costs.tip.newChat', { replies: chat.advice.replies })
+      : tt('costs.tip.smallerModel', { from: modelName(tip.from), to: modelName(tip.to) }));
+    return h('section', { class: 'tree-block', id: 'savings' }, h('h3', {}, tt('costs.savings')), h('p', { class: 'view-note' }, tt('costs.savingsLede')),
+      r.tips.length ? h('p', { class: 'strong num' }, tt('costs.savingsTotal', { amount: fmt.money(r.totalSavingUSD) })) : null,
+      r.tips.length ? h('ol', { class: 'plain rows costs-list' }, r.tips.slice(0, 12).map(({ project, chat, tip }) => h('li', { class: 'tip-row' },
+        h('button', { type: 'button', class: 'link-row', onclick: () => ctx.go(project.id, { type: 'chat', id: chat.sessionId }) },
+          h('span', { class: 'lr-title' }, chat.title),
+          h('span', { class: 'lr-date num strong' }, tt('costs.tipSave', { amount: fmt.money(tip.savingUSD) })),
+          h('span', { class: 'lr-line' }, [tipWords(tip, chat), project.name, tt('costs.tipCost', { amount: fmt.money(chat.costUSD) })].join(' · '))))))
+        : h('p', { class: 'view-note' }, tt('costs.savingsNone')),
+      r.byModel.length ? h('div', {}, h('h4', {}, tt('costs.byModel')),
+        h('ul', { class: 'plain rows bars' }, r.byModel.map((x) => h('li', { class: 'bar-row model-row' },
+          h('span', { class: 'br-name' }, modelName(x.model)),
+          h('span', { class: 'br-value num' }, fmt.money(x.usd)),
+          h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((x.usd / maxModel) * 100).toFixed(1)}%` })))))) : null,
+      r.tasks.length ? h('div', {}, h('h4', {}, tt('costs.byTask')), h('p', { class: 'view-note' }, tt('costs.byTaskNote')),
+        h('ul', { class: 'plain rows bars' }, r.tasks.slice(0, 8).map(({ project, workCell, costUSD }) => h('li', { class: 'bar-row task-row' },
+          h('span', { class: 'br-name' }, workCell.branch),
+          h('span', { class: 'br-value num' }, fmt.money(costUSD)),
+          h('span', { class: 'br-sub' }, project.name))))) : null);
   }
 
   // One row per AI that did the map's own work today (or14): Claude and every other AI that is on. The numbers are
@@ -336,7 +379,7 @@ export function createTabs(ctx) {
     },
     // Polling refreshes the open view, except History, which keeps the person's place.
     refresh(name, root) {
-      if (root.contains(document.activeElement)) return;
+      if (root.contains(document.activeElement) || hand.dragging()) return;
       const { name: n, sub } = convsName(name);
       if (n !== 'convs') { renderers[n]?.(root); return; }
       const shell = shells.get(root);

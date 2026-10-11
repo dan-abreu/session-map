@@ -81,6 +81,23 @@ test('linkLabelKey: the words of an arrow come from the target when it says what
   assert.equal(linkLabelKey({ id: 'svc:git', kind: 'service', name: 'Readers' }, p('beta', 'Beta')), null, 'actors and services keep the catalog words');
 });
 
+test('linkLabelKey: one part handing on to several others says what each one gets, so the arrows can be told apart', () => {
+  const p = (id, name) => ({ id: `part:${id}`, kind: 'part', partId: id, name });
+  const sb = p('state-builder', 'State builder');
+  const fd = p('foundation', 'Foundation');
+  const bi = p('bootstrap-and-inspection', 'Bootstrap and inspection');
+  const targets = [p('flow', 'Flow'), p('watcher-and-alerts', 'Watcher and alerts'), p('orchestration', 'Orchestration'), p('architecture-map', 'Architecture map'), p('page-chat', 'Page chat'), bi];
+  for (const from of [sb, fd, bi]) {
+    const keys = targets.filter((t) => t !== from).map((t) => linkLabelKey(from, t));
+    assert.ok(keys.every(Boolean), from.name);
+    const pairs = keys.filter((k) => k.startsWith('flow.l1.lbl.pair.'));
+    assert.equal(new Set(pairs).size, pairs.length, `${from.name}: no two targets share pair words`);
+    assert.ok(pairs.length >= 3, `${from.name}: at least three targets get their own words`);
+  }
+  assert.equal(linkLabelKey(sb, p('server', 'Server')), 'flow.l1.lbl.role.state', 'a pair with no words of its own keeps the source words');
+  assert.equal(linkLabelKey(p('server', 'Server'), p('mind-map-page', 'Mind map page')), 'flow.l1.lbl.role.toPage');
+});
+
 test('every role and arrow word of the table exists in English and in Portuguese', () => {
   const keys = [...new Set(LINK_RULES.map((r) => r.key))];
   assert.ok(keys.length >= 15);

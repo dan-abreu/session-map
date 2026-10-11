@@ -7,12 +7,14 @@ import { fileTree } from './code.js';
 import { ancestorsOf, nodeById } from './tree.js';
 import { agentTone } from './workflows.js';
 
-const LIST_TTL_MS = 30_000; // like files.js: the server recounts at most this often anyway
+const LIST_TTL_MS = 5_000; // a file made a moment ago shows up in the list within seconds (id77); the server keeps its own count for 30 s
 const MARKS_TTL_MS = 8_000; // what changed in the folder: a new file appears within seconds
 const MORE_AT = 40; // boxes in one folder before the rest folds into one "+N more" box
 const PICK_OPEN_MAX = 40; // a part picked with more files than this lights the way to them without opening it (mm40)
 const HOVER_LEAVE_MS = 150; // a pointer passing from box to box keeps the light instead of flashing it off and on
 export const PREF_KEY = 'sm.filesSide';
+
+const LEFT_OUT = new Set(['dep', 'generated', 'binary', 'secret']); // the reasons census.excluded.* explains
 
 // The server never lists a secrets file (files.mjs isSecretsFile): .env and .env.local, but not .env.example.
 const SECRETS_RE = /^\.env(\..+)?$/i;
@@ -69,11 +71,13 @@ export function withStatus(files, rows) {
   return out;
 }
 
+// The census of a file (id77) rides on its row: census {code, comment, blank} or null (not counted yet, never zero),
+// excluded (why the count leaves it out) or null, new (git sees it and no count has read it: marked like a new file).
 // loose: a file the count read and no part of the map holds (owners: [], one of mm25's files with no box), drawn apart
 // (mm42); a file too new for the count has no owners at all and is not one of them.
 const fileNode = (f) => ({
-  id: `rf:${f.path}`, kind: 'file', side: 'left', label: f.name, path: f.path, lines: f.lines, status: f.status ?? null,
-  loose: Array.isArray(f.owners) && !f.owners.length, children: [],
+  id: `rf:${f.path}`, kind: 'file', side: 'left', label: f.name, path: f.path, lines: f.lines, status: f.status ?? (f.new ? 'A' : null),
+  census: f.census ?? null, excluded: f.excluded ?? null, loose: Array.isArray(f.owners) && !f.owners.length, children: [],
 });
 
 // A big folder shows MORE_AT boxes, folders first, then the files marked new, changed or removed, then the rest, each kept in
@@ -86,6 +90,15 @@ function capped(path, children, expanded) {
   return [...children.filter((c) => shown.has(c)), { id: `rm:${path}`, kind: 'more', side: 'left', label: `+${more}`, path, more, children: [] }];
 }
 
+const addCensus = (a, b) => (a && b ? { code: a.code + b.code, comment: a.comment + b.comment, blank: a.blank + b.blank } : a ?? b);
+
+// The counts of a census as one line in the words of the census table; empty when the file has none.
+export function censusLine(census, tt) {
+  if (!census) return '';
+  return [['census.col.code', census.code], ['census.col.comment', census.comment], ['census.col.blank', census.blank]]
+    .map(([key, n]) => `${tt(key)}: ${n}`).join(' · ');
+}
+
 // A folder counts the files in it, not the removed ones; its chip counts every mark, removed included; loose, the files in
 // it with no box.
 function folderNode(dir, expanded) {
@@ -93,8 +106,14 @@ function folderNode(dir, expanded) {
   const sum = (key, own) => all.reduce((n, c) => n + (c.kind === 'folder' ? c[key] : own(c) ? 1 : 0), 0);
   const count = sum('count', (c) => c.status !== 'D');
   const changed = sum('changed', (c) => c.status);
-  return { id: `rd:${dir.path}`, kind: 'folder', side: 'left', label: dir.name, path: dir.path, count, changed, loose: sum('loose', (c) => c.loose), children: capped(dir.path, all, expanded) };
+  const census = all.reduce((acc, c) => addCensus(acc, c.census), null);
+  // Grey only when everything in it is left out; a folder with nothing in it is not.
+  const excluded = all.length > 0 && all.every((c) => (c.kind === 'folder' ? c.excluded : Boolean(c.excluded)));
+  return { id: `rd:${dir.path}`, kind: 'folder', side: 'left', label: dir.name, path: dir.path, count, changed, census, excluded, loose: sum('loose', (c) => c.loose), children: capped(dir.path, all, expanded) };
 }
+
+// What makes a list worth drawing again: the Files list's rows, the census fields included.
+export const listSig = (list) => JSON.stringify(list.map((x) => [x.path, x.lines, x.kind, x.added, x.removed, x.owners?.join(','), x.census?.code, x.census?.comment, x.census?.blank, x.excluded, x.new]));
 
 // The boxes hung on the left of the root: the project's first level, folders first, like the Files tab.
 export function repoNodes(files, { expanded = new Set() } = {}) {
@@ -238,7 +257,6 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
     return map.get(id);
   };
   const openOf = (id) => setOf(opened, id);
-  const sigOf = (list) => JSON.stringify(list.map((x) => [x.path, x.lines, x.kind, x.added, x.removed, x.owners?.join(',')]));
 
   function buildNodes(p, e) {
     e.nodes = repoNodes(e.marked, { expanded: setOf(expanded, p.id) });
@@ -263,12 +281,12 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
     e.busy = false;
     let changed = false;
     if (list?.ok) {
-      changed = !e.list || sigOf(list.files) !== sigOf(e.list);
+      changed = !e.list || listSig(list.files) !== listSig(e.list);
       e.list = list.files;
     }
     if (marks?.ok) {
       const rows = marks.rows.filter((r) => r.state === 'pending' && r.inFolder);
-      changed ||= sigOf(rows) !== sigOf(e.rows);
+      changed ||= listSig(rows) !== listSig(e.rows);
       e.rows = rows;
     }
     if (!changed || !e.list) return;
@@ -385,10 +403,12 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
     if (node.kind === 'more') return [h('span', { class: 'bx-title rs-more' }, tt.count('map.moreFiles', node.more)), live].filter(Boolean);
     const names = namesOf(node);
     const placed = names ? tt('map.fileIn', { parts: names }) : null;
+    const counts = censusLine(node.census, tt);
+    const why = LEFT_OUT.has(node.excluded) ? tt(`census.excluded.${node.excluded}`) : null;
     if (node.kind === 'folder') {
       const loose = node.loose ? tt.count('map.folderLoose', node.loose) : null;
       return [
-        h('span', { class: 'bx-title rs-name', title: placed ?? '' }, node.label),
+        h('span', { class: 'bx-title rs-name', title: [placed, counts].filter(Boolean).join('\n') }, node.label),
         h('span', { class: 'bx-meta' }, h('span', { class: 'num' }, tt.count('size.files', node.count)),
           loose ? h('span', { class: 'rs-loose-dot', title: loose }, h('span', { class: 'visually-hidden' }, loose)) : null,
           node.changed ? h('span', { class: 'bx-chip rs-changed', title: tt('map.folderChangedTitle') }, tt.count('map.folderChanged', node.changed)) : null),
@@ -399,11 +419,11 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
     const status = node.status
       ? [h('span', { class: `rs-status st-${node.status}`, 'aria-hidden': 'true' }, node.status), h('span', { class: 'visually-hidden' }, `${tt(`wc.status.${node.status}`)}: `)]
       : [];
-    const notes = [node.loose ? tt('map.fileLoose') : null, placed].filter(Boolean);
+    const notes = [node.loose ? tt('map.fileLoose') : null, placed, why, counts].filter(Boolean);
     const title = [node.status === 'D' ? tt('map.fileGone') : tt('map.fileRead', { path: node.path }), ...notes].join('\n');
     return [
       h('span', { class: 'bx-title rs-name', title }, ...status, node.label),
-      node.lines !== undefined ? h('span', { class: 'bx-meta num' }, tt.count('files.lines', node.lines)) : null,
+      node.lines != null ? h('span', { class: 'bx-meta num' }, tt.count('files.lines', node.lines)) : null,
       notes.length ? h('span', { class: 'visually-hidden' }, notes.join('. ')) : null,
       live,
     ].filter(Boolean);
@@ -412,8 +432,8 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
   const ctx = {
     content,
     onHover: hover,
-    classes: (node) => ({ 'is-loose': node.kind === 'file' && node.loose }),
-    signature: (node) => JSON.stringify([lang(), node.label, node.count, node.changed, node.lines, node.status, node.more, node.loose, isLive(node), namesOf(node)]),
+    classes: (node) => ({ 'is-loose': node.kind === 'file' && node.loose, 'is-excluded': Boolean(node.excluded) }),
+    signature: (node) => JSON.stringify([lang(), node.label, node.count, node.changed, node.lines, node.status, node.more, node.loose, node.excluded, node.census, isLive(node), namesOf(node)]),
     toggleLabel: (node, isOpen) => t()(isOpen ? 'map.collapse' : 'map.expand', { name: node.label }),
     onToggle: toggle,
     // A folder opens like its toggle; a file opens in the Files tab's viewer, read only.

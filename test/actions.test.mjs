@@ -254,3 +254,22 @@ test('dismiss-cut remembers the last activity the conversation had, the same way
     assert.equal((await runAction({ action: 'dismiss-cut', sessionId: UNKNOWN }, f.deps)).status, 404);
   } finally { f.cleanup(); }
 });
+
+test('delete of a conversation the hub keeps idle closes that process first, then removes it; one whose turn runs is refused', async () => {
+  const f = fixture();
+  try {
+    const file = join(f.smDir, 'removed.json');
+    const closed = [];
+    const closeIdle = async (id) => { closed.push([id, statSync(file, { throwIfNoEntry: false }) === undefined]); return true; };
+    const idle = await runAction({ action: 'delete', sessionId: TERM_LIVE }, { ...f.deps, driving: new Set([TERM_LIVE]), closeIdle });
+    assert.equal(idle.status, 200);
+    assert.deepEqual(closed, [[TERM_LIVE, true]], 'closed before removed.json was written');
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), [TERM_LIVE]);
+    // The hub knows its own chat better than a state collected while the turn still ran.
+    assert.equal((await runAction({ action: 'delete', sessionId: TERM_BUSY }, { ...f.deps, driving: new Set([TERM_BUSY]), closeIdle })).status, 200);
+
+    const running = await runAction({ action: 'delete', sessionId: TERM_CLOSED }, { ...f.deps, driving: new Set([TERM_CLOSED]), closeIdle: async () => false });
+    assert.deepEqual([running.status, running.body.error], [409, 'busy']);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), [TERM_LIVE, TERM_BUSY]);
+  } finally { f.cleanup(); }
+});

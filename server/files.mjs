@@ -1,7 +1,7 @@
-import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { runGit } from './sources/gitqueue.mjs';
 
 export const FILE_MAX = 1024 * 1024;
 const LIST_MAX = 2000;
@@ -54,12 +54,10 @@ export function safeResolve(root, rel) {
   return inside(realpathSync(root), real) ? real : null;
 }
 
-function run(cwd, args, { buffer = false, maxBuffer = 16 * 1024 * 1024 } = {}) {
-  return new Promise((resolveRun) => {
-    execFile('git', ['--literal-pathspecs', ...args], { cwd, timeout: TIMEOUT_MS, maxBuffer, windowsHide: true, encoding: buffer ? 'buffer' : 'utf8' }, (err, stdout) => {
-      resolveRun({ out: err ? null : stdout, tooBig: err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' });
-    });
-  });
+// quiet: a file too big to show is an answer here, not a slow git.
+async function run(cwd, args, { buffer = false, maxBuffer = 16 * 1024 * 1024 } = {}) {
+  const { err, stdout } = await runGit(cwd, ['--literal-pathspecs', ...args], { timeout: TIMEOUT_MS, maxBuffer, encoding: buffer ? 'buffer' : 'utf8', quiet: true });
+  return { out: err ? null : stdout, tooBig: err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' };
 }
 
 export async function mergeBaseOf(root, base, ref) {

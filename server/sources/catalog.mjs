@@ -13,6 +13,12 @@ const TOPICS = ['claude-code-plugin', 'claude-code-skills', 'claude-skills', 'ag
 const MARKETPLACE_FILE = '.claude-plugin/marketplace.json';
 const REPO_RE = /^\w[\w.-]*\/[\w.-]+$/;
 const NAME_RE = /^\w[\w.-]*$/;
+// A topic search returns 50 a page; the next pages are read up to this cap (GitHub itself stops a search at 1000), one at a time
+// with a pause, and only while the request budget has room.
+const PAGE_SIZE = 50;
+export const MAX_TOPIC_PAGES = 4;
+const PAGE_PAUSE_MS = 1500;
+const BUDGET_FLOOR = 2;
 const MAX_EXTRA_REPOS = 40;
 const MAX_KNOWN_REPOS = 20;
 const MAX_FILE_LOOKUPS = 60;
@@ -106,7 +112,7 @@ function githubClient({ token, fetchFn }) {
     'user-agent': 'session-map',
     ...(token ? { authorization: `Bearer ${token}` } : {}),
   };
-  const state = { failures: 0, networkFailures: 0, unauthorized: false };
+  const state = { failures: 0, networkFailures: 0, unauthorized: false, remaining: null };
   async function get(path) {
     let res;
     try {
@@ -117,6 +123,8 @@ function githubClient({ token, fetchFn }) {
       return null;
     }
     const body = await res.json().catch(() => null);
+    const left = Number.parseInt(res.headers?.get?.('x-ratelimit-remaining'), 10);
+    if (!Number.isNaN(left)) state.remaining = left;
     if (isRateLimit(res, body)) throw new LimitReached();
     if (res.ok) return body;
     if (res.status !== 404) {
@@ -128,7 +136,7 @@ function githubClient({ token, fetchFn }) {
   return { get, state };
 }
 
-async function gather({ token, fetchFn, dir }) {
+async function gather({ token, fetchFn, dir, sleep, deep }) {
   const api = githubClient({ token, fetchFn });
   const repos = new Map();
   const add = (raw, markets = false) => {
@@ -138,6 +146,8 @@ async function gather({ token, fetchFn, dir }) {
     if (markets) entry.files.add(MARKETPLACE_FILE);
     repos.set(key, entry);
   };
+  // Set when the extra pages were cut short (limit or budget): the list is shallower than it could be.
+  let partial = false;
   const addByName = async (full, markets) => {
     if (!REPO_RE.test(full)) return;
     const known = repos.get(full.toLowerCase());
@@ -150,9 +160,30 @@ async function gather({ token, fetchFn, dir }) {
   };
 
   try {
+    const search = (topic, page) => api.get(`/search/repositories?q=${encodeURIComponent(`topic:${topic}`)}&sort=stars&per_page=${PAGE_SIZE}&page=${page}`);
+    const more = (found, page) => (found?.items?.length ?? 0) >= PAGE_SIZE && (found.total_count === undefined || found.total_count > page * PAGE_SIZE);
+    const open = [];
     for (const topic of TOPICS) {
-      const found = await api.get(`/search/repositories?q=${encodeURIComponent(`topic:${topic}`)}&sort=stars&per_page=50`);
+      const found = await search(topic, 1);
       for (const raw of found?.items ?? []) add(raw);
+      if (more(found, 1)) open.push(topic);
+    }
+    // The pages past the first go after every topic has its first page, a round at a time, and only for the background read
+    // (deep): the tab never waits for the pauses. Running out of budget here makes the catalog shallower, flagged partial.
+    try {
+      for (let page = 2; deep && page <= MAX_TOPIC_PAGES; page++) {
+        for (const topic of open.splice(0)) {
+          if (api.state.remaining !== null && api.state.remaining <= BUDGET_FLOOR) { partial = true; break; }
+          await sleep(PAGE_PAUSE_MS);
+          const found = await search(topic, page);
+          for (const raw of found?.items ?? []) add(raw);
+          if (more(found, page)) open.push(topic);
+        }
+        if (!open.length) break;
+      }
+    } catch (err) {
+      if (!(err instanceof LimitReached)) throw err;
+      partial = true;
     }
     if (token) {
       const found = await api.get(`/search/code?q=${encodeURIComponent('filename:marketplace.json path:.claude-plugin')}&per_page=50`);
@@ -176,21 +207,25 @@ async function gather({ token, fetchFn, dir }) {
     if (!(err instanceof LimitReached)) throw err;
     return { repos, limited: true, ...api.state };
   }
-  return { repos, limited: false, ...api.state };
+  return { repos, limited: false, partial, ...api.state };
 }
 
 // token: undefined looks it up (GITHUB_TOKEN, then `gh auth token`); null stays anonymous (topic searches only).
-export async function fetchCatalog({ token, exec = execCapture, fetchFn = fetch, smDir, dir, now = Date.now(), force = false }) {
+// deep: also read the pages past the first (slow, with pauses): only the background refresh asks for it, never the tab. A
+// load that is not deep saves `shallow: true`, and the next deep load does not count that cache as fresh.
+const mergeItems = (older, newer) => [...new Map([...older, ...newer].map((i) => [i.repo.toLowerCase(), i])).values()];
+
+export async function fetchCatalog({ token, exec = execCapture, fetchFn = fetch, smDir, dir, now = Date.now(), force = false, deep = true, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   const cache = readCatalogCache(smDir);
-  if (cache && !force && now - Date.parse(cache.fetchedAt) < CACHE_TTL_MS) {
+  if (cache && !force && now - Date.parse(cache.fetchedAt) < CACHE_TTL_MS && !(deep && cache.shallow === true)) {
     return { items: cache.items, fetchedAt: cache.fetchedAt, stale: false, limited: false };
   }
   const resolved = token === undefined ? await resolveToken({ exec }) : token;
-  let result = await gather({ token: resolved, fetchFn, dir });
+  let result = await gather({ token: resolved, fetchFn, dir, sleep, deep });
   // A rejected token (expired, revoked) would fail every Refresh the same way: fall back to the anonymous topic searches.
-  if (resolved && result.unauthorized) result = await gather({ token: null, fetchFn, dir });
-  const { repos, limited, failures, networkFailures } = result;
-  const items = [...repos.values()].map((e) => toItem(e.raw, [...e.files]));
+  if (resolved && result.unauthorized) result = await gather({ token: null, fetchFn, dir, sleep, deep });
+  const { repos, limited, partial, failures, networkFailures } = result;
+  let items = [...repos.values()].map((e) => toItem(e.raw, [...e.files]));
   if (limited) {
     log('warn', 'catalog-rate-limited', { cached: Boolean(cache) });
     return cache
@@ -203,8 +238,17 @@ export async function fetchCatalog({ token, exec = execCapture, fetchFn = fetch,
       ? { items: cache.items, fetchedAt: cache.fetchedAt, stale: true, limited: false, error }
       : { items, fetchedAt: null, stale: true, limited: false, error };
   }
+  // The extra pages were cut short and a cache exists: it never gets smaller. Keep it with what was just read added, with its
+  // own old date, and say stale so the background waits before trying again.
+  if (partial && cache) {
+    items = mergeItems(cache.items, items);
+    writeAtomic(join(smDir, 'catalog.json'), `${JSON.stringify({ fetchedAt: cache.fetchedAt, items, ...(cache.shallow ? { shallow: true } : {}) })}\n`);
+    return { items, fetchedAt: cache.fetchedAt, stale: true, limited: false };
+  }
+  // A shallow read is shorter than a deep cache that may exist: keep what that one held.
+  if (!deep && cache) items = mergeItems(cache.items, items);
   const fetchedAt = new Date(now).toISOString();
-  writeAtomic(join(smDir, 'catalog.json'), `${JSON.stringify({ fetchedAt, items })}\n`);
+  writeAtomic(join(smDir, 'catalog.json'), `${JSON.stringify({ fetchedAt, items, ...(deep ? {} : { shallow: true }) })}\n`);
   return { items, fetchedAt, stale: false, limited: false };
 }
 

@@ -24,6 +24,10 @@ export const pointTabs = (has) => POINT_TABS.filter((tab) => tab === 'summary' |
 // The root box holds the whole project: its own chats are always there, since that tab starts a new one.
 export const projectTabs = (has) => ['summary', 'chats', 'changes', 'files'].filter((tab) => tab === 'summary' || tab === 'chats' || has[tab]);
 
+// Opened with the "look only" link (server.md sv11): the Files tab lists the project's files, which the server refuses
+// to that link, so it is left out.
+export const lookTabs = (tabs) => tabs.filter((tab) => tab !== 'files');
+
 // The tab a box opens on: its information (the Summary), unless another tab is asked for by name.
 export const openingTab = (tab) => (POINT_TABS.includes(tab) ? tab : 'summary');
 

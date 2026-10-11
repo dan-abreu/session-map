@@ -39,11 +39,18 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - A dashed border on each file the root counts as "with no box on the map", so it is clear which ones are missing (`id80`).
   - How to confirm it is done: the number of dashed files equals the root's "N files with no box on the map".
 
+### Speed
+
+- [ ] **in progress:** A new state redraws only the parts of the screen that changed, never the whole page `mm44`
+  - Today every poll redraws the map, the conversations, Live and the open area, even when nothing changed. From `id84`.
+
 ### Views
 
 - [x] **Claude:** Mind map and an outline for phones `mm01`
 - [x] **Claude:** Board as columns of items `mm02`
 - [ ] **detail:** Drag an item to another part `mm03`
+- [x] Review the four design warnings in the page shell: three thick one-sided coloured borders ("side-tab") and a pulsing dot `mm45`
+  - Keep the pulse only where it marks something really live (a conversation working now); soften or remove the side borders. From `id87`.
 - [x] A card at the top of Home: "How much may the AI spend per month on big work", with the value, Save and what was used this month `mm46`
   - From `id89`. The same limit (`budget.reinforcedMonthlyUSD`) the run menu by Send already sets, now in plain sight; a bar shows used against the limit, and with no limit it says the Autonomous way will stop to ask before each big job.
 
@@ -88,7 +95,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Bank-statement-style date range `mm06`
   - Buttons Today, 7, 15, 30, 60, 90 days, This month, Last month, Custom. Custom has From and To fields and a two-month calendar (click the start, click the end, the range is painted), Apply and Clear; on phones a one-month calendar in a bottom sheet.
   - The range shows on the button ("3–9 Oct"), is remembered per project and applies to "What changed", History, Costs and Activity.
-- [ ] **important:** The AI's plain-words reason for a relation `mm32`
+- [x] **important:** The AI's plain-words reason for a relation `mm32`
   - What is left of `mm05`: the relation panel shows every reason with its evidence (chats, files, branch, last commit, plan), but not a sentence from the AI saying why the two parts are tied.
   - One cheap AI call per relation, cached in the session-map storage and redone only when its reasons change.
 - [x] **Claude:** Panels separated by kind of information `mm07`
@@ -135,20 +142,25 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 ### Later (ideas, not committed)
 
 - [ ] **detail:** Edit files and folders inside the page (create, rename, delete, save) `mm12`
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [ ] **detail:** A terminal inside the page `mm13`
   - Needs a native module, which breaks the no-npm rule; decide before starting.
-- [ ] **detail:** Create and drag cards by hand in the Board `mm14`
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
+- [x] **detail:** Create and drag cards by hand in the Board `mm14`
 - [ ] **detail:** Zoom inside a part: its files as dots tied to the chats and commits that touched them `mm15`
   - "This chat touched these 3 files".
-- [ ] **detail:** More mind map exports: Markdown outline, XMind, FreeMind `mm16`
+- [x] **detail:** More mind map exports: Markdown outline, XMind, FreeMind `mm16`
   - draw.io, PlantUML and Graphviz are covered by the Flow part (`fl13`, `fl14`).
 - [ ] **detail:** Discover: recommended for this project, trust badge, hand-picked lists `mm17`
   - The AI reads the project's architecture and stack and explains what fits; open a repository and list its skills translated; trust badge from last update, license, issues and an optional audit.
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [ ] **detail:** Discover for every AI, not only Claude `mm18`
   - A "Works with" filter (Claude, Codex, Gemini, Cursor, any = MCP); new sources: the official MCP server registry, Gemini CLI extensions, Codex, Cursor rules and SKILL.md skills (check who accepts them).
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [ ] **detail:** "Which AI for each task" section (video, image, voice, bulk text, code) `mm19`
   - What each is good for, price and API. It is the base of the Arsenal idea (`or11`).
-- [ ] **detail:** Discover updates itself in the background and pages past 50 results per topic `mm20`
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
+- [x] **detail:** Discover updates itself in the background and pages past 50 results per topic `mm20`
   - Today it refreshes only when the tab opens after 24 hours or on the Update button.
 
 ### Where the work really is
@@ -191,7 +203,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Workflows you can trace: from the request to every agent and the places it touches `mm31`
   - Tree request → workflow → agents → live footprint; one colour per workflow and a dot per active agent on its box, several projects at once; trace both ways between a request and its files, commits and release.
   - Released in v0.2.3: `server/sources/claude.mjs` keeps the owner's message right before each Workflow launch (its words, time and the item codes it names, also far back in a long conversation) and reads every agent of a run with its state (working, finished, failed), phase, model, last step and the files and commits it made; the phases still to come come from the running script. `server/workflows.mjs` places each agent on the project and part of its file (any repository), finds the map item the request names and the version that carries each commit. The page (`server/web/workflows.js`) draws the tree: what you asked → the team with its phase and n/total → each helper with its state in a word, model and place → where the team worked; Live shows it for every team at work (also when its conversation finished its turn) with a link to the whole trace in the conversation's panel (files, saved changes, "Released in v1.2.0"). Each team has its own colour, kept apart from the other teams on the page and away from amber and red; every box where a helper works carries a dot per helper and "N helpers", from teams of any project. A change made by a helper names its team in Changes, and its before and after shows the request that led to it. What is left moved to `mm37`.
-- [ ] **important:** The rest of the traceable workflows `mm37`
+- [x] **important:** The rest of the traceable workflows `mm37`
   - What is left of `mm31`: a page chat opened on a map point does not yet name that point as the request's item when the owner's words carry no item code; helpers started one by one (not in a team) have no request of their own; the request is the owner's message right before the launch even when that message answers something else (seen on real data: a reply about currency shown as the request of a whole team), so also show the words the conversation gave the team; the dots show on the open project's map only, and the Now strip cards do not yet carry the team colours.
   - How to confirm it is done: a team started from a page chat on a box shows "On the map: <box>"; a single helper's change in Changes shows the request before it; a Now card shows one dot per team in its colour.
 

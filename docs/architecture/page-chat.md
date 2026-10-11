@@ -35,7 +35,7 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - An on-screen notice when a chat finishes.
 - [x] **Claude:** A server restart must not kill a running chat `pc06`
   - Either the process runs detached, or the chat resumes automatically with "the chat was interrupted by the restart, continue?".
-- [ ] **in progress:** A quiet chat with a team of helpers still working is never closed for being idle `pc12`
+- [x] A quiet chat with a team of helpers still working is never closed for being idle `pc12`
   - Today the hub ends a page chat 30 minutes after its last turn (`IDLE_MS` in `server/chat/hub.mjs`), which kills a workflow or background helpers still running inside it.
   - Before closing, look at the session's helper files (`<session>/subagents/`): anything written within the idle window postpones the close.
 - [x] **Claude:** Reopening a running chat is quick and never shows it empty or cut `pc13`
@@ -59,6 +59,19 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - From `id91`. Autonomous, Automatic and Manual (Manual shows the model and level right under it), a quiet "model · level · cost in this conversation" line and the link "Monthly limit and permissions…".
   - Configurações (`runsettings.js`) is one sheet, also in the person's menu: the monthly limit (the same value as Home's card), "may reinforce on its own", the permission mode with "use this mode in every Claude on this PC", and the advanced ways (Maestro, Ultracode, Same as my Claude).
 
+### A professional chat (step 1 of `id93`)
+
+- [ ] **in progress:** The model and the mode in plain sight by Send, in professional terms: Agente · Planejar · Perguntar, the model and its reasoning level `pc20`
+  - From `id93`. Like Cursor's and ChatGPT's selectors; the words: Modelo, Raciocínio, Contexto, Permissões, Modo agente, Modo plano.
+- [ ] **in progress:** Actions on every message: edit and resend, regenerate, copy, and code blocks with their own copy `pc21`
+  - From `id93`.
+- [ ] **in progress:** The conversation's context in sight: attached files and images as chips, @ files, and a meter of context used and cost `pc22`
+  - From `id93`.
+- [ ] **in progress:** Conversation history like the big chats: search, pin, rename and export `pc23`
+  - From `id93`.
+- [ ] **in progress:** Titles written by the AI from the conversation, rewritten when the topic moves, never over a title the person set `pc24`
+  - From `id93`.
+
 ### How it runs
 
 - [x] **Claude:** Automatic and Manual ways a page chat runs, with the model and effort shown `pc07`
@@ -79,6 +92,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Released in v0.2.4.
   - Headings inside a reply stay close to the text size (1.15, 1.08 and 1 times the text), with tight margins.
   - How to confirm it is done: open a project chat; only the title line sits above the messages; the button by Send opens its menu and Esc or a click outside closes it; a reply with headings reads like the rest of the text, a step bolder.
+- [ ] **in progress:** A chat opens at once: its newest messages first, the older ones as you scroll up `pc15`
+  - From `id84`.
 - [x] An autonomous way: one prompt and the chat works to the end, deciding on its own and listing its decisions `pc16`
   - From `id89`. It stops only to spend past the monthly limit (the owner's choice on 2026-10-10); publishing and deleting it does on its own; everything else it decides, writes down and goes on.
   - Built on 2026-10-11 (`server/chat/run.mjs`, `hub.mjs`, `safety.mjs`, `guard.mjs`): Autonomous is the default of every new chat, runs in Claude Code's own `auto` permission mode, a permission that reaches session-map is left for the owner ("Ficou para você"), AskUserQuestion is answered "decide yourself", a force push is refused in every way (relay and a PreToolUse hook), and a git snapshot under `refs/session-map/safety` is taken at each turn and before a destructive command. Reaches the page with the next version.

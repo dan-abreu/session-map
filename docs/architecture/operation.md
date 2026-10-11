@@ -25,3 +25,12 @@ Nothing here is code; the part is this file:
 
 - [x] **Claude:** Publish the Requests tab as the next version, after the owner looks at the screenshots `op05`
   - From the request `id76`.
+
+### Closing the open work
+
+- [x] **with the owner:** Say which open activities go to "later" and approve the finishing waves `op06`
+  - From the request `id88`.
+  - Decided on 2026-10-10: the reinforced way is approved; later: `mm12`, `mm13`, `sv02`, `sv05`, `bi01`–`bi10` (but `bi06`), `or09`, `or10`, `fl14`, `mm17`–`mm19`, and the request `id28`.
+- [x] **Claude:** Publish what is ready as v0.3.0, so the owner's brother can see the new version, while other work goes on `op07`
+  - From the request `id94`.
+  - Done on 2026-10-11: v0.3.0 tagged and pushed; the screens of the foundation still in progress (health, versions, care) ship unhooked, their texts on a pending list in the tests until each block merges them.

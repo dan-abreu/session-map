@@ -313,3 +313,9 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: open Requests: every request shows his words and date, its activities with their state and a bar; one with no activity yet shows in red; the other projects show their lists too.
   - Where it went: `mm38`, `op01`.
   - Status: done (released in v0.2.5, with the screenshots approved by the owner).
+- [x] Send what is ready to the repository as a new version, so his brother can see it `id94`
+  - Asked: 2026-10-11 — "quero que dê commit e push em tudo para o repositorio, versionando, tem coisa fazendo ainda mas manda o que ta pronto pro meu irmao ver a nova versão"
+  - What it means: commit the work that is finished and tested, give it a version number and push it to GitHub, without waiting for the work still running in other conversations.
+  - How to confirm it is done: on GitHub, the tag v0.3.0 and its release exist and the tests of that push are green.
+  - Where it went: `op07`.
+  - Status: done (released in v0.3.0).

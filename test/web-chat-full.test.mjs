@@ -150,7 +150,7 @@ test('a conversation still running in VS Code is mirrored: new steps appear, and
   assert.match(text(part('status')), /chat.mirrorShort/, 'the working line says it is live');
   answer = { ok: true, same: true, version: 'v1' };
   await timers[0].fn();
-  assert.ok(calls.at(-1).path.endsWith('?since=v1'), 'only what changed');
+  assert.ok(calls.at(-1).path.includes('?since=v1'), 'only what changed');
   assert.equal(timers.length, 2);
   const stepBefore = part('log').children.find((li) => li.classes.has('msg-steps'));
   answer = { ...HISTORY, readOnly: true, live: false, version: 'v2', costUSD: 0.75, items: [...ITEMS, { type: 'assistant', text: 'One more thing.', ts: '2026-10-09T09:06:00.000Z' }] };
@@ -253,4 +253,111 @@ test('an edit waiting for permission shows before and after, to accept or reject
   assert.ok(walk(card).some((e) => e.classes.has('diff-del')) && walk(card).some((e) => e.classes.has('diff-add')));
   const labels = walk(card).filter((e) => e.tag === 'button').map(text);
   assert.ok(labels.includes('chat.accept') && labels.includes('chat.reject'));
+});
+
+// pc15: the log grows by 100 px per row in this fake, inside a 300 px window.
+function measured(log) {
+  log.clientHeight = 300;
+  log.replaceChildren = (...cs) => { log.children = cs; log.scrollHeight = cs.length * 100; };
+}
+
+test('a long conversation opens on its newest page and brings older ones when scrolled to the top, keeping the place (pc15)', async () => {
+  const OLDER = [
+    { type: 'user', text: 'Start the shop', ts: '2026-10-08T09:00:00.000Z' },
+    { type: 'assistant', text: 'Shop started.', ts: '2026-10-08T09:01:00.000Z' },
+  ];
+  const { calls } = server({
+    [`GET /api/chat/history/${S1}?before=2`]: () => ({ ok: true, items: OLDER, start: 0, total: 6, version: 'v1' }),
+    [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, start: 2, total: 6 }),
+  });
+  const { chat, part } = makeChat();
+  measured(part('log'));
+  openOld(chat);
+  await settle();
+  assert.doesNotMatch(text(part('log')), /Start the shop/, 'only the newest page at first');
+  assert.equal(calls.filter((c) => c.path.includes('before=')).length, 0, 'not at the top: nothing older asked yet');
+  const before = part('log').scrollHeight;
+  part('log').scrollTop = 0;
+  part('log').fire('scroll');
+  await settle();
+  assert.ok(calls.at(-1).path.endsWith('?before=2'), 'the page that ends where the shown one starts');
+  assert.match(text(part('log')), /Start the shop/);
+  assert.match(text(part('log')), /All \*\*green\*\*|green/);
+  assert.equal(part('log').scrollTop, part('log').scrollHeight - before, 'the row the person was reading stays in place');
+  part('log').scrollTop = 0;
+  part('log').fire('scroll');
+  await settle();
+  assert.equal(calls.filter((c) => c.path.includes('before=')).length, 1, 'all of it is shown: nothing more to ask');
+});
+
+test('the mirror asks only for what follows the items it has, and keeps the rest (pc15)', async () => {
+  let answer = { ...HISTORY, readOnly: true, live: true, start: 0, total: 4 };
+  const { calls } = server({ [`GET /api/chat/history/${S1}`]: () => answer });
+  const { chat, part, timers } = makeChat();
+  openOld(chat);
+  await settle();
+  answer = { ...HISTORY, readOnly: true, live: true, version: 'v2', start: 3, total: 5, items: [ITEMS[3], { type: 'assistant', text: 'One more thing.', ts: '2026-10-09T09:06:00.000Z' }] };
+  await timers[0].fn();
+  assert.ok(calls.at(-1).path.endsWith('?since=v1&from=4'), 'only what is new after the four items it has');
+  assert.match(text(part('log')), /One more thing/);
+  assert.match(text(part('log')), /checkout/, 'the items before stay');
+  assert.equal(part('log').children.filter((li) => li.classes?.has('msg-claude')).length, 2, 'the item sent again is not shown twice');
+  answer = { ok: true, same: true, version: 'v2' };
+  await timers[1].fn();
+  assert.ok(calls.at(-1).path.endsWith('?since=v2&from=5'));
+  chat.close();
+});
+
+test('a history that comes back after the sheet closed draws nothing, asks for nothing older and starts no mirror', async () => {
+  const { calls } = server({ [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, readOnly: true, live: true, start: 2, total: 6 }) });
+  const { chat, part, timers } = makeChat();
+  openOld(chat);
+  chat.close();
+  await settle();
+  await settle();
+  assert.equal(calls.length, 1, 'a hidden log reads as scrolled to the top: it must not page through the whole conversation');
+  assert.equal(timers.length, 0, 'no mirror after the close');
+  assert.doesNotMatch(text(part('log')), /checkout/);
+});
+
+test('an older page that comes back after the sheet closed asks for no further page', async () => {
+  let release;
+  const { calls } = server({
+    [`GET /api/chat/history/${S1}?before=`]: () => ({ ok: true, items: ITEMS.slice(0, 2), start: 100, total: 300, version: 'v1' }),
+    [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, start: 200, total: 300 }),
+  });
+  const { chat, part } = makeChat();
+  measured(part('log'));
+  openOld(chat);
+  await settle();
+  const saved = globalThis.fetch;
+  globalThis.fetch = (...args) => new Promise((resolve) => { release = () => resolve(saved(...args)); });
+  part('log').scrollTop = 0;
+  part('log').fire('scroll');
+  chat.close();
+  // A hidden sheet is display:none: its log reads 0 for every scroll measure.
+  const log = part('log');
+  log.replaceChildren = (...cs) => { log.children = cs; log.scrollHeight = 0; log.scrollTop = 0; };
+  globalThis.fetch = saved;
+  release();
+  await settle();
+  await settle();
+  assert.equal(calls.filter((c) => c.path.includes('before=')).length, 1, 'only the page asked while it was open');
+});
+
+test('a hidden tab\'s mirror does not ask the server; it asks again once the tab is seen', async () => {
+  const { calls } = server({ [`GET /api/chat/history/${S1}`]: () => ({ ...HISTORY, readOnly: true, live: true }) });
+  const { chat, timers } = makeChat();
+  openOld(chat);
+  await settle();
+  const asked = calls.length;
+  document.hidden = true;
+  try {
+    await timers[0].fn();
+    assert.equal(calls.length, asked, 'nothing asked while hidden');
+    assert.equal(timers.length, 2, 'still scheduled, so it resumes');
+  } finally { document.hidden = false; }
+  await timers[1].fn();
+  assert.equal(calls.length, asked + 1);
+  chat.close();
 });

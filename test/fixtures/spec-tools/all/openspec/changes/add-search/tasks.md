@@ -1,0 +1,2 @@
+- [x] write the proposal
+- [ ] index the documents

@@ -155,6 +155,15 @@ export function partOfFiles(files, arch, { topLevel } = {}) {
   return { partId, touches: inPartOrder(arch, touched) };
 }
 
+// The proof behind a placement by files: the files that voted for the part partOfFiles chose (sb03), in the order given.
+// When specific votes decided it, a file that only reached a broad folder is not counted, as in partOfFiles.
+export function filesVotingFor(files, arch, partId, { topLevel } = {}) {
+  const bests = bestOf(files, arch, topLevel);
+  const voted = files.map((f, i) => ({ f, broad: bests[i]?.broad, yes: bests[i]?.ids.has(partId) })).filter((v) => v.yes);
+  const specific = voted.filter((v) => !v.broad);
+  return (specific.length ? specific : voted).map((v) => v.f);
+}
+
 export function partsTouched(files, arch, { topLevel } = {}) {
   return inPartOrder(arch, new Set(bestByFile(files, arch, topLevel).flatMap((b) => [...b.ids])));
 }
@@ -182,6 +191,20 @@ export function itemByCodes(mentions, arch, partId) {
   const codes = new Map(part.groups.flatMap((g) => g.items).filter((i) => i.code).map((i) => [key(i.code), i.code]));
   for (const { code } of [...(mentions ?? [])].reverse()) if (codes.has(key(String(code)))) return codes.get(key(String(code)));
   return null;
+}
+
+// The proof behind a placement by code: the codes of the part's items the chat cited, the last cited first (three at most).
+export function codesInPart(mentions, arch, partId) {
+  const part = arch.parts.find((p) => p.id === partId);
+  if (!part) return [];
+  const codes = new Map(part.groups.flatMap((g) => g.items).filter((i) => i.code).map((i) => [key(i.code), i.code]));
+  const seen = new Set();
+  const out = [];
+  for (const { code } of [...(mentions ?? [])].reverse()) {
+    const k = key(String(code));
+    if (codes.has(k) && !seen.has(k)) { seen.add(k); out.push(codes.get(k)); }
+  }
+  return out.slice(0, 3);
 }
 
 export function attachToParts(arch, chats, workCells) {

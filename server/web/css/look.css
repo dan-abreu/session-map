@@ -1,0 +1,39 @@
+/* The "look only" link (server.md sv04): the owner's box in the help menu, and a page opened with the link, which shows
+   the map and hides the chat and every button (the server refuses all of them anyway). */
+
+.look-share { display: grid; gap: var(--sp-2); padding: 0 10px 10px 36px; }
+.look-share[hidden] { display: none; }
+.look-note { margin: 0; color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.45; }
+.look-link {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: var(--fs-xs);
+}
+.look-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.look-banner { display: none; }
+.is-look .look-banner {
+  grid-column: 1 / -1; grid-row: 2;
+  display: block; margin: 0; padding: 6px var(--sp-4); border-bottom: 1px solid var(--line);
+  background: var(--bg-2); color: var(--ink-2); font-size: var(--fs-sm); text-align: center;
+}
+
+.is-look #chat,
+.is-look #chatForm,
+.is-look #chatMore,
+.is-look .btn,
+.is-look .actions,
+.is-look .cv-new,
+.is-look #newBtn,
+.is-look #newMenu,
+.is-look #viewBtn,
+.is-look #viewMenu,
+.is-look #newChat,
+.is-look #newIdea,
+.is-look #createArch,
+.is-look #lookShareOpen,
+.is-look #lookShareBox { display: none !important; }
+
+/* sv11: links on the map that open a file or the Files tab read what the server refuses to the link, so they go too. */
+.is-look .kind-row.kind-files,
+.is-look .meta-link.path,
+.is-look .meta-link.is-unowned { display: none !important; }

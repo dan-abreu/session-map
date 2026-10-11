@@ -44,7 +44,7 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-function setup({ saved = null } = {}) {
+function setup({ saved = null, state = DEMO } = {}) {
   const calls = [];
   globalThis.document = { activeElement: null };
   globalThis.fetch = async (url) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => ({ results: [] }) }; };
@@ -52,7 +52,7 @@ function setup({ saved = null } = {}) {
   const t = translator('en');
   const tabs = createTabs({
     h, t: () => t, lang: () => 'en', fmt: { money: String, shortDate: String, relative: String },
-    state: () => DEMO, project: () => DEMO.projects[0], go() {}, toast() {}, errorText: String, confirm: async () => true,
+    state: () => state, project: () => state.projects[0], go() {}, toast() {}, errorText: String, confirm: async () => true,
     prefs: { archived: () => false, setArchived() {} }, range: () => null, rangeButton: () => h('button'),
     store: { get: (k) => store.get(k) ?? null, set: (k, v) => store.set(k, v) },
   });
@@ -98,7 +98,7 @@ test('the sub-tabs are labelled with the existing board and history words', () =
 test('switching sub-tabs does not fetch the history again', async () => {
   const a = setup();
   a.tabs.render('convs', a.root);
-  assert.equal(a.calls.length, 0, 'the board needs no search');
+  assert.equal(a.calls.filter((u) => u.includes('/api/history')).length, 0, 'the board needs no search');
   const [board, history] = a.root.querySelectorAll('.sub-tab');
   history.handlers.click();
   await tick();
@@ -144,4 +144,44 @@ test('costs still renders on its own', () => {
   const a = setup();
   a.tabs.render('costs', a.root);
   assert.ok(a.root.querySelector('.ledger'));
+});
+
+// sb05: the savings report in the Costs tab.
+test('costs shows the cost by model and the savings tips in plain words, and says so when there are none', () => {
+  const state = JSON.parse(JSON.stringify(DEMO));
+  const p = state.projects[0];
+  p.costByModel = { '2026-10-08': { 'claude-opus-5-5': 7, 'claude-sonnet-5-5': 1 } };
+  p.chats[0].updatedAt = '2026-10-08T10:00:00.000Z';
+  p.chats[0].advice = { replies: 80, context: 300000, tips: [
+    { kind: 'newChat', savingUSD: 2 },
+    { kind: 'smallerModel', from: 'claude-opus-5-5', to: 'claude-sonnet-5-5', savingUSD: 3 },
+  ] };
+  const a = setup({ state });
+  a.tabs.render('costs', a.root);
+  const box = a.root.querySelector('#savings');
+  assert.ok(box, 'the savings section exists');
+  assert.equal(box.querySelectorAll('.tip-row').length, 2);
+  assert.match(box.text, /Opus 5\.5/);
+  assert.match(box.text, /Sonnet 5\.5/);
+  assert.match(box.text, /new one/i);
+  assert.equal(a.root.querySelectorAll('.model-row').length, 2);
+  assert.doesNotMatch(box.text, /undefined|\{\w+\}/);
+  const bare = JSON.parse(JSON.stringify(DEMO));
+  for (const q of bare.projects) for (const c of q.chats) delete c.advice;
+  const b = setup({ state: bare });
+  b.tabs.render('costs', b.root);
+  assert.equal(b.root.querySelectorAll('.tip-row').length, 0);
+  assert.match(b.root.querySelector('#savings').text, /Nothing to suggest/);
+});
+
+test('costs labels the savings total as the whole life of the conversations active in the period', () => {
+  const state = JSON.parse(JSON.stringify(DEMO));
+  const c = state.projects[0].chats[0];
+  c.updatedAt = '2026-10-08T10:00:00.000Z';
+  c.advice = { replies: 400, context: 300000, tips: [{ kind: 'newChat', savingUSD: 40 }] };
+  const a = setup({ state });
+  a.tabs.render('costs', a.root);
+  const box = a.root.querySelector('#savings');
+  assert.match(box.text, /active in this period/i);
+  assert.match(box.text, /whole life/i);
 });

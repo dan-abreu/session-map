@@ -29,7 +29,7 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 
 - [x] **Claude:** Keep all Claude Code format knowledge in `server/sources/claude.mjs` `rd01`
 - [x] **Claude:** Read the waiting questions out of the cards from the board skill `rd02`
-- [ ] **detail:** Read OpenSpec changes from other tools' task files too `rd03`
+- [x] **detail:** Read OpenSpec changes from other tools' task files too `rd03`
 - [x] **Claude:** Archive every conversation, read only when asked `rd05`
   - A compressed copy outside the folders Claude Code cleans, by a scan and the `SessionEnd` hook; an index with no AI; History on the page; `/session-map:history` answers with at most 5 short matches. Released in v0.1.0.
 - [x] **Claude:** The skills installed in each project `rd06`

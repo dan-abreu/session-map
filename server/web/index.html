@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="css/fd-guide.css">
   <link rel="stylesheet" href="css/fd-screens.css">
   <link rel="stylesheet" href="css/ai-helpers.css">
+  <link rel="stylesheet" href="css/look.css">
+  <link rel="stylesheet" href="css/board-cards.css">
 </head>
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true">
@@ -98,10 +100,13 @@
   <!-- Help and every setting live in the ⋯ of the bar (navbar.js): the tour, other AIs, Full mode, this panel and Configurações. -->
   <div class="help-menu" id="helpMenu" popover="auto" role="dialog" aria-labelledby="helpMenuTitle">
     <h2 id="helpMenuTitle" data-i18n="more.help"></h2>
+    <button type="button" class="help-row" id="lookShareOpen" aria-controls="lookShareBox" aria-expanded="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-globe"/></svg><span data-i18n="look.open"></span></button>
+    <div class="look-share" id="lookShareBox" hidden></div>
     <h3 data-i18n="help.glossary"></h3>
     <ul class="help-glossary" id="helpGlossary"></ul>
   </div>
   <div class="help-tip" id="helpTip" popover="auto" role="note"></div>
+  <p class="look-banner" id="lookBanner" role="status" data-i18n="look.banner"></p>
 
   <aside class="convs" id="convs" aria-labelledby="convsTitle">
     <div class="cv-rail">
@@ -173,6 +178,14 @@
             <button type="button" class="pm-row mm-files-btn" role="menuitemcheckbox" id="filesSide" aria-checked="true" data-i18n-title="map.filesSideHint"><svg class="pm-icon" aria-hidden="true"><use href="#i-file"/></svg><span class="pm-label" data-i18n="view.files"></span><span class="pm-switch" aria-hidden="true"></span></button>
             <button type="button" class="pm-row mm-rel-btn" role="menuitemcheckbox" id="relations" aria-checked="false" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-links"/></svg><span class="pm-label" data-i18n="view.relations"></span><span class="pm-switch" aria-hidden="true"></span></button>
             <hr class="pm-sep vm-sep-toggles">
+            <div class="pm-sub mm-export" id="mapExport">
+              <button type="button" class="pm-row" role="menuitem" id="mapExportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="mapExportMenu"><svg class="pm-icon" aria-hidden="true"><use href="#i-download"/></svg><span class="pm-label" data-i18n="mapexport.button"></span><svg class="pm-icon pm-go" aria-hidden="true"><use href="#i-next"/></svg></button>
+              <div class="pop-menu pm-flyout" id="mapExportMenu" role="menu" data-i18n-aria="mapexport.button" hidden>
+                <button type="button" class="pm-row" role="menuitem" data-map-export="md" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-file"/></svg><span class="pm-label" data-i18n="mapexport.md"></span></button>
+                <button type="button" class="pm-row" role="menuitem" data-map-export="mm" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-map"/></svg><span class="pm-label" data-i18n="mapexport.mm"></span></button>
+                <button type="button" class="pm-row" role="menuitem" data-map-export="xmind" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-map"/></svg><span class="pm-label" data-i18n="mapexport.xmind"></span></button>
+              </div>
+            </div>
             <div class="pm-keep" id="bgKeep" hidden>
               <hr class="pm-sep">
               <button type="button" class="pm-row is-two bg-switch" role="menuitemcheckbox" id="bgSwitch" aria-checked="false"><svg class="pm-icon" aria-hidden="true"><use href="#i-auto"/></svg><span class="pm-label" data-i18n="view.keep"></span><span class="pm-switch" aria-hidden="true"></span><span class="pm-desc"><span data-i18n="view.keepHint"></span> <strong data-i18n="view.keepCost"></strong></span></button>
@@ -334,6 +347,7 @@
         <div class="seg fl-levels" id="flowLevel" role="group" data-i18n-aria="flow.level">
           <button type="button" data-level="1" aria-pressed="true" data-i18n="flow.level.one"></button>
           <button type="button" data-level="parts" aria-pressed="false" data-i18n="flow.level.parts"></button>
+          <button type="button" data-level="journeys" aria-pressed="false" data-i18n="flow.level.journeys"></button>
         </div>
         <div class="fl-actions" id="flowActions">
           <button type="button" class="btn" id="flowCopy"><svg class="btn-icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="flow.copy"></span></button>
@@ -344,6 +358,9 @@
               <button type="button" data-export="png" data-i18n="flow.export.png"></button>
               <button type="button" data-export="md" data-i18n="flow.export.md"></button>
               <button type="button" data-export="mmd" data-i18n="flow.export.mmd"></button>
+              <button type="button" data-export="drawio" data-i18n="flow.export.drawio"></button>
+              <button type="button" data-export="puml" data-i18n="flow.export.puml"></button>
+              <button type="button" data-export="pumld" data-i18n="flow.export.pumld"></button>
             </div>
           </details>
           <button type="button" class="btn" id="flowImport"><svg class="btn-icon" aria-hidden="true"><use href="#i-import"/></svg><span data-i18n="flow.import"></span></button>
@@ -381,7 +398,9 @@
           <textarea id="flowSourceText" spellcheck="false" autocomplete="off" autocapitalize="off" maxlength="60000"></textarea>
           <p class="fl-editor-error" id="flowEditorError" role="status"></p>
         </div>
+        <section class="fl-journeys" id="flowJourneys" aria-labelledby="flowJourneysTitle" hidden></section>
         <div class="fl-canvas-wrap">
+          <nav class="fl-crumbs" id="flowCrumbs" data-i18n-aria="flow.l2.crumbs" hidden></nav>
           <div class="fl-filters" id="flowFilters" hidden>
             <div class="fl-filter-row">
               <label class="fl-filter" for="flowJourney"><span data-i18n="flow.l1.journey.label"></span>

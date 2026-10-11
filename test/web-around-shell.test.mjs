@@ -188,9 +188,10 @@ test('the map header is one quiet row: the summary with who works, then search a
   assert.equal(translator('pt-BR')('search.placeholder'), 'Buscar no mapa');
 });
 
-test('Vista holds what changed, files, relations and keeping the map up to date', () => {
+test('Vista holds what changed, files, relations, the export and keeping the map up to date', () => {
   const menu = between('id="viewMenu"', 'id="archBanner"');
-  for (const id of ['changed', 'filesSide', 'relations', 'bgSwitch']) assert.match(menu, new RegExp(`id="${id}"`), id);
+  for (const id of ['changed', 'filesSide', 'relations', 'mapExport', 'bgSwitch']) assert.match(menu, new RegExp(`id="${id}"`), id);
+  for (const kind of ['md', 'mm', 'xmind']) assert.match(menu, new RegExp(`data-map-export="${kind}"`), kind);
   const pt = translator('pt-BR');
   assert.equal(pt('view.keep'), 'Manter o mapa em dia sozinho');
   assert.match(pt('view.keepCost'), /Isso gasta/);
@@ -218,6 +219,12 @@ const fnOf = (name) => {
 
 test('on a phone the amber pill and "who works" close the Conversas drawer first, so their list is not under it', () => {
   for (const name of ['openWaiting', 'openLive']) assert.match(fnOf(name), /convs\.closeDrawer\(\);/, name);
+});
+
+test('Esc in the export list closes only that list and goes back to "Exportar o mapa"', () => {
+  const wire = fnOf('wireMenus');
+  const handler = wire.slice(wire.indexOf("exportMenu.addEventListener('keydown'"));
+  assert.match(handler.slice(0, handler.indexOf('});')), /'Escape'/);
 });
 
 test('both chats read their dot from the pill\'s rule, and the dot follows each new count', () => {

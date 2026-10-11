@@ -1,0 +1,79 @@
+{
+  "version": "0.3.0",
+  "date": "2026-10-11",
+  "tool": "scripts/readme-shots.mjs",
+  "images": {
+    "en-help.webp": {
+      "sha": "610e108378257eda29f453580e611cedf6d42cf3115977f1342642198e0f2673",
+      "width": 1440,
+      "height": 900,
+      "lang": "en"
+    },
+    "en-map.webp": {
+      "sha": "72b7598194059c73228cc871350c58dbb2999ff81b22d0418bc5153e97e31a79",
+      "width": 1440,
+      "height": 900,
+      "lang": "en"
+    },
+    "en-part.webp": {
+      "sha": "3d32fa7736e85c884954c074584e10dceb65cd8dad3b27d2421f3f4099b61a06",
+      "width": 1440,
+      "height": 900,
+      "lang": "en"
+    },
+    "en-phone.webp": {
+      "sha": "fef82479f9212dbed5c6da2541b6d9b2d48b9699f8383d6b760621452661b148",
+      "width": 780,
+      "height": 1688,
+      "lang": "en"
+    },
+    "en-tour.webp": {
+      "sha": "161bd7d3b227e8d5d98223355863bba2c9831ea2d00b1c4757c88f923f2679d8",
+      "width": 1440,
+      "height": 900,
+      "lang": "en"
+    },
+    "en-waiting.webp": {
+      "sha": "31df5f80c11842e8ac4911d6daf8a93c843c6f07f6941d25716ed342e0dd9c50",
+      "width": 1440,
+      "height": 900,
+      "lang": "en"
+    },
+    "pt-help.webp": {
+      "sha": "5c93d3ffbc0ea74c256b0c14827af5a3a164fce93915fd1952e38d409881f752",
+      "width": 1440,
+      "height": 900,
+      "lang": "pt-BR"
+    },
+    "pt-map.webp": {
+      "sha": "1f1a14d053cc32eafa4fd991648b299bae3628964446da0c8f5ffcd7c6eb0df8",
+      "width": 1440,
+      "height": 900,
+      "lang": "pt-BR"
+    },
+    "pt-part.webp": {
+      "sha": "3e52cd6140312ab5d0ab1bccc2335e6c747a2d9f550e2b4ee0e09a647dbe5ff8",
+      "width": 1440,
+      "height": 900,
+      "lang": "pt-BR"
+    },
+    "pt-phone.webp": {
+      "sha": "19d54e0c64e347dd2d6381f3988cd11abefc01dca2cfa9ce5e827421be4fa11d",
+      "width": 780,
+      "height": 1688,
+      "lang": "pt-BR"
+    },
+    "pt-tour.webp": {
+      "sha": "32f9d8832e41ff240b1c28961e7bfbfe104ae6ed47434c500e646f74ae99200a",
+      "width": 1440,
+      "height": 900,
+      "lang": "pt-BR"
+    },
+    "pt-waiting.webp": {
+      "sha": "3c7c77c2dcbb3ff01407a73b093f4d3f3c57db9cec14f4f18bb166352c8c2c55",
+      "width": 1440,
+      "height": 900,
+      "lang": "pt-BR"
+    }
+  }
+}

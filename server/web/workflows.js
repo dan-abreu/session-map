@@ -112,11 +112,17 @@ export function workflowView(ctx, w, { compact = false, onDetails = null } = {})
   const atWork = agents.filter((x) => x.tone === 'running' || x.tone === 'stopped');
   const finished = agents.filter((x) => x.tone === 'done' || x.tone === 'failed');
 
+  // A box a page chat was opened on has no code to say (mm37).
+  const itemWords = (item) => {
+    const place = ctx.placeWords({ projectId: item.projectId, partId: item.partId });
+    return item.code ? t('wf.item', { place, code: item.code }) : t('wf.itemBox', { place });
+  };
   const request = w.request
     ? h('div', { class: 'wf-ask' },
       h('p', { class: 'wf-ask-head' }, icon('chat', 'wf-ask-icon'), h('span', { class: 'wf-ask-label' }, t('wf.request')), w.request.ts ? h('span', { class: 'wf-ask-when num' }, ctx.relative(w.request.ts)) : null),
       h('p', { class: 'wf-ask-text' }, w.request.text),
-      w.request.item ? h('button', { type: 'button', class: 'wf-item', onclick: () => ctx.onItem?.(w.request.item) }, icon('map', 'wf-item-icon'), t('wf.item', { place: ctx.placeWords({ projectId: w.request.item.projectId, partId: w.request.item.partId }), code: w.request.item.code })) : null)
+      w.request.words ? h('p', { class: 'wf-ask-words' }, t('wf.told', { words: w.request.words })) : null,
+      w.request.item ? h('button', { type: 'button', class: 'wf-item', onclick: () => ctx.onItem?.(w.request.item) }, icon('map', 'wf-item-icon'), itemWords(w.request.item)) : null)
     : h('p', { class: 'wf-ask is-none' }, t('wf.requestNone'));
 
   const phases = w.phases?.length ? h('ol', { class: 'wf-phases', 'aria-label': t('wf.phases') }, w.phases.map((p, i) => {

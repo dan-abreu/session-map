@@ -17,6 +17,9 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 - `server/arch/flowscan.mjs`
 - `server/arch/flowcatalog.mjs`
 - `server/web/flowlevel.js`
+- `server/web/flowgrid.js`
+- `server/arch/flowinner.mjs`
+- `server/arch/flowjourneys.mjs`
 
 ## Rules that must not break
 
@@ -33,6 +36,8 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 - [x] **Claude:** Flow tab drawing the README diagram, boxes tied to parts and colored by status `fl01`
 - [x] **Claude:** Mermaid export and import with a preview, never deleting a part `fl02`
 - [x] **Claude:** Draft studio with a chat, manual tools and undo, applied only on "Apply" `fl03`
+- [x] Move the drawing with the hand, like the map: grab cursor, drag to pan, wheel to zoom around the pointer, clicks on boxes untouched `fl15`
+  - Same feel as the mind map (`.mm` uses `cursor: grab` and dragging). On every Flow view: general, Parts, inside a part, Journeys, and the workshop when no tool is picked. From `id85`.
 
 ### Fluid Flow
 
@@ -51,14 +56,16 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
   - Separate "declared" (README and architecture) from "detected" (chats, branches, code), with an "AI" or "confirmed" badge.
   - The AI generates it, caches it in the session-map storage and regenerates only the nodes whose hash changed, per folder, with a cheap model.
   - Done without the AI: `GET /api/arch/<project>/model` builds it from the README, the part files and the code, in the background, cached in the session-map storage (only changed files are read again); every fact has "declared" and "detected" evidence (file and line). Still to do: the AI enrichment and the owner's "confirmed".
-- [ ] **in progress · Level 1, the general view, with actors and outside services** `fl08`
+- [x] **Level 1, the general view, with actors and outside services** `fl08`
   - Actors (customer, professional, owner or panel) and outside services (messaging, AI provider, hosting, database, storage, error tracking, e-mail), and a label on each arrow saying what passes.
   - Starts here, with a fixed legend and filters by journey.
-  - Done on the server: actors (browser, phone on the network, terminal, Claude Code, and the people of each app's screens) and outside services found in the code, an arrow per part and service with words from the README or the catalog, and the drawing of the general view, which can never be imported back as parts. The page has the level switch, the legend, the facts list and zoom; the view opens whole. An arrow the README left without words takes them from what its two parts are (a small table of roles in the catalog: readers hand on "data read", a state builder "the current state", a server "what the screen shows" to a page), else "code it shares" when the code shows the link; with nothing known it is drawn without words and counted, never with a placeholder. Arrows to one service with the same words are drawn once, from the part with the most evidence, naming the others. The layers read left to right: who uses it, what they touch, then deeper layers, then this computer and the internet; backward arrows are laid out turned round with their heads kept where the facts say. Still to do: words from the AI (the model keeps an `ai` path for them).
-- [ ] **Level 2, inside a part** `fl09`
+  - Done on the server: actors (browser, phone on the network, terminal, Claude Code, and the people of each app's screens) and outside services found in the code, an arrow per part and service with words from the README or the catalog, and the drawing of the general view, which can never be imported back as parts. The page has the level switch, the legend, the facts list and zoom; the view opens at a size that reads (whole when that still reads, else as wide as the area and scrolled down), and "Fit to screen" shows it whole. An arrow the README left without words takes them from what its two parts are (a small table of roles in the catalog: readers hand on "data read", a state builder "the current state", a server "what the screen shows" to a page; a part that hands on to several others says what each one gets, such as the state builder giving the Flow "what is happening in each part"), else "code it shares" when the code shows the link; with nothing known it is drawn without words and counted, never with a placeholder. Arrows to one service with the same words are drawn once, from the part with the most evidence, naming the others. The drawing is laid out in bands, top to bottom (`server/web/flowgrid.js`): who uses it, then one band per layer, then this computer and the internet side by side; labels sit in the gaps between bands, so they never overlap. Words from the AI stay with `fl07`.
+- [x] **Level 2, inside a part** `fl09`
   - A double click opens the part's inner flow: components taken from "How it works", "Where in the code" and who it talks to, plus the code itself, with live colors per component.
-- [ ] **Level 3, Journeys tab** `fl10`
+  - Done without the AI: `GET /api/arch/<project>/model/part/<part>` (read without a key on this PC; the colours need the key) builds the inside of a part from the model build kept in memory, writing nothing. Its pieces are the paths "Where in the code" names (a big folder keeps its folders, its entry and its most linked files, and groups the rest as "+N files in …"), each with the first sentence of the file's opening comment; arrows between pieces come from the imports, and every arrow of the general view reaches the piece whose file shows it (a README-only one starts at the entry piece). Rows top to bottom: what comes in, where it starts, what other parts call, the work, the pieces it leans on, where it hands things on. A piece is green when a conversation working now changed it, blue when it changed in the last ten minutes, with a ring when it has changes not saved yet. The page opens it with a double click, Shift+Enter or the "See … inside" button (the way in on a phone), and goes back by the breadcrumb or Escape. A piece four or more others of the part use is not reached by a bundle of "uses" arrows: its box says how many use it, and the facts list keeps every arrow. A band that wraps stays one band, titled once. A file comment in another language than the page moves to the hover title, and the box says instead how the piece is tied to the others. The view opens whole when that still reads, and the floating legend never hides its last band. Still to do: words from the AI for each piece and the owner's "confirmed".
+- [x] **Level 3, Journeys tab** `fl10`
   - Three to six numbered end-to-end flows (for example from a request to its acceptance), each step tied to a part, with live colors (the Structurizr dynamic view).
+  - Done without the AI: the model carries its journeys (`server/arch/flowjourneys.mjs`, started from a small catalog in `flowcatalog.mjs`): from a person or a program that sends something in, along the arrows with words (at most one step against an arrow, six steps in all), to the end the catalog names; the same model always gives the same journeys, each marked "detected". On this project: you open the map, a Claude Code conversation shows up, you ask in the page chat and the AI answers, an alert reaches your phone, you type a command in the terminal, an alert shows on the screen. The page has a "Journeys" level next to "Overview | Parts": the list, the numbered steps in plain words (each tied to a part, one click opens it) and the path drawn alone, top to bottom; in the general view the journey filter now works, opens framed on the path near life size, and dims everything outside it while keeping it readable. A step against an arrow says who is asked and what comes back ("asks “Page chat”, which answers with: …"). A name the README wrote keeps its words, in quotes, inside a sentence; the common layer names ("What it reads", "What you touch") are said in the page language. Still to do: the AI that rewrites the steps in better words, and the owner's "confirmed".
 
 ### Stays in step
 
@@ -74,9 +81,10 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 
 ### Any format
 
-- [ ] **Export in more formats** `fl13`
+- [x] **Export in more formats** `fl13`
   - Deterministic, from the diagram model: draw.io (mxGraph XML) and PlantUML (component and deployment), beside the mermaid, SVG, PNG and Markdown ones.
 - [ ] **Import from any format, with the AI filling in** `fl14`
   - draw.io, PlantUML, Graphviz, Excalidraw, or an image or PDF of a drawing: the AI (the user's own `claude`, a model that sees images) converts it to mermaid and matches each box to a part; the result goes through the same import preview.
   - With `flow.sync: auto` it applies with an event and Undo; with `suggest` it shows the preview. New parts get the convention's skeleton.
   - Limits: 5 MB per file, an allowed list of types, nothing executed from the file (draw.io and Excalidraw read as data).
+  - Later, by the owner's choice on 2026-10-10 (`op06`).

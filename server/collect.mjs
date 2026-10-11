@@ -1,12 +1,11 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
-import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
+import { aiPlacements, aiStatus, explainRelations, lifeOf, placeChanged, withRelationWhys } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { alwaysOn, backgroundOf, isWorking, tidyOn } from './background.mjs';
-import { attachToParts, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
+import { attachToParts, codesInPart, filesVotingFor, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { withLocalParts } from './arch/local.mjs';
 import { norm } from './arch/parse.mjs';
@@ -16,6 +15,7 @@ import { parentOf, readLineage } from './brain/lineage.mjs';
 import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
+import { adviceFor, modelDaily } from './savings.mjs';
 import { attachChanges } from './changes-state.mjs';
 import { footprintOf, touchesOf } from './footprint.mjs';
 import { foundationSummary } from './foundation/summary.mjs';
@@ -29,6 +29,8 @@ import { readDismissed, readRemoved } from './hidden.mjs';
 import { countRepo } from './sources/count.mjs';
 import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
+import { planLimits } from './sources/limits.mjs';
+import { runGit } from './sources/gitqueue.mjs';
 import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
@@ -66,16 +68,16 @@ const gitMemo = new Map();
 const cut = (s) => String(s ?? '').slice(0, TEXT_MAX);
 const modelOf = (usage) => [...(usage ?? [])].reverse().find((u) => u.model && u.model !== 'unknown')?.model ?? null;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
+// The savings advice of a conversation's own replies, or null when no rule has anything to say (sb05).
+const adviceOf = (usage, prices) => {
+  const a = adviceFor(usage, prices);
+  return a.tips.length ? a : null;
+};
 const hashOf = (v) => createHash('sha1').update(JSON.stringify(v)).digest('hex');
 const plain = (s) => norm(String(s));
 
-function git(cwd, args) {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: 10_000, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
-      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
-      resolve(err ? '' : stdout);
-    });
-  });
+async function git(cwd, args) {
+  return (await runGit(cwd, args, { timeout: 10_000, maxBuffer: 64 * 1024 * 1024 })).stdout;
 }
 
 // ---- reading ---------------------------------------------------------------
@@ -170,23 +172,27 @@ async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
 // The owner's own move first (mm21), then an item code the conversation cites, then the part the page opened it on, then
 // the files it edited, then what the AI answered earlier (desenho-3 § 2). A project chat belongs to the whole project.
 // page: what page-chats.json keeps of a conversation the page started in this project.
-function placeInPart(item, arch, placeFiles, root, aiAnswers, page, placement) {
+// partWhy keeps the rule that won and its evidence, for the page to say it in plain words: {rule} plus codes (the item
+// codes it cited) or files (what it edited there).
+function placeInPart(item, arch, placeFiles, root, aiAnswers, page, placement, votersFor = () => []) {
   const s = item.summary;
-  if (!arch.parts.length) return { partId: null, partSource: 'none' };
+  const placed = (partId, rule, evidence) => ({ partId, partSource: rule, partWhy: { rule, ...evidence } });
+  if (!arch.parts.length) return placed(null, 'none');
   if (placement && 'partId' in placement && (placement.partId === null || arch.parts.some((p) => p.id === placement.partId))) {
-    return { partId: placement.partId, partSource: 'owner' };
+    return placed(placement.partId, 'owner', placement.partId === null ? { none: true } : undefined);
   }
   // The orchestrator (or01) is a project chat too: the codes its notes cite are its activity chats', never its part.
-  if (page?.node?.kind === 'project' || page?.node?.kind === 'orchestrator') return { partId: null, partSource: 'project' };
+  if (page?.node?.kind === 'project' || page?.node?.kind === 'orchestrator') return placed(null, 'project');
   const byCode = partByCodes(s.mentionedCodes, arch);
-  if (byCode) return { partId: byCode, partSource: 'code' };
+  if (byCode) return placed(byCode, 'code', { codes: codesInPart(s.mentionedCodes, arch, byCode) });
   const byPage = page?.partId;
-  if (typeof byPage === 'string' && arch.parts.some((p) => p.id === byPage)) return { partId: byPage, partSource: 'page' };
-  const byFiles = placeFiles(repoFiles([...s.editedFiles ?? [], ...item.helperEdits ?? []], root, s.cwd)).partId;
-  if (byFiles) return { partId: byFiles, partSource: 'files' };
+  if (typeof byPage === 'string' && arch.parts.some((p) => p.id === byPage)) return placed(byPage, 'page');
+  const edited = [...new Set(repoFiles([...s.editedFiles ?? [], ...item.helperEdits ?? []], root, s.cwd))];
+  const byFiles = placeFiles(edited).partId;
+  if (byFiles) return placed(byFiles, 'files', { files: votersFor(edited, byFiles).slice(0, 3) });
   const byAi = aiAnswers[s.sessionId]?.partId;
-  if (byAi && arch.parts.some((p) => p.id === byAi)) return { partId: byAi, partSource: 'ai' };
-  return { partId: null, partSource: 'none' };
+  if (byAi && arch.parts.some((p) => p.id === byAi)) return placed(byAi, 'ai');
+  return placed(null, 'none');
 }
 
 const under = (path, base) => {
@@ -195,11 +201,14 @@ const under = (path, base) => {
   return p === b || p.startsWith(`${b}/`);
 };
 
+// workCellWhy: the rule that won and what shows it (the front the card names, or the branch).
+const placedCell = (workCellId, rule, evidence) => ({ workCellId, workCellSource: rule, workCellWhy: { rule, ...evidence } });
+
 function placeInWorkCell(summary, card, workCells) {
   if (card?.front) {
     const wanted = plain(card.front);
     const hit = workCells.find((w) => plain(w.id) === wanted || plain(w.branch) === wanted);
-    if (hit) return { workCellId: hit.id, workCellSource: 'card' };
+    if (hit) return placedCell(hit.id, 'card', { front: card.front });
   }
   const withPath = workCells.filter((w) => w.path);
   let guess = null;
@@ -207,12 +216,12 @@ function placeInWorkCell(summary, card, workCells) {
     const n = summary.mentionedPaths.filter((p) => under(p, w.path)).length;
     if (n > 0 && (!guess || n > guess.n)) guess = { id: w.id, n };
   }
-  if (guess) return { workCellId: guess.id, workCellSource: 'guess' };
+  if (guess) return placedCell(guess.id, 'guess');
   const byCwd = withPath.find((w) => under(summary.cwd, w.path));
-  if (byCwd) return { workCellId: byCwd.id, workCellSource: 'cwd' };
+  if (byCwd) return placedCell(byCwd.id, 'cwd');
   const byBranch = summary.gitBranch && workCells.find((w) => w.branch === summary.gitBranch);
-  if (byBranch) return { workCellId: byBranch.id, workCellSource: 'branch' };
-  return { workCellId: null, workCellSource: 'cwd' };
+  if (byBranch) return placedCell(byBranch.id, 'branch', { branch: byBranch.branch });
+  return placedCell(null, 'cwd');
 }
 
 // ---- the real footprint (mm24) ------------------------------------------------------
@@ -331,6 +340,11 @@ function originOf(sessionId, entrypoint, pageChats, fromPage = false) {
   return 'terminal';
 }
 
+// A page chat's own rule, shared with the chat hub's "interrupted" mark (mm43): page-chats.json says running, unless the
+// transcript's turn closed and its last line (lastAt, ISO) is after the page's last turn end. summary may be null.
+export const pageTurnCut = (page, summary, lastAt) => page?.running === true
+  && !(summary?.turnOpen === false && Date.parse(lastAt ?? '') > Date.parse(page.updatedAt ?? ''));
+
 // Whether a conversation was working when the server fell or the PC restarted (mm43), one rule per origin. A page chat:
 // page-chats.json still says running (only a turn's end writes false), and nothing drives it now, unless the transcript shows
 // the turn closed after the page's last turn end (finished elsewhere, as in VS Code). VS Code and the terminal
@@ -341,7 +355,7 @@ function cutOffOf(row, page, summary, cutCtx) {
   const id = row.sessionId;
   const at = Date.parse(row.updatedAt);
   if (row.live || cutCtx.driving.has(id) || cutCtx.dismissed[id] === row.updatedAt || !(cutCtx.nowMs - at <= CUT_KEEP_MS)) return false;
-  if (row.origin === 'map') return page?.running === true && !(summary?.turnOpen === false && at > Date.parse(page.updatedAt ?? ''));
+  if (row.origin === 'map') return pageTurnCut(page, summary, row.updatedAt);
   if (row.origin !== 'vscode' && row.origin !== 'terminal') return false;
   return Boolean(summary?.turnOpen && !summary.pendingQuestion && (at < cutCtx.bootMs - CUT_BOOT_SLACK_MS || cutCtx.staleBusy.has(id)));
 }
@@ -368,6 +382,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats, s.fromPage),
       partId: x.partId,
       partSource: x.partSource,
+      partWhy: x.partWhy,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId) ?? nodeOf(page)?.code ?? null,
       node: nodeOf(page),
       parentId: motherOf(s.sessionId),
@@ -395,6 +410,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       origin: 'map',
       partId: knownPart(c.partId),
       partSource: knownPart(c.partId) ? 'page' : 'none',
+      partWhy: { rule: knownPart(c.partId) ? 'page' : 'none' },
       itemCode: nodeOf(c)?.code ?? null,
       node: nodeOf(c),
       parentId: motherOf(sessionId),
@@ -427,6 +443,7 @@ async function buildProject(ctx, { root, items }) {
   const arch = withLocalParts(await readArch(root, config, { mainBranch: main }), smDir, projectId);
   const topLevel = topLevelOf(root);
   const placeFiles = (files) => partOfFiles(files, arch, { topLevel });
+  const votersFor = (files, partId) => filesVotingFor(files, arch, partId, { topLevel });
   const memo = await gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso);
   const sizes = sizesOf(await countRepo(root), arch, { topLevel });
   autoFetch(root, config.autoFetchMinutes).then((at) => { memo.fetchedAt = at; });
@@ -448,9 +465,11 @@ async function buildProject(ctx, { root, items }) {
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
       item, updatedAt,
-      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageOf(s.sessionId), placements[s.sessionId]),
+      ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageOf(s.sessionId), placements[s.sessionId], votersFor),
       ...placeInWorkCell(s, item.card, memo.workCells),
       costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
+      // The part of that cost inside the 30 days the project's cost shows (sb06).
+      costD30: windowed([...s.usage, ...item.helperUsage], now, prices).d30,
       // Removed from session-map (mm43): its cost still counts below, but it shows nowhere.
       shown: !removed.has(s.sessionId) && (liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch)),
     };
@@ -466,9 +485,11 @@ async function buildProject(ctx, { root, items }) {
       title: cut(titleOf(s)),
       partId: x.partId,
       partSource: x.partSource,
+      partWhy: x.partWhy,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId),
       workCellId: x.workCellId,
       workCellSource: x.workCellSource,
+      workCellWhy: x.workCellWhy,
       parentId: parentOf(s.sessionId, lineage, forLineage(x.partId)),
       status: live ? live.status : 'closed',
       entrypoint: live?.entrypoint ?? '',
@@ -481,6 +502,7 @@ async function buildProject(ctx, { root, items }) {
       waiting: { strong: waiting.strong, weak: waiting.weak, items: waiting.items.map(cut) },
       card: x.item.card,
       costUSD: x.costUSD,
+      advice: adviceOf(x.item.summary.usage, prices),
       workflows: x.item.workflows,
       liveSteps: s.liveSteps ?? [],
       startedAt: s.startedAt,
@@ -503,7 +525,14 @@ async function buildProject(ctx, { root, items }) {
   const workCells = memo.workCells.map((w) => {
     const mine = placed.filter((x) => x.shown && x.workCellId === w.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
     const latest = (field) => mine.find((x) => x.item.card?.[field] !== undefined)?.item.card[field];
-    const spec = openspec.find((o) => plain(w.branch).includes(plain(o.change)));
+    // Several tools can have a name inside the branch ("export" and "export-csv"): the exact name wins, then the longest, then tool order.
+    const branchName = plain(w.branch);
+    const spec = openspec.reduce((best, o) => {
+      const name = plain(o.change);
+      if (!branchName.includes(name)) return best;
+      const rank = name === branchName ? Infinity : name.length;
+      return !best || rank > best.rank ? { o, rank } : best;
+    }, null)?.o;
     return {
       ...w,
       chatIds: mine.map((x) => x.item.summary.sessionId),
@@ -532,6 +561,12 @@ async function buildProject(ctx, { root, items }) {
   }
 
   const chatFiles = new Map(placed.filter((x) => x.shown).map((x) => [x.item.summary.sessionId, repoFiles(x.item.summary.editedFiles ?? [], root, x.item.summary.cwd)]));
+  // The AI's plain-words reason for each relation (mm32): asked in the background where the AI may work, shown from disk.
+  const explained = (links) => {
+    if (config.ai?.enabled === false) return links;
+    if (aiOn) explainRelations(life, { smDir, projectId, arch }, links);
+    return withRelationWhys(life, { smDir, projectId, arch }, links);
+  };
   const milestones = roadmap?.milestones.map((m) => ({ ...m, workCellId: placed.find((x) => x.workCellId && x.item.card?.milestone === m.id)?.workCellId ?? null })) ?? null;
   const allRows = items.flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
   const cost = windowed(allRows, now, prices);
@@ -539,7 +574,7 @@ async function buildProject(ctx, { root, items }) {
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
-      arch: { ...attachToParts(arch, chats, workCells), links: linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel }), sizes },
+      arch: { ...attachToParts(arch, chats, workCells), links: explained(linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel })), sizes },
       workCells,
       // The words of a registry of requests kept translated in session-map's folder, by language and code (id76).
       requestWords: readJsonFile(join(smDir, 'projects', projectId, 'requests-words.json'), null),
@@ -558,11 +593,19 @@ async function buildProject(ctx, { root, items }) {
       skills: listSkills(root, dir),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
       costByDay: dailyCost(allRows, prices),
+      costByModel: modelDaily(allRows, prices),
+      // Why the money can be there with no chat on the map (sb06): how many conversations that cost something are off it,
+      // either too old for the map (they wait in History) or removed by the person.
+      costWhy: {
+        older: placed.filter((x) => !x.shown && !removed.has(x.item.summary.sessionId) && x.costD30 > 0).length,
+        removed: placed.filter((x) => removed.has(x.item.summary.sessionId) && x.costD30 > 0).length,
+      },
     },
     rows: allRows,
     commits: memo.activity,
     key: normalizePath(root),
     ownersOf: (files) => ownersOf(files, arch, { topLevel }),
+    pageOf,
   };
 }
 
@@ -594,7 +637,8 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     internals: new Map(),
     placements: readPlacements(smDir),
   };
-  const groups = await groupByRoot(readItems(dir, smDir, now.getTime(), ctx.liveById), ctx.placements);
+  const items = readItems(dir, smDir, now.getTime(), ctx.liveById);
+  const groups = await groupByRoot(items, ctx.placements);
   const touches = new Map();
   for (const g of groups) for (const item of g.items) touches.set(item.summary.sessionId, touchOf(item, g.root, [dir, smDir]));
   // A repository a conversation edits shows as a project of its own, though no conversation started there.
@@ -646,6 +690,8 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     currency: currencyOf(userConfig.currency),
     totals: { today: sum('today'), d7: sum('d7'), d30: sum('d30') },
     budget: Number.isFinite(monthlyUSD) && monthlyUSD > 0 ? { monthlyUSD, used: round6(costOf(monthRows, ctx.prices).usd) } : null,
+    // The plan's weekly and 5-hour limits, from the limit messages in the histories (wa09): the account's, not a project's.
+    limits: planLimits(items.flatMap((i) => [i.summary.limitHit?.weekly, i.summary.limitHit?.session]).filter(Boolean), now.getTime()),
     projects,
   };
   Object.defineProperty(state, INTERNALS, { value: { chats: ctx.internals, changes }, enumerable: false });

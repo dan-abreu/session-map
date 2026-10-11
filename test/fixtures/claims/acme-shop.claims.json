@@ -1,0 +1,365 @@
+{
+ "version": 1,
+ "fixture": "acme-shop",
+ "notes": [
+  "Twelve claims about the acme-shop fixture, in the shape of section 5 of the contracts: `claim` is what the AI would send (plus the `sha` of each cite), `expect` is what the checker (B2-T4) must answer. 01 to 04 are true; 05 to 12 are planted false claims, one for each way a claim can be wrong, and each one is wrong in that way only: everything the checker looks at before its reason passes, and a claim that fails earlier than its reason would hide the check of the reason (the order is unknown-id, no-cite, file-missing, line-out, stale-sha, quote-mismatch, then the numbers of a fact).",
+  "`cites[].sha` is not written by the AI: the program attaches it from the read ledger, the sha of the file at the moment the text was sent in the request. The checker compares it with the sha of the file in the census today. Here the true ones carry the sha of the fixture file today (the test fixtures-model-answer.test.mjs recomputes it), 09 carries an old one, 07 points to a file that does not exist.",
+  "`expect.verdict`: approved (badge confirmed for a fact, interpretation for an explain, not-found for a not-found), rejected (checkClaim answers ok false with that reason) or downgraded (an important claim whose two readers disagree: it is not a claim any more, it becomes not-found with reason disagreement). \"Removed\" for the measure (limits.json claims.plantedRemoved = 1) means a planted claim whose verdict is not approved, so all eight must come out removed: rate 8/8.",
+  "`readings` exist only on important claims: two independent readers (what each one says it is about, and which facts) and one adversary (the indexes of the cites it knocks down). 04 agrees and the adversary knocks nothing: approved. 11 has readers who disagree about what the claim is about: downgraded. Importance is checked after the claim itself passed, so 11 passes the cite checks.",
+  "The fact check (12): a `fact` claim whose text has a number (a line, a count) that is not the one of the fact it repeats is wrong even if its citation is right. 01 says line 13 and the fact is at line 13; 12 says line 40.",
+  "Vocabulary of the checker for this fixture = every node and edge id of acme-shop.model-answer.json plus every fact id of acme-shop.answer.json. 05 uses an app and a route that are in neither."
+ ],
+ "claims": [
+  {
+   "planted": false,
+   "claim": {
+    "id": "claim:01",
+    "about": "cmp:apps/api#root",
+    "type": "fact",
+    "text": {
+     "en": "GET /status is declared at line 13 of apps/api/src/server.ts.",
+     "pt-BR": "GET /status é declarado na linha 13 de apps/api/src/server.ts."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/server.ts",
+      "line": 13,
+      "quote": "app.get('/status'",
+      "sha": "089a5ec232b4a38e"
+     }
+    ],
+    "factIds": [
+     "route:GET /status"
+    ],
+    "important": false
+   },
+   "expect": {
+    "verdict": "approved",
+    "badge": "confirmed"
+   }
+  },
+  {
+   "planted": false,
+   "claim": {
+    "id": "claim:02",
+    "about": "ctr:apps/worker",
+    "type": "explain",
+    "text": {
+     "en": "The worker starts a consumer for the emails queue, in the same place the queue name is written.",
+     "pt-BR": "O worker inicia um consumidor para a fila emails, no mesmo lugar em que o nome da fila é escrito."
+    },
+    "cites": [
+     {
+      "file": "apps/worker/src/worker.ts",
+      "line": 10,
+      "quote": "new Worker('emails', processEmail",
+      "sha": "c750e077d7a0f949"
+     }
+    ],
+    "factIds": [
+     "queue:emails"
+    ],
+    "important": false
+   },
+   "expect": {
+    "verdict": "approved",
+    "badge": "interpretation"
+   }
+  },
+  {
+   "planted": false,
+   "claim": {
+    "id": "claim:03",
+    "about": "ctr:apps/api",
+    "type": "not-found",
+    "text": {
+     "en": "No route that deletes an order exists in the api: the DELETE call in routes/orders.ts is only a comment.",
+     "pt-BR": "Nenhuma rota que apaga um pedido existe na api: a chamada DELETE em routes/orders.ts é só um comentário."
+    },
+    "cites": [],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "approved",
+    "badge": "not-found"
+   }
+  },
+  {
+   "planted": false,
+   "claim": {
+    "id": "claim:04",
+    "about": "ctr:packages/adapters",
+    "type": "explain",
+    "text": {
+     "en": "The adapters package charges cards through the payment provider SDK.",
+     "pt-BR": "O pacote adapters cobra cartões pelo SDK do provedor de pagamento."
+    },
+    "cites": [
+     {
+      "file": "packages/adapters/src/payments.ts",
+      "line": 4,
+      "quote": "new Stripe(key)",
+      "sha": "a8b595bbb21c3073"
+     }
+    ],
+    "factIds": [
+     "integration:stripe"
+    ],
+    "important": true
+   },
+   "expect": {
+    "verdict": "approved",
+    "badge": "interpretation"
+   },
+   "readings": [
+    {
+     "role": "reader",
+     "about": "ctr:packages/adapters",
+     "factIds": [
+      "integration:stripe"
+     ]
+    },
+    {
+     "role": "reader",
+     "about": "ctr:packages/adapters",
+     "factIds": [
+      "integration:stripe"
+     ]
+    },
+    {
+     "role": "adversary",
+     "rejects": []
+    }
+   ]
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:05",
+    "about": "ctr:apps/billing",
+    "type": "explain",
+    "text": {
+     "en": "The billing app sends the invoices every night.",
+     "pt-BR": "O app de cobrança envia as faturas toda noite."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/routes/orders.ts",
+      "line": 6,
+      "quote": "app.get('/orders/:id'",
+      "sha": "c4484f806ea8d7b3"
+     }
+    ],
+    "factIds": [
+     "route:GET /invoices"
+    ],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "unknown-id"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:06",
+    "about": "ctr:apps/web",
+    "type": "explain",
+    "text": {
+     "en": "The web app shows the cart and the orders of the customer.",
+     "pt-BR": "O app web mostra o carrinho e os pedidos do cliente."
+    },
+    "cites": [],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "no-cite"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:07",
+    "about": "cmp:apps/api/src/routes",
+    "type": "explain",
+    "text": {
+     "en": "The invoices are served from routes/invoices.ts.",
+     "pt-BR": "As faturas são servidas por routes/invoices.ts."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/routes/invoices.ts",
+      "line": 3,
+      "quote": "app.get('/invoices'",
+      "sha": "0123456789abcdef"
+     }
+    ],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "file-missing"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:08",
+    "about": "cmp:apps/api/src/services",
+    "type": "explain",
+    "text": {
+     "en": "Placing an order is done by a function at the end of the orders service.",
+     "pt-BR": "Fazer um pedido é função do fim do serviço de pedidos."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/services/orders.ts",
+      "line": 400,
+      "quote": "export async function placeOrder",
+      "sha": "fdba46319e949ee5"
+     }
+    ],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "line-out"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:09",
+    "about": "cmp:apps/api#root",
+    "type": "explain",
+    "text": {
+     "en": "The api prints a start-up message through a small log helper.",
+     "pt-BR": "A api imprime uma mensagem de início por um ajudante de log."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/log.ts",
+      "line": 1,
+      "quote": "export function logStartup",
+      "sha": "00000000deadbeef"
+     }
+    ],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "stale-sha"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:10",
+    "about": "cmp:apps/api/src/routes",
+    "type": "explain",
+    "text": {
+     "en": "Orders can be changed in part with a PATCH call.",
+     "pt-BR": "Os pedidos podem ser mudados em parte com uma chamada PATCH."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/routes/orders.ts",
+      "line": 6,
+      "quote": "app.patch('/orders/:id'",
+      "sha": "c4484f806ea8d7b3"
+     }
+    ],
+    "factIds": [],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "quote-mismatch"
+   }
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:11",
+    "about": "ctr:apps/api",
+    "type": "explain",
+    "text": {
+     "en": "The status check answers without a login.",
+     "pt-BR": "A checagem de status responde sem login."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/server.ts",
+      "line": 13,
+      "quote": "app.get('/status'",
+      "sha": "089a5ec232b4a38e"
+     }
+    ],
+    "factIds": [
+     "route:GET /status"
+    ],
+    "important": true
+   },
+   "expect": {
+    "verdict": "downgraded",
+    "badge": "not-found",
+    "reason": "disagreement"
+   },
+   "readings": [
+    {
+     "role": "reader",
+     "about": "ctr:apps/api",
+     "factIds": [
+      "route:GET /status"
+     ]
+    },
+    {
+     "role": "reader",
+     "about": "ctr:apps/web",
+     "factIds": [
+      "route:GET /api/health"
+     ]
+    },
+    {
+     "role": "adversary",
+     "rejects": []
+    }
+   ]
+  },
+  {
+   "planted": true,
+   "claim": {
+    "id": "claim:12",
+    "about": "cmp:apps/api#root",
+    "type": "fact",
+    "text": {
+     "en": "GET /status is declared at line 40 of apps/api/src/server.ts.",
+     "pt-BR": "GET /status é declarado na linha 40 de apps/api/src/server.ts."
+    },
+    "cites": [
+     {
+      "file": "apps/api/src/server.ts",
+      "line": 13,
+      "quote": "app.get('/status'",
+      "sha": "089a5ec232b4a38e"
+     }
+    ],
+    "factIds": [
+     "route:GET /status"
+    ],
+    "important": false
+   },
+   "expect": {
+    "verdict": "rejected",
+    "reason": "fact-mismatch"
+   }
+  }
+ ]
+}

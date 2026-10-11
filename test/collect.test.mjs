@@ -145,6 +145,7 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     const a = p.chats.find((c) => c.sessionId === A);
     assert.equal(a.partId, 'shop');
     assert.equal(a.partSource, 'files');
+    assert.deepEqual(a.partWhy, { rule: 'files', files: ['src/shop/cart.ts', 'src/shop/list.ts'] }, 'the page can say which files put it here');
     assert.equal(a.unitId, undefined);
     assert.equal(a.status, 'busy');
     assert.equal(a.live, true);
@@ -156,6 +157,8 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     const b = p.chats.find((c) => c.sessionId === B);
     assert.equal(b.partId, 'billing', 'the item code beats the files');
     assert.equal(b.partSource, 'code');
+    assert.deepEqual(b.partWhy, { rule: 'code', codes: ['bi01'] }, 'and which item code');
+    assert.deepEqual(p.conversations.find((r) => r.sessionId === B).partWhy, b.partWhy, 'the list row keeps the same reason');
     assert.equal(b.itemCode, 'bi01', 'the item it cites is the tip it works on');
     assert.equal(a.itemCode, null);
     assert.ok(Array.isArray(a.liveSteps) && a.liveSteps.every((st) => typeof st.kind === 'string' && 'target' in st), 'every chat carries its live steps');
@@ -211,9 +214,33 @@ test('collect hangs branches on parts by their diff and fills them from their ch
     const a = p.chats.find((c) => c.sessionId === A);
     assert.equal(a.workCellId, 'feature/cart');
     assert.equal(a.workCellSource, 'branch');
+    assert.deepEqual(a.workCellWhy, { rule: 'branch', branch: 'feature/cart' });
     assert.ok(readEvents(smDir, p.id).some((e) => e.kind === 'born' && e.workCellId === 'feature/cart'));
     const born = p.activity.find((i) => i.kind === 'born' && i.workCellId === 'feature/cart');
     assert.deepEqual(born.partIds, ['shop']);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('a branch takes the checklist with the longest matching name, not the first tool listed', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'shop'), { arch: true });
+  try {
+    // "export" (OpenSpec, listed first) is contained in the branch too, but "export-csv" (Kiro) is the closer name.
+    mkdirSync(join(root, 'openspec', 'changes', 'export'), { recursive: true });
+    writeFileSync(join(root, 'openspec', 'changes', 'export', 'tasks.md'), '- [ ] wide export\n');
+    mkdirSync(join(root, '.kiro', 'specs', 'export-csv'), { recursive: true });
+    writeFileSync(join(root, '.kiro', 'specs', 'export-csv', 'tasks.md'), '- [x] header row\n- [ ] quote commas\n');
+    git(root, ['checkout', '-q', '-b', 'feature/export-csv']);
+    writeFileSync(join(root, 'src', 'shop', 'cart.ts'), 'b\n');
+    git(root, ['commit', '-q', '-am', 'csv']);
+    git(root, ['checkout', '-q', 'main']);
+    writeChat(dir, { id: A, cwd: root, branch: 'feature/export-csv', title: 'CSV export' });
+
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    const cell = p.workCells.find((w) => w.id === 'feature/export-csv');
+    assert.equal(cell.openspec.tool, 'Kiro');
+    assert.equal(cell.openspec.change, 'export-csv');
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
@@ -265,6 +292,7 @@ test('a project without architecture shows only the project and loose chats, and
     assert.deepEqual([sizes.total, sizes.unowned.files], [{ files: 1, lines: 1 }, 1], 'with no map, every file of the program has no box');
     assert.equal(p.chats[0].partId, null);
     assert.equal(p.chats[0].partSource, 'none');
+    assert.deepEqual(p.chats[0].partWhy, { rule: 'none' });
     assert.equal(calls, 0);
     assert.deepEqual(p.decisions, []);
   } finally {
@@ -298,6 +326,7 @@ test('a chat no code or file places is shown to the AI with the parts as candida
     const a = p.chats.find((c) => c.sessionId === A);
     assert.equal(a.partId, 'billing');
     assert.equal(a.partSource, 'ai');
+    assert.deepEqual(a.partWhy, { rule: 'ai' });
     assert.deepEqual(p.arch.parts.find((x) => x.id === 'billing').chatIds, [A]);
     assert.equal(prompts.length, 1, 'nothing changed, nothing asked again');
   } finally {
@@ -319,6 +348,38 @@ test('with ai.enabled false collect stays on the rules and never calls claude', 
     assert.equal(calls, 0);
     assert.equal(state.projects[0].ai, null);
     assert.equal(state.projects[0].chats[0].partSource, 'none');
+  } finally {
+    forgetLife(smDir);
+    cleanup(dir, smDir, join(root, '..'));
+  }
+});
+
+test('a relation gets the AI\'s plain-words reason in the background, once, and none when the AI is off (mm32)', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'garden'), { arch: true });
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
+    writeChat(dir, { id: B, cwd: root, title: 'Invoices', prompts: ['work on `bi01` now'], edits: ['src/shop/cart.ts'], mtimeAgo: 10 * 60_000 });
+    const asked = [];
+    const run = async (prompt) => {
+      asked.push(prompt);
+      return /why two parts|tied together/.test(prompt) ? { ok: true, value: { why: 'Invoices also touch the cart.' }, costUSD: 0.001 } : { ok: true, value: { partId: null }, costUSD: 0.001 };
+    };
+    const ai = { bin: 'fake-claude', run };
+    const first = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects[0];
+    assert.equal(first.arch.links.length, 1);
+    assert.equal(first.arch.links[0].why, undefined, 'the sentence comes in the background');
+    await settleAi(smDir);
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
+    await settleAi(smDir);
+    assert.equal(p.arch.links[0].why, 'Invoices also touch the cart.');
+    assert.equal(asked.filter((x) => /tied together/.test(x)).length, 1, 'nothing changed, nothing asked again');
+
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: false } }));
+    forgetLife(smDir);
+    const [off] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
+    assert.equal(off.arch.links[0].why, undefined, 'the AI off: the relation stays as it was');
   } finally {
     forgetLife(smDir);
     cleanup(dir, smDir, join(root, '..'));
@@ -732,6 +793,11 @@ test('the owner moves a conversation to another project and part and renames it:
     assert.deepEqual(byName['acme-shop'].conversations.map((r) => r.sessionId), [B]);
     const moved = byName.garden.chats.find((c) => c.sessionId === A);
     assert.deepEqual([moved.partId, moved.partSource, moved.title], ['billing', 'owner', 'Garden invoices']);
+    assert.deepEqual(moved.partWhy, { rule: 'owner' });
+    writeFileSync(join(smDir, 'placements.json'), JSON.stringify({ [A]: { root: garden, partId: null } }));
+    const off = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const offChat = off.projects.find((p) => p.name === 'garden').chats.find((c) => c.sessionId === A);
+    assert.deepEqual([offChat.partId, offChat.partWhy], [null, { rule: 'owner', none: true }], 'moved to no part: the reason says so');
     const row = byName.garden.conversations.find((r) => r.sessionId === A);
     assert.deepEqual([row.partId, row.title], ['billing', 'Garden invoices']);
     assert.deepEqual(byName.garden.arch.parts.find((x) => x.id === 'billing').chatIds, [A]);
@@ -901,4 +967,128 @@ test('a conversation removed from session-map is nowhere in the state, but its c
     assert.deepEqual(p.cost, before.projects[0].cost);
     assert.deepEqual(after.totals, before.totals);
   } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('a project with no chat on the map still says where its 30-day cost went (sb06)', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Old cart', edits: ['src/shop/cart.ts'], endedAgo: 3 * 24 * HOUR });
+    writeChat(dir, { id: B, cwd: root, title: 'Gone', endedAgo: 2 * 24 * HOUR });
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([B]));
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.deepEqual(p.chats, [], 'nothing recent is on the map');
+    assert.ok(p.cost.d30 > 0);
+    assert.deepEqual(p.costWhy, { older: 1, removed: 1 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('sb06: an old chat that is still live or on an open branch is on the map, so it is not counted as older', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Live old', endedAgo: 3 * 24 * HOUR });
+    writeSession(dir, { pid: 1, id: A, cwd: root });
+    writeChat(dir, { id: B, cwd: root, title: 'Gone', endedAgo: 2 * 24 * HOUR });
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.deepEqual(p.chats.map((c) => c.sessionId), [A]);
+    assert.deepEqual(p.costWhy, { older: 1, removed: 0 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('sb06: a chat exactly 24 h old is hidden (the check is strict), one a minute younger is shown', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Edge', endedAgo: 24 * HOUR });
+    let [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.deepEqual(p.chats, []);
+    assert.deepEqual(p.costWhy, { older: 1, removed: 0 });
+    writeChat(dir, { id: A, cwd: root, title: 'Edge', endedAgo: 24 * HOUR - 60_000 });
+    [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.equal(p.chats.length, 1, 'a shown chat means no note');
+    assert.deepEqual(p.costWhy, { older: 0, removed: 0 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('sb06: a hidden chat whose paid usage is all older than 30 days does not explain the 30-day cost', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Ancient usage', endedAgo: 40 * 24 * HOUR, mtimeAgo: 3 * 24 * HOUR });
+    writeChat(dir, { id: B, cwd: root, title: 'Gone', endedAgo: 2 * 24 * HOUR });
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([B]));
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.deepEqual(p.costWhy, { older: 0, removed: 1 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('sb06: a removed chat that is also live counts only as removed', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Live and removed', endedAgo: 3 * 24 * HOUR });
+    writeSession(dir, { pid: 1, id: A, cwd: root });
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([A]));
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.deepEqual(p.chats, []);
+    assert.deepEqual(p.costWhy, { older: 0, removed: 1 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('sb06: a project with a chat on the map has chats, so the page shows no note', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Recent' });
+    writeChat(dir, { id: B, cwd: root, title: 'Old', endedAgo: 3 * 24 * HOUR });
+    const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects;
+    assert.ok(p.chats.length > 0);
+    assert.deepEqual(p.costWhy, { older: 1, removed: 0 });
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
+test('wa09: a conversation with a weekly and a session hit keeps both flags, in either order', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'));
+  try {
+    const line = (ago, type, resetsAt, text) => ({ type: 'assistant', timestamp: iso(ago), error: 'rate_limit', isApiErrorMessage: true, quotaLimits: { status: 'rejected', resetsAt: Date.parse(resetsAt) / 1000, rateLimitType: type },
+      message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text }] } });
+    const weekly = (ago) => line(ago, 'seven_day', '2026-09-12T21:00:00Z', "You've hit your weekly limit · resets Sep 12, 6pm");
+    const session = (ago) => line(ago, 'five_hour', '2026-09-10T20:00:00Z', "You've hit your session limit · resets 5pm");
+    for (const tail of [[weekly(HOUR), session(HOUR / 2)], [session(HOUR), weekly(HOUR / 2)]]) {
+      writeChat(dir, { id: A, cwd: root, title: 'Cart page', tail });
+      const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+      assert.equal(state.limits.weekly.hit, true);
+      assert.equal(state.limits.session.hit, true);
+    }
+  } finally { cleanup(dir, smDir); }
+});
+
+test('wa09: the plan limits come from the limit messages in the histories, as flags for the state', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'));
+  try {
+    const empty = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    assert.deepEqual(empty.limits, { weekly: { hit: false, resetsAt: null, resetsText: null }, session: { hit: false, resetsAt: null, resetsText: null } });
+
+    const resets = Date.parse('2026-09-12T21:00:00Z') / 1000;
+    const limitLine = { type: 'assistant', timestamp: iso(HOUR / 2), error: 'rate_limit', isApiErrorMessage: true, quotaLimits: { status: 'rejected', resetsAt: resets, rateLimitType: 'seven_day' },
+      message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text: "You've hit your weekly limit · resets Sep 12, 6pm (America/Fortaleza)" }] } };
+    writeChat(dir, { id: A, cwd: root, title: 'Cart page', tail: [limitLine] });
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    assert.deepEqual(state.limits.weekly, { hit: true, resetsAt: '2026-09-12T21:00:00.000Z', resetsText: 'Sep 12, 6pm (America/Fortaleza)' });
+    assert.equal(state.limits.session.hit, false);
+
+    const later = await collect({ dir, smDir, now: new Date('2026-09-13T00:00:00Z'), isAlive: alive, ai: NO_AI });
+    assert.equal(later.limits.weekly.hit, false, 'once the reset time has passed the flag is off');
+  } finally { cleanup(dir, smDir); }
 });

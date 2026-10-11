@@ -66,3 +66,31 @@ export function setTidy(smDir, root, on) {
   writeAtomic(file, `${JSON.stringify({ ...config, projects }, null, 2)}\n`);
   return { ok: true, tidy: on };
 }
+
+// Discover's catalog refreshes itself: the 5-minute sweep asks, and the catalog's own 24 h cache decides whether GitHub is
+// called at all. One run at a time (the same run the page's tab shares), and after a limit or an error it waits an hour
+// before trying again, so a rate limit is never hammered. load(false) → {stale, ...}.
+export const CATALOG_RETRY_MS = 60 * 60_000;
+
+export function createCatalogRefresher({ load, now = Date.now, retryMs = CATALOG_RETRY_MS }) {
+  let running = null;
+  let failedAt = -Infinity;
+  const fail = () => { failedAt = now(); };
+  function refresh() {
+    if (running) return running;
+    if (now() - failedAt < retryMs) return Promise.resolve({ skipped: 'cooling' });
+    running = (async () => {
+      try {
+        // The second argument asks for the deep read (the pages past the first): only the background waits for those.
+        const res = await load(false, true);
+        if (res.stale) fail();
+        return { stale: res.stale === true };
+      } catch {
+        fail();
+        return { error: 'failed' };
+      }
+    })().finally(() => { running = null; });
+    return running;
+  }
+  return { refresh };
+}

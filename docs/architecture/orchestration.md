@@ -65,8 +65,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] **The orchestration chat wears the roles of a board** `or09`
   - CEO and strategy, Product, Marketing, Finance, Operations and delivery, Technology (the senior conductor), Legal and privacy.
   - Every relevant proposal is analyzed from the angles that apply (value, cost to build and to run, return, timing, positioning, legal risk) and ends with a recommendation. It uses the `pm-product-strategy`, `pm-market-research` and `pm-product-discovery` skills when they fit, plus the real costs session-map already has.
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [ ] **Business view of the project** `or10`
   - Cost per feature, priority by impact × effort × cost, a delivery roadmap.
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 
 ### Later (ideas, not committed)
 

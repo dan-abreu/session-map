@@ -1,4 +1,6 @@
 {
   "extractors": { "accuracy": 1, "invention": 0 },
+  "model": { "accuracy": 1, "invention": 0 },
+  "claims": { "plantedRemoved": 1 },
   "ai": { "invention": 0.02 }
 }

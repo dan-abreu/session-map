@@ -454,3 +454,35 @@ test('bootTime is a moment in the past', () => {
   const at = bootTime();
   assert.ok(Number.isFinite(at) && at < Date.now());
 });
+
+test('readTranscript keeps the newest plan limit message of each kind in the conversation, and none when there is none (wa09)', () => {
+  assert.equal(readTranscript(transcript(A)).limitHit, null);
+  withTempDir((dir) => {
+    const line = (at, text, resetsAt) => JSON.stringify({
+      type: 'assistant', timestamp: at, sessionId: A, cwd: '/work/acme-shop', error: 'rate_limit', isApiErrorMessage: true,
+      quotaLimits: { status: 'rejected', resetsAt, rateLimitType: 'five_hour' }, message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const file = join(dir, `${A}.jsonl`);
+    writeFileSync(file, `${line('2026-09-01T10:00:00.000Z', "You've hit your session limit · resets 1pm", 1788000000)}\n${line('2026-09-01T15:00:00.000Z', "You've hit your session limit · resets 6pm", 1788020000)}\n`);
+    const s = readTranscript(file);
+    assert.deepEqual([s.limitHit.session.kind, s.limitHit.session.resetsText, s.limitHit.session.at], ['session', '6pm', '2026-09-01T15:00:00.000Z']);
+    assert.equal(s.limitHit.weekly, null);
+  });
+});
+
+test('readTranscript keeps a weekly and a session hit side by side, whichever came last (wa09)', () => {
+  withTempDir((dir) => {
+    const line = (at, type, text, resetsAt) => JSON.stringify({
+      type: 'assistant', timestamp: at, sessionId: A, cwd: '/work/acme-shop', error: 'rate_limit', isApiErrorMessage: true,
+      quotaLimits: { status: 'rejected', resetsAt, rateLimitType: type }, message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const weekly = (at) => line(at, 'seven_day', "You've hit your weekly limit · resets Oct 1, 6pm", 1790888400);
+    const session = (at) => line(at, 'five_hour', "You've hit your session limit · resets 3pm", 1788020000);
+    const file = join(dir, `${A}.jsonl`);
+    for (const lines of [[weekly('2026-09-01T10:00:00.000Z'), session('2026-09-01T15:00:00.000Z')], [session('2026-09-01T10:00:00.000Z'), weekly('2026-09-01T15:00:00.000Z')]]) {
+      writeFileSync(file, `${lines.join('\n')}\n`);
+      const s = readTranscript(file);
+      assert.deepEqual([s.limitHit.weekly?.kind, s.limitHit.session?.kind], ['weekly', 'session']);
+    }
+  });
+});

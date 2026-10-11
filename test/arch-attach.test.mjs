@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachToParts, linkParts, partByCodes, itemByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
+import { attachToParts, codesInPart, filesVotingFor, linkParts, partByCodes, itemByCodes, partOfFiles, partsTouched, waitingItems } from '../server/arch/attach.mjs';
 
 const item = (code, extra = {}) => ({ code, title: `Item ${code}`, detail: [], status: 'todo', who: null, weight: null, milestone: null, line: 1, ...extra });
 const part = (id, codePaths, items = []) => ({
@@ -62,6 +62,33 @@ test('partByCodes: on a tie the part of the latest mention wins', () => {
   const arch = archOf(part('orders', [], [item('or01')]), part('pay', [], [item('pa01')]));
   assert.equal(partByCodes([{ code: 'or01', n: 2 }, { code: 'pa01', n: 2 }], arch), 'pay');
   assert.equal(partByCodes([{ code: 'pa01', n: 2 }, { code: 'or01', n: 2 }], arch), 'orders');
+});
+
+test('codesInPart: the codes the conversation cited that belong to the part, newest mention first, capped', () => {
+  const arch = archOf(part('orders', [], [item('or01'), item('or02'), item('or03'), item('or04')]), part('pay', [], [item('pa01')]));
+  const mentions = [{ code: 'or01', n: 1 }, { code: 'PA01', n: 1 }, { code: 'or02', n: 1 }, { code: 'zz99', n: 3 }];
+  assert.deepEqual(codesInPart(mentions, arch, 'orders'), ['or02', 'or01'], 'other parts and unknown codes are left out');
+  assert.deepEqual(codesInPart([...mentions, { code: 'or03', n: 1 }, { code: 'or04', n: 1 }], arch, 'orders'), ['or04', 'or03', 'or02'], 'three at most');
+  assert.deepEqual(codesInPart(undefined, arch, 'orders'), []);
+  assert.deepEqual(codesInPart(mentions, arch, 'nope'), []);
+});
+
+test('filesVotingFor: the files that voted for the winner, even when each one alone ties between two parts', () => {
+  const arch = archOf(part('a', ['lib/x', 'lib/y']), part('b', ['lib/x']), part('c', ['lib/y']));
+  const files = ['lib/x/f.js', 'lib/y/g.js', 'README.md'];
+  assert.equal(partOfFiles(files, arch).partId, 'a');
+  assert.equal(partOfFiles(['lib/x/f.js'], arch).partId, null, 'alone, a file of the tie places nothing');
+  assert.deepEqual(filesVotingFor(files, arch, 'a'), ['lib/x/f.js', 'lib/y/g.js'], 'but both voted for a; the README did not vote');
+});
+
+test('filesVotingFor: when specific votes decided the part, a file that only reached a broad folder is not listed', () => {
+  const arch = archOf(part('web', ['apps/web', 'apps/web/src/home']), part('api', ['apps/api']));
+  const files = ['apps/web/package.json', 'apps/web/src/home/a.ts'];
+  assert.equal(partOfFiles(files, arch).partId, 'web');
+  assert.deepEqual(filesVotingFor(files, arch, 'web'), ['apps/web/src/home/a.ts']);
+  assert.deepEqual(filesVotingFor(['apps/web/package.json'], arch, 'web'), ['apps/web/package.json'], 'with only broad votes, those are the evidence');
+  assert.deepEqual(filesVotingFor(files, arch, 'api'), []);
+  assert.deepEqual(filesVotingFor([], arch, 'web'), []);
 });
 
 test('attachToParts hangs chats and open branches on their parts without touching the input', () => {

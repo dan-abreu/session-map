@@ -6,6 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { CONTEXT_HEAD, personsWords } from '../chat/prompt.mjs';
 import { log } from '../log.mjs';
+import { limitHitOf } from './limits.mjs';
 
 const UUID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const CARD_RE = /```session-map[ \t]*\r?\n([\s\S]*?)```/g;
@@ -143,17 +144,24 @@ function humanPromptOf(entry) {
   return parts.length ? parts.join('\n') : null;
 }
 
-// The run a Workflow call launched: Claude Code answers the launch with the run's id (later status checks answer in text).
+// What a Workflow or Agent call launched: Claude Code answers the launch with the run's id (later status checks answer in
+// text) or the helper's id, and with the words the conversation gave it (the team's summary, the helper's description).
+// {id, words | null}, or null.
 function launchOf(entry) {
   const r = entry.type === 'user' ? entry.toolUseResult : null;
-  return r && typeof r === 'object' && typeof r.runId === 'string' && RUN_ID_RE.test(r.runId) ? r.runId : null;
+  if (!r || typeof r !== 'object') return null;
+  const said = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, REQUEST_MAX) : null);
+  if (typeof r.runId === 'string' && RUN_ID_RE.test(r.runId)) return { id: r.runId, words: said(r.summary) };
+  if (typeof r.agentId === 'string' && /^[\w-]+$/.test(r.agentId) && typeof r.prompt === 'string') return { id: r.agentId, words: said(r.description) };
+  return null;
 }
 
-// What the owner asked right before a workflow started: their words, when, and the item codes they named.
-function requestOf(prompt) {
+// What the owner asked right before a workflow or helper started: their words, when, the item codes they named and, when
+// the conversation worded the launch itself, those words (the owner's message may answer something else).
+function requestOf(prompt, words = null) {
   const text = personsWords(prompt.text).slice(0, REQUEST_MAX);
   const codes = [...new Set([...text.matchAll(ITEM_CODE_RE)].map((m) => m[1].toLowerCase()))];
-  return { text, ts: prompt.ts, codes };
+  return { text, ts: prompt.ts, codes, ...(words ? { words } : {}) };
 }
 
 function usageRowOf(entry, fallbackId) {
@@ -361,6 +369,7 @@ function summarize(entries, sessionId) {
   let lastHuman = null;
   let fromPage = false;
   let turnOpen = false;
+  const limitHits = {};
   const usageById = new Map();
   const toolUses = [];
   const results = new Map();
@@ -394,11 +403,13 @@ function summarize(entries, sessionId) {
       noteCodes(prompt);
       lastHuman = { text: prompt, ts: entry.timestamp ?? null };
     }
-    const run = launchOf(entry);
-    if (run && lastHuman && !launches[run]) launches[run] = requestOf(lastHuman);
+    const launch = launchOf(entry);
+    if (launch && lastHuman && !launches[launch.id]) launches[launch.id] = requestOf(lastHuman, launch.words);
     if ((entry.type === 'user' || entry.type === 'assistant') && !entry.isSidechain && !entry.isMeta) turnOpen = turnOpenAfter(entry, turnOpen);
 
     if (entry.type === 'assistant') {
+      const hit = limitHitOf(entry);
+      if (hit) limitHits[hit.kind] = hit;
       const row = usageRowOf(entry, `line-${i}`);
       if (row) addUsage(usageById, row);
       const text = textOf(blocksOf(entry).filter((b) => b.type === 'text'));
@@ -467,6 +478,8 @@ function summarize(entries, sessionId) {
     endedAt,
     usage: [...usageById.values()],
     lastCardText,
+    // The newest plan-limit hit of each kind in this conversation, or null when it has none (wa09).
+    limitHit: limitHits.weekly || limitHits.session ? { weekly: limitHits.weekly ?? null, session: limitHits.session ?? null } : null,
   };
 }
 
@@ -515,13 +528,13 @@ function fullScan(path, st) {
   let lastHuman = null;
   forEachLine(path, (line, i) => {
     const maybeHuman = line.includes('"type":"user"') && !line.includes('"tool_result"');
-    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
+    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"agentId"') &&!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
     const prompt = maybeHuman ? humanPromptOf(entry) : null;
     if (prompt) lastHuman = { text: prompt, ts: entry.timestamp ?? null };
-    const run = launchOf(entry);
-    if (run && lastHuman && !launches[run]) launches[run] = requestOf(lastHuman);
+    const launch = launchOf(entry);
+    if (launch && lastHuman && !launches[launch.id]) launches[launch.id] = requestOf(lastHuman, launch.words);
     const row = usageRowOf(entry, `line-${i}`);
     if (row) addUsage(usageById, row);
     for (const card of cardsIn(entry)) lastCardText = card;
@@ -590,7 +603,7 @@ export function helperAgents(sessionDir) {
     const label = labels.get(id) ?? (typeof meta?.description === 'string' ? meta.description : '');
     // A workflow agent names its workflow (mm31), so a change it made leads back to the request that launched it.
     const workflowId = basename(dirname(dirname(file))) === 'workflows' ? basename(dirname(file)) : null;
-    return { file, label: label.slice(0, STEP_MAX), model: typeof meta?.model === 'string' ? meta.model : null, workflowId };
+    return { file, agentId: id, label: label.slice(0, STEP_MAX), model: typeof meta?.model === 'string' ? meta.model : null, workflowId };
   });
 }
 

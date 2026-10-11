@@ -20,6 +20,7 @@ import { flowKey, matchParts, parseFlow } from '../web/flow.js';
 import { ownersAllOf } from './attach.mjs';
 import { programOnly } from './flow.mjs';
 import { ACTORS, CATALOG_VERSION, actorOfApp, catalogOfLabel, linkLabelKey, serviceById, serviceOf } from './flowcatalog.mjs';
+import { detectJourneys } from './flowjourneys.mjs';
 import { EXTRACTORS, VERSION as SCANNER, scanFile, scanHooks, scanManifest, scanPackageJson } from './flowscan.mjs';
 import { MERMAID_FENCE_RE, slug } from './parse.mjs';
 
@@ -173,10 +174,12 @@ const SYNTH_LAYERS = { 'l:actors': ['actors', 'flow.l1.layer.actors', 'Who uses 
 // The whole model from the two sides. scans: { path: { signals, imports } } (files of no interest left out by the
 // caller); owners: Map(path → [partId]); resolve(from, spec) → path | null; packageJson: { path, name, bin, deps };
 // hooks: { path, scripts }; plugin: { path } | null; manifests: [{ path, deps }]; hosting: [path]; shas: Map(path → sha)
-// for the file hashes. Pure.
+// for the file hashes. trace: a Map the caller may pass to learn, for each arrow, the files behind it (level 2, fl09):
+// edgeId → [{ file, other, line, via }], file being the code on the part's side (and other the file it imports, for an
+// import between parts); it changes nothing in the model. Pure.
 export function assembleModel({
   arch: archIn, readmeText = null, scans = {}, owners = new Map(), resolve = () => null, packageJson = null, hooks = null, plugin = null,
-  manifests = [], hosting = [], shas = null, source = archIn?.source ?? 'none', projectId = null, notes = [], limits: limitsIn = {},
+  manifests = [], hosting = [], shas = null, source = archIn?.source ?? 'none', projectId = null, notes = [], limits: limitsIn = {}, trace = null,
 }) {
   const limits = { ...LIMITS, ...limitsIn };
   const arch = programOnly(archIn);
@@ -200,7 +203,12 @@ export function assembleModel({
   };
   const between = (a, b, kinds) => [...edges.values()].find((e) => kinds.includes(e.kind) && ((e.from === a && e.to === b) || (e.from === b && e.to === a)));
   // An arrow to or from an actor or service: the README's own when it drew one, else a new one with the catalog's words.
-  const link = (from, to, kind, evidence) => {
+  const traced = (e, file, other, evidence) => {
+    if (!trace || !file) return;
+    if (!trace.has(e.id)) trace.set(e.id, []);
+    trace.get(e.id).push({ file, other, line: evidence.line ?? null, via: evidence.via });
+  };
+  const link = (from, to, kind, evidence, file = null) => {
     const other = kind === 'actor' ? from : from.startsWith('svc:') ? from : to;
     let e = between(from, to, [kind, 'flow']);
     if (!e) {
@@ -208,6 +216,7 @@ export function assembleModel({
       edges.set(e.id, e);
     } else if (e.label.missing && catalogLabel(other)) e.label = labelOf({ from: 'catalog', key: catalogLabel(other) });
     e.detected.push(evidence);
+    traced(e, file, null, evidence);
   };
   const touch = (node, file, evidence) => {
     node.detected.push(evidence);
@@ -220,12 +229,12 @@ export function assembleModel({
   };
   const partsOfFile = (file) => ownerOf(file).map((p) => `part:${p}`);
   const serviceEdges = (svc, file, evidence) => {
-    for (const part of partsOfFile(file)) (svc.dir === 'in' ? link(svc.id, part, 'service', evidence) : link(part, svc.id, 'service', evidence));
+    for (const part of partsOfFile(file)) (svc.dir === 'in' ? link(svc.id, part, 'service', evidence, file) : link(part, svc.id, 'service', evidence, file));
   };
   const actorFrom = (actorId, files, evidence) => {
     const n = ensure(actorId, 'actor');
     touch(n, evidence.file, evidence);
-    for (const f of files) for (const part of partsOfFile(f)) link(actorId, part, 'actor', evidence);
+    for (const f of files) for (const part of partsOfFile(f)) link(actorId, part, 'actor', evidence, f);
   };
 
   // Services and actors seen in the code, file by file in path order.
@@ -286,15 +295,16 @@ export function assembleModel({
         for (const consumer of consumers) {
           if (provider === consumer || consumers.includes(provider)) continue;
           const k = `${provider}>${consumer}`;
-          const pair = pairs.get(k) ?? { provider, consumer, names: new Set(), evidence: [] };
+          const pair = pairs.get(k) ?? { provider, consumer, names: new Set(), evidence: [], files: [] };
           for (const n of imp.names ?? []) pair.names.add(n);
           pair.evidence.push(evidenceOf(path, imp.line, 'import'));
+          pair.files.push([path, target]);
           pairs.set(k, pair);
         }
       }
     }
   }
-  for (const { provider, consumer, names, evidence } of [...pairs.values()].sort((a, b) => `${a.provider}>${a.consumer}`.localeCompare(`${b.provider}>${b.consumer}`))) {
+  for (const { provider, consumer, names, evidence, files } of [...pairs.values()].sort((a, b) => `${a.provider}>${a.consumer}`.localeCompare(`${b.provider}>${b.consumer}`))) {
     const from = `part:${provider}`;
     const to = `part:${consumer}`;
     let e = between(from, to, ['flow']) ?? between(from, to, ['uses']);
@@ -304,6 +314,7 @@ export function assembleModel({
     }
     e.detected.push(...evidence);
     e.names = [...new Set([...e.names, ...names])];
+    files.forEach(([file, target], i) => traced(e, file, target, evidence[i]));
   }
 
   // Relations from chats, branches and file links: a hidden "related" line where nothing else joins the two parts.
@@ -395,7 +406,7 @@ export function assembleModel({
   }).filter((l) => outNodes.some((n) => n.layer === l.id));
   return {
     version: MODEL_VERSION, scanner: SCANNER, catalog: CATALOG_VERSION, extractors: { ...EXTRACTORS }, projectId, source, generatedAt: null,
-    layers: outLayers, nodes: outNodes, edges: outEdges, journeys: [],
+    layers: outLayers, nodes: outNodes, edges: outEdges, journeys: detectJourneys({ nodes: outNodes, edges: outEdges }),
     counts: { nodes: outNodes.length, edges: outEdges.length, unlabeled: outEdges.filter((e) => e.label.missing).length, hidden: outEdges.filter((e) => e.hidden).length, cut },
     notes: [...notes],
   };
@@ -507,10 +518,13 @@ function workspaceOf(path, workspaces) {
 // Reads the project (only reads it) and builds the model, reusing every file whose size and time did not change and
 // every scan whose file content did not change. The merge is redone each time: it is pure and cheap, and import arrows
 // depend on files of other parts. The cache is written only when something in it changed. root null (the demo, a
-// project with no folder) gives the declared side only and writes nothing.
+// project with no folder) gives the declared side only and writes nothing. side: an object the caller may pass to get
+// what level 2 (fl09) needs and the model does not carry, kept in memory only: { ready, owners: Map(path → [partId]),
+// links: Map(path → [{ target, line, names }]) (imports that reach a file the Flow read), trace (see assembleModel),
+// paths (every file of the project), topLevel, entries (what the program itself runs), program, shas }.
 export async function buildFlowModel({
   root, arch, smDir = null, projectId = null, source = arch?.source ?? 'worktree', readFile = readFileSync,
-  now = () => new Date(), maxFiles = FILES_MAX, maxBytes = BYTES_MAX,
+  now = () => new Date(), maxFiles = FILES_MAX, maxBytes = BYTES_MAX, side = null,
 }) {
   const notes = source === 'main-branch' ? ['code-from-folder'] : [];
   const bare = (extraNotes) => {
@@ -624,14 +638,27 @@ export async function buildFlowModel({
   const codeScans = Object.fromEntries(code.filter((x) => scans[x.path]).map((x) => [x.path, scans[x.path]]));
   const manifests = Object.entries(scans).filter(([, s]) => s.manifest?.deps).map(([path, s]) => ({ path, deps: s.manifest.deps }));
   const shas = new Map(Object.entries(rows).map(([p, r]) => [p, r.sha]));
+  const trace = side ? new Map() : null;
   const model = assembleModel({
-    arch, readmeText, scans: codeScans, owners, resolve, source, projectId, notes, shas, manifests,
+    arch, readmeText, scans: codeScans, owners, resolve, source, projectId, notes, shas, manifests, trace,
     packageJson: rootPkg ? { path: 'package.json', ...rootPkg } : null,
     hooks: hooksScan.length ? { path: 'hooks/hooks.json', scripts: hooksScan } : null,
     plugin: scans['.claude-plugin/plugin.json'] ? { path: '.claude-plugin/plugin.json' } : null,
     hosting: Object.entries(scans).filter(([, s]) => s.hosting).map(([p]) => p),
   });
 
+  if (side) {
+    const links = new Map();
+    for (const [path, scan] of Object.entries(codeScans)) {
+      const out = [];
+      for (const imp of scan.imports ?? []) {
+        const target = resolve(path, imp.spec);
+        if (target && target !== path && codeScans[target]) out.push({ target, line: imp.line ?? null, names: [...(imp.names ?? [])] });
+      }
+      if (out.length) links.set(path, out);
+    }
+    Object.assign(side, { ready: true, owners, links, trace, paths: all, topLevel, entries, program, shas, scanned: Object.keys(codeScans) });
+  }
   const recomputed = model.nodes.filter((n) => cache?.nodes[n.id]?.filesHash !== n.filesHash).map((n) => n.id).sort();
   const nodeHashes = Object.fromEntries(model.nodes.map((n) => [n.id, { filesHash: n.filesHash }]));
   const digest = sha16(JSON.stringify({ rows, scans, model }));

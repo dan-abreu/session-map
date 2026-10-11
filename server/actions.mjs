@@ -32,6 +32,11 @@ function findChat(state, sessionId) {
   return null;
 }
 
+// The actions that only write session-map's own lists: a state a few seconds old is enough for them. Open and close start
+// or stop a process, so they wait for a fresh one.
+const LIST_ACTIONS = new Set(['archive', 'unarchive', 'delete', 'dismiss-cut']);
+export const listActionOn = (state, body) => LIST_ACTIONS.has(body?.action) && typeof body.sessionId === 'string' && findChat(state, body.sessionId) !== null;
+
 function findWorkCell(state, frontId, projectId) {
   for (const project of state.projects) {
     if (projectId && project.id !== projectId) continue;
@@ -138,8 +143,9 @@ async function dispatch(body, deps) {
     case 'close':
       return close(chat, info, deps);
     // Delete hides the conversation from session-map only (mm43): its transcript and the projects are never touched.
+    // One the chat hub drives is the hub's to judge: kept idle after its turn, its process is closed first; mid-turn, refused.
     case 'delete':
-      if (chat.status === 'busy' || deps.driving?.has(chat.sessionId)) return reply(409, { error: 'busy' });
+      if (deps.driving?.has(chat.sessionId) ? !(await deps.closeIdle?.(chat.sessionId)) : chat.status === 'busy') return reply(409, { error: 'busy' });
       addRemoved(deps.smDir, chat.sessionId);
       return reply(200);
     case 'dismiss-cut':
@@ -170,7 +176,8 @@ export function logAction(smDir, body, status) {
   }
 }
 
-// deps: state (from collect), dir, smDir, driving (the ids the chat hub runs now); spawner, processName, processStart, kill and platform are replaceable for tests.
+// deps: state (from collect), dir, smDir, driving (the ids the chat hub runs now), closeIdle(sessionId) (the hub's: closes
+// a chat it keeps idle, false mid-turn); spawner, processName, processStart, kill and platform are replaceable for tests.
 export async function runAction(body, { processName = processNameDefault, processStart = processStartDefault, kill = killProcess, ...deps }) {
   const res = await dispatch(body, { processName, processStart, kill, ...deps });
   logAction(deps.smDir, body, res.status);

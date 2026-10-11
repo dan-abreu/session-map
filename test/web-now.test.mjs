@@ -100,6 +100,30 @@ test('nowLine words the strip folded to one line', () => {
   assert.deepEqual(nowLine(t, { working: 1, waiting: 0, finished: 0 }), ['now.working:1']);
 });
 
+test('a Now card lists each team still at work, once, so the strip can draw one dot per team (mm37)', () => {
+  const workflows = [
+    { id: 'w1', name: 'build', started: 4, done: 1, running: [{ label: 'Tests', model: 'sonnet', activeAt: ago(2) }] },
+    { id: 'w2', name: 'review', started: 2, done: 0, running: [{ label: 'Read', model: null, activeAt: ago(1) }, { label: 'Check', model: null, activeAt: ago(1) }] },
+    { id: 'w3', name: 'old', started: 2, done: 2, running: [] },
+  ];
+  const jobs = nowJobs(two([chat('team', { status: 'busy', workflows }), chat('solo', { status: 'busy' })], []), { nowMs: NOW_MS });
+  assert.deepEqual(jobs.cards.find((c) => c.chat.sessionId === 'team').teams, [{ id: 'w1', name: 'build' }, { id: 'w2', name: 'review' }]);
+  assert.deepEqual(jobs.cards.find((c) => c.chat.sessionId === 'solo').teams, []);
+});
+
+test('teamDots draws one dot per team in its colour, and nothing when no team works', async () => {
+  const { teamDots } = await import('../server/web/now.js');
+  const { workflowHue } = await import('../server/web/workflows.js');
+  const h = (tag, attrs = {}, ...children) => ({ tag, attrs: attrs ?? {}, children: children.flat(Infinity).filter((c) => c != null && c !== false) });
+  const t = Object.assign((key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key), { count: (key, n) => `${key}:${n}` });
+  assert.equal(teamDots({ h, t }, []), null);
+  const el = teamDots({ h, t }, [{ id: 'w1', name: 'build' }, { id: 'w2', name: 'review' }]);
+  assert.equal(el.children.length, 2);
+  assert.deepEqual(el.children.map((d) => d.attrs.style), [`--wf-h:${workflowHue('w1')}`, `--wf-h:${workflowHue('w2')}`]);
+  assert.deepEqual(el.children.map((d) => d.attrs.title), ['now.teamDotTitle:build', 'now.teamDotTitle:review']);
+  assert.equal(el.attrs['aria-label'], 'now.teamsAria:2');
+});
+
 // ---- the orchestrator's line (or03) ----
 
 test('nowJobs counts the activity chats an orchestrator has working, per project, from the list rows', () => {

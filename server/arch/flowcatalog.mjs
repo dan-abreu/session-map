@@ -3,7 +3,7 @@
 // lookups only: nothing here reads a file or runs anything. Names and arrow labels are i18n keys, so one model serves
 // every language; `name` is the English fallback.
 
-export const CATALOG_VERSION = 'flowcat@2';
+export const CATALOG_VERSION = 'flowcat@3';
 
 // where: 'internet' (an outside service) or 'this-pc' (a program or folder on the same computer). dir: 'out' draws the
 // arrow part → service, 'in' service → part. packages: npm, pub and composer names; scopes: npm scopes; hosts: exact
@@ -162,9 +162,18 @@ export const ROLES = [
   R('queue', ['worker', 'workers', 'queue', 'queues', 'fila', 'filas', 'jobs', 'cron']),
 ];
 
-// The table an arrow's words come from: a target that says what it takes first, then what the source hands on.
+// The table an arrow's words come from: a pair of roles with words of its own first (a part that hands on to several
+// others says what each one gets, so its arrows can be told apart), then a target that says what it takes, then what
+// the source hands on.
 const ROLE_KEY = (role) => `flow.l1.lbl.role.${role}`;
+const PAIRS = [
+  ['state', 'diagram'], ['state', 'alerts'], ['state', 'orchestration'],
+  ['foundation', 'archmap'], ['foundation', 'diagram'], ['foundation', 'bootstrap'],
+  ['bootstrap', 'archmap'], ['bootstrap', 'diagram'], ['bootstrap', 'chat'],
+  ['reader', 'alerts'],
+];
 export const LINK_RULES = [
+  ...PAIRS.map(([from, to]) => ({ from, to, key: `flow.l1.lbl.pair.${from}.${to}` })),
   { to: 'page', key: ROLE_KEY('toPage') },
   { to: 'db', key: 'flow.l1.lbl.data' },
   { to: 'queue', key: 'flow.l1.lbl.queue' },
@@ -188,5 +197,31 @@ export function linkLabelKey(from, to) {
   const a = roleOf(from);
   const b = roleOf(to);
   if (!a && !b) return null;
-  return LINK_RULES.find((r) => (r.to ? r.to === b : r.from === a))?.key ?? null;
+  return LINK_RULES.find((r) => (r.from && r.to ? r.from === a && r.to === b : r.to ? r.to === b : r.from === a))?.key ?? null;
 }
+
+// ---- the journeys of the Flow (flow.md fl10) ----------------------------------------------------------------------
+// The paths a person (or a program) takes through the general view, end to end, found on its arrows with words
+// (flowjourneys.mjs). Data only, tried in this order; the first six that match are kept. A matcher is { id } (one box),
+// { role } (a part whose roleOfPart is that one) or { label } (a service whose arrow words are flow.l1.lbl.<label>).
+// start: tried in order, the first box that reaches the end wins (a journey never starts in the middle of the program).
+// via: boxes to pass through in order; an optional one that cannot be reached is skipped. end: tried in order. The
+// name's {start}, {via} and {end} are filled with the boxes the path took; `name` is the English fallback.
+const J = (key, nameKey, name, start, via, end) => ({ key, nameKey: `flow.j.name.${nameKey}`, name, start, via, end });
+const box = (id) => ({ id });
+const role = (r, optional = false) => ({ role: r, optional });
+const said = (label) => ({ label });
+const CLAUDE_SIDE = [box('svc:claude-files'), box('actor:claude-code')];
+export const JOURNEYS = [
+  J('open-map', 'open', 'You open {end}', [box('actor:browser')], [], [role('page')]),
+  J('chat-appears', 'chatAppears', 'A Claude Code conversation shows up in {end}', CLAUDE_SIDE, [role('reader', true), role('state', true)], [role('page')]),
+  J('chat-ai', 'chatAi', 'You ask in {via} and the AI answers', [box('actor:browser')], [role('chat')], [said('ai')]),
+  J('pay', 'pay', 'A payment goes to {end}', [box('actor:customer'), box('actor:user'), box('actor:browser')], [role('payments', true)], [said('pay')]),
+  J('alert-phone', 'alertPhone', 'An alert reaches your phone', CLAUDE_SIDE, [role('alerts')], [box('svc:ntfy'), box('svc:twilio'), box('svc:whatsapp')]),
+  J('command', 'command', 'You type a command in the terminal', [box('actor:terminal')], [role('plugin', true)], [role('server'), role('page')]),
+  J('alert-screen', 'alertScreen', 'An alert shows on this computer\'s screen', CLAUDE_SIDE, [role('alerts')], [box('svc:toast')]),
+  J('open-phone', 'openPhone', 'You open {end} on your phone', [box('actor:lan')], [], [role('page')]),
+];
+// The journeys added when the catalog finds fewer than three: from a person or a service that sends something in, as
+// far as the arrows go.
+export const JOURNEY_PATH = { nameKey: 'flow.j.name.path', name: 'From {start} to {end}' };

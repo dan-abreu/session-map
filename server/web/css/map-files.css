@@ -29,6 +29,11 @@
 .mm-node.is-loose:not(:has(.st-A)) > .mm-box { border-color: color-mix(in srgb, var(--ink-2) 55%, var(--lv-line)); }
 .rs-loose-dot { display: inline-block; flex: none; width: 8px; height: 8px; border: 1px dotted var(--ink-2); border-radius: 50%; }
 
+/* A file or folder the census leaves out (id77: installed libraries, generated, binary): the same box in grey, its text quiet;
+   the reason is in its title. Colour only, so the box keeps its size and nothing else on the side moves. */
+.mm-node.is-excluded > .mm-box { --lv-bg: var(--bg-2); --lv-line: var(--line); --lv-ink: var(--ink-2); background: var(--bg-2); border-color: var(--line); box-shadow: none; }
+.mm-node.is-excluded .bx-title, .mm-node.is-excluded .bx-meta { color: var(--ink-2); }
+
 /* Work going on (mm41) wins over the marks above, as on the map's own boxes. A part picked lights its files in the parts'
    own green (mm40), apart from the light of a period. */
 .mm-node.is-left.is-live > .mm-box { border-color: color-mix(in srgb, var(--active) 50%, var(--lv-line)); }

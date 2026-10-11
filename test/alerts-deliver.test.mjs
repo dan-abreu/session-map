@@ -61,3 +61,19 @@ test('delivery: switched off means silent, and a failing toast or post never thr
   const broken = createDelivery({ platform: 'win32', baseUrl: 'http://x', exec: (f, a, o, cb) => cb(new Error('no shell')), fetchFn: async () => { throw new Error('offline'); } });
   await broken([finished('a')], { desktop: true, ntfy: { enabled: true, topic: 'sm-0123456789abcdef01234567' }, perProject: {} });
 });
+
+test('wa09: a plan limit alert has no project: the toast opens the page itself, and the phone gets only the situation', async () => {
+  const calls = [];
+  const posts = [];
+  const deliver = createDelivery({
+    platform: 'win32', baseUrl: 'http://127.0.0.1:4001',
+    exec: (file, args, opts, cb) => { calls.push(opts.env.SM_TOAST_XML); cb(null); },
+    fetchFn: async (url, init) => { posts.push(JSON.parse(init.body)); return { ok: true }; },
+  });
+  const limit = { id: 5, kind: 'limit', reason: 'weekly', projectId: null, projectName: '', sessionId: null, resetsAt: '2026-10-12T21:00:00.000Z', resetsText: 'Oct 12, 6pm' };
+  await deliver([limit], { desktop: true, ntfy: { enabled: true, topic: 'sm-0123456789abcdef01234567' }, perProject: {}, lang: 'en' });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /launch="http:\/\/127\.0\.0\.1:4001\/"/, 'no project=null in the link');
+  assert.match(calls[0], /<text>Weekly limit reached<\/text>/);
+  assert.deepEqual([posts[0].title, posts[0].message], ['session-map', 'Weekly limit reached']);
+});

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { activityOf, aheadOf, gitRoot, lastCommit, listWorktrees, mainBranch, projectRoot } from '../server/sources/git.mjs';
 import { normalizePath } from '../server/paths.mjs';
+import { gitStats } from '../server/sources/gitqueue.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=Ana', '-c', 'user.email=ana@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
 
@@ -63,6 +64,26 @@ test('mainBranch falls back to master', async () => {
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
+// mainBranch ran 1-3 git processes on every collect for every project; the answer only changes when the refs do.
+test('mainBranch is remembered until a branch is made, removed or renamed', async () => {
+  const { base, root } = makeRepo();
+  const none = realpathSync(mkdtempSync(join(tmpdir(), 'sm-nogit-')));
+  try {
+    const start = gitStats().spawned;
+    assert.equal(await mainBranch(root), 'main');
+    const before = gitStats().spawned;
+    assert.ok(before > start, 'the first ask goes through the shared git queue');
+    assert.equal(await mainBranch(root), 'main');
+    assert.equal(gitStats().spawned, before, 'the second ask spawned no git');
+    git(root, 'branch', '-m', 'main', 'trunk');
+    assert.equal(await mainBranch(root), null, 'renamed away at once: no main, no master, no origin/HEAD here');
+    assert.equal(await mainBranch(none), null);
+    const after = gitStats().spawned;
+    assert.equal(await mainBranch(none), null);
+    assert.equal(gitStats().spawned, after, 'a folder that is not a repository is not asked again');
+  } finally { rmSync(base, { recursive: true, force: true }); rmSync(none, { recursive: true, force: true }); }
+});
+
 test('activityOf reports commits, co-author, files, tags and pushes', async () => {
   const { base, root } = makeRepo();
   try {
@@ -111,5 +132,26 @@ test('projectRoot gives the main checkout for a linked worktree and for a subfol
     assert.equal(normalizePath(await projectRoot(join(wt, 'sub'))), normalizePath(root));
     assert.equal(normalizePath(await projectRoot(root)), normalizePath(root));
     assert.equal(await projectRoot(base), null);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('workingTree never rewrites .git/index: a touched but unchanged file must not take index.lock from a chat that commits', async () => {
+  const { workingTree } = await import('../server/sources/git.mjs');
+  const { statSync, utimesSync } = await import('node:fs');
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-git-lock-')));
+  try {
+    git(base, 'init', '-b', 'main');
+    writeFileSync(join(base, 'a.txt'), '1');
+    writeFileSync(join(base, 'b.txt'), '2');
+    git(base, 'add', 'a.txt', 'b.txt');
+    git(base, 'commit', '-m', 'first');
+    // One real edit, so the diff runs too; a.txt is only touched.
+    writeFileSync(join(base, 'b.txt'), '3');
+    const later = new Date(Date.now() + 60_000);
+    utimesSync(join(base, 'a.txt'), later, later);
+    const before = statSync(join(base, '.git', 'index'));
+    await workingTree(base);
+    const after = statSync(join(base, '.git', 'index'));
+    assert.equal(after.mtimeMs, before.mtimeMs, 'the index was not written');
   } finally { rmSync(base, { recursive: true, force: true }); }
 });

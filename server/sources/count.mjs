@@ -1,10 +1,9 @@
 // The size of a program, counted by session-map itself (mm25): every tracked file, line by line, with no dependency.
 // Libraries, generated files and binaries are left out of the sums and listed apart, so a number on the map is code a
 // person wrote. The census of the foundation (fd01) refines this later.
-import { execFile } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { log } from '../log.mjs';
+import { runGit } from './gitqueue.mjs';
 
 const TTL_MS = 30_000;
 const DEP_DIRS = new Set(['node_modules', 'vendor', 'vendors', 'third_party', 'third-party', 'bower_components', '.venv', 'venv', 'site-packages', 'pods', '.yarn', '.pnpm-store']);
@@ -51,13 +50,20 @@ export function lineCount(buf) {
 
 const looksBinary = (buf) => buf.subarray(0, 8000).includes(0);
 
-function trackedFiles(root) {
-  return new Promise((resolve) => {
-    execFile('git', ['-c', 'core.quotepath=off', 'ls-files', '-z'], { cwd: root, timeout: 10_000, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
-      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: 'ls-files', code: err.code ?? err.signal });
-      resolve(err ? [] : stdout.split('\0').filter(Boolean));
-    });
-  });
+// The tracked list only changes with the index (add, commit, checkout): while .git/index keeps its time and size the last
+// list stands. A root without its own .git folder (a subfolder, a linked worktree) is asked every time.
+const indexStamp = (root) => {
+  const st = statSync(join(root, '.git', 'index'), { throwIfNoEntry: false });
+  return st ? `${st.mtimeMs}:${st.size}` : null;
+};
+
+async function trackedFiles(root, memo) {
+  const stamp = indexStamp(root);
+  if (stamp && memo.tracked?.stamp === stamp) return memo.tracked.list;
+  const { err, stdout } = await runGit(root, ['-c', 'core.quotepath=off', 'ls-files', '-z'], { timeout: 10_000, maxBuffer: 64 * 1024 * 1024 });
+  const list = err ? [] : stdout.split('\0').filter(Boolean);
+  memo.tracked = err ? null : { stamp, list };
+  return list;
 }
 
 // root → {at, value, pending, seen: path → {sig, kind, lines}}: a file is read again only when its size or time changes.
@@ -67,7 +73,7 @@ async function count(root, memo) {
   const files = [];
   const left = { dep: [], generated: [], binary: [] };
   const seen = new Map();
-  for (const path of (await trackedFiles(root)).sort()) {
+  for (const path of [...(await trackedFiles(root, memo))].sort()) {
     let kind = kindOfFile(path);
     if (LEFT_OUT.includes(kind)) {
       left[kind].push(path);

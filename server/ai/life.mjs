@@ -8,6 +8,7 @@ import { getKey, listKeys } from './keys.mjs';
 import { projectIdOf } from '../paths.mjs';
 import { othersSettings, projectClassOfId } from './others.mjs';
 import { placeByAi } from './place.mjs';
+import { reasonsHash, relationWhyByAi } from './relwhy.mjs';
 import { runApiJSON } from './providers.mjs';
 import { loadStats } from './router.mjs';
 import { AiQueue } from './runner.mjs';
@@ -40,7 +41,7 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     apiRun: ai.apiRun ?? runApiJSON,
     keyOf: ai.keyOf ?? ((provider) => getKey(smDir, provider)),
   });
-  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set() };
+  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set(), whys: new Map(), whyWait: new Map(), whyInFlight: new Set(), maxCalls: cfg.maxCallsPerHour };
   lives.set(smDir, life);
   return life;
 }
@@ -91,6 +92,67 @@ export function placeChanged(life, p, jobs) {
         writeAtomic(placedFile(p.smDir, p.projectId), JSON.stringify(seen));
       } finally {
         life.inFlight.delete(sessionId);
+      }
+    })());
+  }
+}
+
+// The AI's sentence for each relation (mm32): {"a|b": {hash, text}}, the hash being that of the reasons it was written from.
+// On disk, so a restart asks nothing new; a sentence whose reasons changed is not shown and is asked again.
+const WHY_PER_PASS = 5; // and never past half of the hour's calls (explainRelations)
+const WHY_RETRY_MS = 10 * 60 * 1000;
+const linkKey = (l) => `${l.a}|${l.b}`;
+export const relationWhyFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'relation-why.json');
+
+export function aiRelationWhys(life, smDir, projectId) {
+  if (!life.whys.has(projectId)) {
+    const stored = readJsonFile(relationWhyFile(smDir, projectId), {});
+    life.whys.set(projectId, stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {});
+  }
+  return life.whys.get(projectId);
+}
+
+// The relations with the sentence the AI wrote for their current reasons; the others stay as they are.
+export function withRelationWhys(life, p, links) {
+  if (!life.queue.enabled) return links;
+  const seen = aiRelationWhys(life, p.smDir, p.projectId);
+  return links.map((l) => {
+    const stored = seen[linkKey(l)];
+    return typeof stored?.text === 'string' && stored.hash === reasonsHash(l, p.arch) ? { ...l, why: stored.text } : l;
+  });
+}
+
+// links come strongest first. A relation is asked again only when its reasons changed; a call that failed waits ten minutes.
+export function explainRelations(life, p, links, { now = Date.now } = {}) {
+  if (!life.queue.enabled) return;
+  const seen = aiRelationWhys(life, p.smDir, p.projectId);
+  // Placement is the map's main AI work: half of the hour's calls (and the ones already on their way) are kept for it.
+  const budget = life.queue.callsLeft() - Math.floor((life.maxCalls ?? AI_DEFAULTS.maxCallsPerHour) / 2) - life.whyInFlight.size;
+  if (budget <= 0) return;
+  const current = new Set(links.map(linkKey));
+  const flightOf = (l) => `${p.projectId}:${linkKey(l)}`;
+  const jobs = links.filter((l) => {
+    const hash = reasonsHash(l, p.arch);
+    const failed = life.whyWait.get(flightOf(l));
+    return !life.whyInFlight.has(flightOf(l)) && seen[linkKey(l)]?.hash !== hash && !(failed?.hash === hash && now() - failed.at < WHY_RETRY_MS);
+  }).slice(0, Math.min(WHY_PER_PASS, budget));
+  for (const link of jobs) {
+    const key = linkKey(link);
+    const hash = reasonsHash(link, p.arch);
+    life.whyInFlight.add(flightOf(link));
+    track(life, (async () => {
+      try {
+        const text = await relationWhyByAi(link, p.arch, (req) => life.queue.ask({ ...req, projectId: p.projectId }), p.projectId);
+        if (text === undefined) return;
+        if (text === null) {
+          life.whyWait.set(flightOf(link), { hash, at: now() });
+          return;
+        }
+        seen[key] = { hash, text };
+        for (const k of Object.keys(seen)) if (!current.has(k)) delete seen[k];
+        writeAtomic(relationWhyFile(p.smDir, p.projectId), JSON.stringify(seen));
+      } finally {
+        life.whyInFlight.delete(flightOf(link));
       }
     })());
   }

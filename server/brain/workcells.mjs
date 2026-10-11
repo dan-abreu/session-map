@@ -1,18 +1,13 @@
-import { execFile } from 'node:child_process';
-import { log } from '../log.mjs';
 import { listWorktrees } from '../sources/git.mjs';
+import { runGit } from '../sources/gitqueue.mjs';
 
 const TIMEOUT_MS = 10_000;
 const IDLE_AFTER_MS = 7 * 86_400_000;
 const FLD = '\x1f';
 
-function run(cwd, args) {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout) => {
-      if (err && (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')) log('warn', 'git-too-slow', { command: args[0], code: err.code ?? err.signal });
-      resolve({ ok: !err, out: err ? '' : stdout });
-    });
-  });
+async function run(cwd, args) {
+  const { err, stdout } = await runGit(cwd, args, { timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
+  return { ok: !err, out: stdout };
 }
 
 const git = async (cwd, args) => (await run(cwd, args)).out;

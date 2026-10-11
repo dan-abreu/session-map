@@ -23,8 +23,8 @@ export const SCREENS = [
   { id: 'map', query: `?view=map&project=${DEMO}&open=all`, width: 1440, height: 900, scale: 1 },
   { id: 'tour', query: `?view=map&project=${DEMO}`, width: 1440, height: 900, scale: 1, tour: true, settle: 1800 },
   { id: 'part', query: `?view=map&project=${DEMO}&open=all&select=node:pt:search&tab=details`, width: 1440, height: 900, scale: 1 },
-  { id: 'waiting', query: `?view=map&project=${DEMO}`, width: 1440, height: 900, scale: 1, clicks: ['#nowLine'] },
-  { id: 'help', query: `?view=map&project=${DEMO}`, width: 1440, height: 900, scale: 1, clicks: ['#helpBtn'] },
+  { id: 'waiting', query: `?view=map&project=${DEMO}`, width: 1440, height: 900, scale: 1, clicks: ['#waitingBtn'] },
+  { id: 'help', query: `?view=map&project=${DEMO}`, width: 1440, height: 900, scale: 1, clicks: ['#tab-more', '[data-more="help"]'] },
   { id: 'phone', query: `?view=map&project=${DEMO}`, width: 390, height: 844, scale: 2, mobile: true },
 ];
 

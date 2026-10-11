@@ -47,8 +47,9 @@ export function ntfyRequest(topic, { title, body }) {
   return { url: NTFY_URL, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ topic, title, message: body }) } };
 }
 
-// A single alert opens its conversation; a group or a clash opens the project.
+// A single alert opens its conversation; a group or a clash opens the project; a plan limit has none, so the page itself.
 function linkOf(baseUrl, group) {
+  if (!group.projectId) return `${baseUrl}/`;
   const params = new URLSearchParams({ project: group.projectId });
   const [only] = group.alerts;
   if (group.alerts.length === 1 && only.sessionId) params.set('conv', only.sessionId);

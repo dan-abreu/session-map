@@ -178,3 +178,26 @@ test('the 5-minute sweep refreshes only the projects worked on now or kept alway
     assert.deepEqual(seen, [ID, 'kept-000002']);
   } finally { STEPS.splice(STEPS.indexOf(step), 1); }
 });
+
+// A sweep can outlast its 5 minutes on a big project: the next one must not start a second walk over the projects.
+test('a sweep still running is not started again: the second call waits for the same round', async () => {
+  const seen = [];
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const step = { name: 'slow-probe', run: async (ctx) => { seen.push(ctx.project.id); if (ctx.project.id === ID) await gate; } };
+  const project = (id) => ({ id, name: id, root: `/work/${id}`, arch: { parts: [] }, workCells: [], chats: [], background: { always: false, working: true, on: true } });
+  const two = () => ({ generatedAt: '', waitingCount: 0, projects: [project(ID), project('next-000003')] });
+  STEPS.push(step);
+  try {
+    await withApp({ collectFn: two }, async ({ app }) => {
+      const first = app.refreshFoundations();
+      await new Promise((r) => setTimeout(r, 50));
+      const second = app.refreshFoundations();
+      await new Promise((r) => setTimeout(r, 50));
+      assert.deepEqual(seen, [ID], 'the second call did not walk on to the next project while the first is busy');
+      release();
+      await Promise.all([first, second]);
+      assert.deepEqual(seen, [ID, 'next-000003'], 'one round only');
+    });
+  } finally { STEPS.splice(STEPS.indexOf(step), 1); }
+});

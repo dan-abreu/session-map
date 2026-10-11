@@ -142,3 +142,87 @@ test('the README mermaid block ends only at a fence on its own line', async () =
   assert.equal(readmeMermaid('# A\n\n```mermaid\nflowchart LR\n  a["x ``` y"]\n```\n\nafter ```\n'), 'flowchart LR\n  a["x ``` y"]');
   assert.equal(readmeMermaid('# A\n\nsee ```mermaid\nnot a fence\n'), null);
 });
+
+// am03: a table under "What is missing" / "O que falta" is read row by row, like checklist lines.
+const tablePart = (heading, body) => ({ 'tabela.md': `# Tabela\n\nTexto da parte.\n\n## ${heading}\n\n${body}\n` });
+const rowsOf = (files) => parseArch('docs/architecture', files).parts[0].groups.flatMap((g) => g.items);
+
+test('a table under "What is missing" gives one item per row: status, text, code, tokens', () => {
+  const items = rowsOf(tablePart('What is missing', [
+    '| Status | Item | Code |',
+    '| --- | --- | --- |',
+    '| [x] | Show the order list | `ta01` |',
+    '| [ ] | **Blocks · Step 3:** Send the receipt by e-mail | `ta02` |',
+    '| doing | **with Marcos:** Review the \\| sign | `ta03` |',
+    '| ✅ | Plain done row | |',
+    '|  | Row with no code | |',
+  ].join('\n')));
+  assert.deepEqual(items.map((i) => [i.code, i.title, i.status]), [
+    ['ta01', 'Show the order list', 'done'],
+    ['ta02', 'Send the receipt by e-mail', 'todo'],
+    ['ta03', 'Review the | sign', 'doing'],
+    [null, 'Plain done row', 'done'],
+    [null, 'Row with no code', 'todo'],
+  ]);
+  assert.deepEqual([items[1].weight, items[1].milestone, items[2].who], ['blocks', '3', 'with Marcos']);
+  assert.deepEqual(items.map((i) => i.line), [9, 10, 11, 12, 13]);
+  assert.deepEqual(items[0].detail, []);
+});
+
+test('a table under "O que falta" is read with Portuguese headers and counts like a checklist', () => {
+  const a = parseArch('docs/arquitetura', tablePart('O que falta', [
+    '| Feito | Tarefa | Código | Quem |',
+    '|:-:|---|---|---|',
+    '| [x] | Mostrar a lista de pedidos | `ta01` | Claude |',
+    '| [ ] | Enviar o recibo por e-mail | `ta02` | com a Ana |',
+    '| em andamento | Revisar o aviso | ta03 | |',
+  ].join('\n')));
+  const p = a.parts[0];
+  assert.equal(a.lang, 'pt');
+  assert.deepEqual(p.groups[0].items.map((i) => [i.code, i.title, i.status, i.who]), [
+    ['ta01', 'Mostrar a lista de pedidos', 'done', 'Claude'],
+    ['ta02', 'Enviar o recibo por e-mail', 'todo', 'com a Ana'],
+    ['ta03', 'Revisar o aviso', 'doing', null],
+  ]);
+  assert.deepEqual(p.counts, { todo: 1, doing: 1, done: 1, withUser: 1, blocks: 0 });
+});
+
+test('tables and checklist lines mix in one section; tables elsewhere or without a text column are ignored', () => {
+  const files = {
+    'mix.md': [
+      '# Mix', '', '## Where in the code', '', '| Item | Code |', '|---|---|', '| not an item | `x/y` |', '',
+      '## What is missing', '', '### Group', '', '- [ ] Checklist line `mx01`', '',
+      '| Done | What |', '| --- | --- |', '| x | Table row |', '', '| a | b |', '| 1 | 2 |', '',
+    ].join('\n'),
+  };
+  const groups = parseArch('docs/architecture', files).parts[0].groups;
+  assert.deepEqual(groups.map((g) => [g.name, g.items.map((i) => [i.title, i.status])]), [
+    ['Group', [['Checklist line', 'todo'], ['Table row', 'done']]],
+  ]);
+});
+
+// am03 review: the status cell is normalised, backtick runs match by length, and the delimiter row must match the header.
+test('a status cell with an accent or an emoji variation selector still reads as done', () => {
+  const items = rowsOf(tablePart('O que falta', [
+    '| Status | Item |', '| --- | --- |',
+    '| concluído | Com acento |', '| concluido | Sem acento |', '| ✔️ | Visto com seletor |', '| ☑️ | Caixa com seletor |', '| pendente | Ainda aberto |',
+  ].join('\n')));
+  assert.deepEqual(items.map((i) => i.status), ['done', 'done', 'done', 'done', 'todo']);
+});
+
+test('a table cell keeps pipes inside a code span of the same backtick length and reads a lone backtick as text', () => {
+  const items = rowsOf(tablePart('What is missing', [
+    '| Item | Status |', '| --- | --- |',
+    '| use ``a|b`` | done |', '| use `literal | done |', '| use `a|b` here | done |',
+  ].join('\n')));
+  assert.deepEqual(items.map((i) => [i.title, i.status]), [
+    ['use ``a|b``', 'done'], ['use `literal', 'done'], ['use `a|b` here', 'done'],
+  ]);
+});
+
+test('a delimiter row with another cell count than the header is not a table', () => {
+  const items = rowsOf(tablePart('What is missing', [
+    '| Item | Status |', '| --- |', '| a | done |', '', '- [ ] Real line',
+  ].join('\n')));
+  assert.deepEqual(items.map((i) => i.title), ['Real line']);
+});

@@ -71,3 +71,23 @@ test('tabTitle puts the unseen count in front', () => {
   assert.equal(tabTitle('session-map', 2), '(2) session-map');
   assert.equal(tabTitle('session-map', 0), 'session-map');
 });
+
+test('wa09: a plan limit alert has no project, says when it comes back and what to do, in both languages', () => {
+  const limit = (reason, extra = {}) => ({ id: 3, kind: 'limit', reason, projectId: null, projectName: '', sessionId: null, resetsAt: '2026-10-12T21:00:00.000Z', resetsText: 'Oct 12, 6pm (America/Fortaleza)', ...extra });
+  const w = alertText(en, groupAlerts([limit('weekly')])[0]);
+  assert.equal(w.title, 'Weekly limit reached');
+  assert.match(w.why, /renews: /);
+  assert.doesNotMatch(w.why, /\{|Oct 12, 6pm/, 'the exact time is formatted from the instant, not the written text');
+  assert.equal(alertText(en, groupAlerts([limit('weekly')])[0], { content: false }).title, 'session-map');
+  for (const reason of ['weekly', 'session']) {
+    for (const t of [en, pt]) {
+      for (const extra of [{}, { resetsAt: null }, { resetsAt: null, resetsText: null }]) {
+        const x = alertText(t, groupAlerts([limit(reason, extra)])[0]);
+        for (const field of ['what', 'why', 'todo']) assert.ok(x[field] && !/[{}]|^alert\./.test(x[field]), `${reason} ${field}: ${x[field]}`);
+      }
+    }
+  }
+  assert.match(alertText(en, groupAlerts([limit('weekly', { resetsAt: null })])[0]).why, /Oct 12, 6pm/, 'without an instant the written time is shown');
+  assert.equal(alertText(pt, groupAlerts([limit('session')])[0]).what, 'Limite das 5 horas atingido');
+  assert.equal(alertText(en, groupAlerts([limit('weekly'), limit('session')])[0]).what, '2 plan limits reached');
+});

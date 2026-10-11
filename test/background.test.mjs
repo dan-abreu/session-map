@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ACTIVE_MS, alwaysOn, backgroundOf, isWorking, setBackground, sweepable } from '../server/background.mjs';
+import { ACTIVE_MS, alwaysOn, backgroundOf, createCatalogRefresher, isWorking, setBackground, sweepable } from '../server/background.mjs';
 
 const NOW = Date.parse('2026-10-10T20:00:00Z');
 const item = (id, msAgo) => ({ summary: { sessionId: id }, ref: { mtimeMs: NOW - msAgo } });
@@ -69,4 +69,54 @@ test('setBackground starts a config when there is none, and refuses one it canno
     assert.deepEqual(setBackground(smDir, 'c:/dev/shop', false), { ok: false, error: 'config-unreadable' });
     assert.equal(readFileSync(join(smDir, 'config.json'), 'utf8'), '{ broken', 'a file it cannot read is never overwritten');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
+// Discover's daily refresh: the sweep asks, the catalog's own 24 h cache decides whether anything is fetched.
+test('the catalog refresh asks the loader, never twice at once', async () => {
+  let calls = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const refresher = createCatalogRefresher({ load: async () => { calls++; await gate; return { stale: false }; }, now: () => NOW });
+  const first = refresher.refresh();
+  const second = refresher.refresh();
+  assert.equal(first, second);
+  release();
+  await first;
+  assert.equal(calls, 1);
+  await refresher.refresh();
+  assert.equal(calls, 2);
+});
+
+test('the catalog refresh asks for the deep read (the extra pages); only the background does', async () => {
+  const asked = [];
+  await createCatalogRefresher({ load: async (...args) => { asked.push(args); return { stale: false }; }, now: () => NOW }).refresh();
+  assert.deepEqual(asked, [[false, true]]);
+});
+
+test('after a limit or an error the refresh waits an hour before it tries again, a good answer does not', async () => {
+  let at = NOW;
+  const answers = [{ stale: true, limited: true }, { stale: true, error: 'network' }, { stale: false }, { stale: false }];
+  let calls = 0;
+  const refresher = createCatalogRefresher({ load: async () => answers[calls++], now: () => at });
+  await refresher.refresh();
+  assert.equal(calls, 1);
+  at = NOW + 59 * 60_000;
+  assert.deepEqual(await refresher.refresh(), { skipped: 'cooling' });
+  assert.equal(calls, 1);
+  at = NOW + 61 * 60_000;
+  await refresher.refresh();
+  assert.equal(calls, 2);
+  at += 61 * 60_000;
+  await refresher.refresh();
+  await refresher.refresh();
+  assert.equal(calls, 4);
+});
+
+test('a loader that throws is caught and cools down like any other failure', async () => {
+  let at = NOW;
+  let calls = 0;
+  const refresher = createCatalogRefresher({ load: async () => { calls++; throw new Error('boom'); }, now: () => at });
+  assert.deepEqual(await refresher.refresh(), { error: 'failed' });
+  assert.deepEqual(await refresher.refresh(), { skipped: 'cooling' });
+  assert.equal(calls, 1);
 });

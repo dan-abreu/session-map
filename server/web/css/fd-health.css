@@ -1,1 +1,136 @@
 /* Styles of block B4 (health and versions). Only the tokens of style.css. */
+
+/* ----- health screen (healthview.js) ----- */
+.fdh-view { max-width: 920px; }
+.fdh-live:empty { display: none; }
+.fdh-notice {
+  margin: 0 0 var(--sp-4); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md);
+  background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-sm); max-width: 68ch;
+}
+.fdh-notice.is-warn { background: var(--waiting-fill); color: var(--waiting-ink); }
+.fdh-mode { margin: 0 0 var(--sp-4); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--idle-fill); }
+
+.fdh-online { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); margin: 0 0 var(--sp-4); }
+.fdh-online .view-note, .fdh-online-status { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); max-width: 60ch; }
+
+.fdh-summary { margin: 0 0 var(--sp-6); }
+.fdh-score { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
+.fdh-score-label { font-size: var(--fs-sm); font-weight: 650; color: var(--ink-2); }
+.fdh-score-line { display: inline-flex; align-items: baseline; gap: var(--sp-1); }
+.fdh-score-num { font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.015em; }
+.fdh-score-of, .fdh-score-none { font-size: var(--fs-sm); color: var(--ink-2); }
+.fdh-score-none { font-size: var(--fs-xl); font-weight: 650; color: var(--idle-ink); }
+.fdh-coverage, .fdh-visibility { margin: var(--sp-1) 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+
+.fdh-section { margin: 0 0 var(--sp-8); }
+.fdh-section-title {
+  display: flex; align-items: baseline; gap: var(--sp-2); margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.01em;
+}
+.fdh-count { color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; }
+
+.fdh-cats { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.fdh-catrow {
+  display: grid; grid-template-columns: minmax(8rem, 1fr) 6rem minmax(8rem, auto); align-items: baseline; gap: var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-md);
+}
+.fdh-catname { font-weight: 600; }
+.fdh-catscore { font-weight: 650; }
+.fdh-catscore.is-none, .fdh-catcounts { color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; }
+
+.fdh-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.fdh-gap { padding: var(--sp-4) 0; border-bottom: 1px solid var(--line); }
+.fdh-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); }
+.fdh-sev { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.fdh-sev::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--idle); }
+.sev-E .fdh-sev { color: var(--clash-ink); }
+.sev-E .fdh-sev::before { background: var(--clash); }
+.sev-R .fdh-sev { color: var(--waiting-ink); }
+.sev-R .fdh-sev::before { background: var(--waiting); }
+.fdh-cat { font-size: var(--fs-xs); color: var(--ink-2); }
+.fdh-reason { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2); }
+.fdh-view .fd-badge { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: 650; white-space: nowrap; color: var(--ink-2); }
+.fdh-view .fd-badge--fail { color: var(--waiting-ink); }
+.fdh-where {
+  min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; text-align: left;
+  font: var(--fs-xs)/1.4 var(--mono); overflow-wrap: anywhere;
+}
+button.fdh-where:hover code { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.fdh-where code { font: inherit; }
+
+.fdh-facts { display: grid; gap: var(--sp-2); margin: 0 0 var(--sp-3); max-width: 68ch; font-size: var(--fs-sm); }
+.fdh-facts > div { display: grid; grid-template-columns: 9rem 1fr; gap: var(--sp-3); }
+.fdh-facts dt { color: var(--ink-2); font-weight: 600; }
+.fdh-facts dd { margin: 0; overflow-wrap: anywhere; }
+.fdh-packages, .fdh-fill { margin: 0 0 var(--sp-3); max-width: 68ch; font-size: var(--fs-sm); }
+.fdh-fill { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--waiting-fill); color: var(--waiting-ink); }
+.fdh-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+
+.fdh-plain { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.fdh-plain-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm);
+}
+.fdh-plain-what { flex: 1 1 18rem; min-width: 0; overflow-wrap: anywhere; }
+.fdh-na > summary { cursor: pointer; font-size: var(--fs-lg); font-weight: 650; margin-bottom: var(--sp-2); }
+.fdh-na > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .fdh-catrow { grid-template-columns: 1fr auto; }
+  .fdh-catcounts { grid-column: 1 / -1; }
+  .fdh-facts > div { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* ----- versions strip (versionsview.js, fd09) ----- */
+.fdv-view { max-width: 920px; }
+.fdv-rows { margin: 0 0 var(--sp-6); border-top: 1px solid var(--line); }
+.fdv-row {
+  display: grid; grid-template-columns: 12rem 1fr; align-items: baseline; gap: var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-md);
+}
+.fdv-row dt { color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; }
+.fdv-row dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.fdv-num { font-weight: 650; letter-spacing: -0.01em; }
+.fdv-kind { font-weight: 650; }
+.fdv-note, .fdv-none { font-size: var(--fs-sm); color: var(--ink-2); }
+.fdv-others { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); flex-basis: 100%; }
+.fdv-other { display: inline-flex; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-sm); }
+.fdv-seal, .fdv-relation { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.fdv-view .fd-badge { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: 650; white-space: nowrap; color: var(--ink-2); }
+.fdv-view .fd-badge--warning { color: var(--waiting-ink); }
+
+.fdv-where {
+  min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; text-align: left;
+  font: var(--fs-xs)/1.4 var(--mono); overflow-wrap: anywhere;
+}
+button.fdv-where:hover code { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+button.fdv-where:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fdv-where code { font: inherit; }
+
+.fdv-section { margin: 0 0 var(--sp-8); }
+.fdv-section-title {
+  display: flex; align-items: baseline; gap: var(--sp-2); margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.01em;
+}
+.fdv-count { color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; }
+.fdv-list, .fdv-plain { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.fdv-piece { padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.fdv-piece-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); }
+.fdv-piece-name { font-size: var(--fs-md); font-weight: 650; }
+.fdv-warn { font-size: var(--fs-xs); font-weight: 650; color: var(--waiting-ink); }
+.kind-vulnerable .fdv-warn { color: var(--clash-ink); }
+.fdv-ids, .fdv-piece .fdv-note { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--ink-2); }
+.fdv-id { margin-right: var(--sp-2); font: var(--fs-xs)/1.4 var(--mono); }
+
+.fdv-unverified { margin: 0 0 var(--sp-6); }
+.fdv-unverified > summary { cursor: pointer; font-size: var(--fs-md); font-weight: 650; margin-bottom: var(--sp-2); }
+.fdv-unverified > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fdv-plain-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm);
+}
+.fdv-online { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); max-width: 68ch; }
+
+@media (max-width: 640px) {
+  .fdv-row { grid-template-columns: 1fr; gap: var(--sp-1); }
+}

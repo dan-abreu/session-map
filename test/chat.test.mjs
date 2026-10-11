@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -419,9 +419,10 @@ test('reopening an ended conversation shows its history without the context bloc
       const shown = later.history(sessionId);
       assert.equal(shown.status, 200);
       assert.equal(shown.body.chatKey, null);
-      assert.deepEqual(shown.body.messages.map((m) => m.role), ['user', 'assistant']);
-      assert.equal(shown.body.messages[0].text, 'Add the error message');
-      assert.match(shown.body.messages[1].text, /^echo: Context from session-map/);
+      const talk = shown.body.items.filter((i) => i.type === 'user' || i.type === 'assistant');
+      assert.deepEqual(talk.map((i) => i.type), ['user', 'assistant']);
+      assert.equal(talk[0].text, 'Add the error message');
+      assert.match(talk[1].text, /^echo: Context from session-map/);
       assert.equal(later.history('44444444-4444-4444-8444-444444444444').status, 404, 'only conversations born in the page');
 
       const res = await later.start({ projectId: 'demo-abc123', sessionId, text: 'And the retry' }, state);
@@ -432,7 +433,7 @@ test('reopening an ended conversation shows its history without the context bloc
       assert.equal(r.events.find((e) => e.type === 'session').data.sessionId, sessionId);
       assert.deepEqual(r.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['And the retry']);
       assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: And the retry'));
-      assert.equal(later.history(sessionId).body.messages.length, 2, 'a live chat\'s own turns come from its events, not twice');
+      assert.equal(later.history(sessionId).body.items.filter((i) => i.type === 'user' || i.type === 'assistant').length, 2, 'a live chat\'s own turns come from its events, not twice');
       assert.equal((await later.start({ projectId: 'other', sessionId, text: 'x' }, state)).status, 404);
     } finally {
       await later.close();
@@ -541,7 +542,7 @@ test('the history ends at the message the events start with, whatever time the r
       writeFileSync(file, `${lines.map((l, i) => JSON.stringify(i === 1 ? { ...l, timestamp: late } : l)).join('\n')}\n`);
       const shown = hub.history(sessionId, state).body;
       assert.deepEqual(shown.items.filter((i) => i.type === 'assistant').map((i) => i.text.slice(0, 13)), ['echo: Context', 'echo: second']);
-      assert.deepEqual(shown.messages.filter((m) => m.role === 'assistant').map((m) => m.text.slice(0, 13)), ['echo: Context', 'echo: second']);
+      assert.equal(shown.messages, undefined, 'the page reads items only');
     });
   });
 });
@@ -670,6 +671,19 @@ test('http: chat routes need the token, and SSE delivers events in order with re
     assert.equal((await call('GET', `/api/chat/history/${sessionId}`, { headers: { cookie: `sm_token=${token}` } })).status, 200);
     assert.equal((await call('GET', '/api/chat/history/nope', { headers: { cookie: `sm_token=${token}` } })).status, 400);
     const { version } = JSON.parse((await call('GET', `/api/chat/history/${sessionId}`, { headers: { cookie: `sm_token=${token}` } })).text);
+    // The cursors of a page of history (pc15), on a conversation of the list with three turns.
+    const VS = '99999999-9999-4999-8999-999999999999';
+    mkdirSync(join(root, 'projects', 'demo'), { recursive: true });
+    writeFileSync(join(root, 'projects', 'demo', `${VS}.jsonl`), `${[0, 1, 2].flatMap((n) => [
+      { type: 'user', timestamp: '2026-10-01T10:00:00.000Z', message: { role: 'user', content: `ask ${n}` } },
+      { type: 'assistant', timestamp: '2026-10-01T10:00:01.000Z', message: { id: `m${n}`, role: 'assistant', content: [{ type: 'text', text: `reply ${n}` }] } },
+    ]).map((l) => JSON.stringify(l)).join('\n')}\n`);
+    state.projects[0].conversations = [{ sessionId: VS, title: 'Listed', origin: 'vscode', partId: null, chattable: false, live: true }];
+    state[INTERNALS].chats.set(VS, { projectId: 'demo-abc123', root, cwd: root, pid: null });
+    const page = (query) => call('GET', `/api/chat/history/${VS}${query}`, { headers: { cookie: `sm_token=${token}` } }).then((r) => JSON.parse(r.text));
+    assert.deepEqual((await page('?before=2')).items.map((i) => i.text), ['ask 0', 'reply 0'], 'the page before the second turn');
+    assert.deepEqual((await page('?from=6')).items.map((i) => i.text), ['ask 2', 'reply 2'], 'again from the last turn the page has');
+    assert.equal((await page('?before=x')).items.length, 6, 'a cursor that is not a number is left out');
     assert.equal(JSON.parse((await call('GET', `/api/chat/history/${sessionId}?since=${version}`, { headers: { cookie: `sm_token=${token}` } })).text).same, true, 'nothing new: the live mirror gets a short answer');
     assert.equal((await call('GET', `/api/chat/image/${sessionId}/0`)).status, 401, 'images need the token too');
     assert.equal((await call('GET', `/api/chat/image/${sessionId}/0`, { headers: { cookie: `sm_token=${token}` } })).status, 404);
@@ -778,7 +792,7 @@ test('a project chat opens at the root with the compact project summary; many ar
       // Closed and reopened later (another server run): it resumes with its history, without the summary again.
       await hubs[0].close();
       hubs.push(createChatHub({ smDir, dir, bin: FAKE, env: { ...env, FAKE_LOG: log } }));
-      assert.equal(hubs[1].history(first.sessionId, state).body.messages[0].text, 'What is left before launch?');
+      assert.equal(hubs[1].history(first.sessionId, state).body.items[0].text, 'What is left before launch?');
       const again = await talk({ sessionId: first.sessionId, text: 'And the docs?' });
       assert.equal(again.sessionId, first.sessionId, 'the same conversation');
       assert.equal(again.call.argv[again.call.argv.indexOf('--resume') + 1], first.sessionId);
@@ -869,7 +883,7 @@ test('a conversation of the list the page did not start: its history reads read-
       assert.equal(shown.status, 200);
       assert.equal(shown.body.readOnly, true);
       assert.equal(shown.body.title, 'Rename the cart store');
-      assert.deepEqual(shown.body.messages.map((m) => [m.role, m.text]), [['user', 'Rename the cart store'], ['assistant', 'Done.']]);
+      assert.deepEqual(shown.body.items.map((i) => [i.type, i.text]), [['user', 'Rename the cart store'], ['assistant', 'Done.']]);
       assert.equal(hub.history(OPEN_VS, state).body.readOnly, true);
       assert.equal(hub.history(OLD).status, 404, 'without the state only page conversations are known');
       assert.equal(hub.history('77777777-7777-4777-8777-777777777777', state).status, 404);
@@ -1036,7 +1050,7 @@ test('changing the way it runs mid-conversation restarts claude with the new fla
       assert.deepEqual(r2.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['second']);
       const shown = hub.history(sessionId, state).body;
       assert.deepEqual(shown.run, { kind: 'fixed', model: 'sonnet', effort: 'medium' });
-      assert.ok(shown.messages.filter((m) => m.role === 'user').every((m) => !m.text.includes('session-map: the way')));
+      assert.ok(shown.items.filter((i) => i.type === 'user').every((i) => !i.text.includes('session-map: the way')));
     });
   });
 });
@@ -1349,8 +1363,8 @@ const touchHelper = (dir, sessionId) => {
   mkdirSync(join(file, '..'), { recursive: true });
   writeFileSync(file, `${Date.now()}\n`);
 };
-async function idleChat(dir, env, fn) {
-  await withHub({ dir, idleMs: 400, env }, async ({ hub, state }) => {
+async function idleChat(dir, env, fn, idleMs = 400, hubOpts = {}) {
+  await withHub({ dir, idleMs, env, ...hubOpts }, async ({ hub, state }) => {
     const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi' }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
@@ -1385,12 +1399,55 @@ test('once the helpers stop writing, the idle chat closes', async () => {
   await withClaudeDir(async ({ dir, env }) => {
     await idleChat(dir, env, async ({ r, sessionId, ended }) => {
       const until = Date.now() + 900;
-      while (Date.now() < until) { touchHelper(dir, sessionId); await pause(100); }
+      let lastWrite = 0;
+      while (Date.now() < until) { touchHelper(dir, sessionId); lastWrite = Date.now(); await pause(100); }
       assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0);
-      const since = Date.now();
       await ended();
-      assert.ok(Date.now() - since >= 200, 'it waited for the helpers to be quiet for a whole idle time');
+      assert.ok(Date.now() - lastWrite >= 330, 'it waited for the helpers to be quiet for (nearly) a whole idle time of 400 ms');
     });
+  });
+});
+
+test('a helper file buried deeper than the walk goes does not keep an idle chat open forever', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, sessionId }) => {
+      const deep = join(dir, 'projects', 'demo', sessionId, 'subagents', ...Array.from({ length: 12 }, (_, i) => `d${i}`));
+      mkdirSync(deep, { recursive: true });
+      const until = Date.now() + 1200;
+      while (Date.now() < until) { writeFileSync(join(deep, 'journal.jsonl'), `${Date.now()}\n`); await pause(100); }
+      assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 1, 'closed although something kept writing below the depth the walk looks at');
+    }, 600);
+  });
+});
+
+// A walk cut short by the entry cap has not seen every helper file, so it is no proof that they are quiet.
+const staleHelpers = (dir, sessionId, count) => {
+  const folder = join(dir, 'projects', 'demo', sessionId, 'subagents', 'agents');
+  mkdirSync(folder, { recursive: true });
+  const old = new Date(Date.now() - 3600_000);
+  for (let i = 0; i < count; i++) { const f = join(folder, `a${String(i).padStart(3, '0')}.jsonl`); writeFileSync(f, 'old\n'); utimesSync(f, old, old); }
+  return folder;
+};
+
+test('a fresh helper file listed after the walk cap keeps the idle chat open', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, sessionId }) => {
+      const folder = staleHelpers(dir, sessionId, 12);
+      const until = Date.now() + 700;
+      while (Date.now() < until) { writeFileSync(join(folder, 'z-fresh.jsonl'), `${Date.now()}\n`); await pause(100); }
+      assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0, 'closed at the first idle time although the cut walk never reached the fresh file');
+    }, 400, { helperWalkMax: 5 });
+  });
+});
+
+test('a walk cut short postpones the close only a few times; it still closes', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    await idleChat(dir, env, async ({ r, sessionId, ended }) => {
+      staleHelpers(dir, sessionId, 12);
+      await pause(550);
+      assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0, 'the first idle time ran out, the cut walk proves nothing');
+      await ended();
+    }, 400, { helperWalkMax: 5 });
   });
 });
 
@@ -1495,4 +1552,121 @@ test('the list of a part and the cut-off alerts leave out a conversation removed
     await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
+});
+
+test('history opens on the newest turns, gives older ones by cursor, and a mirror gets only what is new (pc15)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const VS = '99999999-9999-4999-8999-999999999999';
+    const folder = join(dir, 'projects', 'demo');
+    mkdirSync(folder, { recursive: true });
+    const file = join(folder, `${VS}.jsonl`);
+    const turn = (n) => [
+      { type: 'user', timestamp: '2026-10-01T10:00:00.000Z', message: { role: 'user', content: `ask ${n}` } },
+      { type: 'assistant', timestamp: '2026-10-01T10:00:01.000Z', message: { id: `m${n}`, role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: `reply ${n}` }] } },
+    ];
+    const lines = (from, to) => Array.from({ length: to - from }, (_, k) => turn(from + k)).flat().map((l) => JSON.stringify(l)).join('\n');
+    writeFileSync(file, `${lines(0, 150)}\n`);
+    await withHub({ dir, env }, async ({ hub, state, root }) => {
+      state.projects[0].conversations = [{ sessionId: VS, title: 'Long', origin: 'vscode', partId: null, chattable: false, live: true, status: 'busy', costUSD: 0 }];
+      state[INTERNALS].chats.set(VS, { projectId: 'demo-abc123', root, cwd: root, pid: null });
+      const first = hub.history(VS, state).body;
+      assert.equal(first.total, 300);
+      assert.ok(first.start > 0 && first.items.length < 300, 'only the newest part on open');
+      assert.equal(first.items.length, 300 - first.start);
+      assert.equal(first.items[0].type, 'user', 'it starts where a turn starts');
+      assert.equal(first.items.at(-1).text, 'reply 149');
+      assert.equal(first.messages, undefined, 'no second read of the whole transcript');
+
+      const older = hub.history(VS, state, { before: first.start }).body;
+      assert.equal(older.start + older.items.length, first.start, 'the older page ends where the open one starts');
+      assert.equal(older.items[0].type, 'user');
+      assert.equal(first.items[0].text, `ask ${first.start / 2}`);
+      assert.equal(older.items.at(-1).text, `reply ${first.start / 2 - 1}`);
+
+      writeFileSync(file, `${lines(0, 151)}\n`);
+      const fresh = hub.history(VS, state, { since: first.version, from: first.total }).body;
+      assert.equal(fresh.start, 298, 'again from the start of the last turn the page has, which may still grow');
+      assert.deepEqual(fresh.items.map((i) => i.text), ['ask 149', 'reply 149', 'ask 150', 'reply 150']);
+      assert.equal(fresh.total, 302);
+      assert.deepEqual(hub.history(VS, state, { since: fresh.version, from: fresh.total }).body, { ok: true, same: true, version: fresh.version });
+    });
+  });
+});
+
+// ---- mm43 review: the hub's "interrupted" agrees with collect, a removed conversation is read nowhere, an idle one closes ----
+
+const PAGE_ID = '55555555-5555-4555-8555-555555555555';
+// A page conversation page-chats.json still calls running, and its transcript under <dir>/projects/demo.
+function cutPage(dir, smDir, root, { pageAt, lines }) {
+  writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [PAGE_ID]: { projectId: 'demo-abc123', partId: 'auth', root, cwd: root, title: 'cut', running: true, updatedAt: pageAt } }));
+  mkdirSync(join(dir, 'projects', 'demo'), { recursive: true });
+  writeFileSync(join(dir, 'projects', 'demo', `${PAGE_ID}.jsonl`), lines.map((l) => JSON.stringify({ sessionId: PAGE_ID, cwd: root, ...l })).join('\n') + '\n');
+}
+const at = (minutesAgo) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+const promptLine = (ts) => ({ type: 'user', timestamp: ts, message: { role: 'user', content: 'Add the retry' } });
+const answerLine = (ts) => ({ type: 'assistant', timestamp: ts, message: { role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done.' }] } });
+const marksOf = (hub, state) => [
+  hub.interrupted(state).length > 0,
+  hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body.chats[0].interrupted,
+  hub.history(PAGE_ID, state).body.interrupted,
+];
+
+test('a page conversation whose turn closed in its transcript after the page\'s last turn end is not interrupted, as collect says', async () => {
+  await withHub({}, async ({ hub, state, smDir, root }) => {
+    cutPage(root, smDir, root, { pageAt: at(10), lines: [promptLine(at(9)), answerLine(at(5))] });
+    assert.deepEqual(marksOf(hub, state), [false, false, false]);
+  });
+});
+
+test('a page conversation whose transcript stops inside a turn, or closed before the page\'s last turn end, is still interrupted', async () => {
+  await withHub({}, async ({ hub, state, smDir, root }) => {
+    cutPage(root, smDir, root, { pageAt: at(10), lines: [answerLine(at(20)), promptLine(at(5))] });
+    assert.deepEqual(marksOf(hub, state), [true, true, true], 'the turn is open');
+    cutPage(root, smDir, root, { pageAt: at(10), lines: [promptLine(at(30)), answerLine(at(20))] });
+    assert.deepEqual(marksOf(hub, state), [true, true, true], 'it closed before the page last wrote');
+  });
+});
+
+test('a conversation removed from session-map is not read by the page chat: history, its images and its helpers answer not found', async () => {
+  await withHub({}, async ({ hub, state, smDir, root }) => {
+    const png = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64');
+    const withImage = { type: 'user', timestamp: at(9), message: { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } }, { type: 'text', text: 'Look' }] } };
+    cutPage(root, smDir, root, { pageAt: at(10), lines: [withImage, answerLine(at(5))] });
+    const helper = join(root, 'projects', 'demo', PAGE_ID, 'subagents', 'agent-abc.jsonl');
+    mkdirSync(join(helper, '..'), { recursive: true });
+    writeFileSync(helper, `${JSON.stringify(answerLine(at(6)))}\n`);
+    assert.equal(hub.history(PAGE_ID, state).status, 200);
+    assert.ok(hub.image(PAGE_ID, 0, state));
+    assert.equal(hub.helper(PAGE_ID, 'abc', state).status, 200);
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([PAGE_ID]));
+    assert.deepEqual([hub.history(PAGE_ID, state).status, hub.history(PAGE_ID, state).body.error], [404, 'unknown-session']);
+    assert.equal(hub.image(PAGE_ID, 0, state), null);
+    assert.equal(hub.helper(PAGE_ID, 'abc', state).status, 404);
+    // One of the list (VS Code, a terminal) the page did not start, too.
+    writeFileSync(join(smDir, 'removed.json'), JSON.stringify([CLOSED]));
+    state.projects[0].conversations = [{ sessionId: CLOSED, title: 'vs', live: false }];
+    assert.equal(hub.history(CLOSED, state).status, 404);
+  });
+});
+
+test('closeIdle closes the process the hub keeps idle after its turn, and refuses one whose turn runs', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    assert.equal(await hub.closeIdle(CLOSED), true, 'nothing to close');
+    const idle = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'Continue' }, state);
+    const r = recorder();
+    hub.subscribe(idle.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.ok(hub.drivingIds().has(CLOSED));
+    assert.equal(await hub.closeIdle(CLOSED), true);
+    assert.ok(r.events.some((e) => e.type === 'session' && e.data.state === 'ended'));
+    assert.equal(hub.drivingIds().has(CLOSED), false);
+    assert.equal(r.count((e) => e.type === 'error'), 0);
+
+    const busy = await hub.start({ projectId: 'demo-abc123', sessionId: MOTHER, text: 'SLOW' }, state);
+    const b = recorder();
+    hub.subscribe(busy.body.chatKey, b.sink);
+    await b.until((e) => e.type === 'text' && e.data.partial);
+    assert.equal(await hub.closeIdle(MOTHER), false);
+    assert.ok(hub.drivingIds().has(MOTHER), 'its turn still runs');
+  });
 });

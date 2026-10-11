@@ -35,6 +35,8 @@ const IMAGES_MAX = 4;
 const IMAGE_BYTES_MAX = 3_700_000;
 // A conversation still running in VS Code or a terminal is asked again this often while it is open here.
 const MIRROR_MS = 3000;
+// How close to the top of the log the older page is asked for (pc15), so it is there before the person reaches the top.
+const OLDER_EDGE_PX = 200;
 const SUGGEST_MAX = 8;
 
 // A picked or pasted image file as {media, data} (base64), the way the server passes it to claude.
@@ -130,6 +132,11 @@ export function createChat({
   const openSteps = new Set();
   let holderOf = new Map();
   let mirror = null;
+  // pc15: where the history the log holds sits among all the conversation's items (histStart: the first one shown,
+  // histEnd: after the last one the server sent); older: the ask for the page before histStart, while it runs.
+  let histStart = 0;
+  let histEnd = 0;
+  let older = null;
   let pending = [];
   let suggest = null;
   let suggestSeq = 0;
@@ -979,11 +986,22 @@ export function createChat({
   }
   async function tickMirror(ctx) {
     if (mirror?.ctx !== ctx) return;
-    const res = await api.chatHistory(ctx.start.sessionId, mirror.version);
+    // A tab nobody sees asks nothing: each ask costs the server a look at the transcript. It asks again once seen.
+    if (document.hidden) {
+      mirror.timer = schedule(() => tickMirror(ctx), MIRROR_MS);
+      return;
+    }
+    const res = await api.chatHistory(ctx.start.sessionId, mirror.version, { from: histEnd });
     if (mirror?.ctx !== ctx || context !== ctx) return;
     if (res.ok && !res.same) {
       mirror.version = res.version;
-      log = chatLog(log, { type: 'history', data: historyData(res) });
+      // Only what follows the items it has, from a little before (those may still change); an older server sends all.
+      const start = Number(res.start) || 0;
+      const data = historyData(res);
+      if (Array.isArray(res.items)) data.items = [...(log?.items ?? []).slice(0, Math.max(0, start - histStart)), ...res.items];
+      log = chatLog(log, { type: 'history', data });
+      histStart = Math.min(histStart, start);
+      histEnd = start + (res.items?.length ?? 0);
       renderRun();
       renderPanel();
       if (res.live === false) {
@@ -999,7 +1017,8 @@ export function createChat({
   // A conversation the page opened before: its history, and its running process if there still is one.
   async function loadHistory(ctx) {
     const res = await api.chatHistory(ctx.start.sessionId);
-    if (context !== ctx || !res.ok) return;
+    // Closed meanwhile: a hidden log reads as scrolled to the top, so drawing it would page through the whole conversation.
+    if (context !== ctx || root.hidden || !res.ok) return;
     settings = res.settings ?? settings;
     choice = MODES.includes(res.mode) ? res.mode : 'settings';
     // What the conversation ran with before; one from elsewhere (or older than these choices) keeps its own Claude.
@@ -1009,18 +1028,46 @@ export function createChat({
     sessionId = ctx.start.sessionId;
     rememberOpen();
     log = chatLog(log, { type: 'history', data: historyData(res) });
+    histStart = Number(res.start) || 0;
+    histEnd = histStart + (res.items?.length ?? 0);
     if (res.chatKey) watch(res.chatKey, Number(res.fromEventId) || 0);
     else if (res.readOnly && res.live) startMirror(ctx, res.version);
     renderMode();
     renderRun();
     renderPanel();
     render();
+    nearTop();
+  }
+
+  // The page of history before the shown one, once the person scrolls near the top (pc15). What they were reading
+  // stays where it was: the log scrolls down by exactly what came in above it.
+  function nearTop() {
+    if (histStart > 0 && !older && sessionId && context && !root.hidden && logEl.scrollTop < OLDER_EDGE_PX) older = loadOlder(context);
+  }
+  async function loadOlder(ctx) {
+    const res = await api.chatHistory(sessionId, undefined, { before: histStart });
+    if (context !== ctx) return;
+    older = null;
+    if (root.hidden || !res.ok || !Array.isArray(res.items)) return;
+    const start = Number(res.start) || 0;
+    if (start >= histStart) return;
+    // Read as the log reads any history, then put before what it holds.
+    const { items } = chatLog(undefined, { type: 'history', data: { items: res.items.slice(0, histStart - start) } });
+    const height = logEl.scrollHeight;
+    const top = logEl.scrollTop;
+    log = { ...log, items: [...items, ...(log?.items ?? [])] };
+    histStart = start;
+    render();
+    logEl.scrollTop = top + (logEl.scrollHeight - height);
+    nearTop();
   }
 
   async function stopRun() {
     const res = await api.chatStop(key);
     if (!res.ok) toast(errorText(res.error));
   }
+
+  logEl.addEventListener('scroll', nearTop, { passive: true });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1184,6 +1231,9 @@ export function createChat({
     key = null;
     sessionId = null;
     log = undefined;
+    histStart = 0;
+    histEnd = 0;
+    older = null;
     lastEventId = 0;
     choice = 'settings';
     run = DEFAULT_RUN;

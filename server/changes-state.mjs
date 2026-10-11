@@ -4,7 +4,6 @@
 // tab is open, and for one change's before and after when it is clicked. The state itself only carries what lights the
 // boxes ("+N files +M lines now").
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { changeDetail, changeRows, freshOf, readChanges } from './changes.mjs';
@@ -16,6 +15,7 @@ import { keepSnapshots, readSnapshot, snapshotDir } from './snapshots.mjs';
 import { helperAgents } from './sources/claude.mjs';
 import { maskSecrets } from './sources/claude-conversation.mjs';
 import { firstTagWith, workingTree } from './sources/git.mjs';
+import { runGit } from './sources/gitqueue.mjs';
 
 const INTERNALS = Symbol.for('session-map.internals');
 const ROWS_MAX = 2000;
@@ -30,10 +30,25 @@ const idOf = (...parts) => createHash('sha1').update(parts.join('|')).digest('he
 
 // root → {at, sig, tags: hash → tag | null}: the tag list is checked again at most every 30 s.
 const tagMemo = new Map();
-function tagsSignature(root) {
-  return new Promise((resolve) => {
-    execFile('git', ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/tags'], { cwd: root, timeout: 5000, windowsHide: true }, (err, out) => resolve(err ? '' : out));
-  });
+async function tagsSignature(root) {
+  return (await runGit(root, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/tags'], { timeout: 5000 })).stdout;
+}
+
+// root → {at, stamp, tree}, for a project nobody works on now: git status and diff run again only when the index or HEAD
+// moved, a conversation edited a file of the project after the last look, or TREE_TTL_MS passed (an edit by hand).
+const TREE_TTL_MS = 60_000;
+const treeMemo = new Map();
+const treeStamp = (root) => ['index', 'HEAD'].map((m) => {
+  const st = statSync(join(root, '.git', m), { throwIfNoEntry: false });
+  return st ? `${st.mtimeMs}:${st.size}` : '-';
+}).join('|');
+export async function treeFor(root, { nowMs, editedMs = 0, read = workingTree }) {
+  const stamp = treeStamp(root);
+  const hit = treeMemo.get(root);
+  if (hit && hit.stamp === stamp && nowMs - hit.at < TREE_TTL_MS && editedMs <= hit.at) return hit.tree;
+  const tree = await read(root);
+  treeMemo.set(root, { at: nowMs, stamp, tree });
+  return tree;
 }
 export async function tagsFor(root, hashes, nowMs) {
   let memo = tagMemo.get(root);
@@ -61,13 +76,17 @@ function agentsOf(item, live) {
 }
 
 // Who made a change: the helper, and for a workflow agent its workflow and the request that launched it (mm31), so a
-// changed file leads back to what the owner asked.
+// changed file leads back to what the owner asked. A helper started on its own has the request before its launch (mm37);
+// words: what the conversation gave the team or the helper, when the owner's message answers something else.
+const requestOf = (launch) => (launch ? { text: launch.text, ts: launch.ts, ...(launch.words ? { words: launch.words } : {}) } : null);
 function agentOf(agent, change, item) {
   const who = { label: agent.label, model: change.model ?? agent.model };
-  if (!agent.workflowId) return who;
+  if (!agent.workflowId) {
+    const launch = requestOf(item.summary.launches?.[agent.agentId]);
+    return launch ? { ...who, request: launch } : who;
+  }
   const name = item.workflows?.find((w) => w.id === agent.workflowId)?.name ?? agent.workflowId;
-  const launch = item.summary.launches?.[agent.workflowId];
-  return { ...who, workflow: { id: agent.workflowId, name }, request: launch ? { text: launch.text, ts: launch.ts } : null };
+  return { ...who, workflow: { id: agent.workflowId, name }, request: requestOf(item.summary.launches?.[agent.workflowId]) };
 }
 
 const mtimeIso = (root, rel) => {
@@ -115,7 +134,10 @@ export async function attachChanges({ dir, smDir, now, windowMs, liveById, remov
     const ops = opRows(smDir, b.project.id, root, nowMs, windowMs);
     // A folder row that is exactly what an operation left (file not touched since) is the operation's row, not a second one.
     const mine = new Set(ops.filter((o) => o.undoable).flatMap((o) => o.files));
-    const tree = (await workingTree(root)).filter((w) => !mine.has(w.path));
+    // The project someone works on is looked at on every pass, so an edit by hand shows at once; the others wait.
+    const quiet = b.project.background?.working === false;
+    const editedMs = quiet ? events.get(b.key).reduce((max, e) => Math.max(max, Date.parse(e.ts) || 0), 0) : 0;
+    const tree = (quiet ? await treeFor(root, { nowMs, editedMs }) : await workingTree(root)).filter((w) => !mine.has(w.path));
     const gone = keepSnapshots(snapDir, root, tree, nowMs, windowMs);
     const worktree = [...tree.map((w) => ({ ...w, ts: w.kind === 'delete' ? null : mtimeIso(root, w.path) })), ...gone];
     const base = { events: events.get(b.key), worktree, commits: b.commits ?? [], ownersOf: b.ownersOf, nowIso: now.toISOString() };

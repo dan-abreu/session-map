@@ -403,6 +403,12 @@ export class AiQueue {
     return (target ? this.#onLane(target.provider, work) : this.#onClaude(work)).finally(() => { this.#pending--; });
   }
 
+  // How many capped calls this hour still allows (those in flight and not yet counted are the caller's to subtract).
+  callsLeft() {
+    const now = this.#now();
+    return Math.max(0, this.#max - this.#state.calls.filter((ts) => now - ts < HOUR).length);
+  }
+
   // Paused for a kind of work (review.mjs): ask.mjs skips it as the queue does.
   pausedFor(provider, kind) {
     return pausedFor(this.#state.helper, provider, kind);

@@ -1,7 +1,7 @@
 // The whole conversation as the chat screen shows it (mind-map-page mm22): every message with its time, the steps with
 // what went in and came out (secrets masked), questions with the answer given, images, helper agents and the cost of each
 // reply. Like claude.mjs, this file depends on Claude Code's undocumented transcript format.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { costOf, loadPrices } from '../cost.mjs';
@@ -115,16 +115,14 @@ const questionsOf = (input) => (Array.isArray(input?.questions) ? input.question
   options: (Array.isArray(q.options) ? q.options : []).filter((o) => o && typeof o.label === 'string').map((o) => ({ label: o.label, description: typeof o.description === 'string' ? o.description : '' })),
 }));
 
-function readEntries(path) {
-  let raw;
+function readRaw(path) {
   try {
-    raw = readFileSync(path);
-    if (path.endsWith('.gz')) raw = gunzipSync(raw);
+    const raw = readFileSync(path);
+    return path.endsWith('.gz') ? gunzipSync(raw) : raw;
   } catch (err) {
     if (err.code !== 'ENOENT') log('warn', 'read-failed', { path, code: err.code });
     return null;
   }
-  return parseLines(raw.toString('utf8'));
 }
 
 // The person's own message: typed text (a slash command as they typed it) and pasted images. Injected blocks
@@ -188,13 +186,55 @@ function readOnce(path, cwd, prices) {
   const version = versionOf(path);
   const kept = reads.get(path);
   if (kept?.version === version && kept.cwd === cwd && kept.prices === prices) return kept;
-  const images = [];
-  const read = { version, cwd, prices, images, ...build(readEntries(path) ?? [], { cwd, prices, keep: images }) };
+  const read = (kept?.cwd === cwd && kept.prices === prices && grownRead(path, kept, version)) || wholeRead(path, cwd, prices, version);
   if (version === '0') return read;
   reads.delete(path);
   reads.set(path, read);
   if (reads.size > READS_KEPT) reads.delete(reads.keys().next().value);
   return read;
+}
+
+// The bytes just before where a read stopped, kept to check that the file grew rather than was written anew.
+const SEAM_BYTES = 64;
+// Where a read of a plain file that ends on a whole line stopped: the next one goes on from there.
+const seamOf = (raw, offset) => ({ offset, tail: Buffer.from(raw.subarray(Math.max(0, raw.length - SEAM_BYTES))) });
+
+function wholeRead(path, cwd, prices, version) {
+  const images = [];
+  const builder = createBuilder({ cwd, prices, keep: images });
+  const raw = readRaw(path);
+  if (raw) builder.add(parseLines(raw.toString('utf8')));
+  const seam = raw?.length && !path.endsWith('.gz') && raw[raw.length - 1] === 0x0a ? seamOf(raw, raw.length) : null;
+  return { version, cwd, prices, images, ...builder.result(), builder, seam };
+}
+
+// A conversation still being written grows by whole lines: only the new ones are parsed, never the whole file again on
+// each mirror ask (a 39 MB one took 0.3 s, blocking the server). null when it did not just grow: then it is read whole.
+function grownRead(path, kept, version) {
+  const { seam } = kept;
+  if (!seam) return null;
+  let fd;
+  try {
+    fd = openSync(path, 'r');
+    const size = fstatSync(fd).size;
+    if (size <= seam.offset) return null;
+    const from = seam.offset - seam.tail.length;
+    const buf = Buffer.alloc(size - from);
+    let got = 0;
+    while (got < buf.length) {
+      const n = readSync(fd, buf, got, buf.length - got, from + got);
+      if (!n) break;
+      got += n;
+    }
+    // Half a line still being written is left to a whole read, which takes it as it always did.
+    if (got !== buf.length || !buf.subarray(0, seam.tail.length).equals(seam.tail) || buf[buf.length - 1] !== 0x0a) return null;
+    kept.builder.add(parseLines(buf.subarray(seam.tail.length).toString('utf8')));
+    return { version, cwd: kept.cwd, prices: kept.prices, images: kept.images, ...kept.builder.result(), builder: kept.builder, seam: seamOf(buf, size) };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 // → {items, costUSD, version}; items in the order they were written. A reply's own cost sits on its last message
@@ -205,24 +245,29 @@ export function readConversation(path, { cwd = '', prices } = {}) {
 }
 
 // keep: an array that receives every image block, numbered in the same walk that numbers them for the page.
-function build(entries, { cwd, prices, keep = null }) {
+// add(entries) can be called again with the lines written since, and result() after each: the walk goes on where it was.
+function createBuilder({ cwd, prices, keep = null }) {
   const items = [];
   const tools = new Map();
   let images = 0;
   let turn = { usage: new Map(), last: null };
-  let total = 0;
+  let closed = 0;
+  // The message a result() put the open turn's cost on: it loses it if a later line becomes the turn's last.
+  let provisional = null;
+  const turnCost = () => (turn.last && turn.usage.size ? round6(costOf([...turn.usage.values()], prices).usd) : null);
   const closeTurn = () => {
-    if (!turn.last || !turn.usage.size) return;
-    const usd = round6(costOf([...turn.usage.values()], prices).usd);
+    const usd = turnCost();
+    if (usd === null) return;
     turn.last.replyCostUSD = usd;
-    total += usd;
+    closed += usd;
+    provisional = null;
   };
   const numbered = (blocks) => imageBlocks(blocks).map((b) => {
     keep?.push(b);
     return { n: images++, media: b.source.media_type };
   });
 
-  for (const entry of entries) {
+  function step(entry) {
     const ts = entry.timestamp ?? null;
     const prompt = promptOf(entry);
     if (prompt) {
@@ -230,7 +275,7 @@ function build(entries, { cwd, prices, keep = null }) {
       turn = { usage: new Map(), last: null };
       const shot = numbered(blocksOf(entry));
       items.push({ type: 'user', text: prompt.text, ts, ...(shot.length ? { images: shot } : {}) });
-      continue;
+      return;
     }
     if (entry.type === 'assistant') {
       const usage = usageOf(entry);
@@ -240,6 +285,8 @@ function build(entries, { cwd, prices, keep = null }) {
         if (b.type === 'text' && b.text?.trim()) {
           const item = { type: 'assistant', text: b.text, ts, model: entry.message?.model ?? null };
           items.push(item);
+          if (provisional && provisional !== item) delete provisional.replyCostUSD;
+          provisional = null;
           turn.last = item;
         } else if (b.type === 'thinking' && (b.thinking?.trim() || entry.thinkingDurationMs)) {
           items.push({ type: 'thinking', text: b.thinking ?? '', ms: Number.isFinite(entry.thinkingDurationMs) ? entry.thinkingDurationMs : null, ts });
@@ -260,9 +307,9 @@ function build(entries, { cwd, prices, keep = null }) {
           turn.last ??= item;
         }
       }
-      continue;
+      return;
     }
-    if (entry.type !== 'user') continue;
+    if (entry.type !== 'user') return;
     for (const b of blocksOf(entry)) {
       if (b.type !== 'tool_result' || !tools.has(b.tool_use_id)) continue;
       const item = tools.get(b.tool_use_id);
@@ -282,8 +329,18 @@ function build(entries, { cwd, prices, keep = null }) {
       }
     }
   }
-  closeTurn();
-  return { items, costUSD: round6(total) };
+  return {
+    add(entries) { for (const entry of entries) step(entry); },
+    // The last turn may still grow: its cost is put on its last message without closing it. Each result has its own list.
+    result() {
+      const usd = turnCost();
+      if (usd !== null) {
+        turn.last.replyCostUSD = usd;
+        provisional = turn.last;
+      }
+      return { items: [...items], costUSD: round6(closed + (usd ?? 0)) };
+    },
+  };
 }
 
 // The n-th image of a transcript (pasted by the person or returned by a step), in the order readConversation numbered them.

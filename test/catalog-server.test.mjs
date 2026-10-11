@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/main.mjs';
@@ -22,10 +22,10 @@ function fakeFetch(handler) {
   return { fetchFn, calls };
 }
 
-async function withServer({ fetchFn, exec, bin, demo = false }, fn) {
+async function withServer({ fetchFn, exec, bin, sleep, demo = false }, fn) {
   const dir = mkdtempSync(join(tmpdir(), 'sm-csrv-dir-'));
   const smDir = mkdtempSync(join(tmpdir(), 'sm-csrv-sm-'));
-  const app = createApp({ dir, smDir, demo, ai: { bin: null }, collectFn: () => ({ projects: [], generatedAt: new Date().toISOString() }), catalog: { token: null, fetchFn, exec, bin } });
+  const app = createApp({ dir, smDir, demo, ai: { bin: null }, collectFn: () => ({ projects: [], generatedAt: new Date().toISOString() }), catalog: { token: null, fetchFn, exec, bin, ...(sleep ? { sleep } : {}) } });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
   const token = loadToken(smDir);
@@ -41,7 +41,7 @@ async function withServer({ fetchFn, exec, bin, demo = false }, fn) {
   });
   const write = { cookie: `sm_token=${token}`, 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' };
   try {
-    await fn({ call, dir, smDir, write, token });
+    await fn({ call, dir, smDir, write, token, app });
   } finally {
     await new Promise((resolve) => app.close(resolve));
     rmSync(dir, { recursive: true, force: true });
@@ -125,5 +125,48 @@ test('install through POST /api/action needs the token and reaches the claude bi
 test('the demo has no catalog and no install', async () => {
   await withServer({ demo: true, fetchFn: async () => { throw new Error('no network in the demo'); } }, async ({ call }) => {
     assert.equal((await call('GET', '/api/catalog')).status, 403);
+  });
+});
+
+test('the background refresh fetches when the cache is old, shares the page\'s run and leaves a fresh cache alone', async () => {
+  const { fetchFn, calls } = fakeFetch(SEARCH);
+  await withServer({ fetchFn }, async ({ app, call, smDir }) => {
+    assert.equal(typeof app.refreshCatalog, 'function');
+    await app.refreshCatalog();
+    const first = calls.length;
+    assert.ok(first > 0);
+    assert.equal(JSON.parse(readFileSync(join(smDir, 'catalog.json'), 'utf8')).items.length, 2);
+    // Fresh cache: the sweep that comes five minutes later asks nothing, and neither does the tab.
+    await app.refreshCatalog();
+    await call('GET', '/api/catalog');
+    assert.equal(calls.length, first);
+    // A day later the cache is old: the next sweep fetches again, with no tab open.
+    const old = JSON.parse(readFileSync(join(smDir, 'catalog.json'), 'utf8'));
+    writeFileSync(join(smDir, 'catalog.json'), JSON.stringify({ ...old, fetchedAt: new Date(Date.now() - 25 * 3600_000).toISOString() }));
+    await app.refreshCatalog();
+    assert.ok(calls.length > first);
+  });
+});
+
+test('the tab reads only the first pages; the background refresh then reads the extra ones', async () => {
+  const full = (url) => (url.includes('topic%3Aclaude-skills')
+    ? { body: { total_count: 90, items: Array.from({ length: /page=2/.test(url) ? 40 : 50 }, (_, i) => repoJson(`p${/page=2/.test(url) ? 2 : 1}/r${i}`, i + 1)) } }
+    : { body: { items: [] } });
+  const { fetchFn, calls } = fakeFetch(full);
+  await withServer({ fetchFn, sleep: async () => {} }, async ({ app, call }) => {
+    const tab = JSON.parse((await call('GET', '/api/catalog')).text);
+    assert.equal(tab.total, 50);
+    assert.equal(calls.filter((u) => /page=2/.test(u)).length, 0, 'the tab never waits for extra pages');
+    await app.refreshCatalog();
+    assert.equal(calls.filter((u) => /page=2/.test(u)).length, 1);
+    assert.equal(JSON.parse((await call('GET', '/api/catalog')).text).total, 90);
+  });
+});
+
+test('the background refresh does nothing in the demo', async () => {
+  let asked = 0;
+  await withServer({ demo: true, fetchFn: async () => { asked++; throw new Error('no network in the demo'); } }, async ({ app }) => {
+    await app.refreshCatalog();
+    assert.equal(asked, 0);
   });
 });

@@ -46,3 +46,6 @@ export function splitIgnored(links, ignored) {
 
 // What the pointer shows over a line: "A ↔ B · 3 reasons".
 export const relationTip = (link, nameOf, reasonsWords) => `${nameOf(link.a)} ↔ ${nameOf(link.b)} · ${reasonsWords(link.reasons.length)}`;
+
+// The AI's plain-words reason for the relation (mm32), written by the server when the AI is on; '' when there is none.
+export const relationWhy = (link) => (typeof link.why === 'string' ? link.why.trim() : '');

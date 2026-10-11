@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CACHE_TTL_MS, fetchCatalog, filterCatalog, markInstalled, readCatalogCache, resolveToken } from '../server/sources/catalog.mjs';
+import { CACHE_TTL_MS, MAX_TOPIC_PAGES, fetchCatalog, filterCatalog, markInstalled, readCatalogCache, resolveToken } from '../server/sources/catalog.mjs';
 
 const NOW = Date.parse('2026-10-09T12:00:00Z');
 
@@ -294,4 +294,141 @@ test('a catalog saved by an older classifier is read back with today\'s categori
     assert.equal(read.category, 'marketing');
     assert.equal(read.type, 'skill', 'the type needed the file list and stays as saved');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
+// Pages past the first 50: a topic search is read page by page up to a cap, politely.
+const pageOf = (url) => Number(/[?&]page=(\d+)/.exec(url)?.[1] ?? 1);
+const nthRepos = (topic, page, n) => Array.from({ length: n }, (_, i) => gh(`${topic}/r${page}-${i}`));
+
+test('a topic with more than 50 results is read page by page until a short page, with a pause before each extra page', async () => {
+  const f = fixture();
+  try {
+    const sizes = { 1: 50, 2: 50, 3: 7 };
+    const { fetchFn, calls } = fakeGithub([
+      [/topic%3Aclaude-code-plugin/, (url) => ({ body: { total_count: 107, items: nthRepos('plug', pageOf(url), sizes[pageOf(url)] ?? 0) } })],
+      [/search\/repositories/, { body: { items: [] } }],
+    ]);
+    const pauses = [];
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async (ms) => { pauses.push(ms); } });
+    const topicCalls = calls.filter((c) => c.url.includes('topic%3Aclaude-code-plugin'));
+    assert.deepEqual(topicCalls.map((c) => pageOf(c.url)), [1, 2, 3]);
+    assert.ok(topicCalls.every((c) => c.url.includes('per_page=50')));
+    assert.equal(out.items.length, 107);
+    assert.equal(out.stale, false);
+    assert.equal(pauses.length, 2);
+    assert.ok(pauses.every((ms) => ms > 0));
+    assert.equal(readCatalogCache(f.smDir).items.length, 107);
+  } finally { f.cleanup(); }
+});
+
+test('paging stops at the cap even when GitHub keeps returning full pages', async () => {
+  const f = fixture();
+  try {
+    const { fetchFn, calls } = fakeGithub([
+      [/topic%3Aclaude-code-plugin/, (url) => ({ body: { total_count: 900, items: nthRepos('plug', pageOf(url), 50) } })],
+      [/search\/repositories/, { body: { items: [] } }],
+    ]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    const pages = calls.filter((c) => c.url.includes('topic%3Aclaude-code-plugin')).map((c) => pageOf(c.url));
+    assert.deepEqual(pages, Array.from({ length: MAX_TOPIC_PAGES }, (_, i) => i + 1));
+    assert.equal(out.items.length, 50 * MAX_TOPIC_PAGES);
+  } finally { f.cleanup(); }
+});
+
+test('extra pages are skipped when the request budget is nearly spent, and the first pages still count', async () => {
+  const f = fixture();
+  try {
+    const { fetchFn, calls } = fakeGithub([
+      [/topic%3Aclaude-code-plugin/, (url) => ({ headers: { 'x-ratelimit-remaining': '1' }, body: { total_count: 300, items: nthRepos('plug', pageOf(url), 50) } })],
+      [/search\/repositories/, { body: { items: [] } }],
+    ]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    assert.equal(calls.filter((c) => pageOf(c.url) > 1).length, 0);
+    assert.equal(out.items.length, 50);
+    assert.equal(out.stale, false);
+  } finally { f.cleanup(); }
+});
+
+const limitOnExtraPage = () => fakeGithub([
+  [/topic%3Aclaude-code-plugin/, (url) => (pageOf(url) === 1
+    ? { body: { total_count: 300, items: nthRepos('plug', 1, 50) } }
+    : { status: 403, headers: { 'x-ratelimit-remaining': '0' }, body: { message: 'API rate limit exceeded' } })],
+  [/search\/repositories/, { body: { items: [] } }],
+]);
+const writeCache = (smDir, items, over = {}) => writeFileSync(join(smDir, 'catalog.json'), JSON.stringify({ fetchedAt: new Date(NOW - 30 * 3600_000).toISOString(), items, ...over }));
+const cachedItem = (repo) => ({ repo, name: repo.split('/')[1], owner: repo.split('/')[0], stars: 5, description: 'A thing', topics: [], type: 'plugin', category: 'other', updatedAt: null, license: null, archived: false, url: `https://github.com/${repo}`, hasMarketplace: false });
+
+test('hitting the limit on an extra page with no cache keeps what was read and saves it', async () => {
+  const f = fixture();
+  try {
+    const { fetchFn } = limitOnExtraPage();
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    assert.equal(out.items.length, 50);
+    assert.equal(out.limited, false);
+    assert.equal(readCatalogCache(f.smDir).items.length, 50);
+  } finally { f.cleanup(); }
+});
+
+test('hitting the limit on an extra page never shrinks a deeper cache, keeps its date and says stale', async () => {
+  const f = fixture();
+  try {
+    const old = Array.from({ length: 120 }, (_, i) => cachedItem(`old/r${i}`));
+    writeCache(f.smDir, old);
+    const before = readCatalogCache(f.smDir).fetchedAt;
+    const { fetchFn } = limitOnExtraPage();
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    assert.equal(out.stale, true);
+    assert.equal(out.fetchedAt, before);
+    assert.equal(out.items.length, 170, 'the 120 old plus the 50 new');
+    const saved = readCatalogCache(f.smDir);
+    assert.equal(saved.items.length, 170);
+    assert.equal(saved.fetchedAt, before, 'still old, so the next refresh tries again');
+  } finally { f.cleanup(); }
+});
+
+test('a load that is not deep reads only the first pages and never pauses', async () => {
+  const f = fixture();
+  try {
+    const { fetchFn, calls } = fakeGithub([
+      [/topic%3Aclaude-code-plugin/, (url) => ({ body: { total_count: 300, items: nthRepos('plug', pageOf(url), 50) } })],
+      [/search\/repositories/, { body: { items: [] } }],
+    ]);
+    let slept = 0;
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, deep: false, sleep: async () => { slept++; } });
+    assert.equal(slept, 0);
+    assert.equal(calls.filter((c) => pageOf(c.url) > 1).length, 0);
+    assert.equal(out.items.length, 50);
+    assert.equal(out.stale, false);
+    assert.equal(readCatalogCache(f.smDir).shallow, true);
+  } finally { f.cleanup(); }
+});
+
+test('a shallow load keeps the repositories an older deep cache already held', async () => {
+  const f = fixture();
+  try {
+    writeCache(f.smDir, Array.from({ length: 120 }, (_, i) => cachedItem(`old/r${i}`)));
+    const { fetchFn } = fakeGithub([[/search\/repositories/, { body: { items: [gh('new/one')] } }]]);
+    const out = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, deep: false, sleep: async () => {} });
+    assert.equal(out.items.length, 121);
+  } finally { f.cleanup(); }
+});
+
+test('a shallow cache is fresh for a shallow load but a deep load goes on to read the extra pages', async () => {
+  const f = fixture();
+  try {
+    writeCache(f.smDir, [cachedItem('a/one')], { fetchedAt: new Date(NOW - 3600_000).toISOString(), shallow: true });
+    const { fetchFn, calls } = fakeGithub([
+      [/topic%3Aclaude-code-plugin/, (url) => ({ body: { total_count: 60, items: nthRepos('plug', pageOf(url), pageOf(url) === 1 ? 50 : 10) } })],
+      [/search\/repositories/, { body: { items: [] } }],
+    ]);
+    const shallow = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, deep: false, sleep: async () => {} });
+    assert.equal(calls.length, 0);
+    assert.equal(shallow.items.length, 1);
+    const deep = await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    assert.equal(deep.items.length, 60);
+    assert.equal(readCatalogCache(f.smDir).shallow, undefined);
+    const again = calls.length;
+    await fetchCatalog({ token: null, exec: noExec, fetchFn, smDir: f.smDir, dir: f.dir, now: NOW, sleep: async () => {} });
+    assert.equal(calls.length, again, 'a deep cache is fresh for a deep load too');
+  } finally { f.cleanup(); }
 });

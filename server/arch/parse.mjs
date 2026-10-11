@@ -105,6 +105,80 @@ function scanPart(text) {
   return { lines, heads, section: { headIdx: fh.idx, level: fh.level, end, lang: MISSING_HEADINGS[key(fh.text)] }, regions };
 }
 
+// A markdown table under the section is read row by row as items (am03): the header names the columns (status or
+// checkbox, text, code, who) and the text cell takes the same bold tokens and trailing code as a checklist line.
+const TABLE_SEP_RE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const COL_HEADERS = {
+  status: ['status', 'estado', 'situacao', 'feito', 'done', 'pronto', 'ok', 'check', 'checkbox', 'x'],
+  text: ['item', 'items', 'itens', 'tarefa', 'tarefas', 'task', 'tasks', 'texto', 'text', 'descricao', 'description', 'what', 'titulo', 'title'],
+  code: ['code', 'codigo', 'cod', 'id'],
+  who: ['who', 'quem', 'responsavel', 'owner', 'com'],
+};
+const DONE_CELL_RE = /^(\[[xX]\]|x|✓|✔|✅|☑|done|feito|pronto|concluido|ok)$/i;
+
+// Cells of one table row; a pipe inside backticks or written \| stays in the cell.
+function tableCells(line) {
+  const cells = [];
+  const body = line.trim().replace(/^\|/, '');
+  let cur = '';
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '\\' && body[i + 1] === '|') { cur += '|'; i++; continue; }
+    if (c === '`') {
+      // A run of N backticks opens a code span only if a run of exactly N closes it later; else it is plain text.
+      let n = 1;
+      while (body[i + n] === '`') n++;
+      let close = -1;
+      for (let k = i + n; k < body.length; k++) {
+        if (body[k] !== '`') continue;
+        let m = 1;
+        while (body[k + m] === '`') m++;
+        if (m === n) { close = k; break; }
+        k += m - 1;
+      }
+      const stop = close < 0 ? i + n : close + n;
+      cur += body.slice(i, stop).replace(/\\\|/g, '|');
+      i = stop - 1;
+      continue;
+    }
+    if (c === '|') { cells.push(cur.trim()); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() || !/\|\s*$/.test(body)) cells.push(cur.trim());
+  return cells;
+}
+
+// The table whose header is line i: { items, last } when the header names a text or a status column, else null.
+function tableItems(lines, i, end) {
+  const head = tableCells(lines[i]);
+  if (tableCells(lines[i + 1].replace(/\r$/, '')).length !== head.length) return null; // GFM: header and delimiter row agree
+  const col = {};
+  head.forEach((h, n) => {
+    for (const [name, words] of Object.entries(COL_HEADERS)) if (col[name] === undefined && words.includes(key(h))) col[name] = n;
+  });
+  if (col.text === undefined && col.status === undefined) return null;
+  if (col.text === undefined) col.text = head.findIndex((_, n) => n !== col.status && n !== col.code && n !== col.who);
+  if (col.text < 0) return null;
+  const items = [];
+  let last = i + 1;
+  for (let j = i + 2; j < end; j++) {
+    const l = lines[j].replace(/\r$/, '');
+    if (!/^\s*\|/.test(l)) break;
+    last = j;
+    const cells = tableCells(l);
+    if (!cells[col.text]) continue;
+    const mark = cells[col.status] ?? '';
+    const done = DONE_CELL_RE.test(norm(mark).replace(/️/g, '')); // accents and emoji variation selectors do not matter
+    const item = parseItem(cells[col.text], done, [], j + 1);
+    if (item.status === 'todo' && classifyToken(mark).value === 'doing') item.status = 'doing';
+    const code = (cells[col.code] ?? '').replace(/`/g, '').trim();
+    if (CODE_RE.test(code)) item.code = code;
+    if (cells[col.who]) item.who = cells[col.who];
+    items.push({ ...item, startIdx: j, endIdx: j });
+  }
+  return { items, last };
+}
+
 function itemsIn(lines, start, end) {
   const items = [];
   let fence = null;
@@ -117,6 +191,11 @@ function itemsIn(lines, start, end) {
       continue;
     }
     if (fence) continue;
+    if (/^\s*\|/.test(line) && i + 1 < end && TABLE_SEP_RE.test(lines[i + 1].replace(/\r$/, ''))) {
+      const table = tableItems(lines, i, end);
+      if (table) { items.push(...table.items); i = table.last; }
+      continue;
+    }
     const m = ITEM_RE.exec(line);
     if (!m) continue;
     let last = i;
@@ -160,6 +239,43 @@ function codePathsOf(lines, heads) {
   const paths = [];
   for (const m of body.matchAll(/`([^`\s]*\/[^`\s]*)`/g)) if (!paths.includes(m[1])) paths.push(m[1]);
   return paths;
+}
+
+const HOW_HEADINGS = { comofunciona: 'pt', howitworks: 'en' };
+
+// The two sections the Flow's level 2 (flow.md fl09) reads in a part file, with their lines: "How it works" as plain
+// text (its paragraphs joined, markdown left as written) and every path "Where in the code" names. → { how: { text,
+// line } | null, where: [{ path, line }] }.
+export function partSections(text) {
+  const lines = String(text ?? '').split('\n');
+  const heads = headingsOf(lines);
+  const bodyOf = (table) => {
+    const h = heads.find((x) => table[key(x.text)]);
+    if (!h) return null;
+    const next = heads.find((x) => x.idx > h.idx && x.level <= h.level);
+    return { start: h.idx + 1, end: next ? next.idx : lines.length };
+  };
+  let how = null;
+  const hb = bodyOf(HOW_HEADINGS);
+  if (hb) {
+    const kept = [];
+    let fence = false;
+    for (let i = hb.start; i < hb.end; i++) {
+      const l = lines[i].replace(/\r$/, '');
+      if (FENCE_RE.test(l)) { fence = !fence; continue; }
+      if (fence || !l.trim() || HEADING_RE.test(l)) continue;
+      kept.push({ i, text: l.trim() });
+    }
+    if (kept.length) how = { text: kept.map((k) => k.text).join(' '), line: kept[0].i + 1 };
+  }
+  const where = [];
+  const wb = bodyOf(CODE_PATHS_HEADINGS);
+  if (wb) {
+    for (let i = wb.start; i < wb.end; i++) {
+      for (const m of lines[i].matchAll(/`([^`\s]*\/[^`\s]*)`/g)) if (!where.some((w) => w.path === m[1])) where.push({ path: m[1], line: i + 1 });
+    }
+  }
+  return { how, where };
 }
 
 function parsePart(dir, name, text) {
