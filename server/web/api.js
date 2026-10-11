@@ -62,6 +62,10 @@ export const api = {
   reinforcedLimit: () => call('GET', '/api/settings/reinforced-limit'),
   setReinforcedLimit: (usd) => call('POST', '/api/settings/reinforced-limit', { usd }),
   setProjectBackground: (projectId, always) => call('POST', '/api/settings/project-background', { projectId, always }),
+  // The project's orchestrator (or01): open it, resuming its one conversation (text starts it with a first message), and the
+  // switch "Organizar sozinho" (or18).
+  orchestratorOpen: (body) => call('POST', '/api/chat/orchestrator', body),
+  setProjectTidy: (projectId, tidy) => call('POST', '/api/settings/project-tidy', { projectId, tidy }),
   chatList: (query) => call('GET', `/api/chat/list?${new URLSearchParams(query)}`),
   chatHistory: (sessionId, since) => call('GET', `/api/chat/history/${seg(sessionId)}${since ? `?since=${seg(since)}` : ''}`),
   chatHelper: (sessionId, agentId) => call('GET', `/api/chat/helper/${seg(sessionId)}/${seg(agentId)}`),

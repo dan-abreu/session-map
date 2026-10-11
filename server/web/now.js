@@ -1,7 +1,7 @@
 // The "Now" strip (mm09) and the project picker's badges (mm10): every job on the PC, whatever project the page has open.
 // The pure part on top is what node:test loads; createNowStrip touches the DOM only when called.
 import { archTree } from './tree.js';
-import { nodeOfConversation, placeOf, projectHue, originIcon, workWords } from './convlist.js';
+import { nodeOfConversation, placeOf, projectHue, originIcon, workWords, orchestratorOf, activityOf } from './convlist.js';
 import { modelName, runningWorkflows, stepWords } from './live.js';
 import { kindMark } from './blocks.js';
 
@@ -18,6 +18,16 @@ function kindOf(chat, unseen, nowMs) {
   if (fresh && (chat.status === 'busy' ? chat.waiting.strong : asksFor(chat.waiting))) return 'waiting';
   if (chat.status === 'busy') return 'working';
   return unseen.has(chat.sessionId) ? 'finished' : null;
+}
+
+// The activity chats each project's orchestrator has working now (or03): {working, projects [{id, name, hue, working}]}.
+function orchestraOf(state) {
+  const projects = [];
+  for (const project of state.projects) {
+    const working = activityOf(project, orchestratorOf(project)).filter((r) => r.status === 'busy').length;
+    if (working) projects.push({ id: project.id, name: project.name, hue: projectHue(project), working });
+  }
+  return { working: projects.reduce((n, p) => n + p.working, 0), projects };
 }
 
 // Never takes the open project: the strip reads the same with any project selected (mm09).
@@ -51,7 +61,7 @@ export function nowJobs(state, { unseen = new Set(), nowMs = Date.parse(state.ge
   }
   cards.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || newest(a, b));
   const count = (kind) => cards.filter((c) => c.kind === kind).length;
-  return { cards, counts: { working: count('working'), waiting: count('waiting'), finished: count('finished') } };
+  return { cards, counts: { working: count('working'), waiting: count('waiting'), finished: count('finished') }, orchestra: orchestraOf(state) };
 }
 
 // projectId → {working, waiting, finished}: the marks next to each project in the picker.
@@ -87,6 +97,13 @@ export function nextUnseen(statuses, state, unseen) {
 export function nowLine(t, counts) {
   const parts = ['working', 'waiting', 'finished'].filter((k) => counts[k] > 0).map((k) => t(`now.${k}`, { n: counts[k] }));
   return parts.length ? parts : [t('now.nothing')];
+}
+
+// "Orchestrator: 3 working", with the projects in its tooltip when more than one has an orchestrator at work; null when none does.
+export function orchestraLine(t, orchestra) {
+  if (!orchestra?.working) return null;
+  const where = orchestra.projects.map((p) => `${p.name}: ${p.working}`).join(', ');
+  return { text: t('now.orchestra', { n: orchestra.working }), title: t('now.orchestraTitle', { where }) };
 }
 
 // ---- the strip ----------------------------------------------------------------------------------
@@ -150,9 +167,11 @@ export function createNowStrip(ctx) {
     const c = jobs.counts;
     const kinds = ['working', 'waiting', 'finished'].filter((k) => c[k] > 0);
     if (!kinds.length) return [h('span', { class: 'now-count is-none' }, tt('now.nothing'))];
-    return kinds.map((k) => h('span', { class: `now-count k-${k}` },
+    const orch = orchestraLine(tt, jobs.orchestra);
+    return [...kinds.map((k) => h('span', { class: `now-count k-${k}` },
       k === 'finished' ? icon('check', 'now-count-check') : h('span', { class: 'now-dot', 'aria-hidden': 'true' }),
-      tt(`now.${k}`, { n: c[k] })));
+      tt(`now.${k}`, { n: c[k] }))),
+    orch ? h('span', { class: 'now-count k-orchestra', title: orch.title }, icon('auto', 'now-count-orch'), orch.text) : null].filter(Boolean);
   }
 
   const isOpen = () => root.classList.contains('is-open');

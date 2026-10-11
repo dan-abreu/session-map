@@ -159,6 +159,7 @@
         <button type="button" class="btn mm-files-btn" id="filesSide" aria-pressed="true" data-i18n-title="map.filesSideHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-file"/></svg><span data-i18n="map.filesSide"></span></button>
         <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
         <button type="button" class="btn primary" id="newChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+        <button type="button" class="btn" id="openOrch" data-i18n-title="orch.chipTitle"><svg class="btn-icon" aria-hidden="true"><use href="#i-auto"/></svg><span data-i18n="orch.name"></span></button>
         <button type="button" class="btn" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
         <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
           <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>
@@ -288,12 +289,16 @@
             <div class="chat-run" id="chatRun" data-chat="run"></div>
             <div class="chat-menu" id="chatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
               <div class="run-panel" id="chatRunPanel" data-chat="runpanel"></div>
-              <div class="chat-mode">
-                <label for="chatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
-                <select id="chatMode" data-chat="mode"></select>
-                <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
-                <p class="chat-safety" data-i18n="chat.safety"></p>
-              </div>
+              <details class="run-advanced" data-chat="advanced">
+                <summary data-i18n="run.advanced"></summary>
+                <div class="run-manual" data-chat="manualways"></div>
+                <div class="chat-mode">
+                  <label for="chatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
+                  <select id="chatMode" data-chat="mode"></select>
+                  <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
+                  <p class="chat-safety" data-i18n="chat.safety"></p>
+                </div>
+              </details>
             </div>
             <button type="button" class="btn" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
             <button type="submit" class="btn primary" id="chatSend" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
@@ -425,12 +430,16 @@
               <div class="chat-run" data-chat="run"></div>
               <div class="chat-menu" id="flowChatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
                 <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel"></div>
-                <div class="chat-mode">
-                  <label for="flowChatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
-                  <select id="flowChatMode" data-chat="mode"></select>
-                  <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
-                  <p class="chat-safety" data-i18n="flow.chatSafety"></p>
-                </div>
+                <details class="run-advanced" data-chat="advanced">
+                  <summary data-i18n="run.advanced"></summary>
+                  <div class="run-manual" data-chat="manualways"></div>
+                  <div class="chat-mode">
+                    <label for="flowChatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
+                    <select id="flowChatMode" data-chat="mode"></select>
+                    <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
+                    <p class="chat-safety" data-i18n="flow.chatSafety"></p>
+                  </div>
+                </details>
               </div>
               <button type="button" class="btn" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
               <button type="submit" class="btn primary" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>

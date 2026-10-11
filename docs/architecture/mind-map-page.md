@@ -44,6 +44,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [x] **Claude:** Mind map and an outline for phones `mm01`
 - [x] **Claude:** Board as columns of items `mm02`
 - [ ] **detail:** Drag an item to another part `mm03`
+- [x] A card at the top of Home: "How much may the AI spend per month on big work", with the value, Save and what was used this month `mm46`
+  - From `id89`. The same limit (`budget.reinforcedMonthlyUSD`) the run menu by Send already sets, now in plain sight; a bar shows used against the limit, and with no limit it says the Autonomous way will stop to ask before each big job.
 
 ### Polish package (first, after v0.2.2)
 

@@ -35,6 +35,12 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - [x] **Claude:** A part's files on the page, read-only, with Open in VS Code and Open terminal here `sv07`
   - New and changed files marked, the branch's changed lines highlighted, up to 1 MB, text only, never `.git` or `.env`. Released in v0.1.0.
 
+### Restart
+
+- [x] A chat that needs to restart session-map agrees on the moment with the other chats, and every chat goes on by itself afterwards `sv13`
+  - From `id89`. The restart waits until no chat is in the middle of a step (or each one saved where it was), and the chats it cut off continue without a click.
+  - Built on 2026-10-11 (`server/restart.mjs`, `POST /api/restart`, the `restart_session_map` tool of the arsenal): one pending restart, fired when no page chat is mid-turn or after 10 minutes; the chats are resumed with a note by the new process. Not yet tried against the real server: the first real restart is its end-to-end test.
+
 ### Later (ideas, not committed)
 
 - [ ] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`

@@ -21,9 +21,9 @@ test('both chat sheets start the input at one line and keep the permissions fold
   const inputs = [...html.matchAll(/<textarea id="(chatInput|flowChatInput)"[^>]*>/g)];
   assert.equal(inputs.length, 2);
   for (const [tag] of inputs) assert.match(tag, /rows="1"/);
-  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/div>\s*<\/div>/g)];
+  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/details>\s*<\/div>/g)];
   assert.equal(menus.length, 2, 'a closed menu in each sheet');
-  for (const [, menu] of menus) assert.match(menu, /data-chat="mode"/, 'the permissions wait inside it');
+  for (const [, menu] of menus) assert.match(menu, /<details class="run-advanced"[^>]*>[\s\S]*data-chat="mode"/, 'the permissions wait inside it, folded under Advanced');
 });
 
 test('the key hints show only while typing, and a phone keeps the input above the keyboard', () => {

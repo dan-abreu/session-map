@@ -60,7 +60,8 @@ test('the "create the map" chat starts through /api/chat/start at the root, only
     const exists = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', ...CREATE } });
     assert.deepEqual([exists.status, exists.body.error], [409, 'arch-exists']);
     assert.equal((await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'nope', ...CREATE } })).status, 404);
-    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'bare-abc123', ...CREATE, mode: 'acceptEdits' } });
+    // Automatic: an Autonomous chat (the default) always runs in Claude Code's auto mode.
+    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'bare-abc123', ...CREATE, mode: 'acceptEdits', run: { kind: 'auto', selfReinforce: false } } });
     assert.equal(made.status, 200);
     assert.match(made.body.chatKey, /^[0-9a-f]{32}$/);
     assert.equal(made.body.mode, 'acceptEdits', 'the chat runs in the mode the person picked');

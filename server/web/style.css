@@ -1190,7 +1190,7 @@ body.is-resizing .sheet { animation: none; }
 }
 .run-toggle:hover, .run-toggle[aria-expanded="true"] { background: var(--bg-3); color: var(--ink); }
 .run-toggle::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
-.run-toggle.tone-auto, .run-toggle.tone-maestro { --tone: var(--active); }
+.run-toggle.tone-autonomous, .run-toggle.tone-auto, .run-toggle.tone-maestro { --tone: var(--active); }
 .run-toggle.tone-reinforced, .run-toggle.tone-ultracode { --tone: var(--doing); }
 .run-toggle.tone-ask { --tone: var(--waiting); }
 .run-way { flex: none; font-weight: 600; color: var(--ink); }
@@ -1219,8 +1219,34 @@ body.is-resizing .sheet { animation: none; }
 .chat-mode select { flex: 1 1 160px; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-2); color: var(--ink); font: inherit; }
 .chat-mode .small-btn { flex: none; }
 .chat-safety { flex: 1 1 100%; margin: 0; font-size: var(--fs-2xs); color: var(--ink-2); line-height: 1.4; }
-.run-path { justify-self: start; }
-.run-lede { margin: 0; max-width: 62ch; font-size: var(--fs-sm); line-height: 1.5; }
+/* The three ways: a name and one plain sentence each; the one in use is filled like a chosen option. */
+.run-paths { display: grid; gap: 2px; }
+.run-path-btn {
+  display: grid; gap: 1px; margin: 0 -10px; padding: 8px 10px 8px 34px; position: relative; text-align: left;
+  border: 0; border-radius: var(--r-md); background: none; color: inherit; font: inherit; font-size: var(--fs-sm); cursor: pointer;
+}
+.run-path-btn:hover { background: var(--bg-3); }
+.run-path-btn::before {
+  content: ""; position: absolute; left: 12px; top: 11px; width: 12px; height: 12px; box-sizing: border-box;
+  border: 1.5px solid var(--ink-2); border-radius: 50%;
+}
+.run-path-btn[aria-pressed="true"] { background: var(--active-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--active) 30%, transparent); }
+.run-path-btn[aria-pressed="true"]::before { border-color: var(--active); background: radial-gradient(circle, var(--active) 0 3px, transparent 3.5px); }
+/* Under "Advanced", folded: the ways of Manual, the permission mode, the mode for the whole PC. */
+.run-advanced > summary {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; list-style: none; cursor: pointer;
+  font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2);
+}
+.run-advanced > summary::-webkit-details-marker { display: none; }
+.run-advanced > summary:hover { color: var(--ink); background: var(--bg-3); }
+.run-advanced > summary::before {
+  content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px 1px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-base) var(--ease-out);
+}
+.run-advanced[open] > summary::before { transform: rotate(45deg); }
+.run-manual { padding: 0 14px 12px; }
+.run-manual:empty { display: none; }
+.run-manual + .chat-mode { border-top: 1px solid var(--line); }
 .run-ways, .run-models { display: grid; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .run-ways legend, .run-models legend, .run-effort-label, .run-limit label { padding: 0 0 6px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
 .run-option, .run-check {
@@ -1251,6 +1277,20 @@ body.is-resizing .sheet { animation: none; }
 .run-warn-title, .run-ask-title { font-weight: 650; color: var(--waiting-ink); }
 .run-warn .actions, .run-ask .actions { margin-top: 10px; }
 .run-ask { margin-top: 10px; }
+.msg-auto-note summary { cursor: pointer; list-style: none; }
+.msg-auto-note summary::-webkit-details-marker { display: none; }
+.msg-auto-note summary:hover { color: var(--ink); }
+.msg-auto-text { margin: 6px 0 0; max-height: 12em; overflow: auto; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+
+/* The project's orchestrator (or01): the mark in the root box, and the block in the project's panel with its switch. */
+.bx-chip.is-orch { color: var(--ink-2); }
+.bx-chip.is-orch.is-working { color: var(--active-ink); }
+.orch-block { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.orch-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-sm); font-weight: 650; }
+.orch-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.orch-lede { margin: 0; max-width: 62ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-2); }
+.orch-switch { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; align-items: start; cursor: pointer; }
+.orch-switch input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--active); }
 
 /* the session-map answer given for the person, and the blocks folded out of a reply */
 .msg-auto { justify-self: end; max-width: 88%; padding: 6px 12px; border: 1px dashed var(--line); border-radius: var(--r-lg); font-size: var(--fs-xs); color: var(--ink-2); }
@@ -2060,6 +2100,8 @@ body.is-empty .now { display: none; }
 .now-count.k-waiting { color: var(--waiting-ink); }
 .now-count.k-finished { color: var(--ink-2); }
 .now-count.is-none { color: var(--ink-2); font-weight: 550; }
+.now-count.k-orchestra { color: var(--ink-2); }
+.now-count-orch { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .now-count-check, .now-kind-check { width: 12px; height: 12px; flex: none; fill: none; stroke: var(--active); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .now-chevron {
   position: absolute; top: 10px; right: 10px; width: 16px; height: 16px;
@@ -2139,7 +2181,15 @@ body.is-empty .now { display: none; }
 .cv-origin-badge.o-terminal, .cv-origin-badge.o-sdk { background: var(--bg-3); color: var(--ink-2); }
 .cv-cost { color: var(--ink-2); }
 
-.cv-item { position: relative; }
+.cv-item, .cv-item-main { position: relative; }
+/* The orchestrator carries its activity chats: indented under it on a hairline, each a line shorter (item and model, no place). */
+.cv-origin-badge.o-orchestrator { --o-h: 190; }
+.cv-kids { list-style: none; display: grid; gap: 1px; margin: 0 0 4px 16px; padding: 0 0 0 6px; border-left: 1px solid var(--line); }
+.cv-kid .cv-row { padding-block: 6px; }
+.cv-kid .cv-title { font-size: var(--fs-xs); -webkit-line-clamp: 1; }
+.cv-code, .cv-model { font-size: var(--fs-2xs); font-weight: 650; white-space: nowrap; }
+.cv-code { padding: 0 6px; border-radius: var(--r-xs); background: var(--bg-3); color: var(--ink); line-height: 1.7; }
+.cv-model { color: var(--ink-2); }
 .cv-move {
   position: absolute; right: 4px; bottom: 5px; display: grid; place-items: center; width: 28px; height: 28px;
   border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-2); cursor: pointer; opacity: 0;

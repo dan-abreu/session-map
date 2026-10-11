@@ -9,7 +9,7 @@ import { logAction, runAction } from './actions.mjs';
 import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
-import { createAskRoutes } from './ai/askroute.mjs';
+import { createAskRoutes, hasHeaderToken, headerAuth } from './ai/askroute.mjs';
 import { createHelperRoutes } from './ai/helperroute.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
@@ -18,8 +18,8 @@ import { readConversation, readImage } from './sources/claude-conversation.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
 import { readArch } from './arch/detect.mjs';
 import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
-import { authorize, cookieToken, loadToken, sameToken } from './auth.mjs';
-import { setBackground, sweepable } from './background.mjs';
+import { authorize, cookieToken, isLocal, loadToken, sameToken } from './auth.mjs';
+import { setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
@@ -37,6 +37,7 @@ import { claudeDir } from './sources/claude.mjs';
 import { countRepo } from './sources/count.mjs';
 import { setPlacement } from './placements.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
+import { LISTEN_RETRY_MS, createRestarter, listenWithRetry, resumeAfterRestart } from './restart.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
@@ -56,6 +57,7 @@ const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreada
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
+const TIDY_ERRORS = { 'bad-tidy': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
@@ -123,15 +125,20 @@ async function serveFile(res, path) {
 // helpers ({backend, apiRun, textRun}): the lock for the other AIs' keys and their call, replaceable for tests; askAi ({ask}):
 // askOthers behind POST /api/ai/ask (tests).
 // collectFn, ai, catalog ({token, fetchFn, exec, bin}) and deliver (the desktop and phone alerts) are replaceable for tests;
-// addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page.
+// addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page. restart ({now,
+// every, stopEvery, spawn, exit, execPath, argv, env}): the agreed restart's clock, check, spawn and exit (restart.mjs), fakes in tests.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
   catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
+  restart = {},
 } = {}) {
   let watcher = null;
-  const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({ smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]) });
+  // readState/changed: the orchestrator's tools read the newest state and drop it after an archive or a rename (or17).
+  const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({
+    smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
+  });
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
   const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
   let ready = false;
@@ -175,10 +182,12 @@ export function createApp({
   const fresh = () => { cached = null; };
   const foundationRoute = createFoundationRoute({ smDir, demo, token, projects: async () => (await firstAnswer()).projects, fresh });
   const prefsNow = () => notifyPrefs(readJsonFile(join(smDir, 'config.json'), {}) ?? {});
+  // The chats the restart before this one resumes (sv13): no news as cut off.
+  const resumed = new Set();
   watcher = demo ? null : createWatcher({
     readState: state, deliver, prefs: prefsNow,
     skip: () => chat?.drivenIds?.() ?? new Set(),
-    startup: (s) => chat?.interrupted?.(s) ?? [],
+    startup: (s) => (chat?.interrupted?.(s) ?? []).filter((a) => !resumed.has(a.sessionId)),
   });
 
   const projectOf = async (projectId) => {
@@ -197,6 +206,7 @@ export function createApp({
       const result = await chat.start(await readBody(req, CHAT_BODY_MAX), await state());
       return send(res, result.status, result.body);
     }
+    if (key === 'orchestrator' && parts.length === 4) return orchestratorRoute(req, res, url);
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
       const query = Object.fromEntries(['projectId', 'partId', 'workCellId', 'code', 'kind'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
       const result = chat.list(query, await quickState());
@@ -237,6 +247,21 @@ export function createApp({
     if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req, verb === 'send' ? CHAT_BODY_MAX : BODY_MAX);
     const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
+    return send(res, result.status, result.body);
+  }
+
+  // The project's orchestrator (or01/or03): GET what the page shows of it (one project, or all for the Now strip); POST opens
+  // it, resuming the same conversation, or starts it with the person's message (text, optional).
+  async function orchestratorRoute(req, res, url) {
+    if (req.method === 'GET') {
+      const s = await quickState();
+      const projectId = url.searchParams.get('projectId');
+      if (projectId === null) return send(res, 200, { ok: true, orchestrators: s.projects.map((p) => chat.orchestra.info(p.id, s)) });
+      if (!s.projects.some((p) => p.id === projectId)) throw new HttpError(404, 'unknown-project');
+      return send(res, 200, { ok: true, ...chat.orchestra.info(projectId, s) });
+    }
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const result = await chat.orchestra.open(await readBody(req, CHAT_BODY_MAX), await state());
     return send(res, result.status, result.body);
   }
 
@@ -317,6 +342,23 @@ export function createApp({
     return send(res, status, result);
   }
 
+  // "Organizar sozinho" (or18): the orchestrator's tidy pass on a project, on unless the person turns it off.
+  async function tidyRoute(req, res, url) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'GET' && req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const body = req.method === 'POST' ? await readBody(req) : null;
+    const projectId = req.method === 'GET' ? url.searchParams.get('projectId') : body?.projectId;
+    const project = (await quickState()).projects.find((p) => p.id === projectId);
+    if (!project) throw new HttpError(404, 'unknown-project');
+    if (req.method === 'GET') return send(res, 200, { ok: true, tidy: tidyOn(readJsonFile(join(smDir, 'config.json'), {}) ?? {}, project.root) });
+    const result = setTidy(smDir, project.root, body.tidy);
+    const status = result.ok ? 200 : TIDY_ERRORS[result.error];
+    if (result.ok) cached = null;
+    logAction(smDir, { action: 'project-tidy', projectId: project.id }, status);
+    return send(res, status, result);
+  }
+
   // How the person wants to be told (watcher-and-alerts wa05), and a test alert through every way that is on.
   async function notifyRoute(req, res, path) {
     if (demo) throw new HttpError(403, 'demo');
@@ -332,6 +374,20 @@ export function createApp({
     const status = result.ok ? 200 : NOTIFY_ERRORS[result.error];
     logAction(smDir, { action: 'notify' }, status);
     return send(res, status, result);
+  }
+
+  // The agreed restart (sv13): a conversation asks for a fresh session-map instead of killing it. The arsenal's lock:
+  // the stdio tool's header token or the page's cookie, from this computer only, never in the demo.
+  async function restartRoute(req, res) {
+    if (demo || !restarter) throw new HttpError(403, 'demo');
+    if (!isLocal(addressOf(req), req.headers.host)) throw new HttpError(403, 'loopback-only');
+    if (!sameToken(cookieToken(req), token) && !hasHeaderToken(req, token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    if (typeof body?.reason !== 'string' || !body.reason.trim()) throw new HttpError(400, 'bad-reason');
+    const answer = restarter.request({ reason: body.reason, chatKey: body.chatKey });
+    logAction(smDir, { action: 'restart', mode: answer.already ? 'joined' : 'new' }, 200);
+    return send(res, 200, { ok: true, ...answer });
   }
 
   // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
@@ -579,8 +635,10 @@ export function createApp({
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
+    if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
+    if (path === '/api/restart') return restartRoute(req, res);
     if (askRoutes.handles(path)) {
       const r = await askRoutes.handle(req, url, addressOf(req));
       return send(res, r.status, r.body, r.headers);
@@ -600,7 +658,9 @@ export function createApp({
     } catch {
       return send(res, 400, 'bad request');
     }
-    const auth = askRoutes.authorizeHeader(req, url, addressOf(req)) ?? authorize(req, url, { token, address: addressOf(req) });
+    const auth = askRoutes.authorizeHeader(req, url, addressOf(req))
+      ?? (url.pathname === '/api/restart' ? headerAuth(req, addressOf(req), token) : null)
+      ?? authorize(req, url, { token, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
     if (auth.status !== 200) return send(res, auth.status, auth.status === 401 ? 'token required' : 'forbidden');
     try {
@@ -623,6 +683,19 @@ export function createApp({
       log('warn', 'foundation-sweep-failed', { error: err.message });
     }
   };
+  // The agreed restart (sv13). The port is let go for the copy: an open page's event stream would hold it, so every
+  // connection is closed with it.
+  const closeHttp = () => new Promise((resolve) => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  });
+  const restarter = demo || !chat || !smDir ? null : createRestarter({ hub: chat, smDir, closeServer: closeHttp, ...restart });
+  // after: the new server listens. Called once by start(), never in the demo.
+  server.resumeAfterRestart = (after) => (restarter
+    ? resumeAfterRestart({ smDir, hub: chat, readState: state, onAlert: (a) => watcher?.push([a]), resuming: resumed, after })
+    : Promise.resolve(null));
+  // The orchestrator's tidy scheduler (or18), every 5 minutes: started by start() only, never in a test's app.
+  server.startOrchestra = () => chat?.orchestra?.start?.();
   server.on('close', () => watcher?.stop());
   return server;
 }
@@ -645,14 +718,21 @@ export function start(argv = process.argv.slice(2)) {
   const token = values.demo ? randomBytes(32).toString('hex') : loadToken(smDir);
   const app = createApp({ dir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}` });
   const host = values.lan ? '0.0.0.0' : '127.0.0.1';
-  app.listen(port, host, () => {
+  // A copy started by the agreed restart (sv13) waits a moment for the old process to free the port. The mark is
+  // dropped at once, so no claude this server starts inherits it.
+  const restarted = process.env.SM_RESTARTED === '1';
+  delete process.env.SM_RESTARTED;
+  const listening = new Promise((resolve) => app.once('listening', resolve));
+  app.once('listening', () => {
     // The person's own terminal: the links carry the token, the only way a page gets the cookie it needs to write.
     const links = { local: `http://127.0.0.1:${port}/?k=${token}` };
     const ip = values.lan && lanAddress();
     if (ip) links.lan = `http://${ip}:${port}/?k=${token}`;
     log('info', 'listening', links);
   });
+  listenWithRetry(app, { port, host, retryMs: restarted ? LISTEN_RETRY_MS : 0 });
   if (!values.demo) {
+    app.resumeAfterRestart(listening).catch((err) => log('warn', 'restart-resume-failed', { error: err.message }));
     const sweep = () => {
       try {
         archiveAll(dir, smDir);
@@ -664,6 +744,7 @@ export function start(argv = process.argv.slice(2)) {
     setTimeout(sweep, 10_000).unref();
     setInterval(sweep, SWEEP_MS).unref();
     app.watcher.start(WATCH_MS);
+    app.startOrchestra();
   }
   return app;
 }

@@ -1,8 +1,12 @@
 // Stand-in for the `claude` CLI. One-shot mode (ai runner): logs how it was called to FAKE_LOG and prints FAKE_REPLY
 // (or sleeps FAKE_SLEEP_MS). Chat mode (--input-format stream-json): speaks the lines recorded in .dev/prova/RESULTADO.md.
-//   "PERM:<Tool>" (repeatable) asks our permission MCP once per occurrence; "SLOW" streams until interrupted;
+//   "PERM:<Tool>" (repeatable) asks our permission MCP once per occurrence (a Bash step runs FAKE_PERM_COMMAND when it is
+//   set); "SLOW" streams until interrupted;
 //   "RUN:<level>[:<estimate>]" ends the reply with a session-map-run block at that level (FAKE_RUN: the same for a
 //   message that names none, such as session-map's own answers);
+//   "CRASH" exits mid-turn (code 3), as a claude that died by itself;
+//   "TOOL:<name> <json>" (one per line, repeatable) calls that tool of our sessionmap MCP with those arguments and
+//   answers "tool <name>: <its text>" ("tool <name> (error): …" for an error), one line per call;
 //   anything else is echoed back as "echo: <text>". set_permission_mode changes the mode the next init reports.
 //   init reports the model of --model (as claude names it); total_cost_usd grows by 0.001 a turn, for the process.
 //   FAKE_TRANSCRIPTS: a folder where each conversation is written as <sessionId>.jsonl, as claude does under ~/.claude/projects.
@@ -81,20 +85,42 @@ function chat() {
       const list = await rpc('tools/list', {});
       if (!list.result.tools.some((t) => t.name === 'approve')) throw new Error('no approve tool');
     })();
-    return { child, ask: async (args) => { await ready; return rpc('tools/call', { name: 'approve', arguments: args }); } };
+    return {
+      child,
+      ask: async (args) => { await ready; return rpc('tools/call', { name: 'approve', arguments: args }); },
+      call: async (name, args) => { await ready; return rpc('tools/call', { name, arguments: args }); },
+    };
+  }
+
+  // The orchestrator's tools (TOOL: lines): every call in order, then one reply with their answers.
+  async function useTools(calls) {
+    mcp ??= startMcp();
+    const lines = [];
+    for (const [, name, json] of calls) {
+      const { result: answer } = await mcp.call(name, json ? JSON.parse(json) : {});
+      lines.push(`tool ${name}${answer.isError ? ' (error)' : ''}: ${answer.content[0].text}`);
+    }
+    const reply = lines.join('\n');
+    out({ type: 'assistant', message: { content: [{ type: 'text', text: reply }] } });
+    transcript({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: reply }] } });
+    return result({ result: reply });
   }
 
   async function run(text) {
     out({ type: 'system', subtype: 'init', cwd: process.cwd(), model, permissionMode: mode, mcp_servers: [{ name: 'sessionmap', status: 'connected' }] });
     out({ type: 'system', subtype: 'hook_started', hook_name: 'SessionStart' });
     transcript({ type: 'user', message: { role: 'user', content: text } });
+    // A moment first, so the lines above reach the hub.
+    if (text.includes('CRASH')) return new Promise(() => setTimeout(() => process.exit(3), 200));
+    const calls = [...text.matchAll(/^TOOL:(\w+)(?: (.*))?$/gm)];
+    if (calls.length) return useTools(calls);
     const perms = [...text.matchAll(/PERM:(\w+)/g)].map((m) => m[1]);
     if (perms.length) {
       mcp ??= startMcp();
       const denials = [];
       for (const [i, toolName] of perms.entries()) {
         const id = `toolu_${i}`;
-        const input = { file_path: 'x.txt', content: 'hi' };
+        const input = toolName === 'Bash' && process.env.FAKE_PERM_COMMAND ? { command: process.env.FAKE_PERM_COMMAND } : { file_path: 'x.txt', content: 'hi' };
         out({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: toolName, input }] } });
         const reply = await mcp.ask({ tool_name: toolName, input, tool_use_id: id });
         const decision = JSON.parse(reply.result.content[0].text);

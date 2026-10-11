@@ -1,5 +1,6 @@
 import { emptyState } from './empty.js';
 import { homeRows, homeTotals } from './home.js';
+import { budgetTone } from './views.js';
 
 // The Home screen (fd10): a list that reads at a glance, one row per project with its seven values, and under a row at most
 // two heads-up lines, each with the button that goes to the place that solves it. The whole row opens the project's map
@@ -10,12 +11,16 @@ import { homeRows, homeTotals } from './home.js';
 // ctx: h, t (translator function), icon(name, cls), fmt {money(usd), relative(iso)}, state (object or getter),
 // openProject(id), goTo(area, sub), refreshFoundation(id) (optional; may return a promise), demo (bool or getter, optional),
 // now() and ignored() (optional getters).
+// The limit card (mm46) needs limit { read(), save(usd) } (the routes of the monthly limit for big work), and may take
+// currency() ({ label, rate }), toast(text) and errorText(code); without limit, or in the demo, there is no card.
 
 const COLUMNS = ['project', 'health', 'uptodate', 'working', 'waiting', 'cost', 'last'];
 const COLUMN_ICON = { health: 'check', uptodate: 'file', working: 'auto', waiting: 'bell', cost: 'coin', last: 'clock' };
 // The bell means "waiting for you" everywhere, so a low score gets the cross.
 const TONE_ICON = { good: 'check', ok: 'clock', low: 'close' };
 const SKELETON_ROWS = 3;
+const LIMIT_REFRESH_MS = 15000;
+const roundTo = (n, places) => Math.round(n * 10 ** places) / 10 ** places;
 
 const value = (x) => (typeof x === 'function' ? x() : x);
 
@@ -135,6 +140,97 @@ export function createHomeView(ctx) {
     ];
   }
 
+  // ----- the monthly limit for big (reinforced) work (mm46): the same value the run menu by Send sets -----
+
+  const canLimit = () => !value(ctx.demo) && Boolean(ctx.limit);
+  const currency = () => ({ label: 'US$', rate: 1, ...value(ctx.currency) });
+  const shown = (usd) => roundTo(usd * currency().rate, 2); // what the field says: the owner's currency
+  const tell = (msg) => ctx.toast?.(msg);
+  let limitData = null; // what the route answered ({ ok, limitUSD, spentUSD }), kept so a new frame draws at once
+  let limitAt = 0;
+  let saving = false;
+
+  async function loadLimit() {
+    limitAt = Date.now();
+    let res = null;
+    try { res = await ctx.limit.read(); } catch { /* shown as "could not read" below */ }
+    // A failed re-read keeps the numbers already there; only the very first failure says so.
+    if (res?.ok || !limitData?.ok) limitData = res?.ok ? res : { ok: false };
+    drawLimit();
+  }
+
+  async function saveLimit() {
+    const part = frame?.limit;
+    if (!part?.field || saving) return;
+    const raw = String(part.field.value ?? '').trim().replace(',', '.');
+    const typed = raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(typed)) return tell(ctx.errorText?.('bad-limit'));
+    saving = true;
+    try {
+      const res = await ctx.limit.save(roundTo(typed / currency().rate, 6));
+      if (!res?.ok) return tell(ctx.errorText?.(res?.error));
+      limitData = { ...limitData, ok: true, limitUSD: res.limitUSD };
+      part.field.value = String(shown(res.limitUSD));
+      drawLimit();
+      tell(t('home.limit.saved', { limit: ctx.fmt.money(res.limitUSD) }));
+    } finally {
+      saving = false;
+    }
+  }
+
+  function buildLimit() {
+    if (!canLimit()) return null;
+    const part = { field: null, form: h('div', { class: 'hm-limit-form' }), status: h('div', { class: 'hm-limit-slot', 'aria-live': 'polite' }) };
+    part.card = h('section', { class: 'hm-limit', 'aria-labelledby': 'hm-limit-title' },
+      h('h3', { class: 'hm-limit-title', id: 'hm-limit-title' }, t('home.limit.title')),
+      h('p', { class: 'hm-limit-why' }, t('home.limit.why')),
+      part.form, part.status);
+    return part;
+  }
+
+  // The field and Save are built once: a redraw with new numbers never takes away the number the person is typing.
+  function limitForm(part) {
+    const limit = limitData.limitUSD;
+    part.field = h('input', {
+      id: 'hm-limit-field', type: 'number', min: '0', step: 'any', inputmode: 'decimal', class: 'num', 'data-hm': 'limit',
+      value: limit === null || limit === undefined ? '' : String(shown(limit)),
+      onkeydown: (e) => { if (e.key === 'Enter') saveLimit(); },
+    });
+    part.form.replaceChildren(
+      h('label', { for: 'hm-limit-field' }, t('home.limit.label', { currency: currency().label })),
+      h('div', { class: 'hm-limit-row' }, part.field,
+        h('button', { type: 'button', class: 'btn small-btn', 'data-hm': 'limit-save', onclick: saveLimit }, t('home.limit.save'))));
+  }
+
+  function limitStatus() {
+    const limit = limitData.limitUSD ?? null;
+    const spent = limitData.spentUSD ?? 0;
+    if (limit === null) {
+      return h('div', { class: 'hm-limit-status' },
+        spent > 0 ? h('p', { class: 'hm-limit-used num' }, t('home.limit.usedOnly', { used: ctx.fmt.money(spent) })) : null,
+        h('p', { class: 'hm-limit-note' }, icon('bell', 'hm-icon'), t('home.limit.none')));
+    }
+    const words = t('home.limit.used', { used: ctx.fmt.money(spent), limit: ctx.fmt.money(limit) });
+    const pct = limit > 0 ? Math.min(100, Math.round((100 * spent) / limit)) : (spent > 0 ? 100 : 0);
+    const tone = limit > 0 ? budgetTone(spent, limit) : (spent > 0 ? 'over' : 'ok');
+    return h('div', { class: `hm-limit-status tone-${tone}` },
+      h('p', { class: 'hm-limit-used num' }, words),
+      h('span', { class: 'br-track', role: 'img', 'aria-label': words }, h('span', { style: `width:${pct}%` })));
+  }
+
+  function drawLimit() {
+    const part = frame?.limit;
+    if (!part || !limitData) return; // still reading: the card shows its question and nothing else
+    if (!limitData.ok) {
+      part.field = null;
+      part.form.replaceChildren();
+      part.status.replaceChildren(h('p', { class: 'hm-limit-note' }, t('home.limit.error')));
+      return;
+    }
+    if (!part.field) limitForm(part);
+    part.status.replaceChildren(limitStatus());
+  }
+
   const skeleton = () => h('div', { class: 'skeleton hm-skeleton', role: 'status', 'aria-busy': 'true', 'aria-label': t('home.loading') },
     Array.from({ length: SKELETON_ROWS }, () => h('span', { class: 'sk-bar is-wide' })));
 
@@ -147,9 +243,10 @@ export function createHomeView(ctx) {
       body: h('div', { class: 'hm-body', 'aria-live': 'polite' }),
       title: h('h2', { 'data-help': 'home' }, t('home.title')),
       lede: h('p', { class: 'view-lede' }, t('home.lede')),
+      limit: buildLimit(),
     };
     root.replaceChildren(h('div', { class: 'view-wrap wide hm-view' },
-      h('div', { class: 'view-head' }, frame.title), frame.lede, frame.totals, frame.head, frame.body));
+      h('div', { class: 'view-head' }, frame.title), frame.lede, frame.limit?.card, frame.totals, frame.head, frame.body));
   }
 
   // Keeps the rows whose signature did not change (same element, so focus and selection survive), builds the others,
@@ -199,11 +296,20 @@ export function createHomeView(ctx) {
     render(root) {
       build(root);
       draw();
+      if (frame.limit) {
+        drawLimit();
+        loadLimit();
+      }
     },
     // Called on every state update: redraws only what changed, and builds the frame if the root is a new one.
     refresh(root) {
       if (!frame || frame.root !== root) this.render(root);
       else draw();
+      if (frame.limit && Date.now() - limitAt > LIMIT_REFRESH_MS) loadLimit();
+    },
+    // Reads the limit and what was used again (the card keeps the number being typed).
+    refreshLimit() {
+      return frame?.limit ? loadLimit() : Promise.resolve();
     },
     // The language changed: the frame has words in it, so it is built again (the rows follow by their signature).
     relabel() {

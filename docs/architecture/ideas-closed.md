@@ -6,7 +6,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 
 - The first evening: a map of every chat: id01, id02, id03, id04, id05, id06, id07, id08, id09, id10, id11, id12
 - The picture of the project: id13, id14, id15, id17, id18, id19
-- The model, the orchestration and other AIs: id20, id21
+- The model, the orchestration and other AIs: id20, id21, id89, id90
 - Following the work live: id29, id31, id32, id34, id35, id36, id37, id38, id39
 - Files, terminal and the first use of a repository: id40
 - The Flow: id43, id44
@@ -157,6 +157,19 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: a new page chat is Automatic; a sensitive request shows the plain explanation, an estimate and Yes / No, and waits under "Waiting for you"; switching to Manual › Fixed › Haiku low makes the header show Haiku and low.
   - Where it went: `pc07`.
   - Status: done (released in v0.2.2).
+- [x] An autonomous way: one prompt and the AI works to the end, and the chats agree on when to restart `id89`
+  - Asked: 2026-10-10 — "eu queria colocar um opção aqui pra o session-map ser mais autonomo, porque toda hora para alguma coisa das conversas pra pergunta o que tem que ser feito, tipo tem varios chats, alguns deles são perguntas bestas, acaba que toma tempo, uma opção para IA, eu preciso das solitações finalizadas, se precisar muda depois de pronta ou eu peço pra tomar decisões se for preciso, ou depois que o plano for feito só termina quando terminar mesmo, e  te quer reiniciar o programa, uma conversa fala com a outra pra saber o tempo certo de reinicar, preciso de da um prompt e a IA já trabalhar mesmo fazendo logo tudo"; 2026-10-10 — "coloca uma opção la pra eu escolher quanto eu quero gastar por mes em algum lugar facil de entender"
+  - What it means: an option on the chat where the AI takes the request and finishes it without stopping for small questions: it decides like a senior, writes each decision down so the owner can change it afterwards, and once a plan exists it only stops when the work is done; it stops only for what truly belongs to the owner. When a chat needs to restart session-map, it first checks with the other chats and restarts at a moment that cuts none of them.
+  - How to confirm it is done: with the option on, a medium request ends finished, with no question in the middle and a list of the decisions taken; with two chats working, one that needs a restart waits for the other to reach a safe point, restarts, and both carry on by themselves.
+  - Decided: 2026-10-10 — the owner chose that the autonomous way stops only to spend past the monthly limit; publishing (push, a new version) and deleting it does on its own.
+  - Where it went: `pc16`, `sv13`, `mm46`.
+  - Status: done (`pc16`, `sv13` and `mm46` built on 2026-10-11 with the whole suite passing; reaches the page with the next version).
+- [x] The orchestrator opens the right chats, sends them the right commands and looks after the old conversations `id90`
+  - Asked: 2026-10-10 — "eu quero que tipo o orquestrador abre os chats corretos manda os comandos corretos para ir fazendo sozinho, assim não sai caro as conversas e fica facil de acompanhar o que está acontecendo, porque vai ser feito mais de uma coisa e ela também pode tomar conta das conversas antigas que eu tinha e deixar alinhadas"; 2026-10-10 — "faz da melhor forma, ai e o botão de automatico em conversas ali, não sei preciso de ideia, mas quero deixar mais automatizado e a IA conseguir deixar mais organizado"
+  - What it means: one orchestrator chat per project receives the owner's request, splits it, opens one small activity chat per item with only that part's context and the cheapest model that does it well, sends each one its instructions, follows them and collects the results, all on its own. It also goes through the owner's older conversations of the project, ties each one to its item, finishes or continues what was left and closes what is done, so everything is aligned with the plan. The list shows orchestrator → activities as a tree, so it is easy to follow.
+  - How to confirm it is done: one request to the orchestrator opens two or three activity chats on their own, each tied to an item code and with a cheaper model where it fits; the list shows them under the orchestrator with their state; when they end, the orchestrator reports each result; asked to align the old conversations, it lists each one with its item and what it did with it (continued, closed, left for the owner).
+  - Where it went: `or01`, `or02`, `or03`, `or06`, `or17`, `or18`, `pc17`.
+  - Status: done (built on 2026-10-11 with the whole suite passing; reaches the page with the next version; the first run with the real claude is its end-to-end test).
 
 ### Following the work live
 

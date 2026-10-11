@@ -45,3 +45,24 @@ export function setBackground(smDir, root, always) {
   writeAtomic(file, `${JSON.stringify({ ...config, projects }, null, 2)}\n`);
   return { ok: true, always };
 }
+
+// "Organize on its own" (orchestrator or18): the orchestrator's tidy pass on this project, off until the person turns
+// it on for that project (the owner's choice on 2026-10-11: it spends on Opus, so only where he wants it).
+export const tidyOn = (userConfig, root) => userConfig?.projects?.[normalizePath(root)]?.tidy === true;
+
+export function setTidy(smDir, root, on) {
+  if (typeof on !== 'boolean') return { ok: false, error: 'bad-tidy' };
+  const file = join(smDir, 'config.json');
+  let config = {};
+  try {
+    config = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') return { ok: false, error: 'config-unreadable' };
+  }
+  if (!isObject(config)) return { ok: false, error: 'config-unreadable' };
+  const key = normalizePath(root);
+  const projects = isObject(config.projects) ? { ...config.projects } : {};
+  projects[key] = { ...(isObject(projects[key]) ? projects[key] : {}), tidy: on };
+  writeAtomic(file, `${JSON.stringify({ ...config, projects }, null, 2)}\n`);
+  return { ok: true, tidy: on };
+}

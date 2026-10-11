@@ -20,9 +20,13 @@ import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
 import {
-  DEFAULT_RUN, addReinforcedSpend, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
+  DEFAULT_RUN, addReinforcedSpend, budgetLine, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
   settingsRun, withRunNote,
 } from './run.mjs';
+import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
+import { guardSettings } from './guard.mjs';
+import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
+import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
 import { loadStats } from '../ai/router.mjs';
@@ -34,9 +38,10 @@ const KEY_RE = /^[0-9a-f]{32}$/;
 
 // The MCP servers of an in-page chat (--strict-mcp-config: only these): the permission prompt, and the arsenal that
 // asks the other AIs through session-map (or14). The arsenal reads the token from smDir itself: no secret in its env.
-export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessionId }) {
+// orchestrator: the project's orchestrator, whose sessionmap server also lists its tools (orchestra.mjs).
+export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessionId, orchestrator = false }) {
   return {
-    sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: permissionUrl, SM_PERMISSION_SECRET: secret } },
+    sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: permissionUrl, SM_PERMISSION_SECRET: secret, ...(orchestrator ? { SM_ORCHESTRATOR: '1' } : {}) } },
     arsenal: { command: process.execPath, args: [ARSENAL_MCP], env: { SM_DIR: smDir, ...(arsenalUrl ? { SM_URL: arsenalUrl } : {}), ...(sessionId ? { SM_SESSION_ID: sessionId } : {}) } },
   };
 }
@@ -50,11 +55,15 @@ const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 const TITLE_MAX = 200;
 const EVENTS_MAX = 2000;
 const CHATS_MAX = 6;
+// The orchestrator's own session-map tools, allowed up front by name: the relay never approves for the person.
+const ORCH_ALLOWED = [...ORCH_TOOL_NAMES].map((name) => `mcp__sessionmap__${name}`);
 // A restart that cut a chat off is told for a day; older ones still show it when opened.
 const CUT_OFF_ALERT_MS = 24 * 3600_000;
 const RELAY_BODY_MAX = 4 * 1024 * 1024;
 // The docs give the permission tool 30 s; answering first keeps the denial ours, with our message.
 const PERMISSION_TIMEOUT_MS = 25_000;
+// A snapshot awaited inside the permission tool is given up after this, well within its 30 s (the guard hook took one too).
+const ASK_SNAPSHOT_MS = 10_000;
 const IDLE_MS = 30 * 60_000;
 // The walk over a conversation's helper files only stats: a workflow can leave thousands, and the answer needs the newest one.
 const HELPER_WALK_MAX = 5000;
@@ -80,6 +89,15 @@ const DENIED = 'Denied by the person in session-map.';
 const TIMED_OUT = 'No answer in session-map within 25 s; denied.';
 // Sent for the person when they let Automatic reinforce on its own and the month's allowance still covers the estimate.
 const AUTO_REINFORCE = 'OK, you may reinforce. (Answered by session-map: the person allows reinforcing on its own while the monthly limit holds.)';
+// The Autonomous way (pc16) never waits for a click: a question is decided by the conductor, and whatever Claude Code's own
+// auto mode did not allow alone is left for the person's final list instead of stopping the conversation.
+const DECIDE_YOURSELF = 'Autonomous way: decide yourself, take the option you would recommend, note it under \'Decisions I took\' and go on.';
+const DEFERRED = 'Autonomous way: the person is not asked mid-task. Do not retry this action; reach the goal another way if there is a safe one, otherwise leave it and list it at the end under \'Left for you\' with the exact command or step.';
+// The ways whose ask to reinforce session-map may answer within the monthly limit: Automatic when the person allows it,
+// Autonomous always.
+const SELF_REINFORCE_KINDS = new Set(['auto', 'autonomous']);
+// By the way the live process started with (its prompt and permission mode), not one picked mid-turn for the next process.
+const isAutonomous = (chat) => chat.processRun.kind === 'autonomous';
 // The instructions a conversation already carries: the system prompt of its first turn, or the last note sent.
 const instructionsOf = (run) => (run.kind === 'fixed' || run.kind === 'settings' ? 'plain' : run.kind);
 const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
@@ -93,6 +111,8 @@ const imagesOf = (v) => {
   return ok ? v.map((i) => ({ media: i.media, data: i.data })) : null;
 };
 const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= TEXT_MAX;
+// Who sent a start's message (sendTo's from): the agreed restart's note, or how it shows.
+const fromOf = (internal) => (internal.restart === true ? 'restart' : internal.auto);
 const now = () => new Date().toISOString();
 // What the page remembers of the point a chat was opened on: only the field its kind uses, which contextOf matched against the map.
 const NODE_FIELD = { layer: 'layerId', group: 'group', item: 'code' };
@@ -103,14 +123,24 @@ const nodeTag = (node) => {
   return field && typeof node[field] === 'string' ? { kind: node.kind, [field]: node[field] } : { kind: node.kind };
 };
 
-// The conductor prompt's tail, built at each process start: who is ready today, the cap left, what the bench measured.
-// Only the conductor modes get it; a failure leaves the prompt without it.
+// The conductor prompt's tail, built at each process start: who is ready today, the cap left, what the bench measured, and
+// for Autonomous what the month still allows for reinforced work. Only the conductor modes get it; a failure leaves it out.
+const CONDUCTORS = new Set(['auto', 'maestro', 'autonomous']);
 function tailFor(run, smDir, facts) {
-  if (run?.kind !== 'auto' && run?.kind !== 'maestro') return '';
+  if (!CONDUCTORS.has(run?.kind)) return '';
   let others = null;
   try { others = typeof facts === 'function' ? facts() : null; } catch { others = null; }
-  try { return conductorTail({ others, stats: loadStats(smDir) }); } catch { return ''; }
+  let tail = '';
+  try { tail = conductorTail({ others, stats: loadStats(smDir) }); } catch { tail = ''; }
+  if (run.kind !== 'autonomous') return tail;
+  let budget = '';
+  try { budget = budgetLine({ limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir) }); } catch { budget = ''; }
+  return [tail, budget].filter(Boolean).join('\n');
 }
+
+// An Autonomous chat always runs in Claude Code's own auto mode, whatever the header or the PC picked: its classifier
+// decides, never session-map. Any other way runs in the chat's own mode.
+const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'auto' : pickMode(choice, fromSettings));
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
 // helperWrite(sessionId): when (ms) the conversation's background helpers last wrote, 0 for never; tests inject it.
@@ -118,9 +148,15 @@ function tailFor(run, smDir, facts) {
 // onAlert(alert): the moment a chat finishes, asks or fails (watcher-and-alerts wa01); the watcher leaves these out of its diff.
 // arsenalUrl: where the arsenal tool of a page chat finds this server (main.mjs's baseUrl); without it, its default port.
 // conductorFacts(): the outside AIs right now (GET /api/ai/others' answer, main.mjs), for the conductor prompt's tail.
+// snapshot(cwd): the safety snapshot of an Autonomous chat's folder (safety.mjs); tests inject a fake.
+// askSnapshotMs: how long the permission tool waits for that snapshot; tests make it small.
+// readState(): the newest state, for the orchestrator's tools and its scheduler; changed(): a write the next state must
+// show; orchestra ({now, every, stopEvery, tickMs, namedMs}): the orchestrator's clock and timer (orchestra.mjs), for tests.
+// chatsMax: how many chats may run at once; tests make it larger.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, eventsMax = EVENTS_MAX,
-  spawner, onAlert = () => {}, arsenalUrl, conductorFacts,
+  spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
+  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -128,6 +164,8 @@ export function createChatHub({
   // The conversations a start is resuming right now, before bySession holds them: a double click starts one process (mm43).
   const resuming = new Set();
   let relay = null;
+  // A restart another conversation asked for waits (sv13): no new turn starts, so the moment with none mid-turn comes.
+  let holding = false;
 
   // The conversations the page started or wrote into, by sessionId: where they belong, the person's own words as title,
   // the folder to resume in, the permission mode picked in the header and the tools allowed for the whole conversation.
@@ -161,8 +199,12 @@ export function createChatHub({
     if (chat.stopRequested) return;
     if (data.isError) return alert(chat, 'error', 'failed');
     if (auto || chat.restart) return undefined;
+    // The one stop of the Autonomous way: the next step would spend past the monthly limit.
+    if (isAutonomous(chat) && readRunBlock(reply)?.level === 'ask-reinforce') return alert(chat, 'waiting', 'budget');
     const waits = waitingFor({ lastAssistantText: reply, pendingQuestion: false }, null, null);
     if (waits.strong || waits.weak) return alert(chat, 'waiting', waits.strong ? 'question' : 'asks');
+    // An activity chat's end reaches the person through its orchestrator's summary, not as one alert per turn.
+    if (orchestra.isActivity(chat)) return undefined;
     return alert(chat, 'finished', 'answer', { summary: summaryOf(reply) });
   }
 
@@ -205,14 +247,35 @@ export function createChatHub({
     return { fromEventId: 0, keep: () => beforeMessage({ at: chat.startedAt, prevAt: chat.startedAt }) };
   }
 
-  function ask(chat, args) {
+  // A snapshot never stops the work: a failure was already logged by safety.mjs, a throw from elsewhere is logged here.
+  const safeSnapshot = (chat) => Promise.resolve().then(() => snapshot(chat.cwd)).catch((err) => log('warn', 'safety-snapshot-failed', { error: err.message }));
+  // A slow one goes on in the background; the step does not wait past ms for it.
+  const snapshotWithin = (chat, ms) => {
+    let timer;
+    const late = new Promise((resolve) => { timer = setTimeout(resolve, ms); });
+    return Promise.race([safeSnapshot(chat), late]).finally(() => clearTimeout(timer));
+  };
+
+  async function ask(chat, args) {
     const toolName = String(args?.tool_name ?? '');
     const input = args?.input && typeof args.input === 'object' ? args.input : {};
-    if (chat.always.has(toolName)) return { behavior: 'allow', updatedInput: input };
+    const command = commandOf(toolName, input);
+    // Whatever the way of running and whatever was allowed for the whole conversation.
+    if (isForcePush(command)) return { behavior: 'deny', message: NO_FORCE_PUSH };
+    if (isAutonomous(chat) && toolName === 'AskUserQuestion') return { behavior: 'deny', message: DECIDE_YOURSELF };
+    if (chat.always.has(toolName)) {
+      if (isAutonomous(chat) && isDestructive(command)) await snapshotWithin(chat, askSnapshotMs);
+      return { behavior: 'allow', updatedInput: input };
+    }
     const requestId = randomBytes(8).toString('hex');
     // An edit asks with its before and after, so allowing it reads as accepting the change (mm22).
     const { diff } = toolDetails(toolName, input, chat.cwd);
-    emit(chat, 'permission', { requestId, state: 'asked', toolName, toolUseId: args?.tool_use_id ?? null, input: maskSecrets(preview(input)), ...(diff ? { diff } : {}) });
+    const shown = (state) => ({ requestId, state, toolName, toolUseId: args?.tool_use_id ?? null, input: maskSecrets(preview(input)), ...(diff ? { diff } : {}) });
+    if (isAutonomous(chat)) {
+      emit(chat, 'permission', shown('deferred'));
+      return { behavior: 'deny', message: DEFERRED };
+    }
+    emit(chat, 'permission', shown('asked'));
     alert(chat, 'waiting', 'permission', { tool: toolName });
     return new Promise((resolve) => {
       const finish = (state, decision) => {
@@ -226,13 +289,14 @@ export function createChatHub({
     });
   }
 
-  // The permission MCP is claude's child, not the page: it proves itself with the secret of its own chat.
+  // The permission MCP is claude's child, not the page: it proves itself with the secret of its own chat. /tool: a call
+  // of the orchestrator's tools, answered for the chat that made it (orchestra.mjs).
   async function onRelay(req, res) {
     const answer = (status, body) => {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(body));
     };
-    if (req.method !== 'POST' || req.url !== '/permission') return answer(404, {});
+    if (req.method !== 'POST' || (req.url !== '/permission' && req.url !== '/tool')) return answer(404, {});
     const secret = req.headers['x-session-map-secret'];
     const chat = [...chats.values()].find((c) => !c.ended && sameToken(secret, c.secret));
     if (!chat) return answer(403, {});
@@ -245,6 +309,7 @@ export function createChatHub({
     }
     let args;
     try { args = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return answer(400, {}); }
+    if (req.url === '/tool') return answer(200, await orchestra.call(chat, args));
     return answer(200, await ask(chat, args));
   }
 
@@ -285,8 +350,10 @@ export function createChatHub({
         try { recordLineage(smDir, chat.sessionId, chat.parentId); } catch (err) { log('warn', 'lineage-failed', { error: err.message }); }
       }
       const known = readPageChats()[chat.sessionId];
+      // parentId: the mother, kept also for a conversation the orchestrator adopted (its list_chats reads it).
       savePageChat(chat.sessionId, {
         projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, running: chat.running, updatedAt: now(),
+        ...(chat.parentId && chat.parentId !== chat.sessionId ? { parentId: chat.parentId } : {}),
         ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
       });
       emit(chat, 'session', { sessionId: chat.sessionId, state: 'started', mode: chat.reported });
@@ -309,13 +376,17 @@ export function createChatHub({
       const { processCostUSD, ...data } = evt.data;
       emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD });
       emitRun(chat);
+      const ended = { isError: Boolean(data.isError), reply: chat.lastText, auto: Boolean(auto), stopped: Boolean(chat.stopRequested) };
       alertTurnEnd(chat, data, chat.lastText, auto);
       chat.stopRequested = false;
       chat.lastText = '';
       if (chat.restart) {
         chat.closing = true;
         chat.driver.end();
-      } else if (auto) sendTo(chat, AUTO_REINFORCE, AUTO_REINFORCE, 'reinforce');
+      } else if (auto && holding) chat.held = true;
+      else if (auto) sendTo(chat, AUTO_REINFORCE, AUTO_REINFORCE, 'reinforce');
+      // An activity chat's end goes to its orchestrator's inbox; the orchestrator's own end delivers what waits for it.
+      orchestra.turnEnded(chat, ended);
       return undefined;
     }
     if (evt.type === 'exit') return onExit(chat, evt.data);
@@ -353,8 +424,9 @@ export function createChatHub({
       try { addReinforcedSpend(smDir, spent); } catch (err) { log('warn', 'reinforced-spend-failed', { error: err.message }); }
     }
     // One answer of session-map's per message of the person: a second ask in a row waits for the person's OK.
-    if (chat.run.kind !== 'auto' || block?.level !== 'ask-reinforce' || chat.restart || chat.autoAnswered) return false;
-    return mayReinforce({ selfReinforce: chat.run.selfReinforce, limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
+    if (!SELF_REINFORCE_KINDS.has(chat.run.kind) || block?.level !== 'ask-reinforce' || chat.restart || chat.autoAnswered) return false;
+    const selfReinforce = isAutonomous(chat) || chat.run.selfReinforce;
+    return mayReinforce({ selfReinforce, limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
   }
 
   // The workshop's reply ends with the whole draft in a mermaid fence: that block becomes the shared draft.
@@ -371,6 +443,7 @@ export function createChatHub({
 
   function onExit(chat, { code, signal }) {
     if (chat.ended) return;
+    const wasRunning = chat.running;
     chat.ended = true;
     chat.running = false;
     clearTimeout(chat.idleTimer);
@@ -386,6 +459,7 @@ export function createChatHub({
     for (const sink of chat.sinks) sink.end();
     chat.sinks.clear();
     setTimeout(() => chats.delete(chat.key), LINGER_MS).unref?.();
+    orchestra.exited(chat, wasRunning);
     chat.exited();
   }
 
@@ -429,7 +503,9 @@ export function createChatHub({
   }
 
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
-  function sendTo(chat, shown, prompt = shown, auto = undefined, images = []) {
+  // from: who sent it, for the orchestrator's count of turns in a row: auto, or 'restart' for the agreed restart's note,
+  // which shows as the person's text but is session-map's.
+  function sendTo(chat, shown, prompt = shown, auto = undefined, images = [], from = auto) {
     clearTimeout(chat.idleTimer);
     if (instructionsOf(chat.run) !== chat.prompted) {
       prompt = withRunNote(chat.run, prompt);
@@ -446,11 +522,16 @@ ${prompt}`;
     }
     // The answer to an ask is free text in the person's language: whichever it is, the level the next turns end on decides.
     if (chat.level?.level === 'ask-reinforce') chat.reinforcing = true;
-    chat.autoAnswered = Boolean(auto);
+    // Only session-map's own OK to reinforce counts as its one answer; an orchestrator's message is a new request.
+    chat.autoAnswered = auto === 'reinforce';
+    chat.held = false;
+    orchestra.sent(chat, from);
     chat.running = true;
     // On disk at once: a server that dies mid-turn leaves the mark the next one reads as "cut off" (page-chat pc06).
     // The first message is saved with the rest when claude announces the session.
     if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });
+    // Not awaited: claude needs seconds to start and think before its first step, and the git snapshot takes a fraction.
+    if (isAutonomous(chat)) safeSnapshot(chat);
     emit(chat, 'user', auto ? { text: shown, auto } : { text: shown, ...(images.length ? { images: images.length } : {}) });
     // Only the marks whose message the events still hold matter, and the newest (replayFrom); each knows when the one
     // before it left (the first, when the process started), which bounds how far back its message may be stamped.
@@ -462,10 +543,17 @@ ${prompt}`;
 
   // body: {projectId, node? ({kind, partId?, layerId?, group?, code?, line?}: the point of the map), partId? (same as a part node),
   //        frontId|workCellId?, sessionId? (continue it), parentId? (the mother of a new chat), cut? (a Continue from the
-  //        cut-off panel, mm43), text}
-  async function start(body, state) {
+  //        cut-off panel, mm43), text, idle? (instead of text: a resume after the agreed restart, sv13, of a chat that was
+  //        between turns; its process starts and waits for the next message)
+  // internal (orchestra.mjs only, never the page's body): parentId (the orchestrator, mother of an activity chat, also on a
+  //        resume), auto (how its first message shows: 'orchestrator', 'inbox', 'tidy', 'opening'), orchestrator (a new chat
+  //        is the project's orchestrator: the project chat's context, node kind 'orchestrator'); restart (restart.mjs: the
+  //        message is the agreed restart's note, session-map's and not the person's)
+  async function start(body, state, internal = {}) {
     if (!body || typeof body !== 'object') return reply(400, { error: 'bad-request' });
-    if (!isText(body.text)) return reply(400, { error: 'bad-text' });
+    const idle = body.idle === true && body.sessionId !== undefined;
+    if (!idle && !isText(body.text)) return reply(400, { error: 'bad-text' });
+    if (holding) return reply(409, { error: 'server-restarting' });
     const images = imagesOf(body.images);
     if (!images) return reply(400, { error: 'bad-images' });
     const project = state.projects.find((p) => p.id === body.projectId);
@@ -482,7 +570,7 @@ ${prompt}`;
     let prompt = body.text;
     let resume = null;
     let saved = null;
-    let place = { partId: null, workCellId: null, title: body.text.trim().slice(0, TITLE_MAX) };
+    let place = { partId: null, workCellId: null, title: String(body.text ?? '').trim().slice(0, TITLE_MAX) };
     let flow = null;
     if (body.sessionId) {
       const chat = find(project, 'chat', body.sessionId);
@@ -496,12 +584,13 @@ ${prompt}`;
       // A Continue from the cut-off panel is for a turn nothing finished: once the hub drives the conversation, or a page
       // conversation's turn is no longer running, another tab's older state must not start a second paid turn.
       if (body.cut === true && (driven || (page && page.running !== true))) return reply(409, { error: 'busy', ...(driven ? { chatKey: driven.key } : {}) });
+      if (driven && idle) return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: false });
       if (driven) {
         if (driven.running) return reply(409, { error: 'busy', chatKey: driven.key });
         if (body.mode !== undefined) changeMode(driven, body.mode);
         if (asked) changeRun(driven, asked);
         if (driven.restart) return reply(409, { error: 'restarting' });
-        sendTo(driven, body.text, body.text, undefined, images);
+        sendTo(driven, body.text, body.text, internal.auto, images, fromOf(internal));
         return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: driven.choice === 'settings' && fromSettings.downgraded });
       }
       // A conversation open in VS Code or a terminal is someone else's: writing into it would interleave two drivers.
@@ -512,7 +601,8 @@ ${prompt}`;
       if (!cwd) return reply(409, { error: 'no-folder' });
       resume = body.sessionId;
       if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
-      place = { ...place, title: chat?.title ?? saved?.title ?? place.title };
+      // The point it was opened on comes back with it: a resumed orchestrator is still the project's orchestrator.
+      place = { ...place, title: chat?.title ?? saved?.title ?? place.title, ...(saved?.node ? { node: saved.node } : {}) };
     } else {
       const mother = body.parentId ? find(project, 'chat', body.parentId) : null;
       if (body.parentId && !mother) return reply(404, { error: 'unknown-session' });
@@ -529,35 +619,36 @@ ${prompt}`;
       // An idea, a new map or a project chat is about the whole project: it starts at the root, whatever branch is picked.
       const atRoot = ['idea', 'create-arch', 'flow', 'project'].includes(node?.kind);
       cwd = atRoot ? project.root : workCell?.path ?? project.root;
-      place = { ...place, partId: context.part?.id ?? null, workCellId: workCell?.id ?? null, ...(node ? { node: nodeTag(node) } : {}) };
+      place = { ...place, partId: context.part?.id ?? null, workCellId: workCell?.id ?? null, ...(node ? { node: internal.orchestrator ? { kind: ORCH_KIND } : nodeTag(node) } : {}) };
     }
+    const orchestrator = place.node?.kind === ORCH_KIND;
     const choice = body.mode ?? saved?.mode ?? 'settings';
-    const mode = pickMode(choice, fromSettings);
     // A conversation that ran before without session-map's flags (elsewhere, or before they existed) keeps running that way.
     const run = asked ?? parseRun(saved?.run) ?? (resume ? { kind: 'settings' } : DEFAULT_RUN);
+    const mode = modeFor(run, choice, fromSettings);
     const prompted = resume ? saved?.prompted ?? 'plain' : instructionsOf(run);
     const listed = resume ? (project.conversations ?? []).find((c) => c.sessionId === resume) ?? find(project, 'chat', resume) : null;
     const baseCostUSD = Number(listed?.costUSD) || 0;
 
-    if ([...chats.values()].filter((c) => !c.ended).length >= CHATS_MAX) return reply(429, { error: 'too-many-chats' });
+    if ([...chats.values()].filter((c) => !c.ended).length >= chatsMax) return reply(429, { error: 'too-many-chats' });
     const claude = bin !== undefined ? bin : findClaude();
     if (!claude) return reply(503, { error: 'claude-not-found' });
 
     const key = randomBytes(16).toString('hex');
     const chat = {
-      key, sessionId: resume, parentId: body.sessionId ? null : body.parentId ?? null, secret: randomBytes(32).toString('hex'),
+      key, sessionId: resume, parentId: internal.parentId ?? (body.sessionId ? null : body.parentId ?? null), secret: randomBytes(32).toString('hex'),
       projectId: project.id, projectName: project.name, root: project.root, cwd, ...place, choice, mode, startedAt: now(), reported: null,
       events: [], lastId: 0, turns: [], sinks: new Set(), pending: new Map(), always: new Set(Array.isArray(saved?.always) ? saved.always : []),
       running: false, announced: false, ended: false, closing: false, idleTimer: null,
       configPath: join(smDir, 'chat', `${key}.json`), flow,
-      run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
+      run, processRun: run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
       reinforcing: false, autoAnswered: false,
     };
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     if (resume) resuming.add(resume);
     try {
       // By file, not by argument: a command line is readable by other users of the machine.
-      const config = { mcpServers: chatMcpServers({ permissionUrl: await relayUrl(), secret: chat.secret, smDir, arsenalUrl, sessionId: key }) };
+      const config = { mcpServers: chatMcpServers({ permissionUrl: await relayUrl(), secret: chat.secret, smDir, arsenalUrl, sessionId: key, orchestrator }) };
       mkdirSync(join(smDir, 'chat'), { recursive: true });
       writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
       chats.set(key, chat);
@@ -569,16 +660,20 @@ ${prompt}`;
       if (resume) resuming.delete(resume);
     }
     chat.driver = startDriver({
-      bin: claude, args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, tailFor(run, smDir, conductorFacts)) }), cwd, env: cleanEnv(env),
+      bin: claude,
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts)].filter(Boolean).join('\n')), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: orchestrator ? ORCH_ALLOWED : [] }),
+      cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
-    sendTo(chat, body.text, prompt, undefined, images);
+    // Waiting: closed as any quiet chat is, once idleMs passes with no message.
+    if (idle) armIdle(chat, idleMs);
+    else sendTo(chat, body.text, prompt, internal.auto, images, fromOf(internal));
     return reply(200, { chatKey: key, mode, downgraded: choice === 'settings' && fromSettings.downgraded });
   }
 
   function changeMode(chat, choice) {
     chat.choice = choice;
-    chat.mode = pickMode(choice, settingsMode(chat.root, dir));
+    chat.mode = modeFor(chat.run, choice, settingsMode(chat.root, dir));
     chat.driver.setMode(chat.mode);
     if (chat.sessionId) savePageChat(chat.sessionId, { mode: choice });
   }
@@ -588,6 +683,8 @@ ${prompt}`;
   function changeRun(chat, run) {
     const restart = JSON.stringify(runArgs(run)) !== JSON.stringify(runArgs(chat.run));
     chat.run = run;
+    // The same flags: the live process already runs this way.
+    if (!restart) chat.processRun = run;
     if (chat.sessionId) savePageChat(chat.sessionId, { run });
     emitRun(chat);
     if (!restart || chat.ended) return;
@@ -730,6 +827,7 @@ ${prompt}`;
     if (chat.ended) return reply(409, { error: 'ended' });
     if (chat.running) return reply(409, { error: 'busy' });
     if (!isText(body?.text)) return reply(400, { error: 'bad-text' });
+    if (holding) return reply(409, { error: 'server-restarting' });
     const images = imagesOf(body.images);
     if (!images) return reply(400, { error: 'bad-images' });
     sendTo(chat, body.text, body.text, undefined, images);
@@ -783,19 +881,33 @@ ${prompt}`;
     return () => chat.sinks.delete(sink);
   }
 
+  const endChat = (chat) => {
+    chat.closing = true;
+    chat.driver.kill();
+    return chat.done;
+  };
+
   async function close() {
+    await orchestra.stop();
     const live = [...chats.values()].filter((c) => !c.ended);
-    for (const chat of live) {
-      chat.closing = true;
-      chat.driver.kill();
-    }
-    await Promise.all(live.map((c) => c.done));
+    await Promise.all(live.map(endChat));
     if (relay) {
       const { server } = await relay;
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
       relay = null;
     }
+  }
+
+  // A Delete from session-map (mm43) of a conversation the hub keeps idle after its turn (up to idleMs): its process is
+  // closed first, the way close() ends every chat. false: a turn runs, or a start is resuming it, so it is left alone.
+  async function closeIdle(sessionId) {
+    if (resuming.has(sessionId)) return false;
+    const chat = drivenNow(sessionId);
+    if (!chat) return true;
+    if (chat.running) return false;
+    await endChat(chat);
+    return true;
   }
 
   // The page conversations a restart cut off in the last day, as alerts for the watcher's first look.
@@ -811,9 +923,33 @@ ${prompt}`;
       }));
   }
 
+  // The conversations the hub runs right now or is resuming: collect leaves them out of the cut-off panel (mm43).
+  const drivingIds = () => new Set([...[...bySession].filter(([, c]) => !c.ended).map(([id]) => id), ...resuming]);
+
+  // The project's orchestrator (orchestra.mjs) works through the hub's own chats; this is all it is lent.
+  const orchestra = createOrchestra({
+    smDir, readState, changed, ...orchestraOptions,
+    hub: {
+      live: () => [...chats.values()].filter((c) => !c.ended), byKey: chatOf, driven: drivenNow, start, holding: () => holding,
+      send: (chat, text, auto) => sendTo(chat, text, text, auto), say: (key, text, images) => send(key, { text, images }),
+      pageChats: readPageChats, closeIdle, emit, alert, transcript: transcriptOf, driving: drivingIds, chatsMax,
+    },
+  });
+
   return {
-    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, interrupted, drivenIds: () => everDriven,
-    // The conversations the hub runs right now or is resuming: collect leaves them out of the cut-off panel (mm43).
-    drivingIds: () => new Set([...[...bySession].filter(([, c]) => !c.ended).map(([id]) => id), ...resuming]),
+    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
+    drivingIds,
+    // The orchestrator (or01/or18): open or start a project's, what the page shows of it, a tool call as the chat with
+    // that key would make it (the relay's path), one pass of the scheduler, and the scheduler itself (the real server).
+    orchestra: {
+      open: orchestra.open, info: orchestra.info, call: (key, name, args) => orchestra.call(chatOf(key), { name, arguments: args }),
+      tick: orchestra.tick, start: orchestra.start,
+    },
+    // The agreed restart (sv13, restart.mjs): hold new turns, how many chats are mid-turn, and what to resume after.
+    hold: (on) => { holding = Boolean(on); },
+    turning: () => [...chats.values()].filter((c) => !c.ended && c.running).length,
+    restartList: () => [...chats.values()].filter((c) => !c.ended && c.sessionId).map((c) => ({
+      sessionId: c.sessionId, key: c.key, projectId: c.projectId, run: c.run, running: c.running, held: Boolean(c.held),
+    })),
   };
 }

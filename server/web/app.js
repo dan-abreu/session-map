@@ -17,6 +17,7 @@ import { createResizer, createSplit } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { conversationsOf, createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
 import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
+import { orchChip, orchSection, orchState } from './orchview.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
@@ -400,7 +401,7 @@ function boxContent(node) {
   const c = node.counts;
   if (node.kind === 'project') {
     const sub = hasMap() ? countText(c) : t.count('summary.chats', shown.chats.length);
-    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), projectChatChip(), sizeLine(node), unownedChip(node), freshChip(node), agents, hasMap() ? progress(c) : null, live].filter(Boolean);
+    return [h('span', { class: 'bx-title' }, node.label), h('span', { class: 'bx-meta' }, sub), projectChatChip(), orchChip({ h, icon, t }, orchState(project)), sizeLine(node), unownedChip(node), freshChip(node), agents, hasMap() ? progress(c) : null, live].filter(Boolean);
   }
   return [
     h('span', { class: 'bx-title' }, node.label),
@@ -416,7 +417,7 @@ function boxContent(node) {
 function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
   return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
-    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length, node.kind === 'project' && projectChats(project).length,
+    part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length, node.kind === 'project' && projectChats(project).length, node.kind === 'project' && JSON.stringify(orchState(project)),
     sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node), dotsSig(node)]);
 }
 
@@ -902,6 +903,42 @@ function openProjectChat() {
   renderMap();
 }
 
+// The project's orchestrator (or01): its one conversation, driven again if it was closed; with none yet, an empty chat that
+// starts it with the person's first message (nothing is spent before).
+async function openOrchestrator() {
+  if (!project || !tree) return;
+  convs.closeDrawer();
+  if (view !== 'map') showView('map');
+  const st = orchState(project);
+  if (st.row) {
+    const res = await api.orchestratorOpen({ projectId: project.id });
+    if (!res.ok) return toast(errorText(res.error));
+    const entry = listConversations(state, { projectId: project.id }).sections.flatMap((sec) => sec.pinned).find((e) => e.row.sessionId === st.row.sessionId);
+    if (entry) return openConversation(entry);
+  }
+  closePanel(false);
+  closeLists();
+  selection = { type: 'node', id: tree.id };
+  const resume = st.row ? { start: { sessionId: st.row.sessionId }, title: st.row.title || t('orch.chatTitle') } : { start: { node: { kind: 'orchestrator' } }, title: t('orch.chatTitle') };
+  chat.open({ projectId: project.id, subtitle: project.name, intro: t('orch.intro'), placeholder: t('orch.placeholder'), orchestrator: true, ...resume });
+  showPoint(tree, 'summary', { folded: true });
+  renderMap();
+  return undefined;
+}
+
+// "Organizar sozinho" (or18): the switch of the project; the state brings the new value on the next look.
+async function setTidy(p, on, input) {
+  input.disabled = true;
+  const res = await api.setProjectTidy(p.id, on);
+  input.disabled = false;
+  if (!res.ok) {
+    input.checked = !on;
+    return toast(errorText(res.error));
+  }
+  toast(t(on ? 'orch.tidy.savedOn' : 'orch.tidy.savedOff'));
+  return poll();
+}
+
 function openIdea() {
   if (!hasMap()) return;
   closePanel(false);
@@ -1262,6 +1299,7 @@ function projectDetails(node) {
     const unowned = sizes?.unowned?.files ?? 0;
     return [
       h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
+      orchSection({ h, icon, t }, orchState(p), { onOpen: openOrchestrator, onTidy: (on, input) => setTidy(p, on, input) }),
       sizes?.total ? h('p', { class: 'meta num' }, joinDots([h('span', {}, plural('size.files', sizes.total.files)), h('span', {}, plural('size.lines', sizes.total.lines))]),
         unowned ? linkTo(plural('size.unowned', unowned), () => setPointTab('files'), 'meta-link is-unowned') : null) : null,
       waiting.length ? section(t('waiting.title'),
@@ -2141,6 +2179,10 @@ function wire() {
       openProject: (id) => { if (id !== project?.id) setProject(id); showView('map'); },
       goTo: (area, sub, id) => goArea(area, sub, id),
       refreshFoundation: readFoundation,
+      // The monthly limit for big work: the same value the run menu by Send sets, now in plain sight (mm46).
+      limit: { read: () => api.reinforcedLimit(), save: (usd) => api.setReinforcedLimit(usd) },
+      currency: () => ({ label: state?.currency?.code === 'USD' ? 'US$' : (state?.currency?.code ?? 'US$'), rate: state?.currency?.rate ?? 1 }),
+      toast, errorText,
     },
   });
   navbar.setReady(areas.ready());
@@ -2162,6 +2204,7 @@ function wire() {
   $('#fit').addEventListener('click', () => mindmap.fit(true));
   $('#newIdea').addEventListener('click', openIdea);
   $('#newChat').addEventListener('click', openProjectChat);
+  $('#openOrch').addEventListener('click', openOrchestrator);
   $('#convsNewChat').addEventListener('click', openProjectChat);
   $('#createArch').addEventListener('click', createArch);
   for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {

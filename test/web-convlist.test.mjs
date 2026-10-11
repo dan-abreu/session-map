@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree } from '../server/web/tree.js';
-import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue, SECTION_GROUPS, projectChats, STATE_FILTERS, bucketOf, stateOf } from '../server/web/convlist.js';
+import { conversationsOf, nodeOfConversation, placeOf, listConversations, conversationCounts, dateGroup, projectHue, SECTION_GROUPS, projectChats, STATE_FILTERS, bucketOf, stateOf, orchestratorOf, activityOf } from '../server/web/convlist.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -437,4 +437,69 @@ test('the filter bar has five buttons with their count; a click picks one, a sec
   } finally {
     globalThis.document = realDocument;
   }
+});
+
+// ---- the orchestrator and its activity chats (or03) ----
+
+const ORCH = 'orch-1';
+const orchShop = (extra = []) => shop([
+  row('proj', { node: { kind: 'project' }, updatedAt: ago(1) }),
+  row(ORCH, { node: { kind: 'orchestrator' }, updatedAt: ago(100) }),
+  row('k-old', { parentId: ORCH, itemCode: 'or01', node: { kind: 'item', code: 'or01' }, runModel: 'haiku', updatedAt: ago(50), costUSD: 0.5 }),
+  row('k-busy', { parentId: ORCH, itemCode: 'or03', node: { kind: 'item', code: 'or03' }, runModel: 'sonnet', status: 'busy', live: true, updatedAt: ago(2), costUSD: 1.25 }),
+  row('lone', { parentId: 'nobody-here', updatedAt: ago(4) }),
+  ...extra,
+]);
+
+test('the orchestrator is pinned first in its project, and its activity chats nest under it, working first, out of the date groups', () => {
+  const [sec] = listConversations(orchShop(), { projectId: DEMO.projects[0].id }).sections;
+  const ids = (k) => sec[k].map((e) => e.row.sessionId);
+  assert.deepEqual(ids('pinned'), [ORCH, 'proj'], 'the orchestrator before the project chats, whatever the dates');
+  assert.deepEqual(sec.kids.get(ORCH).map((e) => e.row.sessionId), ['k-busy', 'k-old']);
+  assert.deepEqual(ids('working'), [], 'a nested chat is not drawn a second time');
+  assert.ok(![...ids('today'), ...ids('week'), ...ids('older')].some((id) => id.startsWith('k-')));
+  assert.ok(ids('today').includes('lone'), 'a chat whose mother is not here stays in its group: nothing is guessed');
+  assert.deepEqual(sec.counts, { working: 1, waiting: 0, cutoff: 0, total: 5 }, 'they still count');
+});
+
+test('a nested chat shows flat when its orchestrator is filtered out (a state chip, a search)', () => {
+  const state = orchShop();
+  const [byState] = listConversations(state, { projectId: DEMO.projects[0].id, state: 'working' }).sections;
+  assert.deepEqual(byState.working.map((e) => e.row.sessionId), ['k-busy'], 'the orchestrator is not working: its child stands alone');
+  assert.equal(byState.kids.size, 0);
+  const [bySearch] = listConversations(state, { projectId: DEMO.projects[0].id, query: 'k-busy' }).sections;
+  assert.deepEqual(bySearch.working.map((e) => e.row.sessionId), ['k-busy']);
+});
+
+test('the orchestrator row has its own place, is not a project chat, and the helpers find it and its working chats', () => {
+  const state = orchShop();
+  const project = state.projects[0];
+  const tree = archTree(project);
+  assert.deepEqual(placeOf(tree, project.conversations.find((r) => r.sessionId === ORCH)), { path: [], special: 'orchestrator' });
+  assert.deepEqual(projectChats(project).map((r) => r.sessionId), ['proj'], 'the root bubble counts the person\'s own project chats');
+  assert.equal(orchestratorOf(project).sessionId, ORCH);
+  assert.deepEqual(activityOf(project, orchestratorOf(project)).map((r) => r.sessionId).sort(), ['k-busy', 'k-old']);
+  assert.equal(orchestratorOf(state.projects[1]), null);
+  const archived = clone(project);
+  archived.conversations.find((r) => r.sessionId === ORCH).archived = true;
+  assert.equal(orchestratorOf(archived), null, 'an archived one is not the project\'s orchestrator');
+});
+
+test('the column draws the orchestrator first, its activity chats indented under it with item code, model, state and cost', async () => {
+  const list = await drawList(orchShop());
+  const rows = withClass(list, 'cv-row').map((r) => r.attrs['data-session']);
+  assert.equal(rows[0], ORCH, 'first of the project');
+  const orch = withClass(list, 'cv-item').find((li) => withClass(li, 'cv-row')[0]?.attrs['data-session'] === ORCH);
+  assert.ok(withClass(withClass(orch, 'cv-row')[0], 'cv-orch-badge').length, 'named as the orchestrator, not as an origin');
+  const [kids] = withClass(orch, 'cv-kids');
+  assert.ok(kids, 'a nested list inside its own item');
+  const kidRows = withClass(kids, 'cv-row');
+  assert.deepEqual(kidRows.map((r) => r.attrs['data-session']), ['k-busy', 'k-old']);
+  const busy = kidRows[0];
+  assert.match(withClass(busy, 'cv-code')[0].text, /or03/);
+  assert.match(withClass(busy, 'cv-model')[0].text, /Sonnet/);
+  assert.match(withClass(busy, 'cv-state')[0].text, /convs\.state\.busy/);
+  assert.match(withClass(busy, 'cv-cost')[0].text, /1\.25/);
+  assert.equal(withClass(withClass(list, 'cv-kids')[0], 'cv-item').length, 2);
+  assert.equal(withClass(kids, 'cv-origin-badge').length, 0, 'an activity chat says its job, not where it runs');
 });

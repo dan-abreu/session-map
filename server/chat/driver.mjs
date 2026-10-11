@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { maskSecrets, toolDetails } from '../sources/claude-conversation.mjs';
 import { CHAT_MODES } from './mode.mjs';
@@ -16,11 +16,15 @@ const resultText = (content) => (Array.isArray(content) ? content.map((c) => c?.
 
 // Formats from .dev/prova/RESULTADO.md. The permission mode is always spelled out, and only from CHAT_MODES:
 // a user setting or a crafted request cannot turn it into a bypass. run: the model flags of run.mjs (runArgs).
-export function buildArgs({ mcpConfigPath, resume, mode = 'default', run = [] }) {
+// settings: the guard hook of guard.mjs (guardSettings), as claude's --settings JSON. allowedTools: tool names allowed up
+// front (the orchestrator's own session-map tools), so they never reach the relay, which never approves for the person.
+export function buildArgs({ mcpConfigPath, resume, mode = 'default', run = [], settings = null, allowedTools = [] }) {
   return [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--permission-mode', CHAT_MODES.includes(mode) ? mode : 'default',
     '--mcp-config', mcpConfigPath, '--strict-mcp-config', '--permission-prompt-tool', PERMISSION_TOOL,
+    ...(allowedTools.length ? ['--allowedTools', allowedTools.join(',')] : []),
+    ...(settings ? ['--settings', settings] : []),
     ...run,
     ...(resume ? ['--resume', resume] : []),
   ];
@@ -64,7 +68,8 @@ export function translate(msg, cwd = '') {
 
 // The CLI as a chat: one process, one line per message on stdin. onEvent gets translated events and
 // {type: 'exit', data: {code, signal}} / {type: 'error', data: {error}} for the process itself.
-export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn }) {
+// platform and run (execFile): how kill ends the process tree; tests inject fakes.
+export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn, platform = process.platform, run = execFile }) {
   const script = /\.(m?js|cjs)$/i.test(bin);
   const child = spawner(script ? process.execPath : bin, script ? [bin, ...args] : args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let requests = 0;
@@ -89,6 +94,12 @@ export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn }) {
     // Takes effect from the next turn on; claude confirms it in the init line of that turn.
     setMode: (mode) => write({ type: 'control_request', request_id: `req-${++requests}`, request: { subtype: 'set_permission_mode', mode } }),
     end: () => child.stdin.end(),
-    kill: () => child.kill(),
+    kill: () => killTree(child, platform, run),
   };
+}
+
+// On Windows a kill reaches only claude, not the shells and tools it started: taskkill /T ends the whole tree.
+function killTree(child, platform, run) {
+  if (platform !== 'win32' || !child.pid) return child.kill();
+  return run('taskkill', ['/T', '/F', '/PID', String(child.pid)], { windowsHide: true }, (err) => { if (err) child.kill(); });
 }

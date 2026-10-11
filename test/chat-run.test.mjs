@@ -5,14 +5,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DEFAULT_RUN, parseRun, runArgs, runPrompt, expectedRun, settingsRun, readRunBlock, mayReinforce,
-  reinforcedSpend, addReinforcedSpend, reinforcedLimit, setReinforcedLimit, withRunNote,
+  reinforcedSpend, addReinforcedSpend, reinforcedLimit, setReinforcedLimit, withRunNote, budgetLine,
 } from '../server/chat/run.mjs';
+import { conductorTail } from '../server/ai/conductor.mjs';
 import { personsWords } from '../server/chat/prompt.mjs';
 
 const flag = (args, name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 
-test('parseRun keeps the five shapes and refuses anything else', () => {
-  assert.deepEqual(DEFAULT_RUN, { kind: 'auto', selfReinforce: false });
+test('parseRun keeps the six shapes and refuses anything else; a new conversation runs Autonomous', () => {
+  assert.deepEqual(DEFAULT_RUN, { kind: 'autonomous' });
+  assert.deepEqual(parseRun({ kind: 'autonomous', selfReinforce: false }), { kind: 'autonomous' });
   assert.deepEqual(parseRun({ kind: 'auto' }), { kind: 'auto', selfReinforce: false });
   assert.deepEqual(parseRun({ kind: 'auto', selfReinforce: true }), { kind: 'auto', selfReinforce: true });
   assert.deepEqual(parseRun({ kind: 'maestro', model: 'haiku' }), { kind: 'maestro' });
@@ -26,7 +28,7 @@ test('parseRun keeps the five shapes and refuses anything else', () => {
 });
 
 test('runArgs: Automatic and Maestro run Opus at high with their prompt, Ultracode uses the documented flag, Same as my Claude passes nothing', () => {
-  const auto = runArgs(DEFAULT_RUN);
+  const auto = runArgs({ kind: 'auto', selfReinforce: false });
   assert.equal(flag(auto, '--model'), 'opus');
   assert.equal(flag(auto, '--effort'), 'high');
   assert.match(flag(auto, '--append-system-prompt'), /session-map-run/);
@@ -118,7 +120,72 @@ test('readRunBlock shortens a long reason at a word and marks the cut', () => {
 });
 
 test('the Automatic prompt asks for a short reason', () => {
-  assert.match(runPrompt(DEFAULT_RUN), /"why": "a short reason[^"]*(\d+) words/);
+  assert.match(runPrompt({ kind: 'auto', selfReinforce: false }), /"why": "a short reason[^"]*(\d+) words/);
+});
+
+// ---- the Autonomous way (pc16) ----
+
+test('runArgs and expectedRun: Autonomous runs Opus at high with its own prompt and the tail', () => {
+  const args = runArgs({ kind: 'autonomous' }, 'TAIL');
+  assert.equal(flag(args, '--model'), 'opus');
+  assert.equal(flag(args, '--effort'), 'high');
+  assert.equal(flag(args, '--append-system-prompt'), `${runPrompt({ kind: 'autonomous' })}\nTAIL`);
+  assert.deepEqual(expectedRun({ kind: 'autonomous' }, null), { model: 'opus', effort: 'high', ultracode: false });
+  assert.notEqual(runPrompt({ kind: 'autonomous' }), runPrompt({ kind: 'auto', selfReinforce: true }));
+});
+
+// The activity chats of the orchestrator (or02/or06) run the Autonomous way on the model and effort it picked.
+test('Autonomous takes an optional model and effort from the fixed lists, Opus at high by default', () => {
+  assert.deepEqual(parseRun({ kind: 'autonomous', model: 'sonnet', effort: 'medium' }), { kind: 'autonomous', model: 'sonnet', effort: 'medium' });
+  assert.deepEqual(parseRun({ kind: 'autonomous', model: 'haiku' }), { kind: 'autonomous', model: 'haiku' });
+  assert.deepEqual(parseRun({ kind: 'autonomous', effort: 'low' }), { kind: 'autonomous', effort: 'low' });
+  for (const bad of [{ model: 'gpt' }, { effort: 'ultracode' }, { model: '--dangerously-skip-permissions' }, { model: 7 }]) {
+    assert.equal(parseRun({ kind: 'autonomous', ...bad }), null, JSON.stringify(bad));
+  }
+  const sonnet = runArgs({ kind: 'autonomous', model: 'sonnet', effort: 'medium' }, 'TAIL');
+  assert.equal(flag(sonnet, '--model'), 'sonnet');
+  assert.equal(flag(sonnet, '--effort'), 'medium');
+  assert.match(flag(sonnet, '--append-system-prompt'), /Sonnet at medium effort/);
+  assert.match(flag(sonnet, '--append-system-prompt'), /TAIL$/);
+  assert.equal(flag(runArgs({ kind: 'autonomous', model: 'haiku' }), '--effort'), 'high');
+  assert.equal(flag(runArgs({ kind: 'autonomous', effort: 'max' }), '--model'), 'opus');
+  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'fable', effort: 'max' }, null), { model: 'fable', effort: 'max', ultracode: false });
+  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'haiku' }, null), { model: 'haiku', effort: 'high', ultracode: false });
+  assert.match(runPrompt({ kind: 'autonomous' }), /Opus at high effort/);
+});
+
+test('the Autonomous prompt finishes on its own, never asks, decides and lists its decisions, and stops only for the budget', () => {
+  const p = runPrompt({ kind: 'autonomous' });
+  assert.match(p, /Autonomous/);
+  assert.match(p, /end to end/i);
+  assert.match(p, /never ask the person/i);
+  assert.match(p, /AskUserQuestion/);
+  assert.match(p, /senior would recommend/i);
+  assert.match(p, /monthly limit/i);
+  assert.match(p, /Decisions I took/);
+  assert.match(p, /Decisões que tomei/);
+  assert.match(p, /Left for you/);
+  assert.match(p, /Ficou para você/);
+  assert.match(p, /restart_session_map/);
+  assert.match(p, /never kill or start/i);
+  assert.match(p, /--force-with-lease/);
+  assert.match(p, /refs\/session-map\/safety/);
+  assert.match(p, /ask_other_ai/, 'the shared arsenal is there');
+  assert.match(p, /"level": "direct" \| "helpers" \| "reinforced" \| "ask-reinforce"/);
+  assert.match(p, /"why": "a short reason[^"]*(\d+) words/);
+});
+
+test('the Autonomous prompt stays compact: with the tail of a day with nothing measured it is under 4 KB', () => {
+  const tail = [conductorTail({ others: null, stats: [] }), budgetLine({ limitUSD: 1234.5, spentUSD: 999.25 })].join('\n');
+  const sent = flag(runArgs({ kind: 'autonomous' }, tail), '--append-system-prompt');
+  assert.ok(Buffer.byteLength(sent, 'utf8') < 4096, `${Buffer.byteLength(sent, 'utf8')} bytes`);
+});
+
+test('budgetLine tells the conductor the monthly limit and what is left, or that none is set', () => {
+  assert.match(budgetLine({ limitUSD: 20, spentUSD: 3 }), /monthly limit[^\n]*US\$ 20\.00[^\n]*US\$ 17\.00 left/i);
+  assert.match(budgetLine({ limitUSD: 5, spentUSD: 9 }), /US\$ 0\.00 left/);
+  assert.match(budgetLine({ limitUSD: null, spentUSD: 0 }), /no monthly limit is set: ask before reinforcing/i);
+  assert.match(budgetLine({ limitUSD: 0, spentUSD: 0 }), /US\$ 0\.00 left/);
 });
 
 test('mayReinforce: only when the person allowed it, a limit is set and the estimate still fits this month', () => {

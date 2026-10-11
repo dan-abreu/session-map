@@ -41,7 +41,7 @@ const LIST_MAX = 3;
 export function alertText(t, group, { content = true } = {}) {
   const [first] = group.alerts;
   const many = group.alerts.length > 1;
-  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', ') };
+  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), n: first.resumed ?? 0, reason: first.because ?? '' };
   const what = many ? t(`alert.many.${group.kind}`, { n: group.alerts.length }) : t(`alert.what.${first.reason}`);
   const why = many ? t('alert.why.many') : t(`alert.why.${first.reason}`, vars);
   const todo = many ? t('alert.do.many') : t(`alert.do.${first.reason}`);

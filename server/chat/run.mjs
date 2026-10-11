@@ -6,6 +6,8 @@ import { readRunBlock } from '../web/chatfold.js';
 export { readRunBlock };
 
 // How a page conversation runs: which model, at which effort, and with which way of working (plano-v02 item 12).
+//   autonomous Opus at high finishes the request on its own, decides without asking and lists its decisions; it stops only
+//             to spend past the monthly limit (pc16). The default of a new conversation.
 //   auto      Opus at high sizes each request; large or sensitive work waits for the person's OK (or the monthly allowance).
 //   maestro   Opus at high hands the parts to helpers with an explicit model and effort, without asking.
 //   ultracode the documented `--effort ultracode`: a workflow for every substantive task, at xhigh.
@@ -14,17 +16,28 @@ export { readRunBlock };
 // 'fable': the alias claude accepts for Fable 5.1 (code.claude.com/docs/en/model-config); never a default.
 export const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
-export const DEFAULT_RUN = Object.freeze({ kind: 'auto', selfReinforce: false });
+export const DEFAULT_RUN = Object.freeze({ kind: 'autonomous' });
 
 const LIMIT_MAX = 100_000;
 const SPEND_FILE = 'reinforced-spend.json';
 const CONFIG_FILE = 'config.json';
+
+// Autonomous runs Opus at high unless a model or an effort is named (an activity chat of the orchestrator, or02/or06),
+// each from the fixed lists only.
+function autonomousRun({ model, effort }) {
+  if ((model !== undefined && !MODELS.includes(model)) || (effort !== undefined && !EFFORTS.includes(effort))) return null;
+  return { kind: 'autonomous', ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
+}
+const modelOf = (run) => (run.kind === 'autonomous' && run.model) || 'opus';
+const effortOf = (run) => (run.kind === 'autonomous' && run.effort) || 'high';
+const MODEL_NAMES = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
 
 // → the run as stored and passed on, or null for anything the page must not send to claude.
 export function parseRun(value) {
   if (!value || typeof value !== 'object') return null;
   switch (value.kind) {
     case 'auto': return { kind: 'auto', selfReinforce: value.selfReinforce === true };
+    case 'autonomous': return autonomousRun(value);
     case 'maestro':
     case 'ultracode':
     case 'settings': return { kind: value.kind };
@@ -76,18 +89,40 @@ const MAESTRO_PROMPT = [
   BLOCK.replace('__ASK__', '').replace('__EST__', ''),
 ].join('\n');
 
+// pc16: the person gives one request and gets it finished. The permissions stay with Claude Code's own auto mode (the hub
+// forces it); what that mode blocks is denied at once by the hub and listed at the end, never asked mid-task.
+const AUTONOMOUS_PROMPT = [
+  'Autonomous mode of session-map: you conduct this conversation on Opus at high effort.',
+  'Finish the request end to end: understand, plan, build, test, review, publish if implied. Once a plan exists, go on until it is really done. Never ask the person anything (no AskUserQuestion, no "should I?").',
+  'At each choice, and at each skill or rule gate that waits for approval (design, plan, execution method, business or money), take what a senior would recommend, note it, go on. The only stop: spending past the monthly limit.',
+  ...ARSENAL,
+  '- large or sensitive (new system, cross-layer change, security, personal data, money, production): go reinforced on your own (an agent workflow with adversarial verification) while the monthly limit below covers your estimate; if not, say why with a US$ estimate and end with level "ask-reinforce".',
+  'Never push with --force, -f, --force-with-lease or a +refspec. Deleting is allowed: session-map snapshots the tree first (refs/session-map/safety; name the newest ref if you deleted). To restart session-map, never kill or start it: call restart_session_map.',
+  'A denied step is not retried: reach the goal another safe way or leave it. End the final reply with "Decisions I took" (in the person\'s language; "Decisões que tomei"), one line each with its reason, and, if anything was left, "Left for you" ("Ficou para você") with the exact command.',
+  BLOCK.replace('__ASK__', ' | "ask-reinforce"').replace('__EST__', ', "estimateUSD": number (only with ask-reinforce)'),
+].join('\n');
+
+const PROMPTS = { autonomous: AUTONOMOUS_PROMPT, auto: AUTO_PROMPT, maestro: MAESTRO_PROMPT };
+
 export function runPrompt(run) {
-  if (run.kind === 'auto') return AUTO_PROMPT;
-  if (run.kind === 'maestro') return MAESTRO_PROMPT;
-  return null;
+  if (run.kind === 'autonomous') return AUTONOMOUS_PROMPT.replace('on Opus at high', `on ${MODEL_NAMES[modelOf(run)]} at ${effortOf(run)}`);
+  return PROMPTS[run.kind] ?? null;
+}
+
+// The tail line of the Autonomous way: what the month still allows for reinforced work, so it knows when to stop.
+export function budgetLine({ limitUSD, spentUSD }) {
+  if (!(Number.isFinite(limitUSD) && limitUSD >= 0)) return '- No monthly limit is set: ask before reinforcing.';
+  const left = Math.max(0, limitUSD - (Number.isFinite(spentUSD) ? spentUSD : 0));
+  return `- Monthly limit for reinforced work: US$ ${limitUSD.toFixed(2)}, US$ ${left.toFixed(2)} left this month.`;
 }
 
 // Flags from a fixed list only: nothing the page sends reaches the command line as text. tail: the day's facts for the
 // conductor (conductorTail in ai/conductor.mjs), built by session-map itself; only the conductor modes get it.
 export function runArgs(run, tail = '') {
   switch (run.kind) {
+    case 'autonomous':
     case 'auto':
-    case 'maestro': return ['--model', 'opus', '--effort', 'high', '--append-system-prompt', tail ? `${runPrompt(run)}\n${tail}` : runPrompt(run)];
+    case 'maestro': return ['--model', modelOf(run), '--effort', effortOf(run), '--append-system-prompt', tail ? `${runPrompt(run)}\n${tail}` : runPrompt(run)];
     case 'ultracode': return ['--model', 'opus', '--effort', 'ultracode'];
     case 'fixed': return ['--model', run.model, '--effort', run.effort];
     default: return [];
@@ -97,8 +132,9 @@ export function runArgs(run, tail = '') {
 // mine: settingsRun() of the conversation's folder, what "Same as my Claude" runs.
 export function expectedRun(run, mine) {
   switch (run.kind) {
+    case 'autonomous':
     case 'auto':
-    case 'maestro': return { model: 'opus', effort: 'high', ultracode: false };
+    case 'maestro': return { model: modelOf(run), effort: effortOf(run), ultracode: false };
     case 'ultracode': return { model: 'opus', effort: 'xhigh', ultracode: true };
     case 'fixed': return { model: run.model, effort: run.effort, ultracode: false };
     default: return mine;

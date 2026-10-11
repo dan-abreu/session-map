@@ -3,6 +3,7 @@
 // no rule of its own: it forwards to the session-map server (POST /api/ai/ask, GET /api/ai/others, POST /api/ai/recommend), which routes, caps,
 // redacts and refuses. SM_URL: the server (default http://127.0.0.1:4001); SM_DIR: session-map's folder, where the token
 // is (default <claude dir>/session-map). Whatever goes wrong is a plain answer to Claude, never a protocol error.
+// It also carries restart_session_map (POST /api/restart, sv13): a restart session-map times itself, never a killed process.
 // Before the token or a prompt leaves, the server proves it knows the token (GET /api/ai/hello with a fresh nonce): when
 // session-map is not running, another program on the free port gets nothing.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -94,6 +95,24 @@ const reportTool = {
     required: ['id', 'accepted', 'why'],
   },
 };
+
+// The agreed restart (sv13, POST /api/restart): session-map restarts at the safe moment and resumes its page chats.
+const restartTool = {
+  name: 'restart_session_map',
+  description: [
+    'Asks session-map to restart itself, for example after you changed its own code. Never kill or start the session-map process yourself: that cuts off every conversation it runs from its page.',
+    'session-map restarts when none of its page conversations is in the middle of a turn, at the latest 10 minutes after the first request, and starts no new turn meanwhile; several requests join the one waiting. After the restart it resumes its page conversations with a note.',
+    'If you are one of session-map\'s page conversations, end your turn after calling this: you are resumed with a note and go on from there.',
+  ].join(' '),
+  inputSchema: {
+    type: 'object',
+    properties: { reason: { type: 'string', description: 'Why, in a short sentence: the owner reads it. No secrets.' } },
+    required: ['reason'],
+  },
+};
+// A page chat's arsenal carries the chat's key (hub.mjs): session-map resumes the one that asked with a note.
+const CHAT_KEY_RE = /^[0-9a-f]{32}$/;
+const NOT_RESTARTED = 'Nothing was restarted.';
 
 const usd = (n, digits = 4) => `$${(Number(n) || 0).toFixed(digits)}`;
 const result = (text, isError = false) => ({ content: [{ type: 'text', text }], isError });
@@ -282,7 +301,27 @@ async function report(args) {
   return result(`Recorded: you ${a.accepted ? 'accepted' : 'refused'} that work. The owner sees it in session-map.`);
 }
 
-const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report };
+async function restart(args) {
+  const token = readToken();
+  if (!token) return result(`session-map's token file was not found at ${TOKEN_FILE}: start session-map once and it creates it. ${NOT_RESTARTED}`, true);
+  const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
+  if (!reason) return result(`Give the reason in a short sentence. ${NOT_RESTARTED}`, true);
+  const body = { reason, ...(CHAT_KEY_RE.test(SESSION_ID) ? { chatKey: SESSION_ID } : {}) };
+  const r = await callServer('POST', '/api/restart', body, LIST_TIMEOUT_MS, token);
+  if (r.impostor) return result(`Something answers at ${BASE}, but it is not session-map: it could not prove it knows the token, so nothing was sent. ${NOT_RESTARTED}`, true);
+  if (r.down) return result(r.timeout ? 'session-map took too long to answer; in a moment, check whether it restarted.' : `session-map is not running at ${BASE}: the owner can start it from the session-map plugin. ${NOT_RESTARTED}`, true);
+  const j = r.json;
+  if (r.status === 403) return result(`session-map only restarts at the request of this computer, and never in its demo. ${NOT_RESTARTED}`, true);
+  if (r.status === 401) return result(`session-map refused the key in ${TOKEN_FILE} (it did not match). ${NOT_RESTARTED}`, true);
+  if (r.status !== 200 || !j?.ok || !j.scheduled) return result(`session-map answered ${r.status}${typeof j?.error === 'string' ? ` (${j.error})` : ''}. ${NOT_RESTARTED}`, true);
+  const next = 'Until then it starts no new turn; afterwards it resumes its page conversations with a note. If you are one of them, end your turn now: you go on after the restart.';
+  if (j.already) return result(`A restart of session-map was already waiting: your request joined it. ${next}`);
+  const n = Number(j.waitingFor) || 0;
+  const now = n === 1 ? '1 page conversation is in the middle of a turn' : `${n} page conversations are in the middle of a turn`;
+  return result(`Restart scheduled. session-map restarts as soon as none of its page conversations is in the middle of a turn (now ${now}), at the latest at ${String(j.deadline)}. ${next}`);
+}
+
+const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart };
 
 createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg;
@@ -291,7 +330,7 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
   if (method === 'initialize') {
     send({ jsonrpc: '2.0', id, result: { protocolVersion: params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'session-map-arsenal', version: '1.0.0' } } });
   } else if (method === 'tools/list') {
-    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool] } });
+    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool, restartTool] } });
   } else if (method === 'tools/call') {
     const run = TOOLS[params?.name];
     if (!run) return send({ jsonrpc: '2.0', id, error: { code: -32602, message: `unknown tool: ${String(params?.name).slice(0, 60)}` } });

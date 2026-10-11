@@ -2,9 +2,10 @@
 // The pure part on top is what node:test loads; createConvList below touches the DOM only when called.
 import { archTree, ownerHue } from './tree.js';
 import { emptyState } from './empty.js';
+import { modelName } from './live.js';
 
 const RECENT_PAGE = 50;
-const SPECIAL = new Set(['idea', 'create-arch', 'flow', 'project']);
+const SPECIAL = new Set(['idea', 'create-arch', 'flow', 'project', 'orchestrator']);
 const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 const newest = (a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.row.updatedAt ?? ''));
 
@@ -109,24 +110,36 @@ export function dateGroup(iso, nowMs) {
 // Each project's own color, the same everywhere a project shows (list, picker, Now strip).
 export const projectHue = (project) => ownerHue(project.id);
 
-// The chats about the whole project sit on top of its card, like the chats of a project in Claude.
-const isPinned = (row) => row.node?.kind === 'project';
+// The chats about the whole project sit on top of its card, like the chats of a project in Claude, and so does the
+// project's orchestrator (or01), first of them.
+export const isOrchestrator = (row) => row.node?.kind === 'orchestrator';
+const isPinned = (row) => row.node?.kind === 'project' || isOrchestrator(row);
+const byUpdated = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
 
-// Those chats, not archived, newest first: what the root bubble counts.
-export const projectChats = (project) => conversationsOf(project).filter((r) => isPinned(r) && !r.archived)
-  .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+// Those chats, not archived, newest first: what the root bubble counts. The orchestrator has its own chip.
+export const projectChats = (project) => conversationsOf(project).filter((r) => r.node?.kind === 'project' && !r.archived).sort(byUpdated);
+
+// The project's orchestrator (the newest one that is not archived) and the chats it opened or took over (or03): the
+// ones whose recorded mother is it, never guessed.
+export const orchestratorOf = (project) => conversationsOf(project).filter((r) => isOrchestrator(r) && !r.archived).sort(byUpdated)[0] ?? null;
+export const activityOf = (project, orch) => (orch ? conversationsOf(project).filter((r) => r.parentId === orch.sessionId && !r.archived) : []);
 
 function sectionOf(project, entries, nowMs) {
-  const sec = { project, hue: projectHue(project), pinned: [], working: [], cutoff: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [] };
+  const sec = { project, hue: projectHue(project), pinned: [], working: [], cutoff: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [], kids: new Map() };
   const own = entries.filter((e) => !e.home);
+  // The activity chats of an orchestrator in the list hang under it; if it is not here (a filter), they stand alone.
+  const mothers = new Set(own.filter((e) => isOrchestrator(e.row)).map((e) => e.row.sessionId));
   for (const e of [...entries].sort(newest)) {
     if (e.home) sec.visiting.push(e);
+    else if (mothers.has(e.row.parentId)) sec.kids.set(e.row.parentId, [...(sec.kids.get(e.row.parentId) ?? []), e]);
     else if (isPinned(e.row)) sec.pinned.push(e);
     else if (e.row.status === 'busy') sec.working.push(e);
     else if (isCut(e.row)) sec.cutoff.push(e);
     else if (e.row.waiting) sec.waiting.push(e);
     else sec[dateGroup(e.row.updatedAt, nowMs)].push(e);
   }
+  sec.pinned.sort((a, b) => isOrchestrator(b.row) - isOrchestrator(a.row));
+  for (const list of sec.kids.values()) list.sort((a, b) => (b.row.status === 'busy') - (a.row.status === 'busy'));
   sec.counts = {
     working: own.filter((e) => e.row.status === 'busy').length,
     cutoff: own.filter((e) => isCut(e.row)).length,
@@ -194,6 +207,7 @@ export function conversationCounts(project, tree, { showArchived = false } = {})
 
 // Every origin has its own drawn icon and word, so a row never leaves "where does this run?" open.
 const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto' };
+const PLACE_ICON = { idea: 'idea', project: 'compass', orchestrator: 'compass' };
 export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
 const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
 const DATED = new Set(DATE_GROUPS);
@@ -243,9 +257,19 @@ export function createConvList(ctx) {
     return h('span', { class: `cv-origin-badge o-${origin}`, title: tt('convs.origin.title', { origin: word }) }, icon(originIcon(origin), 'cv-origin'), word);
   }
 
+  // The orchestrator says what it is where the others say where they run; an activity chat of it (kid) says its item and model.
+  function kindBadges(row, kid) {
+    const tt = ctx.t();
+    if (isOrchestrator(row)) return [h('span', { class: 'cv-origin-badge cv-orch-badge o-orchestrator', title: tt('convs.orchestratorTitle') }, icon('auto', 'cv-origin'), tt('convs.orchestrator'))];
+    if (!kid) return [originBadge(row.origin)];
+    return [row.itemCode ? h('span', { class: 'cv-code num', title: tt('convs.codeTitle') }, row.itemCode) : null,
+      row.runModel ? h('span', { class: 'cv-model', title: tt('now.modelTitle') }, modelName(row.runModel)) : null];
+  }
+
   // Title and time on top, then the state in a word and where it runs (cost on the right), then its place on the map on a
-  // line of its own. The project is the card the row sits in, so the row does not repeat it.
-  function rowView(e) {
+  // line of its own. The project is the card the row sits in, so the row does not repeat it. An orchestrator carries its
+  // activity chats (kids) indented under it, each one line shorter: no place, no origin.
+  function rowView(e, kids = [], kid = false) {
     const tt = ctx.t();
     const { row } = e;
     const tone = toneOf(row);
@@ -253,9 +277,9 @@ export function createConvList(ctx) {
     const current = ctx.current() === row.sessionId;
     const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
     const title = row.title || tt('chat.untitled');
-    const where = placeWords(e);
-    const work = workText(workWords(row, e.project));
-    return h('li', { class: `cv-item${e.home ? ' is-visitor' : ''}` },
+    const where = kid ? '' : placeWords(e);
+    const work = kid ? '' : workText(workWords(row, e.project));
+    const main = [
       h('button', {
         type: 'button', class: `cv-row tone-${tone}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
         title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
@@ -266,14 +290,18 @@ export function createConvList(ctx) {
         row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null),
       h('span', { class: 'cv-badges' },
         h('span', { class: `cv-state s-${state}` }, h('span', { class: 'cv-state-dot', 'aria-hidden': 'true' }), tt(`convs.state.${state}`)),
-        originBadge(row.origin)),
+        ...kindBadges(row, kid)),
       step ? h('span', { class: 'cv-step' }, step) : null,
-      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon({ idea: 'idea', project: 'compass' }[e.place.special] ?? 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
+      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon(PLACE_ICON[e.place.special] ?? 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
       work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null),
       h('button', {
         type: 'button', class: 'cv-move', 'aria-label': tt('convs.moveAria', { title }), title: tt('convs.move'), 'aria-haspopup': 'dialog',
         onclick: () => ctx.onMove(e),
-      }, icon('more', 'cv-move-icon')));
+      }, icon('more', 'cv-move-icon'))];
+    const cls = `cv-item${e.home ? ' is-visitor' : ''}${kid ? ' cv-kid' : ''}`;
+    if (!kids.length) return h('li', { class: cls }, ...main);
+    return h('li', { class: `${cls} has-kids` }, h('div', { class: 'cv-item-main' }, ...main),
+      h('ul', { class: 'cv-kids', 'aria-label': tt('convs.kidsAria', { n: kids.length }) }, kids.map((k) => rowView(k, [], true))));
   }
 
   function groupView(sec, name, heading) {
@@ -288,7 +316,7 @@ export function createConvList(ctx) {
       h(heading, { id, class: 'cv-group-head' },
         h('span', { class: 'cv-group-mark', 'aria-hidden': 'true' }, icon(GROUP_ICON[name], 'cv-group-icon')),
         h('span', { class: 'cv-group-name' }, tt(`convs.group.${name}`)), h('span', { class: 'cv-group-n num' }, String(entries.length))),
-      h('ul', { class: 'cv-rows' }, shown.map(rowView)),
+      h('ul', { class: 'cv-rows' }, shown.map((e) => rowView(e, sec.kids.get(e.row.sessionId)))),
       rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll.add(key); render(); } }, tt('convs.more', { n: rest })) : null);
   }
 

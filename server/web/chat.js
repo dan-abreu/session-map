@@ -9,12 +9,16 @@ import { errorSignal } from './signals.js';
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // What the header shows (the way it runs, the mode, the session), as opposed to the turns the transcript also holds.
 const HEADER_EVENTS = new Set(['session', 'mode', 'run']);
-// How the conversation runs (server/chat/run.mjs): Automatic is the default of a new one.
-const DEFAULT_RUN = { kind: 'auto', selfReinforce: false };
+// How the conversation runs (server/chat/run.mjs): Autonomous is the default of a new one (pc16). The menu has three
+// paths: Autonomous, Automatic and Manual, which holds the WAYS.
+const DEFAULT_RUN = { kind: 'autonomous' };
 const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
 const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
-const RUN_KINDS = new Set(['auto', ...WAYS]);
+const RUN_KINDS = new Set(['autonomous', 'auto', ...WAYS]);
+// Why session-map wrote a message itself, besides the one answer to a reinforcing ask (hub.mjs, orchestra.mjs).
+const AUTO_KINDS = new Set(['inbox', 'tidy', 'orchestrator', 'opening']);
+const pathOf = (run) => (WAYS.includes(run.kind) ? 'manual' : run.kind);
 const usd = (v) => `US$ ${v.toFixed(2)}`;
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
 const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
@@ -71,6 +75,9 @@ export function createChat({
   const whereEl = q('where');
   const runEl = q('run');
   const panelEl = q('runpanel');
+  // Under "Advanced", folded: the ways of Manual, then the permission mode and "use in every Claude on this PC".
+  const advancedEl = q('advanced');
+  const manualEl = q('manualways');
   const findEl = q('find');
   const tasksEl = q('tasks');
   const attachEl = q('attach');
@@ -97,6 +104,7 @@ export function createChat({
   let lastManual = { kind: 'maestro' };
   let lastFixed = { model: 'sonnet', effort: 'medium' };
   let confirmUltra = false;
+  let advancedOpen = false;
   let mine = null;
   let reinforce = null;
   // mm22: what is drawn (items with their date lines) and the node of each, reused while the item is the same object.
@@ -218,7 +226,7 @@ export function createChat({
   // the transcript the same way History draws it.
   function itemView(item, isLast) {
     const tt = t();
-    if (item.type === 'user' && item.auto) return h('li', { class: 'msg msg-auto' }, h('p', {}, tt('run.autoAnswered')));
+    if (item.type === 'user' && item.auto) return autoNote(item, tt);
     if (item.type === 'assistant') return claudeView(item, isLast);
     if (item.type === 'permission') return permissionView(item);
     if (item.type === 'error') return h('li', { class: 'msg msg-error', role: 'alert' }, errorText(item.error));
@@ -243,8 +251,11 @@ export function createChat({
     const tt = t();
     const asked = item.state === 'asked' && !log.ended;
     const edit = Boolean(item.diff);
+    // Left for the person by the Autonomous way: it was never asked, so it reads as a note, not a question.
+    const title = item.state === 'deferred' ? tt('chat.permDeferred', { tool: item.toolName })
+      : edit ? tt('chat.permEdit', { path: item.diff.path }) : tt('chat.permAsk', { tool: item.toolName });
     return h('li', { class: `msg msg-permission state-${item.state}` },
-      h('p', { class: 'perm-title' }, edit ? tt('chat.permEdit', { path: item.diff.path }) : tt('chat.permAsk', { tool: item.toolName })),
+      h('p', { class: 'perm-title' }, title),
       edit ? tv.diffView(item.diff) : h('pre', {}, item.input),
       asked
         ? h('div', { class: 'actions' },
@@ -324,6 +335,13 @@ export function createChat({
   const runHead = h('div', { class: 'run-head' });
   const menuOpen = () => Boolean(menuEl && !menuEl.hidden);
 
+  // A message session-map sent on its own, in words: the answer to a reinforcing ask, or what the orchestrator's work put in
+  // the chat (notes from its chats, a tidy pass, its orders, the first opening); those can be opened to read the text.
+  function autoNote(item, tt) {
+    if (!AUTO_KINDS.has(item.auto)) return h('li', { class: 'msg msg-auto' }, h('p', {}, tt('run.autoAnswered')));
+    return h('li', { class: 'msg msg-auto' }, h('details', { class: 'msg-auto-note' }, h('summary', {}, tt(`run.auto.${item.auto}`)), h('p', { class: 'msg-auto-text' }, item.text)));
+  }
+
   function renderRun() {
     if (!toggleEl) return;
     const tt = t();
@@ -334,11 +352,12 @@ export function createChat({
     toggleEl.setAttribute('title', tt('run.change'));
     toggleEl.replaceChildren(
       h('span', { class: 'run-way' }, words.way),
-      h('span', { class: 'run-model' }, [words.model, words.effort].filter(Boolean).join(' · ')),
+      h('span', { class: 'run-model' }, words.model),
       h('span', { class: 'run-caret', 'aria-hidden': 'true' }));
     runHead.replaceChildren(
       h('p', { class: `run-why tone-${words.tone}` }, words.why),
-      cost !== null ? h('p', { class: 'run-cost' }, h('span', {}, tt('run.costTitle')), h('span', { class: 'num' }, money(cost))) : null);
+      h('p', { class: 'run-cost' }, h('span', {}, tt('run.levelTitle')), h('span', { class: 'num' }, [words.model, words.effort].filter(Boolean).join(' · '))),
+      ...(cost !== null ? [h('p', { class: 'run-cost' }, h('span', {}, tt('run.costTitle')), h('span', { class: 'num' }, money(cost)))] : []));
   }
 
   // Esc and a press outside close it, as a menu does; Esc gives the focus back to the button.
@@ -346,6 +365,7 @@ export function createChat({
     if (!menuEl) return;
     menuEl.hidden = !open;
     confirmUltra = false;
+    if (open && pathOf(run) === 'manual') advancedOpen = true;
     renderRun();
     renderPanel();
     if (!open && focusBack) toggleEl?.focus();
@@ -354,7 +374,7 @@ export function createChat({
   async function pick(next) {
     run = next;
     confirmUltra = false;
-    if (next.kind !== 'auto') lastManual = next;
+    if (pathOf(next) === 'manual') { lastManual = next; advancedOpen = true; }
     if (next.kind === 'fixed') lastFixed = { model: next.model, effort: next.effort };
     renderRun();
     renderPanel();
@@ -387,21 +407,28 @@ export function createChat({
       h('span', { class: 'run-option-text' }, h('span', { class: 'run-option-name' }, title), h('span', { class: 'run-hint' }, hint)));
   }
 
-  function autoPart(tt) {
+  // The monthly limit for reinforced work, the same field under Autonomous and Automatic.
+  function limitPart(tt) {
     const limitId = `${uid}-run-limit`;
     const limit = reinforce?.limitUSD ?? null;
     const field = h('input', { id: limitId, type: 'number', min: '0', step: '1', inputmode: 'decimal', class: 'num', value: limit === null ? '' : String(limit), 'data-run': 'limit' });
+    return h('div', { class: 'run-limit' },
+      h('label', { for: limitId }, tt('run.limitLabel')),
+      h('div', { class: 'run-limit-row' },
+        field,
+        h('button', { type: 'button', class: 'btn small-btn', 'data-run': 'limit-save', onclick: () => saveLimit(field) }, tt('run.limitSave'))),
+      h('p', { class: 'run-hint' }, limit === null ? tt('run.limitNone') : tt('run.limitUsed', { used: money(reinforce?.spentUSD ?? 0), limit: money(limit) })));
+  }
+
+  // Autonomous always reinforces within the limit on its own: nothing to tick, only the limit it stops at.
+  const autonomousPart = (tt) => [limitPart(tt)];
+
+  function autoPart(tt) {
     return [
-      h('p', { class: 'run-lede' }, tt('run.hint.auto')),
       h('label', { class: 'run-check' },
         h('input', { type: 'checkbox', checked: run.selfReinforce, 'data-run': 'self', onchange: () => pick({ kind: 'auto', selfReinforce: !run.selfReinforce }) }),
         h('span', { class: 'run-option-text' }, h('span', { class: 'run-option-name' }, tt('run.self')), h('span', { class: 'run-hint' }, tt('run.selfHint')))),
-      h('div', { class: 'run-limit' },
-        h('label', { for: limitId }, tt('run.limitLabel')),
-        h('div', { class: 'run-limit-row' },
-          field,
-          h('button', { type: 'button', class: 'btn small-btn', 'data-run': 'limit-save', onclick: () => saveLimit(field) }, tt('run.limitSave'))),
-        h('p', { class: 'run-hint' }, limit === null ? tt('run.limitNone') : tt('run.limitUsed', { used: money(reinforce?.spentUSD ?? 0), limit: money(limit) }))),
+      limitPart(tt),
     ];
   }
 
@@ -443,16 +470,21 @@ export function createChat({
       ]))];
   }
 
+  // The three ways, one plain sentence each; the one in use is pressed. What the way needs goes right under them.
   function renderPanel() {
     if (!panelEl || !menuOpen()) return;
     const tt = t();
-    const manual = run.kind !== 'auto';
+    const path = pathOf(run);
+    const first = { autonomous: { kind: 'autonomous' }, auto: { kind: 'auto', selfReinforce: false }, manual: lastManual };
     panelEl.replaceChildren(
       runHead,
-      h('div', { class: 'seg run-path', role: 'group', 'aria-label': tt('run.pathLabel') },
-        h('button', { type: 'button', 'data-run': 'path-auto', 'aria-pressed': String(!manual), onclick: () => { if (manual) pick({ kind: 'auto', selfReinforce: false }); } }, tt('run.path.auto')),
-        h('button', { type: 'button', 'data-run': 'path-manual', 'aria-pressed': String(manual), onclick: () => { if (!manual) pick(lastManual); } }, tt('run.path.manual'))),
-      ...(manual ? manualPart(tt) : autoPart(tt)));
+      h('div', { class: 'run-paths', role: 'group', 'aria-label': tt('run.pathLabel') },
+        Object.keys(first).map((p) => h('button', {
+          type: 'button', class: 'run-path-btn', 'data-run': `path-${p}`, 'aria-pressed': String(path === p), onclick: () => { if (path !== p) pick(first[p]); },
+        }, h('span', { class: 'run-option-name' }, tt(`run.path.${p}`)), h('span', { class: 'run-hint' }, tt(`run.pathHint.${p}`))))),
+      ...(path === 'manual' ? [] : { autonomous: autonomousPart, auto: autoPart }[path](tt)));
+    if (advancedEl) advancedEl.open = advancedOpen;
+    manualEl?.replaceChildren(...manualPart(tt));
   }
 
   const modeName = (mode) => t()(`chat.modeName.${mode}`);
@@ -779,9 +811,11 @@ export function createChat({
       context.title = text.replace(/\s+/g, ' ').trim().slice(0, 200);
       q('title').textContent = context.title;
     }
+    // The project's orchestrator not started yet is opened through its own route, so there is only ever one.
+    const opens = !live && !sessionId && context.orchestrator;
     const res = live
       ? await api.chatSend(key, text, images)
-      : await api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text, ...(images.length ? { images } : {}) });
+      : await (opens ? api.orchestratorOpen({ projectId: context.projectId, text, ...(images.length ? { images } : {}) }) : api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text, ...(images.length ? { images } : {}) }));
     if (!res.ok && !(res.error === 'busy' && res.chatKey)) {
       log = chatLog(log, { type: 'error', data: { error: res.error } });
       return render();
@@ -794,7 +828,7 @@ export function createChat({
   async function loadList(ctx) {
     const node = ctx.start?.node;
     let scope = {};
-    if (['idea', 'create-arch', 'flow', 'project'].includes(node?.kind)) scope = { kind: node.kind };
+    if (['idea', 'create-arch', 'flow', 'project', 'orchestrator'].includes(node?.kind)) scope = { kind: node.kind };
     else if (node?.partId) scope = { partId: node.partId, ...(node.kind === 'item' && node.code ? { code: node.code } : {}) };
     else if (ctx.start?.workCellId) scope = { workCellId: ctx.start.workCellId };
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
@@ -856,7 +890,7 @@ export function createChat({
     choice = MODES.includes(res.mode) ? res.mode : 'settings';
     // What the conversation ran with before; one from elsewhere (or older than these choices) keeps its own Claude.
     run = RUN_KINDS.has(res.run?.kind) ? res.run : { kind: 'settings' };
-    if (run.kind !== 'auto') lastManual = run;
+    if (pathOf(run) === 'manual') lastManual = run;
     mine = res.mine ?? mine;
     reinforce = res.reinforce ?? reinforce;
     sessionId = ctx.start.sessionId;
@@ -952,6 +986,7 @@ export function createChat({
     setMenu(false, { focusBack: true });
   };
   menuEl?.addEventListener('keydown', escMenu);
+  advancedEl?.addEventListener('toggle', () => { advancedOpen = advancedEl.open; });
   runEl?.addEventListener('keydown', escMenu);
 
   // ---- the header's ⋯ menu: what can be done with the conversation (rename, archive, open where it lives) ----
@@ -1013,6 +1048,7 @@ export function createChat({
     run = DEFAULT_RUN;
     lastManual = { kind: 'maestro' };
     confirmUltra = false;
+    advancedOpen = false;
     findQuery = '';
     findAt = 0;
     pending = [];

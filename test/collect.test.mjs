@@ -621,6 +621,38 @@ test('a project chat belongs to the whole project: the codes and files it touche
   } finally { cleanup(dir, smDir, join(root, '..')); }
 });
 
+// The orchestrator (or03): the list nests its activity chats under it by parentId and knows it by node.kind.
+test('conversation rows carry their mother as recorded and their kind of point; the orchestrator belongs to the whole project', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const root = repo(join(tmp(), 'acme-shop'), { arch: true });
+  const E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  try {
+    writeChat(dir, { id: A, cwd: root, title: 'Orchestrator', prompts: ['[session-map: activity `bi01` (sonnet) ended — finished]'] });
+    writeChat(dir, { id: B, cwd: root, title: 'Tax table', prompts: ['work on `bi01`'] });
+    writeChat(dir, { id: C, cwd: root, title: 'Cart', edits: ['src/shop/cart.ts'] });
+    const projectId = projectIdOf(root);
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
+      [A]: { projectId, root, cwd: root, partId: null, node: { kind: 'orchestrator' }, title: 'Orchestrator', startedAt: iso(3 * HOUR), run: { kind: 'settings' } },
+      [B]: { projectId, root, cwd: root, partId: 'billing', node: { kind: 'item', code: 'bi01' }, parentId: A, title: 'Tax table', startedAt: iso(2 * HOUR), run: { kind: 'autonomous', model: 'sonnet', effort: 'medium' } },
+      [E]: { projectId, root, cwd: root, partId: 'billing', node: { kind: 'item', code: 'bi01' }, parentId: A, title: 'Older tax work', startedAt: iso(41 * 24 * HOUR), run: { kind: 'fixed', model: 'haiku', effort: 'low' } },
+    }));
+    writeFileSync(join(smDir, 'lineage.json'), JSON.stringify({ [B]: A, [C]: B }));
+    const state = await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI });
+    const [p] = state.projects;
+    const by = Object.fromEntries(p.conversations.map((r) => [r.sessionId, r]));
+    assert.deepEqual([by[A].node, by[A].partId, by[A].partSource, by[A].itemCode, by[A].parentId], [{ kind: 'orchestrator' }, null, 'project', null, null]);
+    assert.deepEqual([by[B].node.kind, by[B].parentId, by[B].itemCode], ['item', A, 'bi01']);
+    assert.equal(by[C].parentId, B, 'from lineage.json');
+    assert.equal(by[E].parentId, A, 'a page chat older than the window keeps it too');
+    // The model session-map runs a page chat on (Autonomous with none named: Opus); none for the others.
+    assert.deepEqual([by[A].runModel, by[B].runModel, by[C].runModel, by[E].runModel], [null, 'sonnet', null, 'haiku']);
+    assert.equal(p.tidy, false, '"Organize on its own" is off until the owner turns it on in the project');
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ projects: { [normalizePath(root)]: { tidy: true } } }));
+    assert.equal((await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects[0].tidy, true);
+  } finally { cleanup(dir, smDir, join(root, '..')); }
+});
+
 test('collect reads the workflows of a live conversation again on every pass, though its transcript did not change', async () => {
   const dir = tmp();
   const smDir = tmp();

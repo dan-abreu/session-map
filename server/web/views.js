@@ -110,6 +110,13 @@ function closeStreaming(items) {
 // What a history item may be (server/sources/claude-conversation.mjs): the chat screen draws each of these.
 const HISTORY_TYPES = new Set(['user', 'assistant', 'thinking', 'tool', 'question']);
 
+// The history does not mark what session-map wrote on its own: the notes the orchestrator gets start with a fixed tag.
+const AUTO_TAGS = [['[session-map: activity', 'inbox'], ['[session-map: tidy pass]', 'tidy'], ['[session-map: the person opened the orchestrator]', 'opening']];
+const marked = (i) => {
+  const auto = i.type === 'user' && !i.auto ? AUTO_TAGS.find(([tag]) => String(i.text).startsWith(tag))?.[1] : null;
+  return auto ? { ...i, auto } : i;
+};
+
 // The page's chat, folded from SSE events plus the person's own sends ({type: 'local-send'}) and the history of a
 // reopened conversation ({type: 'history', data: {items}}, or only {messages} from an older server). evt.at: when the
 // page got the event, the time a live item shows.
@@ -124,8 +131,8 @@ export function chatLog(log = EMPTY_LOG, evt) {
         // running: a turn still under way whose message the history shows, so no replayed message says so (pc13).
         ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true, running: data.running === true,
         items: Array.isArray(data.items)
-          ? data.items.filter((i) => HISTORY_TYPES.has(i?.type)).map((i) => (i.type === 'assistant' ? { ...i, streaming: false } : i))
-          : data.messages.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),
+          ? data.items.filter((i) => HISTORY_TYPES.has(i?.type)).map((i) => (i.type === 'assistant' ? { ...i, streaming: false } : marked(i)))
+          : data.messages.map((m) => marked({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),
       };
     case 'local-send':
       return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true, ts, ...(data.images?.length ? { localImages: data.images } : {}) }] };
@@ -165,8 +172,9 @@ export function chatLog(log = EMPTY_LOG, evt) {
       }
       return { ...log, items: items.map((i) => (i.type === 'tool' && i.id === data.id ? { ...i, result: data.text, isError: data.isError } : i)) };
     case 'permission':
-      if (data.state === 'asked') {
-        return { ...log, items: [...closeStreaming(items), { type: 'permission', requestId: data.requestId, toolName: data.toolName, input: data.input, state: 'asked', ts, ...(data.diff ? { diff: data.diff } : {}) }] };
+      // deferred: the Autonomous way denied it at once and left it for the person's final list; a line, never a card.
+      if (data.state === 'asked' || data.state === 'deferred') {
+        return { ...log, items: [...closeStreaming(items), { type: 'permission', requestId: data.requestId, toolName: data.toolName, input: data.input, state: data.state, ts, ...(data.diff ? { diff: data.diff } : {}) }] };
       }
       return { ...log, items: items.map((i) => (i.type === 'permission' && i.requestId === data.requestId ? { ...i, state: data.state } : i)) };
     case 'turn-end':
@@ -194,7 +202,9 @@ export function chatState(log, { sessionId }) {
 
 // What the chat header says about how the conversation runs. choice: the run picked (run.mjs shapes); info: the last
 // 'run' event of the server (null before the first); mine: what the person's own Claude settings run.
-const EXPECTED = { auto: ['opus', 'high'], maestro: ['opus', 'high'], ultracode: ['opus', 'xhigh'] };
+const EXPECTED = { autonomous: ['opus', 'high'], auto: ['opus', 'high'], maestro: ['opus', 'high'], ultracode: ['opus', 'xhigh'] };
+// The ways whose conductor ends each reply with the level it works at.
+const LEVELLED = new Set(['autonomous', 'auto', 'maestro']);
 const LEVEL_TONE = { reinforced: 'reinforced', 'ask-reinforce': 'ask' };
 // The same claude process flags: only 'may reinforce on its own' may differ.
 const sameRun = (a, b) => a.kind === b.kind && a.model === b.model && a.effort === b.effort;
@@ -204,7 +214,7 @@ export function runWords(t, { choice, info: last, mine }) {
   const [model, effort] = choice.kind === 'fixed' ? [choice.model, choice.effort] : choice.kind === 'settings' ? [mine?.model, mine?.effort] : EXPECTED[choice.kind];
   const shownModel = info?.model ?? model;
   const shownEffort = info?.effort ?? effort;
-  const level = choice.kind === 'auto' || choice.kind === 'maestro' ? info?.level : null;
+  const level = LEVELLED.has(choice.kind) ? info?.level : null;
   let why = t(`run.why.${choice.kind}`);
   if (level) why = t(`run.level.${level}`, { why: info.why ?? t('run.level.noReason') });
   return {

@@ -39,3 +39,19 @@ test('chatLog: a permission keeps the before and after of the edit it asks for',
   const log = fold([{ type: 'permission', at: AT, data: { requestId: 'r1', state: 'asked', toolName: 'Edit', input: '{}', diff: { path: 'a.ts', hunks: [{ before: 'a', after: 'b' }] } } }]);
   assert.deepEqual(log.items[0].diff, { path: 'a.ts', hunks: [{ before: 'a', after: 'b' }] });
 });
+
+test('chatLog: a reopened orchestrator shows the messages session-map wrote on its own as such (the history does not mark them)', () => {
+  const user = (text) => ({ type: 'user', text, ts: null });
+  const log = chatLog(undefined, {
+    type: 'history',
+    data: { items: [
+      user('[session-map: activity or03 (sonnet) ended - finished, cost US$ 1.20. Summary: done]'),
+      user('[session-map: tidy pass] Tie each conversation to its item'),
+      user('[session-map: the person opened the orchestrator]'),
+      user('Please look at the payments chats'),
+    ] },
+  });
+  assert.deepEqual(log.items.map((i) => i.auto ?? null), ['inbox', 'tidy', 'opening', null]);
+  const old = chatLog(undefined, { type: 'history', data: { messages: [{ role: 'user', text: '[session-map: tidy pass]' }, { role: 'user', text: 'hello' }] } });
+  assert.deepEqual(old.items.map((i) => i.auto ?? null), ['tidy', null], 'also from an older server that sends only messages');
+});

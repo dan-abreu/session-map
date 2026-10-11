@@ -14,7 +14,7 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 ## Rules that must not break
 
 - Quality is rule number one; saving money is a consequence of choosing well, never the goal.
-- An activity chat is started only after the owner confirms.
+- An activity chat is started by the orchestration on its own, in the Autonomous way, tied to an item code; the owner sees it in the list and can stop it (the owner's choice on 2026-10-10, `id90`; before, it waited for a confirmation).
 - Money, accounts, contracts and business priority belong to the owner: a recommendation plus a one-click confirmation.
 - The mode `bypassPermissions` is never used.
 
@@ -29,14 +29,19 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Kept in page-chats.json with the point kind `project`; never pinned to one part by the codes or files it touches; listed under "Project chats" on top of the project's card (title from the first message, time, state, cost); resumes with its history, renames and archives like any chat. The sheet takes the first message as its title as soon as it is sent, as the list does.
   - Checked in the real app on a test folder: two chats with Haiku at low asked "what is missing in this project?"; each answer named the open items and the parts without a description, about US$ 0.01 each.
   - How to confirm it is done: click the root bubble: the panel lists the project chats and offers a new one; send a message: the first prompt shows the summary under 4 KB, the chat opens in the project root and shows on top of the list in "Project chats" with its title, time, state and cost; "New chat" starts another; reopen the first from the list and continue it with its history; archive it and it leaves the list and the panel.
-- [ ] **in progress · blocks:** Orchestration chat per project `or01`
+- [x] Orchestration chat per project `or01`
+  - Built on 2026-10-11 (`server/chat/orchestra.mjs`, `orch-tools.mjs`, `server/web/orchview.js`): one orchestrator per project running the Autonomous way, eight tools of its own (open, drive, read, continue, archive and rename chats) allowed up front by name, an inbox on disk that wakes it when an activity chat ends, and brakes: 3 working at once, 2 slots always left for the owner, 30 a day, depth 1, 20 automatic turns in a row. Not yet tried with the real claude: the first real run is its end-to-end test. Reaches the page with the next version.
   - First step done: the plain project chats (`or13`); the manager's powers below come next.
   - Pinned on top of the list and on the root node. Starts from the compact project summary, absorbs "New idea" (puts items in the right place), and when long it summarizes and continues (`--resume` with its own summary, or a chained new session).
   - First of the backlog once the foundation is done (the owner decided on 2026-10-09 that understanding the programs comes first; see the Foundation part, `fd11`).
-- [ ] **blocks:** Activity chats started from the orchestration `or02`
-  - A chat focused on one item of the map, started by a tool or a `POST /api/chat/start` per item, with the model chosen by the Automatic mode and always with confirmation.
+- [x] Activity chats started from the orchestration `or02`
+  - A chat focused on one item of the map, started by a tool or a `POST /api/chat/start` per item, with the model chosen by the orchestration (the cheapest that does the item well) and only its part's context (`or06`); since `id90` it starts without a confirmation and gets its instructions from the orchestration.
   - When it ends it ticks the item in the architecture and posts its result in the orchestration thread (item, outcome, tests, what is left).
-- [ ] **important:** The tree orchestration → activities in the list and the Now strip `or03`
+- [x] **important:** The tree orchestration → activities in the list and the Now strip `or03`
+- [x] The orchestration looks after the older conversations of the project and aligns them with the plan `or17`
+  - From `id90`. Each older conversation (not live now) is tied to its item code; what was left is continued in it, what is done is ticked and archived, and what needs the owner goes to his list. It ends with a table: conversation, item, what it did.
+- [x] Automatic upkeep: the orchestration keeps the conversations organized by itself `or18`
+  - From `id90`. A switch per project ("Organizar sozinho"), off until the owner turns it on in the project he wants (his choice on 2026-10-11: it spends on Opus). The activity chats send no "finished" notice of their own; the orchestrator tells their end (same day). When the project is quiet (no chat working) and at most once a day, or when 5 new conversations piled up, the orchestration runs a tidy pass: clear titles, each conversation tied to its item, finished ones archived, cut-off ones continued, items ticked and requests moved along; a short note of what it did lands in its thread.
 
 ### Senior conductor
 
@@ -48,7 +53,7 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] **Route by kind of task** `or05`
   - Bulk reading and inventory → Haiku low; ordinary analysis and code → Sonnet medium; decisions, security, review and second checks → Opus; huge manual work → a cheap outside AI when one is set up (`or11`).
   - Research of 2026-10-10 (official price pages and independent leaderboards): Haiku 5.5 costs the same as the cheapest outside models (US$ 0.10 / 0.50 per million tokens), so an outside AI earns its place by diversity, not price: GPT-6.1 Sol as the reviewer from another family when Claude wrote the code, DeepSeek V4 Pro as a cheap try on public code only, Gemini Flash for fast reading of long pieces. Personal or client data, keys and `.env` never go to DeepSeek (stored in China, trains by default); Gemini only on a paid key. Portuguese, code review and bulk accuracy have no independent comparison yet: measure them in our own trial (`or12`) before trusting any routing, and keep the routing configurable.
-- [ ] **Lean context for activity chats** `or06`
+- [x] **Lean context for activity chats** `or06`
   - Each gets only its part's context; long chats are summarized automatically.
 - [ ] **Monthly budget per project** `or07`
   - Alert at 80% and a polite pause at 100%.

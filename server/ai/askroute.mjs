@@ -48,6 +48,15 @@ const ERRORS = {
 const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const fail = (status, error, extra = {}) => ({ status, body: { ok: false, error, ...extra } });
 
+// The stdio tools' lock: a request that carries the header token is judged by it alone, loopback only. -> null (no
+// header: the usual rules apply) or {status: 200 | 401 | 403}. The agreed restart (POST /api/restart) uses it too.
+export function headerAuth(req, address, token) {
+  if (req.headers[HEADER] === undefined) return null;
+  if (!isLocal(address, req.headers.host)) return { status: 403 };
+  return sameToken(String(req.headers[HEADER]), token) ? { status: 200 } : { status: 401 };
+}
+export const hasHeaderToken = (req, token) => sameToken(String(req.headers[HEADER] ?? ''), token);
+
 function readConfig(smDir) {
   try {
     const config = JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8'));
@@ -85,9 +94,7 @@ export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, 
   // Before the server's own authorize: a request to these routes that carries the header token is judged here, whole.
   // -> null (not ours: the usual rules apply) or {status: 200 | 401 | 403}.
   function authorizeHeader(req, url, address) {
-    if (!handles(url.pathname) || req.headers[HEADER] === undefined) return null;
-    if (!isLocal(address, req.headers.host)) return { status: 403 };
-    return sameToken(String(req.headers[HEADER]), token) ? { status: 200 } : { status: 401 };
+    return handles(url.pathname) ? headerAuth(req, address, token) : null;
   }
 
   function others() {

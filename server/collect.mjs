@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, lifeOf, placeChanged } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
-import { alwaysOn, backgroundOf, isWorking } from './background.mjs';
+import { alwaysOn, backgroundOf, isWorking, tidyOn } from './background.mjs';
 import { attachToParts, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { withLocalParts } from './arch/local.mjs';
@@ -34,6 +34,7 @@ import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills } from './sources/skills.mjs';
 import { readJsonFile } from './store.mjs';
+import { expectedRun, parseRun } from './chat/run.mjs';
 
 const DAY = 86_400_000;
 const RECENT_MS = DAY;
@@ -175,7 +176,8 @@ function placeInPart(item, arch, placeFiles, root, aiAnswers, page, placement) {
   if (placement && 'partId' in placement && (placement.partId === null || arch.parts.some((p) => p.id === placement.partId))) {
     return { partId: placement.partId, partSource: 'owner' };
   }
-  if (page?.node?.kind === 'project') return { partId: null, partSource: 'project' };
+  // The orchestrator (or01) is a project chat too: the codes its notes cite are its activity chats', never its part.
+  if (page?.node?.kind === 'project' || page?.node?.kind === 'orchestrator') return { partId: null, partSource: 'project' };
   const byCode = partByCodes(s.mentionedCodes, arch);
   if (byCode) return { partId: byCode, partSource: 'code' };
   const byPage = page?.partId;
@@ -346,10 +348,15 @@ function cutOffOf(row, page, summary, cutCtx) {
 
 // The list of conversations (plano-v02 § v0.2.2 item 0): every conversation of the window, shown on the map or not, plus the
 // page's own older than the window, which stay resumable. Light rows: the map's chats carry the full detail.
-function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx, removed }) {
+// parentId (or03): the mother recorded in lineage.json, or the one the page kept (an orchestrator's activity chat), else null;
+// never guessed from shared files, so the list nests only what session-map started from another chat.
+function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx, removed, lineage }) {
   const onMap = new Map(chats.map((c) => [c.sessionId, c]));
+  const motherOf = (id) => [lineage[id], pageChats[id]?.parentId].find((m) => typeof m === 'string' && UUID_RE.test(m) && m !== id) ?? null;
   const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
   const nodeOf = (page) => (page?.node && typeof page.node.kind === 'string' ? page.node : null);
+  // The model session-map runs a page chat on (an orchestrator's activity chat shows it); null for the rest.
+  const runModelOf = (page) => (page ? expectedRun(parseRun(page.run) ?? { kind: 'settings' }, { model: null }).model ?? null : null);
   const fromTranscripts = placed.filter((x) => !removed.has(x.item.summary.sessionId)).map((x) => {
     const s = x.item.summary;
     const live = liveById.get(s.sessionId);
@@ -363,6 +370,8 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       partSource: x.partSource,
       itemCode: itemByCodes(s.mentionedCodes, arch, x.partId) ?? nodeOf(page)?.code ?? null,
       node: nodeOf(page),
+      parentId: motherOf(s.sessionId),
+      runModel: runModelOf(page),
       status: live ? live.status : 'closed',
       waiting: Boolean(chat && !chat.archived && (chat.waiting.strong || chat.waiting.weak || chat.waiting.items.length)),
       lastStep: s.liveSteps?.at(-1) ?? null,
@@ -388,6 +397,8 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       partSource: knownPart(c.partId) ? 'page' : 'none',
       itemCode: nodeOf(c)?.code ?? null,
       node: nodeOf(c),
+      parentId: motherOf(sessionId),
+      runModel: runModelOf(c),
       status: 'closed',
       waiting: false,
       lastStep: null,
@@ -483,7 +494,7 @@ async function buildProject(ctx, { root, items }) {
     const { sessionId, cwd } = x.item.summary;
     ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null });
   }
-  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed });
+  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed, lineage });
   // A cut-off conversation (mm43) waits for nobody: the person had answered and its turn was running. Its question and its
   // card's items are behind them, so the Now strip, the waiting list and the count agree with the list's "Cut off".
   const cutIds = new Set(conversations.filter((r) => r.cutOff).map((r) => r.sessionId));
@@ -536,6 +547,8 @@ async function buildProject(ctx, { root, items }) {
       foundation: foundationSummary(smDir, projectId),
       ai: aiOn ? aiStatus(life, projectId) : null,
       background,
+      // Organize on its own (or18): the orchestrator's tidy pass, on unless the person turned it off.
+      tidy: tidyOn(userConfig, root),
       activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [
         ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),

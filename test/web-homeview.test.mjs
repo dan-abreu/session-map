@@ -166,3 +166,140 @@ test('the words the screen asks for exist in both languages with the same blanks
   }
   assert.doesNotMatch(source, /\bdocument\./, 'the view works on the root it is given');
 });
+
+// ----- mm46: the card on top of Home with the monthly limit for big (reinforced) work -----
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+function makeLimit({ limitUSD = 40, spentUSD = 12, rate = 1, fail = false, over = {} } = {}) {
+  const box = { limitUSD, spentUSD, saved: [], toasts: [] };
+  const limit = {
+    read: async () => (fail ? { ok: false, error: 'boom' } : { ok: true, limitUSD: box.limitUSD, spentUSD: box.spentUSD }),
+    save: async (usd) => { box.saved.push(usd); if (usd < 0) return { ok: false, error: 'bad-limit' }; box.limitUSD = usd; return { ok: true, limitUSD: usd }; },
+  };
+  const made = make({
+    limit, currency: () => ({ label: 'US$', rate }), fmt: { money: (usd) => `$${(usd * rate).toFixed(2)}`, relative: (iso) => `ago ${iso.slice(0, 10)}` },
+    toast: (m) => box.toasts.push(m), errorText: (code) => `err:${code}`, ...over,
+  });
+  return { ...made, box };
+}
+const cardOf = (root) => withClass(root, 'hm-limit')[0];
+const fieldOf = (root) => walk(root).find((x) => x.tag === 'input' && x.attrs['data-hm'] === 'limit');
+const saveOf = (root) => buttons(root).find((b) => b.attrs['data-hm'] === 'limit-save');
+
+test('the card sits above the totals, with the question, the number, Save, the used line and a bar', async () => {
+  const { view, root } = makeLimit();
+  view.render(root);
+  await tick();
+  const card = cardOf(root);
+  assert.ok(card, 'the card is there');
+  const wrap = root.children[0];
+  assert.ok(wrap.children.indexOf(card) < wrap.children.indexOf(withClass(root, 'hm-totals')[0]), 'above the totals');
+  const text = textOf(card);
+  assert.match(text, /How much the AI may spend per month on big jobs/);
+  assert.match(text, /Used this month: \$12\.00 of \$40\.00/);
+  assert.match(text, /counts only the big \(reinforced\) work/i);
+  assert.equal(fieldOf(root).attrs.value, '40');
+  assert.ok(saveOf(root));
+  const bar = withClass(card, 'br-track')[0];
+  assert.equal(bar.attrs.role, 'img');
+  assert.equal(bar.children[0].attrs.style, 'width:30%');
+});
+
+test('the card speaks plain Portuguese for the owner', async () => {
+  assert.equal(LANGS['pt-BR']['home.limit.title'], 'Quanto a IA pode gastar por mês em trabalhos grandes');
+  assert.match(LANGS['pt-BR']['home.limit.used'], /^Usado este mês: \{used\} de \{limit\}$/);
+});
+
+test('with no limit it says the Autonomous way will stop to ask before each big job, and draws no bar', async () => {
+  const { view, root } = makeLimit({ limitUSD: null });
+  view.render(root);
+  await tick();
+  const card = cardOf(root);
+  assert.match(textOf(card), /Autonomous way will stop to ask before each big job/);
+  assert.equal(withClass(card, 'br-track').length, 0);
+  assert.equal(fieldOf(root).attrs.value, '');
+});
+
+test('the bar warns near the limit and fills at most to the end', async () => {
+  const warm = makeLimit({ limitUSD: 10, spentUSD: 9 });
+  warm.view.render(warm.root);
+  await tick();
+  assert.match(withClass(cardOf(warm.root), 'hm-limit-status')[0].attrs.class, /tone-warn/);
+  const over = makeLimit({ limitUSD: 10, spentUSD: 25 });
+  over.view.render(over.root);
+  await tick();
+  assert.match(withClass(cardOf(over.root), 'hm-limit-status')[0].attrs.class, /tone-over/);
+  assert.equal(withClass(cardOf(over.root), 'br-track')[0].children[0].attrs.style, 'width:100%');
+});
+
+test('Save sends the number the person typed and the card shows the new limit', async () => {
+  const { view, root, box } = makeLimit();
+  view.render(root);
+  await tick();
+  fieldOf(root).value = '55,5';
+  saveOf(root).attrs.onclick();
+  await tick();
+  assert.deepEqual(box.saved, [55.5]);
+  assert.match(textOf(cardOf(root)), /of \$55\.50/);
+  assert.match(box.toasts.at(-1), /Limit saved: \$55\.50/);
+});
+
+test('an empty or wrong number is not saved: it says why', async () => {
+  const { view, root, box } = makeLimit();
+  view.render(root);
+  await tick();
+  for (const bad of ['', 'abc']) {
+    fieldOf(root).value = bad;
+    saveOf(root).attrs.onclick();
+    await tick();
+  }
+  assert.deepEqual(box.saved, [], 'nothing was sent');
+  assert.deepEqual(box.toasts, ['err:bad-limit', 'err:bad-limit']);
+  const refused = makeLimit();
+  refused.view.render(refused.root);
+  await tick();
+  fieldOf(refused.root).value = '-3';
+  saveOf(refused.root).attrs.onclick();
+  await tick();
+  assert.deepEqual(refused.box.toasts, ['err:bad-limit'], 'the server answer is told as it came');
+});
+
+test('the field is in the owner\'s currency and Save converts back to dollars', async () => {
+  const { view, root, box } = makeLimit({ limitUSD: 40, rate: 5 });
+  view.render(root);
+  await tick();
+  assert.equal(fieldOf(root).attrs.value, '200');
+  fieldOf(root).value = '100';
+  saveOf(root).attrs.onclick();
+  await tick();
+  assert.deepEqual(box.saved, [20]);
+});
+
+test('a state update keeps the field the person is typing in', async () => {
+  const { view, root, box } = makeLimit();
+  view.render(root);
+  await tick();
+  const field = fieldOf(root);
+  view.refresh(root);
+  await tick();
+  assert.equal(fieldOf(root), field, 'same element');
+  box.spentUSD = 20;
+  await view.refreshLimit();
+  assert.equal(fieldOf(root), field, 'the field survives new numbers');
+  assert.match(textOf(cardOf(root)), /Used this month: \$20\.00 of \$40\.00/);
+});
+
+test('no card in the demo, without the routes, or when the limit cannot be read it says so', async () => {
+  const demoView = makeLimit({ over: { demo: true } });
+  demoView.view.render(demoView.root);
+  await tick();
+  assert.equal(cardOf(demoView.root), undefined);
+  const plain = make();
+  plain.view.render(plain.root);
+  await tick();
+  assert.equal(cardOf(plain.root), undefined);
+  const broken = makeLimit({ fail: true });
+  broken.view.render(broken.root);
+  await tick();
+  assert.match(textOf(cardOf(broken.root)), /could not read/i);
+  assert.equal(saveOf(broken.root), undefined);
+});

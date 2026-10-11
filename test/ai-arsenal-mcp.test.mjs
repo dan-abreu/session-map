@@ -41,7 +41,8 @@ async function fakeServer(replies) {
         return res.end(JSON.stringify(json));
       }
       seen.push({ method: req.method, url: req.url, headers: req.headers, body });
-      const [status, json] = req.url === '/api/ai/ask' ? replies.ask(body) : req.url === '/api/ai/others' ? replies.others() : [404, { ok: false, error: 'not-found' }];
+      const [status, json] = req.url === '/api/ai/ask' ? replies.ask(body) : req.url === '/api/ai/others' ? replies.others()
+        : req.url === '/api/restart' && replies.restart ? replies.restart(body) : [404, { ok: false, error: 'not-found' }];
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(json));
     });
@@ -71,12 +72,12 @@ function startMcp(env) {
   return { rpc, stop, child };
 }
 
-async function withMcp({ replies, serverDown = false, token = TOKEN }, fn) {
+async function withMcp({ replies, serverDown = false, token = TOKEN, env = {} }, fn) {
   const smDir = mkdtempSync(join(tmpdir(), 'sm-arsenal-'));
   if (token) writeFileSync(join(smDir, 'token'), `${token}\n`);
   const fake = await fakeServer(replies ?? { ask: () => [200, { ok: true, answers: [], skipped: [] }], others: () => [200, { ok: true }] });
   if (serverDown) await fake.close();
-  const mcp = startMcp({ SM_URL: fake.url, SM_DIR: smDir });
+  const mcp = startMcp({ SM_URL: fake.url, SM_DIR: smDir, SM_SESSION_ID: '', ...env });
   try {
     await mcp.rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
     const call = async (name, args) => (await mcp.rpc('tools/call', { name, arguments: args })).result;
@@ -117,10 +118,10 @@ test('it speaks MCP: initialize, ping, and -32601 for what it does not know', as
   }
 });
 
-test('it lists four tools, and the asking one warns that answers are data to verify', async () => {
+test('it lists five tools, and the asking one warns that answers are data to verify', async () => {
   await withMcp({}, async ({ mcp }) => {
     const { tools } = (await mcp.rpc('tools/list', {})).result;
-    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'pick_worker', 'report_result']);
+    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'pick_worker', 'report_result', 'restart_session_map']);
     const ask = tools.find((t) => t.name === 'ask_other_ai');
     assert.deepEqual(ask.inputSchema.required.sort(), ['kind', 'prompt', 'sensitivity']);
     assert.deepEqual(ask.inputSchema.properties.kind.enum, ['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning']);
@@ -346,5 +347,59 @@ test('ask_other_ai offers exclude and passes it on, so the AI that failed is not
     const result = await call('ask_other_ai', { kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'] });
     assert.deepEqual(seen[0].body, { kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'] });
     assert.match(textOf(result), /openai: left out: it failed this work before/);
+  });
+});
+
+// The agreed restart (sv13): a conversation asks session-map to restart instead of killing it.
+const CHAT_KEY = 'c'.repeat(32);
+
+test('restart_session_map asks session-map with the header token and the page chat\'s key, and says what comes next', async () => {
+  const deadline = '2026-10-11T12:10:00.000Z';
+  const replies = { ask: () => [500, {}], others: () => [500, {}], restart: () => [200, { ok: true, scheduled: true, waitingFor: 2, deadline }] };
+  await withMcp({ replies, env: { SM_SESSION_ID: CHAT_KEY } }, async ({ mcp, call, seen }) => {
+    const { tools } = (await mcp.rpc('tools/list', {})).result;
+    const tool = tools.find((t) => t.name === 'restart_session_map');
+    assert.deepEqual(tool.inputSchema.required, ['reason']);
+    assert.match(tool.description, /never kill or start/i);
+    assert.match(tool.description, /mid-turn|middle of a turn/i);
+    const result = await call('restart_session_map', { reason: 'Reload after editing hub.mjs' });
+    assert.equal(result.isError, false);
+    assert.equal(seen[0].method, 'POST');
+    assert.equal(seen[0].url, '/api/restart');
+    assert.equal(seen[0].headers['x-session-map-token'], TOKEN);
+    assert.deepEqual(seen[0].body, { reason: 'Reload after editing hub.mjs', chatKey: CHAT_KEY });
+    const text = textOf(result);
+    assert.match(text, /2 (page )?conversations? (are|is) in the middle of a turn/);
+    assert.match(text, new RegExp(deadline));
+    assert.match(text, /end your turn/i);
+  });
+});
+
+test('restart_session_map from outside the page sends no key; a restart already waiting is joined', async () => {
+  const replies = { ask: () => [500, {}], others: () => [500, {}], restart: () => [200, { ok: true, scheduled: true, already: true }] };
+  await withMcp({ replies }, async ({ call, seen }) => {
+    const result = await call('restart_session_map', { reason: 'new route' });
+    assert.deepEqual(seen[0].body, { reason: 'new route' });
+    assert.equal(result.isError, false);
+    assert.match(textOf(result), /already waiting/i);
+  });
+});
+
+test('restart_session_map refuses an empty reason on its side and reads a refusal or a server that is down plainly', async () => {
+  const replies = { ask: () => [500, {}], others: () => [500, {}], restart: () => [403, { ok: false, error: 'demo' }] };
+  await withMcp({ replies }, async ({ call, seen }) => {
+    const empty = await call('restart_session_map', { reason: '  ' });
+    assert.equal(empty.isError, true);
+    assert.equal(seen.length, 0, 'nothing was sent');
+    const refused = await call('restart_session_map', { reason: 'x' });
+    assert.equal(refused.isError, true);
+    assert.match(textOf(refused), /demo/);
+    assert.match(textOf(refused), /Nothing was restarted/);
+  });
+  await withMcp({ serverDown: true }, async ({ call }) => {
+    const down = await call('restart_session_map', { reason: 'x' });
+    assert.equal(down.isError, true);
+    assert.match(textOf(down), /not running/);
+    assert.doesNotMatch(textOf(down), /No other AI was asked/);
   });
 });

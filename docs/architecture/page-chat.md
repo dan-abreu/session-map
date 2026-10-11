@@ -68,3 +68,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Released in v0.2.4.
   - Headings inside a reply stay close to the text size (1.15, 1.08 and 1 times the text), with tight margins.
   - How to confirm it is done: open a project chat; only the title line sits above the messages; the button by Send opens its menu and Esc or a click outside closes it; a reply with headings reads like the rest of the text, a step bolder.
+- [x] An autonomous way: one prompt and the chat works to the end, deciding on its own and listing its decisions `pc16`
+  - From `id89`. It stops only to spend past the monthly limit (the owner's choice on 2026-10-10); publishing and deleting it does on its own; everything else it decides, writes down and goes on.
+  - Built on 2026-10-11 (`server/chat/run.mjs`, `hub.mjs`, `safety.mjs`, `guard.mjs`): Autonomous is the default of every new chat, runs in Claude Code's own `auto` permission mode, a permission that reaches session-map is left for the owner ("Ficou para você"), AskUserQuestion is answered "decide yourself", a force push is refused in every way (relay and a PreToolUse hook), and a git snapshot under `refs/session-map/safety` is taken at each turn and before a destructive command. Reaches the page with the next version.
+- [x] The button by Send speaks plainly: three ways, one sentence each, the rest under "Advanced" `pc17`
+  - From `id90`. Autonomous (does everything on its own), Automatic (asks before big work), Manual (you pick the model); the permissions and "every Claude on this PC" go under Advanced, folded.

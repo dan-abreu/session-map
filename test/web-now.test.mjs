@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { nowJobs, jobBadges, pendingCount, nextUnseen, nowLine } from '../server/web/now.js';
+import { nowJobs, jobBadges, pendingCount, nextUnseen, nowLine, orchestraLine } from '../server/web/now.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -98,4 +98,25 @@ test('nowLine words the strip folded to one line', () => {
   assert.deepEqual(nowLine(t, { working: 3, waiting: 2, finished: 1 }), ['now.working:3', 'now.waiting:2', 'now.finished:1']);
   assert.deepEqual(nowLine(t, { working: 0, waiting: 0, finished: 0 }), ['now.nothing:']);
   assert.deepEqual(nowLine(t, { working: 1, waiting: 0, finished: 0 }), ['now.working:1']);
+});
+
+// ---- the orchestrator's line (or03) ----
+
+test('nowJobs counts the activity chats an orchestrator has working, per project, from the list rows', () => {
+  const state = two([chat('k1', { status: 'busy' }), chat('k2', { status: 'busy' })], [chat('x', { status: 'busy' })]);
+  const rows = (...r) => r.map(([sessionId, extra]) => ({ sessionId, status: 'closed', archived: false, node: null, parentId: null, ...extra }));
+  state.projects[0].conversations = rows(['orch', { node: { kind: 'orchestrator' } }], ['k1', { parentId: 'orch', status: 'busy' }], ['k2', { parentId: 'orch', status: 'busy' }], ['k3', { parentId: 'orch' }]);
+  state.projects[1].conversations = rows(['x', { status: 'busy' }]);
+  const { orchestra } = nowJobs(state, { nowMs: NOW_MS });
+  assert.equal(orchestra.working, 2, 'only the working ones, only the orchestrator\'s');
+  assert.deepEqual(orchestra.projects.map((p) => [p.name, p.working]), [['acme-shop', 2]], 'a project with no orchestrator is left out');
+  state.projects[0].conversations[0].archived = true;
+  assert.equal(nowJobs(state, { nowMs: NOW_MS }).orchestra.working, 0, 'an archived orchestrator has no chats to follow');
+});
+
+test('orchestraLine says "Orchestrator: N working", with the projects when there is more than one, and nothing when none works', () => {
+  const t = (key, vars) => `${key}:${Object.values(vars ?? {}).join('|')}`;
+  assert.equal(orchestraLine(t, { working: 0, projects: [] }), null);
+  assert.deepEqual(orchestraLine(t, { working: 3, projects: [{ name: 'a', working: 3 }] }), { text: 'now.orchestra:3', title: 'now.orchestraTitle:a: 3' });
+  assert.equal(orchestraLine(t, { working: 3, projects: [{ name: 'a', working: 1 }, { name: 'b', working: 2 }] }).title, 'now.orchestraTitle:a: 1, b: 2');
 });

@@ -3,6 +3,29 @@
    The project's name is the one button of a row; its ::after stretches over the whole row. The heads-up buttons sit above it. */
 .hm-view { --hm-cols: minmax(10rem, 1.7fr) minmax(8rem, 1fr) minmax(11rem, 1.5fr) minmax(6rem, 0.8fr) minmax(6rem, 0.8fr) minmax(6.5rem, 0.8fr) minmax(7rem, 0.9fr); }
 
+/* The monthly limit for big work (mm46): one quiet panel above the totals. Question, why, number with Save, then what was used
+   as a line and a bar (the bar is the one of the costs screen, .br-track). */
+.hm-limit { display: grid; gap: var(--sp-2); max-width: 40rem; margin: 0 0 var(--sp-5); padding: var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-2); }
+.hm-limit-title { margin: 0; font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+.hm-limit-why { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.hm-limit-form { display: grid; gap: var(--sp-1); margin-top: var(--sp-2); }
+.hm-limit-form label { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.hm-limit-row { display: flex; align-items: center; gap: var(--sp-2); }
+.hm-limit-row input {
+  width: 8rem; height: 32px; padding: 0 var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums;
+}
+.hm-limit-row input:focus-visible { outline-offset: 0; border-color: var(--focus); }
+.hm-limit-status { display: grid; gap: var(--sp-1); margin-top: var(--sp-1); }
+.hm-limit-used, .hm-limit-note { margin: 0; font-size: var(--fs-sm); }
+.hm-limit-note { display: flex; align-items: flex-start; gap: var(--sp-2); color: var(--ink-2); }
+.hm-limit-note .hm-icon { margin-top: 2px; }
+.hm-limit-status .br-track { width: 100%; }
+.hm-limit-status.tone-warn .br-track span { background: var(--waiting); }
+.hm-limit-status.tone-over .br-track span { background: var(--clash); }
+.hm-limit-status.tone-warn .hm-limit-used { color: var(--waiting-ink); font-weight: 650; }
+.hm-limit-status.tone-over .hm-limit-used { color: var(--clash-ink); font-weight: 650; }
+
 /* Totals: one quiet line, not a wall of big numbers. */
 .hm-totals { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); margin: 0 0 var(--sp-5); padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--line); }
 .hm-total { display: inline-flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
@@ -63,6 +86,8 @@
 @media (max-width: 720px) {
   .hm-head { display: none; }
   .hm-totals { gap: var(--sp-2) var(--sp-4); }
+  .hm-limit { padding: var(--sp-3); }
+  .hm-limit-row input, .hm-limit-row .btn { min-height: 44px; }
   /* The card: line one is the name and when it was last active, the rest are chips with an icon and a word. */
   .hm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-2); }
   .hm-project { order: 0; flex: 1 1 12rem; min-width: 0; }
