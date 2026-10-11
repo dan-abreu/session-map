@@ -55,6 +55,8 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 - [x] Create a new project's folder and show it as a project before any conversation runs there `sv14`
   - From `id95`. `POST /api/projects/new` creates the folder (a safe name, inside a folder that exists, never over one that exists) and remembers it in the person's `config.json`; the map lists it until its first conversation makes it a project like the others.
+- [ ] **in progress:** A new project can also get its GitHub repository: private by default, with a first save sent `sv15`
+  - From `id96`. Through the `gh` login already on the computer: checked before the folder is made (logged in, the name free on GitHub), then `git init`, a README, the first save and `gh repo create --source --push`. Nothing goes to GitHub unless the person chose it.
 
 ### Later (ideas, not committed)
 

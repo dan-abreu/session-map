@@ -46,7 +46,8 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 
 - [x] **detail:** Explain a project that looks empty but shows a high 30-day cost `sb06`
   - Say "chats older than 24 h are in History" or show the recent ones that were deleted.
-- [ ] **in progress · detail:** Other AIs for session-map's own AI tasks `sb07`
+- [x] **detail:** Other AIs for session-map's own AI tasks `sb07`
+  - Confirmed 2026-10-10 with the owner's real keys (OpenAI, Gemini, DeepSeek): calls go out, cost shows in Costs and in the panel (`or16`).
   - A DeepSeek, Gemini or OpenRouter key in place of the cheap Claude model.
   - Built on 2026-10-10: providers OpenAI (GPT), Gemini, DeepSeek and OpenRouter in one OpenAI-format caller (`server/ai/providers.mjs`); keys only in session-map's own folder, encrypted with Windows DPAPI (AES-GCM elsewhere), never sent back to the page or logged (`server/ai/keys.mjs`); e-mails, CPF/CNPJ, phones, cards and secrets masked before anything leaves the PC (`server/ai/redact.mjs`); only the bulk "place this chat" task may go to the helper, with a daily cap per provider, fallback to Claude on any failure, and Claude re-asking 1 in 5 answers, pausing the helper when it disagrees too often (`server/ai/helper.mjs`, `server/ai/review.mjs`); the "Other AIs" dialog and one row per provider in Costs (`server/ai/helperroute.mjs`, `server/web/aihelpers.js`).
   - How to confirm it is done: paste a real key in "Other AIs", press Test, turn it on for bulk work; new chats get placed by it, its cost shows in Costs next to Claude's, and "reviewed by Claude" grows.

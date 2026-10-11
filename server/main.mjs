@@ -24,7 +24,7 @@ import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.
 import { authorize, cookieToken, dropLookKey, isLocal, loadLookKey, loadToken, lookAllows, newLookKey, sameToken } from './auth.mjs';
 import { lookState } from './lookstate.mjs';
 import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
-import { createProject, suggestParent } from './newproject.mjs';
+import { githubStatus, newProject, suggestParent } from './newproject.mjs';
 import { projectIdOf } from './paths.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
@@ -65,7 +65,10 @@ const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
 const TIDY_ERRORS = { 'bad-tidy': 400, 'config-unreadable': 409 };
-const NEW_PROJECT_ERRORS = { 'bad-name': 400, 'bad-parent': 400, 'folder-exists': 409, 'config-unreadable': 409, 'folder-failed': 500 };
+const NEW_PROJECT_ERRORS = {
+  'bad-name': 400, 'bad-parent': 400, 'bad-github': 400, 'bad-repo-name': 400, 'folder-exists': 409, 'repo-exists': 409, 'github-not-ready': 409, 'github-user-changed': 409, 'github-unreachable': 502,
+  'config-unreadable': 409, 'folder-failed': 500,
+};
 const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
@@ -166,7 +169,7 @@ export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
   catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
-  lanUrl = null, restart = {},
+  lanUrl = null, restart = {}, newProjectExec,
 } = {}) {
   let watcher = null;
   // The look-only key (sv04): null while the owner has none; read once here, then changed only by lookRoute.
@@ -419,17 +422,22 @@ export function createApp({
     return send(res, status, result);
   }
 
-  // A new project (sv14): GET says where new projects usually go, POST {parent, name} creates its folder; the next read
-  // of the projects lists it.
+  // A new project (sv14): GET says where new projects usually go and who is logged in to GitHub here (sv15); POST
+  // {parent, name, github?} creates its folder, and its GitHub repository when asked; the next read of the projects lists it.
   async function newProjectRoute(req, res) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
-    if (req.method === 'GET') return send(res, 200, { ok: true, parent: suggestParent((await quickState()).projects.map((p) => p.root)) });
+    const opts = newProjectExec ? { exec: newProjectExec } : {};
+    if (req.method === 'GET') {
+      const parent = suggestParent((await quickState()).projects.map((p) => p.root));
+      return send(res, 200, { ok: true, parent, github: await githubStatus(opts) });
+    }
     if (req.method !== 'POST') throw new HttpError(404, 'not-found');
-    const result = createProject(smDir, await readBody(req));
+    const body = await readBody(req);
+    const result = await newProject(smDir, body, { ...opts, fresh: true });
     const status = result.ok ? 200 : NEW_PROJECT_ERRORS[result.error];
     if (result.ok) cached = null;
-    logAction(smDir, { action: 'new-project', projectId: result.ok ? projectIdOf(result.root) : null }, status);
+    logAction(smDir, { action: 'new-project', projectId: result.ok ? projectIdOf(result.root) : null, github: result.github ? (result.github.ok ? 'created' : result.github.error) : null }, status);
     return send(res, status, result.ok ? { ...result, projectId: projectIdOf(result.root) } : result);
   }
 

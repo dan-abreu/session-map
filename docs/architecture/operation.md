@@ -21,6 +21,11 @@ Nothing here is code; the part is this file:
 - [ ] **with the owner:** The "Why session-map exists" section in the README `op04`
   - Proposed after the polish; waits for his OK.
 
+- [ ] **with the owner:** Fable's "last word" on critical deliveries: at high effort (cheaper, today's choice) or at max `op08`
+  - From `or04` on 2026-10-10: Fable costs 2.5× Opus; as the final check it runs at high. Say "máximo" to change it.
+- [ ] **with the owner:** Rate the Portuguese texts of the bench without knowing which AI wrote each `op09`
+  - The file is C:Usersdanie.claudesession-mapenchuns6-10-10-21-43-44pt-blind.md; the automatic checks passed almost everyone, so his rating decides who writes for him (`or12`, `or19`).
+
 ### Releases
 
 - [x] **Claude:** Publish the Requests tab as the next version, after the owner looks at the screenshots `op05`

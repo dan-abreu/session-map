@@ -15,7 +15,15 @@ async function withServer(fn, { demo = false } = {}) {
   const smDir = mkdtempSync(join(tmpdir(), 'sm-npsrv-sm-'));
   const parent = mkdtempSync(join(tmpdir(), 'sm-npsrv-p-'));
   const state = { generatedAt: new Date().toISOString(), waitingCount: 0, projects: [{ id: 'shop-123456', name: 'shop', root: join(parent, 'shop') }] };
-  const app = createApp({ dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state, ...(demo ? { demo: true, token: 'x' } : {}) });
+  const ghCalls = [];
+  // gh as a fake: logged in as ana, no repository taken; nothing reaches GitHub.
+  const newProjectExec = async (file, args) => {
+    ghCalls.push(`${file} ${args.join(' ')}`);
+    if (args[0] === 'api') return { code: 0, stdout: 'ana\n', stderr: '' };
+    if (args[0] === 'repo' && args[1] === 'view') return { code: 1, stdout: '', stderr: 'GraphQL: Could not resolve to a Repository' };
+    return { code: 0, stdout: '', stderr: '' };
+  };
+  const app = createApp({ dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state, newProjectExec, ...(demo ? { demo: true, token: 'x' } : {}) });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
   const token = demo ? 'x' : loadToken(smDir);
@@ -31,7 +39,7 @@ async function withServer(fn, { demo = false } = {}) {
     req.end(body === undefined ? undefined : JSON.stringify(body));
   });
   try {
-    await fn({ call, smDir, parent });
+    await fn({ call, smDir, parent, ghCalls });
   } finally {
     await new Promise((resolve) => app.close(resolve));
     for (const d of [dir, smDir, parent]) rmSync(d, { recursive: true, force: true });
@@ -49,7 +57,7 @@ test('a new project needs the token', async () => {
 test('the page is told where new projects usually go', async () => {
   await withServer(async ({ call, parent }) => {
     const out = await call('GET', PATH, { auth: true });
-    assert.deepEqual([out.status, out.json], [200, { ok: true, parent }]);
+    assert.deepEqual([out.status, out.json], [200, { ok: true, parent, github: { ready: true, user: 'ana' } }]);
   });
 });
 
@@ -64,6 +72,18 @@ test('creating a project makes its folder, remembers it and answers its id', asy
     assert.deepEqual([again.status, again.json.error], [409, 'folder-exists']);
     assert.equal((await call('POST', PATH, { auth: true, body: { parent, name: '../fora' } })).status, 400);
     assert.equal((await call('POST', PATH, { auth: true, body: { parent: join(parent, 'nao-ha'), name: 'b' } })).status, 400);
+  });
+});
+
+test('a project can also go to GitHub; only when asked', async () => {
+  await withServer(async ({ call, parent, ghCalls }) => {
+    const local = await call('POST', PATH, { auth: true, body: { parent, name: 'so-pc' } });
+    assert.equal(local.json.github, undefined);
+    assert.equal(ghCalls.filter((c) => c.startsWith('gh repo create')).length, 0);
+    const out = await call('POST', PATH, { auth: true, body: { parent, name: 'com-gh', github: 'private', githubUser: 'ana' } });
+    assert.deepEqual([out.status, out.json.github], [200, { ok: true, url: 'https://github.com/ana/com-gh', private: true }]);
+    assert.ok(ghCalls.includes('gh repo create ana/com-gh --private --source . --remote origin --push'));
+    assert.equal((await call('POST', PATH, { auth: true, body: { parent, name: 'z', github: 'sim' } })).status, 400);
   });
 });
 

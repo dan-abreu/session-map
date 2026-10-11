@@ -2467,6 +2467,12 @@ body.is-empty .convs { display: none; }
 .pp-new { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 var(--r-md) var(--r-md); color: var(--ink-2); }
 .pp-new-icon { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .np-path { margin: 6px 0 0; font: var(--fs-xs)/1.45 var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.np-path[hidden], .np-public[hidden] { display: none; }
+.np-where { margin-top: 14px; }
+.np-legend { margin-bottom: 4px; padding: 0; font-size: var(--fs-sm); font-weight: 650; }
+.np-where .care-opt:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+.np-public { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: var(--fs-sm); cursor: pointer; }
+.np-public input { accent-color: var(--ink); }
 
 /* ---------- teams of helpers at work, one dot each in the team's colour (now.js teamDots, mm37) ---------- */
 
