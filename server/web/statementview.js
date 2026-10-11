@@ -55,7 +55,11 @@ export function createStatement({ h, t, lang, errorText }) {
 
   const num = (n) => new Intl.NumberFormat(lang()).format(Math.round(n ?? 0));
   const usd = (n, digits = 2) => new Intl.NumberFormat(lang(), { style: 'currency', currency: 'USD', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n ?? 0);
-  const pct = (x) => new Intl.NumberFormat(lang(), { style: 'percent', maximumFractionDigits: 1 }).format(x ?? 0);
+  // A share too small to show is "< 0.1 %", never "0 %": it did cost something.
+  const pct = (x) => {
+    const f = new Intl.NumberFormat(lang(), { style: 'percent', maximumFractionDigits: 1 });
+    return x > 0 && x < 0.0005 ? `< ${f.format(0.001)}` : f.format(x ?? 0);
+  };
   const date = (ms) => new Intl.DateTimeFormat(lang(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(ms);
   const when = (ms) => new Intl.DateTimeFormat(lang(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(ms);
   const dayName = (day) => new Intl.DateTimeFormat(lang(), { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(`${day}T12:00`));
