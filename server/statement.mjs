@@ -102,10 +102,14 @@ export function placeOf(projectsDir, file) {
   return { folder, sessionId, agent: `${kind}: ${what}`, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null };
 }
 
+const LIMIT_NOTICE = /hit your (weekly|monthly|session|daily)[^"]{0,40}limit|out of (extra usage|credits)|spend limit/i;
+const LIST_MAX = 300;
+
 // Every reply of one transcript file, in order, with what it read just before (the tool results that went into its
-// input) and what it did (the tools it called).
+// input) and what it did (the tools it called), and the limit notices Claude Code wrote into it.
 export async function readTranscript(file, { since = 0 } = {}) {
   const replies = [];
+  const events = [];
   const byKey = new Map();
   const toolById = new Map();
   let pendingRead = { words: 0, items: [] };
@@ -122,6 +126,10 @@ export async function readTranscript(file, { since = 0 } = {}) {
     if (o.type === 'custom-title' && o.customTitle) titles.custom = o.customTitle;
     if (o.type === 'ai-title' && o.aiTitle) titles.ai = o.aiTitle;
     if (o.type === 'summary' && o.summary && !titles.summary) titles.summary = o.summary;
+    if (o.isApiErrorMessage === true && LIMIT_NOTICE.test(raw)) {
+      const at = Date.parse(o.timestamp);
+      if (Number.isFinite(at)) events.push({ at, text: oneLine(resultText(o.message?.content), 140) });
+    }
 
     if (o.type === 'user' && o.message) {
       const c = o.message.content;
@@ -173,7 +181,10 @@ export async function readTranscript(file, { since = 0 } = {}) {
     r.did.push(...tools.map(toolLabel));
     r.wroteWords += words(texts);
   }
-  return { replies: replies.filter((r) => r.keep && r.model !== '<synthetic>'), titles, cwd };
+  const kept = replies.filter((r) => r.keep && r.model !== '<synthetic>').map(({ keep, ...r }) => ({
+    ...r, did: oneLine(r.did.join(' | '), LIST_MAX), readWhat: oneLine(r.readWhat.join(' | '), LIST_MAX),
+  }));
+  return { replies: kept, titles, cwd, events };
 }
 
 const USAGE_FIELDS = ['input', 'cacheWrite5m', 'cacheWrite1h', 'cacheRead', 'output', 'thinking', 'webSearch'];
@@ -219,20 +230,39 @@ function addTo(b, r) {
   b.first = Math.min(b.first, r.ts); b.last = Math.max(b.last, r.ts);
 }
 
-// Reads every transcript touched since `since` and returns the priced rows and the sums.
-export async function buildStatement({ projectsDir = join(homedir(), '.claude', 'projects'), since, prices = loadPrices() } = {}) {
+// Reads every transcript touched since `since` and returns the priced rows and the sums. cache (a Map, optional) keeps
+// what each file gave, by its path, size and time: a file that did not change is not read again. onProgress(done, of).
+export async function buildStatement({ projectsDir = join(homedir(), '.claude', 'projects'), since, prices = loadPrices(), cache = null, onProgress = null } = {}) {
   const seen = new Map();
   const rows = [];
   const sessions = new Map();
-  const files = [...walk(projectsDir)].filter((f) => {
-    try { return statSync(f).mtimeMs >= since; } catch { return false; }
-  });
+  const events = new Map();
+  const files = [];
+  for (const f of walk(projectsDir)) {
+    try {
+      const st = statSync(f);
+      if (st.mtimeMs >= since) files.push({ file: f, mtimeMs: st.mtimeMs, size: st.size });
+    } catch { /* gone meanwhile */ }
+  }
   // Chats before their agents, so a chat's own title and project are known when its agents are read.
-  files.sort((a, b) => a.split(sep).length - b.split(sep).length || a.localeCompare(b));
+  files.sort((a, b) => a.file.split(sep).length - b.file.split(sep).length || a.file.localeCompare(b.file));
 
-  for (const file of files) {
+  let done = 0;
+  for (const { file, mtimeMs, size } of files) {
     const place = placeOf(projectsDir, file);
-    const { replies, titles, cwd } = await readTranscript(file, { since });
+    const hit = cache?.get(file);
+    const data = hit && hit.mtimeMs === mtimeMs && hit.size === size ? hit.data : await readTranscript(file);
+    if (cache && data !== hit?.data) {
+      cache.set(file, { mtimeMs, size, data });
+      cache.dirty = true;
+    }
+    onProgress?.(++done, files.length);
+    const { titles, cwd } = data;
+    const replies = data.replies.filter((r) => r.ts >= since).map((r) => ({ ...r }));
+    for (const e of data.events ?? []) {
+      const k = `${e.text}|${Math.floor(e.at / 600_000)}`;
+      if (e.at >= since && !events.has(k)) events.set(k, e);
+    }
     const s = sessions.get(place.sessionId) ?? { sessionId: place.sessionId, folder: place.folder, cwd: null, title: null };
     if (!place.agent) {
       s.cwd = s.cwd ?? cwd;
@@ -279,7 +309,7 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
     addTo(chat, r);
     addTo(get(chat.agents, r.who), r);
   }
-  return { rows, sessions, total, byDay, byHour, byChat, byModel, byProject, unpriced };
+  return { rows, sessions, total, byDay, byHour, byChat, byModel, byProject, unpriced, events: [...events.values()].sort((a, b) => a.at - b.at) };
 }
 
 // ---- writing -------------------------------------------------------------------------------------------------
@@ -294,9 +324,9 @@ const csvCell = (v) => {
 const csv = (header, lines) => `﻿${[header, ...lines].map((l) => l.map(csvCell).join(';')).join('\r\n')}\r\n`;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-export function detailCsv(st) {
+export function detailCsv(st, rows = st.rows) {
   const dayTotals = new Map();
-  const lines = st.rows.map((r) => {
+  const lines = [...rows].sort((a, b) => a.ts - b.ts).map((r) => {
     const s = st.sessions.get(r.sessionId);
     const c = r.cost ?? { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, webSearch: 0, total: 0 };
     const day = dayOf(r.ts);
@@ -305,8 +335,8 @@ export function detailCsv(st) {
       r.input, r.cacheWrite5m + r.cacheWrite1h, r.cacheRead, r.output, r.thinking, r.webSearch,
       c.input, c.cacheWrite, c.cacheRead, c.output, c.webSearch, c.total, dayTotals.get(day),
       r.ask ? `pedido de ${r.ask.words} palavras: ${r.ask.text}` : '',
-      r.readWords ? `${r.readWords} palavras: ${r.readWhat.join(' | ')}` : '',
-      r.did.join(' | '), r.wroteWords, r.cost ? '' : 'modelo sem preço conhecido'];
+      r.readWords ? `${r.readWords} palavras: ${r.readWhat}` : '',
+      r.did, r.wroteWords, r.cost ? '' : 'modelo sem preço conhecido'];
   });
   return csv(['data', 'hora', 'projeto', 'conversa', 'id da conversa', 'quem respondeu', 'modelo', 'esforço', 'velocidade',
     'tokens de entrada novos', 'tokens gravados no cache', 'tokens lidos do cache', 'tokens de saída', 'dos quais pensamento', 'buscas na web',
@@ -379,7 +409,7 @@ ${chats.map((c) => `<details><summary>${usd(c.usd)} — ${esc(c.title)} <small>(
 ${[...c.agents].sort((a, b) => b[1].usd - a[1].usd).map(([who, a]) => `<tr><td>${esc(who)}</td><td class="n">${brNum(a.replies)}</td><td class="n">${brNum(a.input + a.cacheWrite + a.cacheRead)}</td><td class="n">${usd(a.usdInput + a.usdCacheWrite + a.usdCacheRead)}</td><td class="n">${brNum(a.output)}</td><td class="n">${usd(a.usdOutput)}</td><td class="n"><b>${usd(a.usd)}</b></td></tr>`).join('')}
 </table><small>id: ${esc(c.sessionId)}</small></details>`).join('')}</section>
 <section class="card"><h2>As 60 respostas mais caras</h2><table><tr><th>quando</th><th>conversa / quem</th><th>modelo</th><th class="n">entrada</th><th class="n">saída</th><th class="n">custo</th><th>o que leu antes · o que fez</th></tr>
-${top.map((r) => { const s = st.sessions.get(r.sessionId); return `<tr><td>${esc(new Date(r.ts).toLocaleString('pt-BR'))}</td><td>${esc(oneLine(s.title, 50))}<br><small>${esc(r.who)}</small></td><td>${esc(r.model)}</td><td class="n">${brNum(r.input + r.cacheWrite5m + r.cacheWrite1h + r.cacheRead)}<br><small>${usd4(r.cost.input + r.cost.cacheWrite + r.cost.cacheRead)}</small></td><td class="n">${brNum(r.output)}<br><small>${usd4(r.cost.output)}</small></td><td class="n"><b>${usd4(r.cost.total)}</b></td><td><small>${r.readWords ? `leu ${brNum(r.readWords)} palavras: ${esc(oneLine(r.readWhat.join(' | '), 160))}<br>` : ''}${esc(oneLine(r.did.join(' | '), 160)) || 'escreveu a resposta'}</small></td></tr>`; }).join('')}</table></section>
+${top.map((r) => { const s = st.sessions.get(r.sessionId); return `<tr><td>${esc(new Date(r.ts).toLocaleString('pt-BR'))}</td><td>${esc(oneLine(s.title, 50))}<br><small>${esc(r.who)}</small></td><td>${esc(r.model)}</td><td class="n">${brNum(r.input + r.cacheWrite5m + r.cacheWrite1h + r.cacheRead)}<br><small>${usd4(r.cost.input + r.cost.cacheWrite + r.cost.cacheRead)}</small></td><td class="n">${brNum(r.output)}<br><small>${usd4(r.cost.output)}</small></td><td class="n"><b>${usd4(r.cost.total)}</b></td><td><small>${r.readWords ? `leu ${brNum(r.readWords)} palavras: ${esc(oneLine(r.readWhat, 160))}<br>` : ''}${esc(oneLine(r.did, 160)) || 'escreveu a resposta'}</small></td></tr>`; }).join('')}</table></section>
 ${st.unpriced.size ? `<section class="card"><h2>Modelos sem preço conhecido (não somados)</h2><ul>${[...st.unpriced].map(([m, n]) => `<li>${esc(m)}: ${n} respostas</li>`).join('')}</ul></section>` : ''}
 <section class="card"><h2>Como foi calculado</h2><p><small>Cada resposta do Claude grava no seu PC quantos tokens leu e escreveu (campo usage, preenchido pela Anthropic). Este extrato soma cada uma uma vez só, multiplicando pelos preços oficiais: entrada, gravação de cache (5 minutos ou 1 hora), leitura de cache e saída, mais US$ 10 por 1.000 buscas na web; o modo rápido conta em dobro e o Haiku 5.5 usa a faixa mais cara acima de 100 mil tokens. A linha completa de cada resposta está em <b>extrato-detalhado.csv</b> (abre no Excel); o resumo por conversa e agente em <b>extrato-por-conversa.csv</b>.</small></p></section>
 </body></html>`;
@@ -408,24 +438,51 @@ export function accountSnapshot(claudeJsonPath = join(homedir(), '.claude.json')
   };
 }
 
-// The limit notices Claude Code wrote into the chats ("You've hit your weekly limit", "monthly spend limit"…).
-export async function limitEvents(projectsDir, since) {
-  const out = new Map();
-  const pattern = /hit your (weekly|monthly|session|daily)[^"]{0,40}limit|out of (extra usage|credits)|spend limit/i;
-  for (const file of walk(projectsDir)) {
-    try { if (statSync(file).mtimeMs < since) continue; } catch { continue; }
-    const lines = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
-    for await (const raw of lines) {
-      if (!raw.includes('"isApiErrorMessage":true') || !pattern.test(raw)) continue;
-      let o;
-      try { o = JSON.parse(raw); } catch { continue; }
-      const text = oneLine(resultText(o.message?.content), 140);
-      const at = Date.parse(o.timestamp);
-      const k = `${text}|${Math.floor(at / 600_000)}`;
-      if (!out.has(k) && at >= since) out.set(k, { at, text });
-    }
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
+function bucketOut(b) {
+  const out = {};
+  for (const [k, v] of Object.entries(b)) {
+    if (k === 'agents') continue;
+    out[k] = typeof v === 'number' ? (Number.isFinite(v) ? round6(v) : null) : v;
   }
-  return [...out.values()].sort((a, b) => a.at - b.at);
+  return out;
+}
+
+// What the page shows above the lines (sb09): the sums, each chat with its agents, the account and the notices.
+export function statementSummary(st, { account = null, since, generatedAt = Date.now(), pricesAsOf = null } = {}) {
+  const recent = generatedAt - 4 * 86_400_000;
+  return {
+    since, generatedAt, pricesAsOf, account, events: st.events ?? [],
+    total: bucketOut(st.total),
+    byDay: [...st.byDay].sort(([a], [b]) => b.localeCompare(a)).map(([day, b]) => ({ day, ...bucketOut(b) })),
+    byHour: [...st.byHour].filter(([, b]) => b.last >= recent).sort(([a], [b]) => b.localeCompare(a)).map(([hour, b]) => ({ hour, ...bucketOut(b) })),
+    byProject: [...st.byProject].sort(([, a], [, b]) => b.usd - a.usd).map(([name, b]) => ({ name, ...bucketOut(b) })),
+    byModel: [...st.byModel].sort(([, a], [, b]) => b.usd - a.usd).map(([model, b]) => ({ model, ...bucketOut(b) })),
+    chats: [...st.byChat.values()].sort((a, b) => b.usd - a.usd).map((c) => ({
+      ...bucketOut(c),
+      agents: [...c.agents].sort(([, a], [, b]) => b.usd - a.usd).map(([who, a]) => ({ who, ...bucketOut(a) })),
+    })),
+    unpriced: Object.fromEntries(st.unpriced),
+  };
+}
+
+// The lines that match the page's filters: a day ("YYYY-MM-DD"), a chat id, who answered, words in what it did.
+export function filterRows(st, { day = '', chat = '', who = '', q = '' } = {}) {
+  const words = q.trim().toLowerCase();
+  return st.rows.filter((r) => (!day || dayOf(r.ts) === day) && (!chat || r.sessionId === chat) && (!who || r.who === who)
+    && (!words || `${r.did} ${r.readWhat} ${r.ask?.text ?? ''}`.toLowerCase().includes(words)));
+}
+
+export function rowOut(st, r) {
+  const s = st.sessions.get(r.sessionId);
+  const c = r.cost ?? { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, webSearch: 0, total: 0 };
+  return {
+    ts: r.ts, sessionId: r.sessionId, title: s?.title ?? '', project: s?.project ?? '', who: r.who, model: r.model,
+    effort: r.effort, speed: r.speed ?? 'standard', priced: Boolean(r.cost),
+    input: r.input, cacheWrite: r.cacheWrite5m + r.cacheWrite1h, cacheRead: r.cacheRead, output: r.output, thinking: r.thinking, webSearch: r.webSearch,
+    usd: { input: round6(c.input), cacheWrite: round6(c.cacheWrite), cacheRead: round6(c.cacheRead), output: round6(c.output), webSearch: round6(c.webSearch), total: round6(c.total) },
+    ask: r.ask, readWords: r.readWords, readWhat: r.readWhat, did: r.did, wroteWords: r.wroteWords,
+  };
 }
 
 async function main(argv) {
@@ -437,7 +494,7 @@ async function main(argv) {
   const pricesJson = JSON.parse(readFileSync(new URL('./prices.json', import.meta.url), 'utf8'));
 
   const st = await buildStatement({ projectsDir, since });
-  const events = await limitEvents(projectsDir, since);
+  const { events } = st;
   const account = accountSnapshot();
   if (!existsSync(out)) mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'extrato-detalhado.csv'), detailCsv(st));

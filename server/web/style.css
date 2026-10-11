@@ -3326,3 +3326,26 @@ body:has(.pop-menu:not([hidden]), .pp-list:not([hidden])) .cut { display: none; 
   .cut .cut-x { width: 44px; height: 44px; }
   .cut-chip { min-height: 44px; }
 }
+
+/* The detailed statement in the Costs tab (sb09). */
+.stmt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.stmt-head h3 { margin: 0; }
+.stmt-filter { display: inline-grid; gap: 2px; font-size: var(--fs-sm); color: var(--ink-2); }
+.stmt-filter select { max-width: 22rem; }
+.stmt-status { display: grid; gap: 6px; color: var(--ink-2); }
+.stmt-account { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 4px solid var(--waiting); border-radius: var(--r-md); }
+.stmt-account h4 { margin: 0 0 6px; }
+.stmt-total { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin: 14px 0 0; }
+.stmt-total strong { font-size: var(--fs-xl); }
+.stmt-cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.stmt-cell { display: grid; gap: 2px; padding: 10px; border-radius: var(--r-md); background: var(--bg-3); }
+.stmt-cell-label { font-weight: 600; }
+.stmt-pick { border: 0; padding: 0; background: none; text-align: left; cursor: pointer; color: inherit; font: inherit; font-weight: 600; text-decoration: underline dotted; }
+.stmt-chats details { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.stmt-chats summary { cursor: pointer; }
+.stmt-chats summary .lr-line { display: block; }
+.stmt-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; margin: 8px 0; }
+.stmt-rows { gap: 0; }
+.stmt-row { display: grid; gap: 2px; padding: 8px 0 !important; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.stmt-row-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: baseline; }
+.stmt-row-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

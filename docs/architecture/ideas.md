@@ -255,11 +255,11 @@ Nothing here is code. The registry is this file, read by the map like every part
 ### What it costs
 
 - [ ] **in progress:** A detailed statement of every cent spent, like a bank statement, for compliance `id98`
-  - Asked: 2026-10-11 18:10 — "quero com urgencia, urgencia mesmo,valores detalhados como se fosse um extrato de cada coisinha que é feita, preciso saber de tudo, valor que gasta na entrada, valor que gasta na saida, cada chat, preciso de um extrato bem organizado, como se fosse um compliance, acabei de colocar 100 dolares e sumiu, quero saber, agente tal leu 1000 palavras ou arquivo gastou x de tal conversa , tal dia, tal hora, detalhados em custos, mas quero que veja os preço reais, você tem acesso tem isso disponivel na internet e também para você"
+  - Asked: 2026-10-11 18:10 — "quero com urgencia, urgencia mesmo,valores detalhados como se fosse um extrato de cada coisinha que é feita, preciso saber de tudo, valor que gasta na entrada, valor que gasta na saida, cada chat, preciso de um extrato bem organizado, como se fosse um compliance, acabei de colocar 100 dolares e sumiu, quero saber, agente tal leu 1000 palavras ou arquivo gastou x de tal conversa , tal dia, tal hora, detalhados em custos, mas quero que veja os preço reais, você tem acesso tem isso disponivel na internet e também para você"; 2026-10-11 18:55 — "tu ta doido macho eu quero isso no programa"
   - What it means: a statement with one line per reply of every chat and every agent: day and hour, which chat, who answered, what it read (words, files) and did, tokens and dollars spent on input and on output, at the real prices checked online; sums by day, chat and agent; and where the credit that vanished went.
-  - How to confirm it is done: open Documents/Extrato-Claude/extrato.html and extrato-detalhado.csv: each reply has its own line with date, hour, chat, agent, input and output in tokens and dollars; the page shows the account's own extra-usage counter and the hours the limits were hit.
+  - How to confirm it is done: in session-map, Costs tab, section "Detailed statement" (or Documents/Extrato-Claude/extrato.html and extrato-detalhado.csv): each reply has its own line with date, hour, chat, agent, input and output in tokens and dollars; the page shows the account's own extra-usage counter and the hours the limits were hit.
   - Where it went: `sb08`, `sb09`.
-  - Status: in progress. `sb08` built on 2026-10-11 (the statement by command); `sb09` (the same on the page) is next.
+  - Status: built on main on 2026-10-11 (`sb08` the statement by command, `sb09` the same in the Costs tab, tested); waiting for the owner to try it on the page.
 
 ### This registry
 
