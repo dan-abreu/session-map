@@ -8,7 +8,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - The picture of the project: id13, id14, id15, id17, id18, id19
 - The model, the orchestration and other AIs: id20, id21, id89, id90
 - Following the work live: id29, id31, id32, id34, id35, id36, id37, id38, id39
-- Files, terminal and the first use of a repository: id40
+- Files, terminal and the first use of a repository: id40, id95
 - The Flow: id43, id44
 - Clarity and polish: id91
 - This registry: id68, id69
@@ -250,6 +250,13 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: see `mm40`, `mm41`, `mm42`.
   - Where it went: `mm40`, `mm41`, `mm42`; census counts and excluded files on the same side come from the foundation (`id77` follow-up, B2).
   - Status: done (on main, saved with the owner's OK on 2026-10-10).
+- [x] Create the folder of a new project from session-map `id95`
+  - Asked: 2026-10-11 — "preciso com urgente poder criar pasta, para criar um novo projeto"
+  - What it means: a "New project" button on the page asks for the project's name and where to put it, creates that folder on the computer and shows the new project on the map at once, with its project chat ready to start, without opening Claude Code in a terminal first.
+  - How to confirm it is done: in the project picker, click "New project", type a name, keep the suggested place and confirm: the folder exists on the disk, the map opens on the new project and its chat starts there.
+  - Where it went: `sv14`, `mm50`.
+  - Confirmed: 2026-10-11 — "serviu"
+  - Status: done (on main, confirmed by the owner on 2026-10-11).
 
 ### The Flow
 

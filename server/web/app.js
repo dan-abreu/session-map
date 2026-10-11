@@ -44,6 +44,7 @@ import { createHelp } from './help.js';
 import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
 import { INFO_KINDS, CHAT_TAB, pointTabs, projectTabs, openingTab, kindDigest, lookTabs } from './kinds.js';
 import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
+import { repoNameOf } from './reponame.js';
 import {
   declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, relationWhy, serializeIgnored, sortRelations, splitIgnored, strengthOf,
 } from './relations.js';
@@ -1143,7 +1144,8 @@ function openPlace({ row, project: home }) {
 }
 
 // A new project (sv14, mm50): its name and where its folder goes; session-map creates the folder, the map opens on it and
-// its project chat waits for the first message.
+// its project chat waits for the first message. Also on GitHub (sv15, mm51) only when the person picks it: private unless
+// the public box is ticked, offered only when gh is logged in on this computer.
 async function openNewProject() {
   const dialog = $('#newProjectDialog');
   const place = await api.newProjectPlace();
@@ -1152,25 +1154,43 @@ async function openNewProject() {
   const parentInput = h('input', { type: 'text', id: 'newProjectParent', value: place.parent ?? '', autocomplete: 'off', required: true, spellcheck: 'false', 'aria-describedby': 'newProjectParentHint' });
   const pathLine = h('p', { class: 'np-path', id: 'newProjectPath', 'aria-live': 'polite' });
   const submit = h('button', { type: 'submit', class: 'btn primary' }, icon('plus', 'btn-icon'), t('newproject.create'));
+  const gh = place.github ?? { ready: false, user: null };
+  const where = (value, checked) => h('input', { type: 'radio', name: 'np-where', value, checked, disabled: value === 'github' && !gh.ready, onchange: showRepo });
+  const onlyPc = where('pc', true);
+  const alsoGh = where('github', false);
+  const publicBox = h('input', { type: 'checkbox', id: 'newProjectPublic', onchange: showRepo });
+  const publicRow = h('label', { class: 'np-public', hidden: true }, publicBox, h('span', {}, t('newproject.public')));
+  const repoLine = h('p', { class: 'np-path', 'aria-live': 'polite', hidden: true });
+  function showRepo() {
+    const on = alsoGh.checked;
+    publicRow.hidden = !on;
+    repoLine.hidden = !on;
+    const repo = repoNameOf(nameInput.value.trim());
+    repoLine.textContent = on && repo ? t(publicBox.checked ? 'newproject.repoPublic' : 'newproject.repoPrivate', { repo: `${gh.user}/${repo}` }) : '';
+  }
   const showPath = () => {
     const parent = parentInput.value.trim();
     const sep = parent.includes('\\') ? '\\' : '/';
     const name = nameInput.value.trim();
     pathLine.textContent = name && parent ? t('newproject.willBe', { path: `${parent.replace(/[\\/]+$/, '')}${sep}${name}` }) : '';
   };
-  nameInput.addEventListener('input', showPath);
+  nameInput.addEventListener('input', () => { showPath(); showRepo(); });
   parentInput.addEventListener('input', showPath);
   const save = async (e) => {
     e.preventDefault();
     submit.disabled = true;
-    const res = await api.createProject({ parent: parentInput.value.trim(), name: nameInput.value.trim() });
+    const github = alsoGh.checked ? (publicBox.checked ? 'public' : 'private') : undefined;
+    if (github) toast(t('newproject.githubWorking'));
+    const res = await api.createProject({ parent: parentInput.value.trim(), name: nameInput.value.trim(), ...(github ? { github, githubUser: gh.user } : {}) });
     if (!res.ok) {
       submit.disabled = false;
       toast(errorText(res.error));
       return (res.error === 'bad-parent' ? parentInput : nameInput).focus();
     }
     dialog.close();
-    toast(t('newproject.done'));
+    // A GitHub step that failed after the folder was made: the project is there, and the toast says what GitHub answered.
+    if (res.github && !res.github.ok) toast(t('newproject.githubFailed', { why: res.github.detail || errorText(res.error ?? res.github.error) }));
+    else toast(t(res.github ? 'newproject.doneGithub' : 'newproject.done'));
     // The server reads the projects again: the new one shows within a few seconds.
     for (let i = 0; i < 30 && !state?.projects.some((p) => p.id === res.projectId); i++) {
       await poll();
@@ -1186,6 +1206,14 @@ async function openNewProject() {
     h('div', { class: 'pl-field' }, h('label', { for: 'newProjectName' }, t('newproject.name')), nameInput, pathLine),
     h('div', { class: 'pl-field' }, h('label', { for: 'newProjectParent' }, t('newproject.parent')), parentInput,
       h('p', { class: 'pl-hint', id: 'newProjectParentHint' }, t('newproject.parentHint'))),
+    h('fieldset', { class: 'care-opts np-where' },
+      h('legend', { class: 'np-legend' }, t('newproject.where')),
+      h('label', { class: 'care-opt' }, onlyPc, h('span', { class: 'care-opt-body' },
+        h('span', { class: 'care-opt-name' }, t('newproject.onlyPc')), h('span', { class: 'care-opt-hint' }, t('newproject.onlyPcHint')))),
+      h('label', { class: 'care-opt' }, alsoGh, h('span', { class: 'care-opt-body' },
+        h('span', { class: 'care-opt-name' }, t('newproject.alsoGithub')),
+        h('span', { class: 'care-opt-hint' }, gh.ready ? t('newproject.alsoGithubHint', { user: gh.user }) : t('newproject.githubNotReady')))),
+      publicRow, repoLine),
     h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, t('confirm.cancel')),
       submit)));

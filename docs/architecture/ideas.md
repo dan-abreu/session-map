@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id28, id73, id93
+- The model, the orchestration and other AIs: id22, id97, id23, id24, id25, id26, id28, id73, id93
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50
@@ -55,8 +55,14 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 08:27 — "tem como colocar para colocar APIs de outras IA, assim voce fica como orquestrador e usa outras IAs naquilo que elas são boas, assim o projeto acaba ficando mais barato"; 2026-10-09 08:31 — "porque tem IA´s que são boas com videos, outras com outras coisas assim por diante, o programa com o arsenal completo, e com os repositorios corretos e skills corretas, teriamos um negocio legal para ajudar a fazer um projeto e rodar uma empresa"; 2026-10-09 08:44 — "sim"; 2026-10-10 — "quero que faça agora com urgencia, a questão de colocar as API de outras IA de deixar bem organizado, como falamos no plano"; 2026-10-10 — "acho que voce não entendeu bem, quero que use todas as IA que tiver API ao mesmo tempo e voce orquestrando e nao eu escolhendo quais voce vai usar"; 2026-10-10 — "eu quero que voce seja o orquestrador, essas IA vão entrar para voce como sub agentes para as tarefas, você ver a atividade, toma a melhor decisão e encimanha as IA para fazer os trabalhos"; 2026-10-10 — "quero que entenda como um orquestrador, que você vai ter essas IA, vai ter os modelos do claude e o nivel do claude,você tem que sozinho entender o nivel que deve ser feito e tomar as melhores decisões e saber onde usar as IA´s contando com voce e modelos."
   - What it means: Claude conducts and calls the AI that is best for each job (video, image, voice, bulk text, code) with the right repositories and skills already chosen; session-map is the panel showing each business area, what is being done, by which AI and at what cost.
   - How to confirm it is done: with a second provider's key set, a bulk task is sent to it, its cost shows next to the Claude cost, and the result is reviewed by Claude before it is accepted.
-  - Where it went: `or11`, `or12`, `sb07`, `mm19`; the routing research in `or05`.
-  - Status: in progress (first slice `sb07` built on 2026-10-10: keys, providers, cost and Claude's review; waiting for a test with a real key).
+  - Where it went: `or11`, `or12`, `sb07`, `mm19`; the routing research in `or05`; `or14`, `or16`, `or04`, `or15`, `or19`.
+  - Status: in progress. Done by 2026-10-10: keys, providers, one daily cap (US$ 5), the dispatcher over every AI with a key (`or14`), the arsenal tools in every chat (`or11`, first piece), the bench (`or12`), the panel by real use (`or16`), the conductor that knows the whole arsenal with Fable (`or04`, in progress). Left: the teams really using the other AIs (`or19`), watching versions and growing the bench (`or15`), budgets and priority (`or07`, `or08`), the other AIs working on files (step 4 of `id93`).
+- [ ] **in progress:** Finish the orchestration plan, then keep refining it without forgetting anything `id97`
+  - Asked: 2026-10-11 — "quero finalizar o plano que traçamos e depois vamos refinando sem esquecer acrescentando isso em solicitacoes para nao esquecee"
+  - What it means: close what is left of the plan traced on 2026-10-10 (quality and economy with Claude as the conductor of every AI), and keep every refinement written here and in its part so none is lost between conversations.
+  - How to confirm it is done: `or04`, `or07`, `or08`, `or15` and `or19` are ticked in Orchestration; the owner's open decisions (`op08`, `op09`) are answered; the panel shows the other AIs doing real work with Claude's accept/refuse.
+  - Where it went: `or04`, `or07`, `or08`, `or15`, `or19`; the owner's part in `op08`, `op09`.
+  - Status: in progress (recorded on 2026-10-11).
 - [ ] A detailed, categorized list of AIs `id23`
   - Asked: 2026-10-09 11:45 — "faz uma lista minunciosa de IAs e categoriza"; 2026-10-09 11:55 — "é bom"; 2026-10-10 — "voce pode da uma pesquisada a qualidade de cada IA e colocar elas no lugar certo mesmo, assim voce faz com mais certeza"
   - What it means: every relevant AI by category (text and code, image, video, voice, transcription, web search, document reading, vector search, browser automation, workflows, gateways), with what it is good for, price, API, open weights and privacy notes, from official price pages where possible.
@@ -291,9 +297,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Decided: 2026-10-11 — both: talk directly with the AI one chooses, and keep Claude (or any AI the person picks) as the orchestrator with the person setting the order of the AIs and turning the automatic rules off.
   - Decided: 2026-10-11 — four steps in this order: 1) a professional chat (model picker, edit and resend, regenerate, code blocks, context, usage meter, history, professional terms); 2) talk directly with GPT, Gemini and DeepSeek through the owner's keys; 3) the owner's own rules for the AIs (order, on/off, optional daily cap and privacy rules, with warnings); 4) the other AIs working on files and orchestrating through each company's official agent (Codex, Gemini CLI; DeepSeek through Claude Code's engine) — "jeito 1".
   - Status: in progress (step 1, the professional chat, started on 2026-10-11 after the new look went live).
-- [ ] **in progress:** Create the folder of a new project from session-map `id95`
-  - Asked: 2026-10-11 — "preciso com urgente poder criar pasta, para criar um novo projeto"
-  - What it means: a "New project" button on the page asks for the project's name and where to put it, creates that folder on the computer and shows the new project on the map at once, with its project chat ready to start, without opening Claude Code in a terminal first.
-  - How to confirm it is done: in the project picker, click "New project", type a name, keep the suggested place and confirm: the folder exists on the disk, the map opens on the new project and its chat starts there.
-  - Where it went: `sv14`, `mm50`.
-  - Status: built on main on 2026-10-11 (`sv14`, `mm50` done and tested; checked on the running session-map); waiting for the owner to try it.
+- [ ] **in progress:** Choose, when creating a project, only on this computer or also on GitHub `id96`
+  - Asked: 2026-10-11 — "serviu, mas é bom deixar a opção para criar na pasta e no github junto ou só no pc"
+  - What it means: the New project window (`id95`) gets a choice: only the folder on this computer, or the folder plus a GitHub repository (private unless the person ticks public), created with the GitHub login already on the computer, with a first save sent there.
+  - How to confirm it is done: create a project choosing "on the computer and on GitHub": the folder exists, the repository shows on github.com under your account, private, with a README; choosing "only on the computer" nothing goes to GitHub.
+  - Where it went: `sv15`, `mm51`.
+  - Status: in progress (started on 2026-10-11).

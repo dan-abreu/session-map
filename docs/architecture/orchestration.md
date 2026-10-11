@@ -50,7 +50,8 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Fable 5.1 is part of the arsenal: the top level for the hardest long autonomous work and the last word on critical deliveries (it leads the agent indexes; 2.5× Opus's price, so never the default). Today `MODELS` in `server/chat/run.mjs` has only haiku, sonnet and opus: Fable must be added there too (fixed mode and the subagent choices).
   - Understand the request, look at architecture and Flow, break it down and order it. Pick the model for the quality the task needs (the strongest without hesitating when it asks), ask for a second opinion from the reviewer, call nothing "done" without proof, explain each decision.
   - Learn from mistakes by kind of task: go up a model where the light one erred.
-- [ ] **Route by kind of task** `or05`
+- [x] **Route by kind of task** `or05`
+  - Done 2026-10-10: `server/ai/router.mjs` and `server/ai/conductor.mjs` route by kind, size, sensitivity and the measured results (bench `or12`, real use `or16`); committed in f126b5c.
   - Bulk reading and inventory → Haiku low; ordinary analysis and code → Sonnet medium; decisions, security, review and second checks → Opus; huge manual work → a cheap outside AI when one is set up (`or11`).
   - Research of 2026-10-10 (official price pages and independent leaderboards): Haiku 5.5 costs the same as the cheapest outside models (US$ 0.10 / 0.50 per million tokens), so an outside AI earns its place by diversity, not price: GPT-6.1 Sol as the reviewer from another family when Claude wrote the code, DeepSeek V4 Pro as a cheap try on public code only, Gemini Flash for fast reading of long pieces. Personal or client data, keys and `.env` never go to DeepSeek (stored in China, trains by default); Gemini only on a paid key. Portuguese, code review and bulk accuracy have no independent comparison yet: measure them in our own trial (`or12`) before trusting any routing, and keep the routing configurable.
 - [x] **Lean context for activity chats** `or06`
@@ -72,19 +73,25 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 ### Later (ideas, not committed)
 
-- [ ] **in progress:** Every AI with a key at once, picked by the conductor, never by the owner `or14`
+- [x] Every AI with a key at once, picked by the conductor, never by the owner `or14`
+  - Done 2026-10-10 (f126b5c): one daily cap for all, per-AI on/off, per-project data class (all the owner's projects are his own; session-map public), the arsenal tools ask_other_ai, list_other_ais, pick_worker and report_result in every chat.
   - The owner only pastes keys and sets one daily cap; a dispatcher picks the AI per task (kind, data sensitivity, cost, measured accuracy), spreads bulk work over all of them at once, sends reviews to another family, never sends client data to DeepSeek, and pauses an AI that errs too often. Asked on 2026-10-10 (`id22`).
-- [ ] **in progress · important:** A panel of the AIs measured by real use `or16`
+- [x] **important:** A panel of the AIs measured by real use `or16`
+  - Done 2026-10-10 (deb1ed8), reviewed by GPT-6.1 Sol through the arsenal (4 findings, all fixed). The cap is US$ 5 a day.
   - Per AI and per kind of work, from what really happened (activity log and Claude's accept/refuse): calls, share accepted, cost per accepted piece, time, today's spend against the one daily cap (US$ 5, set by the owner on 2026-10-10), next to the bench's score. Real-use results with at least 20 decided pieces feed the routing like the bench does. Asked on 2026-10-10: "voce só fez testes, não está usando elas, pode colocar algum painel para acessar os dados delas, para fazer as medições de acordo como vamos usando".
+- [ ] **important:** The conductor's teams use the other AIs in real work `or19`
+  - Asked on 2026-10-11 ("voce ta usando as outras IA´s para fazer essas taferas? pra ver se batareia o projeto"): until now the outside AIs did one review; the teams were all Claude. In every workflow and helper team: the reviewer from another family goes through ask_other_ai (GPT-6.1 Sol when Claude wrote), long reading through Gemini, self-contained code drafts through GPT-6.1 Sol with Claude applying and running the tests, and every piece ends with report_result, so the panel (`or16`) shows the saving with real numbers.
 - [ ] **important:** Watch the outside AIs' versions `or15`
+  - Refinements kept here (2026-10-11): measure GPT-6 Astra; re-measure Gemini 3.8 Flash with its new request settings; grow the bench's code set from 15 to 20+ tasks so code results count in the routing (MIN_MEASURED 20).
   - Once a day, ask each provider for its model list and warn when a model in use disappears, is scheduled to retire or changes the version behind its name (e.g. `deepseek-flash`); re-run the bench on just that model under a small cap so the routing follows; re-check prices on a schedule (Gemini 3.8 Flash doubles on 2027-01-01). Asked on 2026-10-10 ("as API tem versao?") after OpenAI's gpt-6 models started refusing `max_tokens`.
 - [ ] **in progress · detail:** Arsenal: the conductor calls the right AI for each task `or11`
   - First piece (2026-10-10): an "ask another AI" tool in every Claude Code conversation (an MCP server that goes through session-map, so keys, caps and costs stay in one place).
   - The other AIs are Claude's subagents: Claude reads the task, decides, hands a piece to the right AI (it answers with a draft or a patch), checks it, runs the tests and only then accepts. Every handoff shows in session-map (which AI, what task, cost, accepted or refused).
-  - Later: other AIs working on their own in an isolated copy of the project (Codex CLI, Gemini CLI, Claude Code pointed at DeepSeek), after the text subagents prove themselves.
+  - Later: other AIs working on their own in an isolated copy of the project (Codex CLI, Gemini CLI, Claude Code pointed at DeepSeek), after the text subagents prove themselves. This is step 4 of `id93` ("jeito 1"), led by the chat work: build it there, not twice.
   - A studio where Claude is the conductor and calls the right AI for video, image, voice, bulk text and code, with the right repositories and skills already chosen; session-map is the panel: each business area, what is being done, by which AI, at what cost. The board in `or09` is its central piece.
   - Seeds that exist: the Discover tab, the architecture map, costs per chat. First natural piece: Discover for every AI plus "which AI for each task" (`mm18`, `mm19`).
   - Risks: platform competition, quality of cheap AIs, privacy (data going to other providers), safety of third-party tools. Next step agreed: a strategy talk after v0.2 (audience, first slice, how it earns, separate product or evolution).
-- [ ] **in progress · detail:** Trial a cheap outside AI as a helper for bulk work `or12`
+- [x] **detail:** Trial a cheap outside AI as a helper for bulk work `or12`
+  - Done 2026-10-10 (589249c): first run US$ 6.99 in total. Claude was the most reliable everywhere (Sonnet the best reviewer, 20/20); GPT-6.1 Sol strong on code and Portuguese; Gemini 3.8 Flash the best cheap one; DeepSeek fixed (thinking off) but too many false alarms in review. Growing the code set and re-measuring go on in `or15`.
   - 2026-10-10: a measuring bench with session-map's real tasks (classify, write code against tests, find planted bugs, plain Portuguese), run on each Claude level and each outside AI with a key; reports accuracy and cost per correct answer.
   - Audit first; measure cost against quality before trusting it.

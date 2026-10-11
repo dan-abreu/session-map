@@ -41,6 +41,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 - [x] "New project" in the project picker and on the empty page: a name, where to create it, and the map opens on it with its project chat `mm50`
   - From `id95`.
+- [ ] **in progress:** The New project window offers "only on this computer" or "also on GitHub", with a public tick and the repository's name shown `mm51`
+  - From `id96`.
 
 ### Speed
 
