@@ -4,7 +4,7 @@
 export default {
   en: {
     'versions.title': 'Versions',
-    'versions.lede': 'The version the code declares, the last tag, and the main pieces the project stands on. Everything here is read from your files and git. A piece is only called old or unsafe when a public source was asked about it.',
+    'versions.lede': 'The version the code declares, the last tag, and the main pieces the project stands on. Everything here is read from your files and the version history. A piece is only called old or unsafe when a public source was asked about it.',
     'versions.loading': 'Reading the versions…',
     'versions.notRead.title': 'Not read yet',
     'versions.notRead.text': 'The versions of this project have not been read yet. Refresh the project and the result appears here.',
@@ -36,7 +36,7 @@ export default {
     'versions.self.confirmed': 'Up to date',
     'versions.self.unverified': 'Latest version not checked',
     'versions.next': 'Next number',
-    'versions.next.commits': 'commits that count: {n}',
+    'versions.next.commits': 'saved changes that count: {n}',
     'versions.next.already': 'The code already carries this number.',
     'versions.next.typeOnly': 'The last tag is not a plain number, so only the kind of change is suggested.',
     'versions.next.none': 'Nothing to publish since the last tag',
@@ -63,7 +63,7 @@ export default {
   },
   'pt-BR': {
     'versions.title': 'Versões',
-    'versions.lede': 'A versão que o código declara, a última etiqueta (tag) e as peças principais em que o projeto se apoia. Tudo aqui é lido dos seus arquivos e do git. Uma peça só é chamada de velha ou insegura quando uma fonte pública foi consultada sobre ela.',
+    'versions.lede': 'A versão que o código declara, a última etiqueta (tag) e as peças principais em que o projeto se apoia. Tudo aqui é lido dos seus arquivos e do histórico de versões. Uma peça só é chamada de velha ou insegura quando uma fonte pública foi consultada sobre ela.',
     'versions.loading': 'Lendo as versões…',
     'versions.notRead.title': 'Ainda não lido',
     'versions.notRead.text': 'As versões deste projeto ainda não foram lidas. Atualize o projeto e o resultado aparece aqui.',
@@ -95,7 +95,7 @@ export default {
     'versions.self.confirmed': 'Em dia',
     'versions.self.unverified': 'Última versão não verificada',
     'versions.next': 'Próximo número',
-    'versions.next.commits': 'commits que contam: {n}',
+    'versions.next.commits': 'mudanças salvas que contam: {n}',
     'versions.next.already': 'O código já traz esse número.',
     'versions.next.typeOnly': 'A última etiqueta não é um número simples, então só o tipo de mudança é sugerido.',
     'versions.next.none': 'Nada a publicar desde a última etiqueta',
@@ -119,5 +119,16 @@ export default {
     'versions.reason.no-network': 'Sem rede',
     'versions.reason.error': 'A fonte falhou',
     'versions.online.hint': 'Alertas, fim de suporte e versões mais novas vêm de fontes públicas, só quando você clica em "Verificar online" na tela Saúde.',
+  },
+  // Technical originals of the texts above that were put in plain words (shown with "Technical details").
+  tech: {
+    en: {
+      'versions.lede': 'The version the code declares, the last tag, and the main pieces the project stands on. Everything here is read from your files and git. A piece is only called old or unsafe when a public source was asked about it.',
+      'versions.next.commits': 'commits that count: {n}',
+    },
+    'pt-BR': {
+      'versions.lede': 'A versão que o código declara, a última etiqueta (tag) e as peças principais em que o projeto se apoia. Tudo aqui é lido dos seus arquivos e do git. Uma peça só é chamada de velha ou insegura quando uma fonte pública foi consultada sobre ela.',
+      'versions.next.commits': 'commits que contam: {n}',
+    },
   },
 };

@@ -31,7 +31,7 @@ export const routingFileOf = (smDir) => join(benchDir(smDir), 'routing.json');
 // call's own; code that runs too long in the sandbox is 'tests-timeout', the answer's fault, and is kept.)
 const RETRY_ERRORS = new Set(['timeout', 'network', 'spawn-failed', 'crashed', 'claude-not-found', 'no-key', 'http-408', 'http-429', 'no-json', 'bad-output', 'answer-cut']);
 // The sandbox broke on this machine: the stored answer is tested again on resume, unless it was stored cut short.
-const SANDBOX_ERRORS = new Set(['sandbox-failed', 'sandbox-spawn-failed']);
+const SANDBOX_ERRORS = new Set(['sandbox-failed', 'sandbox-spawn-failed', 'sandbox-unsupported']);
 const retestable = (r) => r.kind === 'code' && SANDBOX_ERRORS.has(r.error) && typeof r.answer === 'string' && !r.answerCut;
 const retryable = (r) => Boolean(r.skipped) || RETRY_ERRORS.has(r.error) || /^http-5\d\d$/.test(r.error ?? '')
   || (SANDBOX_ERRORS.has(r.error) && !retestable(r));
@@ -258,7 +258,7 @@ export async function runBench(options = {}, deps = {}) {
         if (typeof item.reference !== 'string') return null;
         try {
           const run = await runCode({ code: item.reference, tests: item.tests });
-          return run.ok ? run.total : 'broken';
+          return run.ok ? run.total : SANDBOX_ERRORS.has(run.error) ? null : 'broken';
         } catch {
           return null;
         }

@@ -170,6 +170,8 @@ test('GET shows the classes chosen so far and the class of everything else', asy
     assert.deepEqual(r.json.projectClass, {});
     assert.equal(r.json.projectClassDefault, 'client');
     assert.deepEqual(r.json.projectClasses, ['client', 'internal', 'public']);
+    // The page needs the server's folder rule to spell a root the same way (Windows ignores case and reads /c/ as c:).
+    assert.equal(r.json.pathRule, process.platform === 'win32' ? 'windows' : 'posix');
   });
   await withServer(async ({ call }) => {
     assert.deepEqual((await call('GET', URL_)).json.projectClass, { [KEY_A]: 'internal' });

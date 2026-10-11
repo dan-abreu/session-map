@@ -49,11 +49,20 @@ test('"when" reads as minutes ago, then as a date', () => {
 });
 
 test('the page spells a folder the way the server does, so a project\'s saved class is found', () => {
-  // /c/x is a drive only on Windows; elsewhere the server keeps it as a real folder, and the lookup below still agrees.
-  const msys = process.platform === 'win32' ? ['/c/clients/shop'] : [];
-  for (const p of ['C:\\Clients\\Shop', 'c:/clients/shop/', ...msys, 'D:/', 'C:\\Users\\dani\\my project\\']) {
-    assert.equal(normalizeRoot(p), normalizePath(p), p);
+  const here = process.platform === 'win32' ? 'windows' : 'posix';
+  for (const p of ['C:\\Clients\\Shop', 'c:/clients/shop/', '/c/clients/shop', 'D:/', 'C:\\Users\\dani\\my project\\', '/home/Dani/Shop/']) {
+    assert.equal(normalizeRoot(p, here), normalizePath(p), p);
   }
+  // The rule is the server's, not the browser's: a Windows server reads /c/ as c: and ignores case everywhere; any other
+  // keeps /c/ and the case of a folder, and only folds a drive-letter path.
+  assert.equal(normalizeRoot('/c/clients/shop', 'windows'), 'c:/clients/shop');
+  assert.equal(normalizeRoot('/home/Dani/Shop/', 'windows'), '/home/dani/shop');
+  assert.equal(normalizeRoot('/c/clients/shop', 'posix'), '/c/clients/shop');
+  assert.equal(normalizeRoot('/home/Dani/Shop/', 'posix'), '/home/Dani/Shop');
+  assert.equal(normalizeRoot('C:\\Clients\\Shop', 'posix'), 'c:/clients/shop');
+  assert.equal(normalizeRoot('/c/clients/shop'), 'c:/clients/shop', 'no rule given: the Windows one');
+  assert.equal(projectClassFor({ '/home/Dani/Shop': 'public' }, '/home/dani/shop', 'posix'), 'client', 'two folders on a posix server');
+  assert.equal(projectClassFor({ '/home/Dani/Shop': 'public' }, '/home/Dani/Shop/', 'posix'), 'public');
   const classes = { [normalizePath('C:\\Clients\\Shop')]: 'internal' };
   assert.equal(projectClassFor(classes, 'C:/CLIENTS/shop'), 'internal');
   assert.equal(projectClassFor(classes, 'C:/other'), 'client', 'not listed: the strictest');

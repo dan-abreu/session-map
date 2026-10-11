@@ -253,7 +253,10 @@ test('dep practices read the dependencies handed in and the facts', () => {
 test('on acme-shop a missing SECURITY.md appears once as fail; adding the file changes only that item and nextPercent', async () => {
   const root = copyFixtureRepo('acme-shop');
   try {
-    const sec = it({ id: 'test.security-md', front: 'security', ladder: 'N0', severity: 'E', detect: { kind: 'content', files: ['SECURITY.md'], matches: ['@|https?://'], minLines: 1 } });
+    // The item sits on N1, a rung where acme-shop already fails other checks, so passing it moves nextPercent but cannot
+    // move the level. On N0 it would be the rung's only failure (the library's N0 checks there pass or wait for health
+    // data), and passing it would rightly lift the level from none to N0.
+    const sec = it({ id: 'test.security-md', front: 'security', ladder: 'N1', severity: 'E', detect: { kind: 'content', files: ['SECURITY.md'], matches: ['@|https?://'], minLines: 1 } });
     const lib = loadLibrary({ sharedDir: sharedKnowledgeDir() });
     assert.deepEqual(lib.invalid, []);
     const packages = [...lib.packages, pkg('test-sec', [sec])];

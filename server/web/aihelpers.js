@@ -45,18 +45,24 @@ export const PROJECT_CLASS_ORDER = Object.freeze(['client', 'internal', 'public'
 const ACTIVITY_KINDS = new Set(['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning', 'place']);
 
 // A folder written the way the server writes it (server/paths.mjs normalizePath), so a project's saved class is found
-// by its root: slashes forward, no trailing one, /c/x as c:/x, lower case. (Windows short names are the server's own.)
-export function normalizeRoot(p) {
-  let out = String(p ?? '').replaceAll('\\', '/').replace(/^\/([a-z])(?=\/|$)/i, '$1:').replace(/\/+$/, '') || '/';
+// by its root: slashes forward, no trailing one. The server's rule (pathRule, from its settings answer) decides the rest:
+// a Windows server reads /c/x as c:/x and ignores case; any other keeps both and lowers only a drive-letter path.
+// No rule given: the Windows one. (Windows short names are the server's own.)
+export function normalizeRoot(p, rule = 'windows') {
+  const windows = rule !== 'posix';
+  let out = String(p ?? '').replaceAll('\\', '/');
+  if (windows) out = out.replace(/^\/([a-z])(?=\/|$)/i, '$1:');
+  out = out.replace(/\/+$/, '') || '/';
   if (/^[a-z]:$/i.test(out)) out += '/';
-  return out.toLowerCase();
+  return windows || /^[a-z]:\//i.test(out) ? out.toLowerCase() : out;
 }
 
-// The class of a project: what the owner chose for its folder, otherwise the strictest. The lookup ignores letter case.
-export function projectClassFor(classes, root) {
-  const want = normalizeRoot(root);
+// The class of a project: what the owner chose for its folder, otherwise the strictest. The lookup follows the server's
+// folder rule (case ignored on a Windows server).
+export function projectClassFor(classes, root, rule) {
+  const want = normalizeRoot(root, rule);
   for (const [key, value] of Object.entries(classes ?? {})) {
-    if (normalizeRoot(key) === want) return PROJECT_CLASS_ORDER.includes(value) ? value : 'client';
+    if (normalizeRoot(key, rule) === want) return PROJECT_CLASS_ORDER.includes(value) ? value : 'client';
   }
   return 'client';
 }
@@ -321,7 +327,7 @@ export function createAiHelpers(ctx) {
       h('p', { class: 'al-opt-hint' }, t('aih.pc.lede')),
       h('dl', { class: 'ah-class-help' }, PROJECT_CLASS_ORDER.flatMap((c) => [h('dt', {}, t(`aih.pc.${c}`)), h('dd', {}, t(`aih.pc.${c}.hint`))])),
       projects.length ? h('div', { class: 'ah-class-list' }, projects.map((p) => {
-        const current = projectClassFor(data.projectClass, p.root);
+        const current = projectClassFor(data.projectClass, p.root, data.pathRule);
         const id = 'ahClass-' + String(p.id ?? p.root).replace(/[^\w-]/g, '');
         return h('div', { class: 'dv-field ah-class-row' },
           h('label', { for: id }, p.name ?? p.root),

@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runCodeItem, sandboxEnv } from '../server/bench/sandbox.mjs';
+import { permissionFlag, runCodeItem, sandboxEnv } from '../server/bench/sandbox.mjs';
 
 const TESTS = `import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -197,6 +197,24 @@ test('a run that reports another number of tests than the file holds is not trus
   const r = await runCodeItem({ code: good, tests: TESTS, expectedTests: 3 });
   assert.equal(r.ok, false);
   assert.equal(r.error, 'tests-miscounted');
+});
+
+test('the permission switch is the one this Node knows: --permission, else the experimental one of Node 20', () => {
+  assert.equal(permissionFlag(new Set(['--permission', '--experimental-permission'])), '--permission');
+  assert.equal(permissionFlag(new Set(['--experimental-permission'])), '--experimental-permission');
+  assert.equal(permissionFlag(new Set(['--test-reporter'])), null);
+  assert.ok(permissionFlag(), 'the Node running these tests has a permission model');
+});
+
+test('a Node without the permission model is refused: the code never runs unguarded', async () => {
+  const r = await runCodeItem({ code: 'export function add(a, b) { return a + b; }', tests: TESTS, nodeFlags: new Set(['--test-reporter']) });
+  assert.deepEqual([r.ok, r.error, r.passed, r.total], [false, 'sandbox-unsupported', 0, 0]);
+  assert.match(r.tail, /permission model/);
+  assert.equal(existsSync(r.dir), false);
+  // An early Node 20 has the permission model but does not yet shut addons and WASI out of it: refused too.
+  const early = new Set(['--experimental-permission', '--allow-fs-read', '--allow-fs-write', '--import', '--test-reporter']);
+  const e = await runCodeItem({ code: 'export function add(a, b) { return a + b; }', tests: TESTS, nodeFlags: early });
+  assert.deepEqual([e.ok, e.error], [false, 'sandbox-unsupported']);
 });
 
 test('runaway code is the answer\'s fault, with its own error code', async () => {

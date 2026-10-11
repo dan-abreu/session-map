@@ -376,7 +376,9 @@ test('delete from session-map (mm43) needs the token like every write, and hands
   });
 });
 
-test('archive and delete answer on the newest finished state, never waiting for the next collect', { timeout: 10_000 }, async () => {
+// The collect after the first never ends until release(), so waiting it out cannot fit in 5 s: the margin is only for a
+// slow runner (a Windows Node 20 runner took more than 1.5 s to archive).
+test('archive and delete answer on the newest finished state, never waiting for the next collect', { timeout: 20_000 }, async () => {
   const ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const NEW = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const row = (sessionId) => ({ sessionId, status: 'closed', live: false, archived: false, updatedAt: '2026-10-09T10:00:00.000Z' });
@@ -392,7 +394,7 @@ test('archive and delete answer on the newest finished state, never waiting for 
       const late = Symbol('late');
       const timer = (ms) => new Promise((r) => setTimeout(() => r(late), ms));
       for (const action of ['archive', 'delete']) {
-        const res = await Promise.race([call('POST', '/api/action', { headers, body: { action, sessionId: ID } }), timer(1500)]);
+        const res = await Promise.race([call('POST', '/api/action', { headers, body: { action, sessionId: ID } }), timer(5000)]);
         assert.notEqual(res, late, `${action} waited for the collect`);
         assert.equal(res.status, 200);
       }

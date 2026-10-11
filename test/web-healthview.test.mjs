@@ -130,7 +130,9 @@ test('the texts: same keys in both languages, every state, category, severity an
     assert.ok(v.trim() && pt[k].trim(), `${k} is empty`);
     assert.deepEqual(vars(pt[k]), vars(v), `${k} blanks differ`);
     assert.ok(k.startsWith('health.'), `${k} stays in the health namespace`);
-    assert.ok(!(k in LANGS.en), `${k} is already in the page dictionary`);
+    // Merged through i18n-fd/health.js: the dictionary holds this very text, so no other key of the same name overrides it.
+    assert.equal(LANGS.en[k], v, `${k} is not the health text in the page dictionary`);
+    assert.equal(LANGS['pt-BR'][k], pt[k], `${k} is not the health text in the page dictionary`);
   }
   for (const c of CATEGORY_IDS) assert.ok(en[`health.category.${c}`], c);
   for (const s of ['E', 'R', 'A']) assert.ok(en[`health.sev.${s}`], s);
@@ -213,7 +215,7 @@ test('"not verified" items sit in their own list with the reason, and "does not 
     await view.render(root);
     const unv = walk(screen()).find((n) => /fdh-unverified\b/.test(n.attrs.class ?? ''));
     assert.ok(unv);
-    assert.match(textOf(unv), /GitHub token/i);
+    assert.match(textOf(unv), /GitHub access key/i);
     const gaps = walk(screen()).filter((n) => /fdh-gap\b/.test(n.attrs.class ?? ''));
     assert.ok(!gaps.some((g) => g.attrs['data-id'] === 'security.secret_scanning'), 'not verified is never a gap');
     const na = walk(screen()).find((n) => n.tag === 'details' && /fdh-na\b/.test(n.attrs.class ?? ''));

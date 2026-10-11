@@ -7,13 +7,26 @@ const WEB = new URL('../server/web/', import.meta.url);
 const sources = readdirSync(WEB).filter((f) => /\.(js|html)$/.test(f)).map((f) => [f, readFileSync(new URL(f, WEB), 'utf8')]);
 // Text files of foundation blocks still waiting for their merge (fd08 health, fd09 versions, fd14 care): a key the page
 // asks for may live there until the block merges the file into the dictionary; then it leaves this list.
-const PENDING = ['care-mode', 'care-findings', 'care-uptodate', 'health-ui', 'health-items-1', 'health-items-2', 'versions-ui'];
+// Empty now: care.js merges the care-* files and health.js the health-* and versions-ui ones.
+const PENDING = [];
 const pending = {};
 for (const name of PENDING) Object.assign(pending, (await import(new URL(`i18n-fd/${name}.js`, WEB))).default.en);
 
 test('a text file waiting for its merge is not merged yet; once merged it leaves the pending list', () => {
-  const i18n = readFileSync(new URL('i18n.js', WEB), 'utf8');
-  for (const name of PENDING) assert.ok(!i18n.includes(`i18n-fd/${name}.js`), `${name} is merged: take it off PENDING`);
+  // A file is merged when i18n.js imports it, or when one of the block files it imports (i18n-fd/care.js...) does.
+  const FD = new URL('i18n-fd/', WEB);
+  const mergers = [readFileSync(new URL('i18n.js', WEB), 'utf8'), ...readdirSync(FD).map((f) => readFileSync(new URL(f, FD), 'utf8'))];
+  for (const name of PENDING) {
+    assert.ok(!mergers.some((text) => text.includes(`i18n-fd/${name}.js`) || text.includes(`'./${name}.js'`)), `${name} is merged: take it off PENDING`);
+  }
+});
+
+test('every block text file in i18n-fd reaches the dictionary, unless it is still pending', () => {
+  const FD = new URL('i18n-fd/', WEB);
+  const files = readdirSync(FD).filter((f) => f.endsWith('.js'));
+  const imported = [readFileSync(new URL('i18n.js', WEB), 'utf8'), ...files.map((f) => readFileSync(new URL(f, FD), 'utf8'))].join('\n');
+  const orphans = files.map((f) => f.slice(0, -3)).filter((n) => !PENDING.includes(n) && !imported.includes(`i18n-fd/${n}.js'`) && !imported.includes(`'./${n}.js'`));
+  assert.deepEqual(orphans, [], 'a text file nobody imports: its words never reach the page');
 });
 
 test('en and pt-BR have exactly the same keys, none empty', () => {

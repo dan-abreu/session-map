@@ -72,9 +72,13 @@ async function readCapped(res, max) {
 }
 
 // { text, error }: error = no-network (thrown, timeout) | redirect | status | too-big. The URL is already checked.
+// The time limit is a timer of our own, not AbortSignal.timeout: that one's timer does not hold the process open, so on
+// Node 20 a request that never answers (and holds nothing open itself) left the wait pending forever instead of ending.
 async function request(u, { fetchFn, method = 'GET', body, headers = {}, maxBytes, timeoutMs }) {
+  const limit = new AbortController();
+  const timer = setTimeout(() => limit.abort(new DOMException('The request took too long.', 'TimeoutError')), timeoutMs);
   try {
-    const res = await fetchFn(u.href, { method, body, headers, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
+    const res = await fetchFn(u.href, { method, body, headers, redirect: 'manual', signal: limit.signal });
     if (!res || typeof res.status !== 'number') return { error: 'no-network' };
     const movedAway = res.url ? new URL(res.url).origin !== u.origin : false;
     if (res.type === 'opaqueredirect' || res.redirected || movedAway || (res.status >= 300 && res.status < 400)) {
@@ -89,6 +93,8 @@ async function request(u, { fetchFn, method = 'GET', body, headers = {}, maxByte
     return text === null ? { error: 'too-big' } : { text };
   } catch {
     return { error: 'no-network' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

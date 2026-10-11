@@ -12,14 +12,29 @@ const TIMEOUT_MS = 20_000;
 const OUTPUT_MAX = 200_000;
 const MEMORY_MB = 256;
 
-// The permission model of Node 24 has no switch for the network, so the preload cuts every way out before the
+// The permission model is named --permission from Node 22.13 and 23.5; Node 20 (and 22 before 22.13) only know
+// --experimental-permission. Same model, same --allow-* switches. null: this Node has none.
+export function permissionFlag(flags = process.allowedNodeEnvironmentFlags) {
+  for (const f of ['--permission', '--experimental-permission']) if (flags.has(f)) return f;
+  return null;
+}
+
+// What else the sandbox stands on. --allow-addons and --allow-wasi are asked for only to learn that this Node's
+// permission model shuts native addons and WASI out (Node 20.16 and later): never passed, so both stay refused.
+const NEEDED_FLAGS = ['--allow-fs-read', '--allow-fs-write', '--allow-addons', '--allow-wasi', '--import', '--test-reporter'];
+const UNSUPPORTED = 'This Node has no complete permission model (Node 20.16 or later is needed), so the bench does not run model-written code on it.';
+
+// Node's permission model (20 and 24 alike) has no switch for the network, so the preload cuts every way out before the
 // model's module loads: sockets (which http, https, http2, tls and fetch all end in), datagrams, every DNS call and
 // resolver (a DNS query alone can carry data out), fetch and WebSocket. The named ESM exports are synced after, so
 // `import { resolveTxt } from 'node:dns'` gets the cut one too.
 // The same preload keeps the code under test from grading itself: the assert and test modules are frozen (a module
 // that rewrites assert.equal fails to load), and it cannot end the process early or rewrite what the test runner
 // prints. One layer of defense against a careless or cheating answer, not a proof against a determined attacker.
-const NET_GUARD = `import { createRequire, syncBuiltinESMExports } from 'node:module';
+const NET_GUARD = `if (!process.permission || process.permission.has('child') || process.permission.has('worker')) {
+  throw new Error('the bench sandbox runs only under the permission model');
+}
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 const require = createRequire(import.meta.url);
 const net = require('node:net');
 const dgram = require('node:dgram');
@@ -88,20 +103,26 @@ function runNode(args, { cwd, env, timeoutMs }) {
 // code: the model's module, saved as solution.mjs. tests: the set's node:test file, which imports './solution.mjs'.
 // expectedTests: how many tests the file holds (learned by running the set's reference); a run that reports another
 // number is not trusted. Errors: 'tests-failed', 'tests-timeout' (the code ran too long: the answer's fault),
-// 'tests-miscounted' (a second summary, or not the tests the file holds), 'sandbox-spawn-failed' (this machine's fault).
-export async function runCodeItem({ code, tests, timeoutMs = TIMEOUT_MS, expectedTests = null } = {}) {
+// 'tests-miscounted' (a second summary, or not the tests the file holds), 'sandbox-spawn-failed' and
+// 'sandbox-unsupported' (this machine's fault: the code did not run). nodeFlags: the switches this Node knows.
+export async function runCodeItem({ code, tests, timeoutMs = TIMEOUT_MS, expectedTests = null, nodeFlags = process.allowedNodeEnvironmentFlags } = {}) {
   const started = Date.now();
+  const permission = permissionFlag(nodeFlags);
+  if (!permission || NEEDED_FLAGS.some((f) => !nodeFlags.has(f))) {
+    return { ok: false, passed: 0, failed: 0, total: 0, timedOut: false, error: 'sandbox-unsupported', ms: Date.now() - started, dir: null, tail: UNSUPPORTED };
+  }
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sm-bench-')));
   try {
     writeFileSync(join(dir, 'solution.mjs'), String(code ?? ''));
     writeFileSync(join(dir, 'solution.test.mjs'), String(tests ?? ''));
     writeFileSync(join(dir, 'guard.mjs'), NET_GUARD);
     const args = [
-      '--permission', `--allow-fs-read=${dir}`, `--allow-fs-write=${dir}`,
+      permission, `--allow-fs-read=${dir}`, `--allow-fs-write=${dir}`,
       `--max-old-space-size=${MEMORY_MB}`,
       '--import', pathToFileURL(join(dir, 'guard.mjs')).href,
-      // In-process: the default runner starts a child per file, which the permission model rightly refuses.
-      '--test', '--test-isolation=none', '--test-reporter=tap',
+      // The test file is run directly, in this one process: `node --test` would start a child per file, which the
+      // permission model rightly refuses (and Node 20 has no --test-isolation=none to keep it in-process).
+      '--test-reporter=tap',
       'solution.test.mjs',
     ];
     const res = await runNode(args, { cwd: dir, env: sandboxEnv(), timeoutMs });
