@@ -7,6 +7,7 @@ const POLL_MS = 1500;
 const REFRESH_MS = 60_000;
 const PAGE = 100;
 const CHATS_FIRST = 20;
+const LIST_FIRST = 15;
 const DAY = 86_400_000;
 
 async function getJson(path) {
@@ -39,7 +40,7 @@ export function presetPeriod(id, now = Date.now()) {
 
 // deps: h, t (getter), lang (getter), errorText(code).
 export function createStatement({ h, t, lang, errorText }) {
-  const ui = { preset: '30', ...presetPeriod('30'), level: 'period', chatId: null, rowsFilter: null, rowsTitle: '', allChats: false };
+  const ui = { preset: '30', ...presetPeriod('30'), level: 'period', chatId: null, rowsFilter: null, rowsTitle: '', allChats: false, open: new Set() };
   let period = null;
   let book = null;
   let rows = [];
@@ -84,7 +85,7 @@ export function createStatement({ h, t, lang, errorText }) {
     const res = await getJson(`/api/statement/chat?${qs({ id, from: ui.from, to: ui.to })}`);
     if (!res.ok) { error = res.error; draw(); return; }
     book = res;
-    Object.assign(ui, { level: 'chat', chatId: id });
+    Object.assign(ui, { level: 'chat', chatId: id, open: new Set() });
     draw();
     root.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
@@ -207,6 +208,12 @@ export function createStatement({ h, t, lang, errorText }) {
 
   // ----- level 2: one chat -----
 
+  // A chat with hundreds of helpers or files shows the most expensive first; the rest one click away.
+  const firstOf = (key, list) => (ui.open.has(key) ? list : list.slice(0, LIST_FIRST));
+  const showAll = (key, list, tt) => (list.length > LIST_FIRST ? h('button', {
+    type: 'button', class: 'btn small-btn', onclick: () => { if (ui.open.has(key)) ui.open.delete(key); else ui.open.add(key); draw(); },
+  }, ui.open.has(key) ? tt('stmt.showFewer') : tt('stmt.showAll', { n: num(list.length) })) : null);
+
   function chatView(tt) {
     const b = book;
     const total = b.total.usd;
@@ -228,15 +235,18 @@ export function createStatement({ h, t, lang, errorText }) {
 
       h('h4', {}, tt('stmt.sec.who')),
       table([tt('stmt.col.who'), tt('stmt.col.replies'), tt('stmt.col.read'), tt('stmt.col.wrote'), tt('stmt.col.cost'), tt('stmt.col.share')],
-        b.who.map((w) => [link(w.who, chatRows({ who: w.who }, w.who)), num(w.replies), usd(w.usdRead + w.usdKeep + w.usdNew), usd(w.usdWrite), usd(w.usd), pct(share(w.usd))]),
+        firstOf('who', b.who).map((w) => [link(w.who, chatRows({ who: w.who }, w.who)), num(w.replies), usd(w.usdRead + w.usdKeep + w.usdNew), usd(w.usdWrite), usd(w.usd), pct(share(w.usd))]),
         [h('strong', {}, tt('stmt.col.total')), num(b.total.replies), '', '', h('strong', {}, usd(b.check.who)), pct(1)]),
+      showAll('who', b.who, tt),
 
       h('h4', {}, tt('stmt.sec.files')),
       f.changed.length ? table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.lines'), tt('stmt.col.cost')],
-        f.changed.map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), lines(x), usd(x.usd)]))
+        firstOf('changed', f.changed).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), lines(x), usd(x.usd)]))
         : h('p', { class: 'view-note' }, tt('stmt.files.none')),
+      showAll('changed', f.changed, tt),
       f.onlyRead.length ? h('details', { class: 'stmt-more' }, h('summary', {}, tt('stmt.files.read', { n: num(f.onlyRead.length), usd: usd(f.readUsd) })),
-        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.cost')], f.onlyRead.map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), usd(x.usd)]))) : null,
+        table([tt('stmt.col.file'), tt('stmt.col.did'), tt('stmt.col.cost')], firstOf('read', f.onlyRead).map((x) => [link(x.name, chatRows({ file: x.file }, x.name)), what(x), usd(x.usd)])),
+        showAll('read', f.onlyRead, tt)) : null,
       h('p', { class: 'view-note' }, tt('stmt.files.note')),
 
       h('h4', {}, tt('stmt.sec.kinds')),
@@ -272,7 +282,8 @@ export function createStatement({ h, t, lang, errorText }) {
         h('div', { class: 'stmt-row-money num small' },
           tt('stmt.row.in', { usd: usd(r.usd.input + r.usd.cacheWrite + r.usd.cacheRead, 4), n: num(r.input + r.cacheWrite + r.cacheRead) }), ' · ',
           tt('stmt.row.out', { usd: usd(r.usd.output, 4), n: num(r.output) })),
-        r.ask ? h('div', { class: 'small' }, tt('stmt.row.ask', { text: r.ask.text })) : null,
+        // The chat itself was asked by the person; a helper was handed its task by the chat or its team.
+        r.ask ? h('div', { class: 'small' }, tt(r.who === 'conversa principal' ? 'stmt.row.ask' : 'stmt.row.task', { text: r.ask.text })) : null,
         r.readWords ? h('div', { class: 'small' }, tt('stmt.row.read', { n: num(r.readWords), what: r.readWhat })) : null,
         files(r) ? h('div', { class: 'small strong' }, files(r)) : null,
         h('div', { class: 'small muted' }, r.did ? tt('stmt.row.did', { what: r.did }) : tt('stmt.row.wrote', { n: num(r.wroteWords) }))))),
