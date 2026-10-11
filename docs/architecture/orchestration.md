@@ -56,8 +56,9 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Research of 2026-10-10 (official price pages and independent leaderboards): Haiku 5.5 costs the same as the cheapest outside models (US$ 0.10 / 0.50 per million tokens), so an outside AI earns its place by diversity, not price: GPT-6.1 Sol as the reviewer from another family when Claude wrote the code, DeepSeek V4 Pro as a cheap try on public code only, Gemini Flash for fast reading of long pieces. Personal or client data, keys and `.env` never go to DeepSeek (stored in China, trains by default); Gemini only on a paid key. Portuguese, code review and bulk accuracy have no independent comparison yet: measure them in our own trial (`or12`) before trusting any routing, and keep the routing configurable.
 - [x] **Lean context for activity chats** `or06`
   - Each gets only its part's context; long chats are summarized automatically.
-- [ ] **in progress:** **Monthly budget per project** `or07`
+- [x] **Monthly budget per project** `or07`
   - Alert at 80% and a polite pause at 100%.
+  - Done 2026-10-11 (commit "feat(budget): a monthly budget per project, an alert at 80% and a polite pause at 100% (or07)"): `server/budget.mjs` adds Claude's cost of the calendar month and the outside AIs' (a ledger by project folder, written at each call) against `projects[root].budgetMonthlyUSD` in session-map's config; the watcher alerts once at 80% and once at 100%; while paused the orchestrator opens, continues or sends nothing new and runs no tidy pass, nothing running is stopped, and the conductor's tail and the project chat summary say to ask the owner ("ask-reinforce"). The project panel has the field, the bar and "Continuar este mês". A soft limit: a turn already running may end a little past it. Reviewed by GPT-6.1 Sol through the arsenal (US$ 0.02, 2 rounds).
 - [ ] **in progress:** **Priority queue** `or08`
   - Urgent work first; detail inspection and Flow polish in the gaps. The important never stops at a limit (see `wa09`).
 

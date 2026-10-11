@@ -24,6 +24,7 @@ import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.
 import { authorize, cookieToken, dropLookKey, isLocal, loadLookKey, loadToken, lookAllows, newLookKey, sameToken } from './auth.mjs';
 import { lookState } from './lookstate.mjs';
 import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
+import { continueProjectMonth, monthOf, setProjectBudget } from './budget.mjs';
 import { githubStatus, newProject, suggestParent } from './newproject.mjs';
 import { projectIdOf } from './paths.mjs';
 import { createChatHub } from './chat/hub.mjs';
@@ -65,6 +66,7 @@ const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
 const TIDY_ERRORS = { 'bad-tidy': 400, 'config-unreadable': 409 };
+const BUDGET_ERRORS = { 'bad-budget': 400, 'config-unreadable': 409 };
 const NEW_PROJECT_ERRORS = {
   'bad-name': 400, 'bad-parent': 400, 'bad-github': 400, 'bad-repo-name': 400, 'folder-exists': 409, 'repo-exists': 409, 'github-not-ready': 409, 'github-user-changed': 409, 'github-unreachable': 502,
   'config-unreadable': 409, 'folder-failed': 500,
@@ -177,6 +179,8 @@ export function createApp({
   // readState/changed: the orchestrator's tools read the newest state and drop it after an archive or a rename (or17).
   const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({
     smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
+    // The project's month against its own budget (or07), from the newest finished state: a chat start never waits a collect.
+    projectBudget: (projectId) => newest?.projects?.find((p) => p.id === projectId)?.budget ?? null,
   });
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
   const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
@@ -441,6 +445,24 @@ export function createApp({
     return send(res, status, result.ok ? { ...result, projectId: projectIdOf(result.root) } : result);
   }
 
+  // A project's monthly budget (or07): POST {projectId, usd} sets it (null removes it), {projectId, continue: true} lifts the
+  // pause until the month ends. Merged into session-map's own config.json; the next state shows it.
+  async function budgetRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    const project = (await quickState()).projects.find((p) => p.id === body?.projectId);
+    if (!project) throw new HttpError(404, 'unknown-project');
+    const keep = body.continue === true && body.usd === undefined;
+    const result = keep ? continueProjectMonth(smDir, project.root, monthOf(Date.now()))
+      : body.continue === undefined && body.usd !== undefined ? setProjectBudget(smDir, project.root, body.usd) : { ok: false, error: 'bad-budget' };
+    const status = result.ok ? 200 : BUDGET_ERRORS[result.error];
+    if (result.ok) cached = null;
+    logAction(smDir, { action: keep ? 'budget-continue' : 'project-budget', projectId: project.id, usd: typeof body.usd === 'number' ? body.usd : null }, status);
+    return send(res, status, result);
+  }
+
   // "Organizar sozinho" (or18): the orchestrator's tidy pass on a project, on unless the person turns it off.
   async function tidyRoute(req, res, url) {
     if (demo) throw new HttpError(403, 'demo');
@@ -506,7 +528,7 @@ export function createApp({
   // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
   const helperRoutes =demo || !smDir ? null : createHelperRoutes({ smDir, ai, roots: async () => ((await quickState()).projects ?? []).map((p) => p.root), ...helpers });
   // Claude asks the other AIs itself (or14): the page's cookie or the stdio tool's header token, loopback only.
-  const askRoutes = createAskRoutes({ smDir, demo, token, ai, ...helpers, ...askAi });
+  const askRoutes = createAskRoutes({ smDir, demo, token, ai, rootOf: (key) => chat?.rootOf?.(key) ?? null, ...helpers, ...askAi });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -814,6 +836,7 @@ export function createApp({
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
+    if (path === '/api/settings/project-budget') return budgetRoute(req, res);
     if (path === '/api/projects/new') return newProjectRoute(req, res);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);

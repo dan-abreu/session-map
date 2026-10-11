@@ -31,6 +31,7 @@ import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
 import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
+import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
@@ -152,16 +153,17 @@ const nodeTag = (node) => {
 // The conductor prompt's tail, built at each process start: who is ready today, the cap left, what the bench measured, and
 // for Autonomous what the month still allows for reinforced work. Only the conductor modes get it; a failure leaves it out.
 const CONDUCTORS = new Set(['auto', 'maestro', 'autonomous']);
-function tailFor(run, smDir, facts) {
+// project: the line of the chat's project monthly budget (or07), or ''.
+export function tailFor(run, smDir, facts, project = '') {
   if (!CONDUCTORS.has(run?.kind)) return '';
   let others = null;
   try { others = typeof facts === 'function' ? facts() : null; } catch { others = null; }
   let tail = '';
   try { tail = conductorTail({ others, stats: loadStats(smDir) }); } catch { tail = ''; }
-  if (run.kind !== 'autonomous') return tail;
+  if (run.kind !== 'autonomous') return [tail, project].filter(Boolean).join('\n');
   let budget = '';
   try { budget = budgetLine({ limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir) }); } catch { budget = ''; }
-  return [tail, budget].filter(Boolean).join('\n');
+  return [tail, budget, project].filter(Boolean).join('\n');
 }
 
 // An Autonomous chat always runs in Claude Code's own auto mode, whatever the header or the PC picked: its classifier
@@ -180,10 +182,11 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // readState(): the newest state, for the orchestrator's tools and its scheduler; changed(): a write the next state must
 // show; orchestra ({now, every, stopEvery, tickMs, namedMs}): the orchestrator's clock and timer (orchestra.mjs), for tests.
 // chatsMax: how many chats may run at once; tests make it larger.
+// projectBudget(projectId): that project's month against its budget (budget.mjs) from the newest finished state, or null.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
-  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX,
+  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -208,6 +211,9 @@ export function createChatHub({
       all[sessionId] = { ...all[sessionId], ...patch };
       writeAtomic(pageChatsPath, `${JSON.stringify(all, null, 2)}\n`);
     } catch (err) { log('warn', 'page-chat-save-failed', { error: err.message }); }
+  };
+  const budgetLineOf = (projectId) => {
+    try { return projectBudgetLine(projectBudget(projectId)); } catch { return ''; }
   };
   const drivenNow = (sessionId) => {
     const chat = bySession.get(sessionId);
@@ -710,7 +716,7 @@ ${prompt}`;
     }
     chat.driver = startDriver({
       bin: claude,
-      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts)].filter(Boolean).join('\n')), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: orchestrator ? ORCH_ALLOWED : [] }),
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n')), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: orchestrator ? ORCH_ALLOWED : [] }),
       cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
@@ -995,6 +1001,8 @@ ${prompt}`;
   return {
     start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
     drivingIds,
+    // The project root of the chat with that key (or07): its outside AI calls count in that project's budget.
+    rootOf: (key) => chatOf(key)?.root ?? null,
     // The orchestrator (or01/or18): open or start a project's, what the page shows of it, a tool call as the chat with
     // that key would make it (the relay's path), one pass of the scheduler, and the scheduler itself (the real server).
     orchestra: {

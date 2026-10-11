@@ -98,6 +98,9 @@ export const api = {
   // switch "Organizar sozinho" (or18).
   orchestratorOpen: (body) => call('POST', '/api/chat/orchestrator', body),
   setProjectTidy: (projectId, tidy) => call('POST', '/api/settings/project-tidy', { projectId, tidy }),
+  // The project's monthly budget (or07): usd null removes it; continue lifts the pause until the month ends.
+  setProjectBudget: (projectId, usd) => call('POST', '/api/settings/project-budget', { projectId, usd }),
+  continueProjectBudget: (projectId) => call('POST', '/api/settings/project-budget', { projectId, continue: true }),
   chatList: (query) => call('GET', `/api/chat/list?${new URLSearchParams(query)}`),
   // cursor (pc15): {before} for the page older than the shown one, {from} for what follows the items the page holds.
   chatHistory: (sessionId, since, cursor = {}) => {

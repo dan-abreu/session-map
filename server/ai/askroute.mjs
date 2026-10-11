@@ -5,6 +5,7 @@ import { logAction } from '../actions.mjs';
 import { cookieToken, isLocal, sameToken } from '../auth.mjs';
 import { ASK_KINDS, askOthers } from './ask.mjs';
 import { ID_RE, SESSION_RE, readActivity, recordActivity, setResult } from './activity.mjs';
+import { addOthersSpend, cleanRoot } from '../budget.mjs';
 import { recommend, recordDecision } from './conductor.mjs';
 import { getKey, listKeys } from './keys.mjs';
 import { lifeOf } from './life.mjs';
@@ -83,8 +84,9 @@ async function readJson(req) {
 }
 
 // ai: the test doubles collect also gets ({bin, run, apiRun, keyOf}); backend: the keys' lock; apiRun/textRun: the
-// providers' call (tests); ask: askOthers itself (tests).
-export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, apiRun, textRun, ask = askOthers, now = Date.now } = {}) {
+// providers' call (tests); ask: askOthers itself (tests). rootOf(sessionId): the project root of the page chat with that
+// key, or null (the hub's), so an outside call's cost counts in that project's monthly budget (or07).
+export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, apiRun, textRun, ask = askOthers, now = Date.now, rootOf = () => null } = {}) {
   const asks = [];
   const keyOf = ai.keyOf ?? (backend ? (provider) => getKey(smDir, provider, { backend }) : undefined);
   const queue = () => lifeOf(smDir, readConfig(smDir), ai).queue;
@@ -140,13 +142,21 @@ export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, 
     if (b.fanout !== undefined && !Number.isInteger(b.fanout)) return fail(400, 'bad-fanout');
     if (b.sessionId !== undefined && !(typeof b.sessionId === 'string' && SESSION_RE.test(b.sessionId))) return fail(400, 'bad-session');
     if (b.why !== undefined && typeof b.why !== 'string') return fail(400, 'bad-why');
+    // cwd: the folder the asking program runs in (the arsenal tool sends it); only files the cost under a project.
+    if (b.cwd !== undefined && cleanRoot(b.cwd) === null) return fail(400, 'bad-cwd');
     // exclude: the AIs that failed this work before; askOthers checks its shape and only removes them from the order.
     if (b.exclude !== undefined && !(Array.isArray(b.exclude) && b.exclude.length <= FAILED_MAX && b.exclude.every((x) => typeof x === 'string' && AUTHOR_RE.test(x)))) return fail(400, 'bad-exclude');
     // Every outside call, answered or not, is one line of the activity log: no prompt, no answer, no key.
-    const onCall = (call) => recordActivity(smDir, {
-      ...call, source: 'chat', kind: b.kind, sensitivity: b.sensitivity,
-      ...(b.sessionId !== undefined ? { sessionId: b.sessionId } : {}), ...(b.why ? { recommendedBy: b.why } : {}),
-    });
+    // The page chat's own project first; a terminal chat by the folder it runs in (or07).
+    let root = null;
+    try { root = (b.sessionId !== undefined ? rootOf(b.sessionId) : null) ?? (b.cwd !== undefined ? b.cwd : null); } catch { root = null; }
+    const onCall = (call) => {
+      if (root && Number(call?.costUSD) > 0) addOthersSpend(smDir, root, Number(call.costUSD), now());
+      return recordActivity(smDir, {
+        ...call, source: 'chat', kind: b.kind, sensitivity: b.sensitivity,
+        ...(b.sessionId !== undefined ? { sessionId: b.sessionId } : {}), ...(b.why ? { recommendedBy: b.why } : {}),
+      });
+    };
     const result = await ask({
       smDir, queue: queue(), kind: b.kind, sensitivity: b.sensitivity, prompt: b.prompt,
       ...(b.schemaHint !== undefined ? { schemaHint: b.schemaHint } : {}),

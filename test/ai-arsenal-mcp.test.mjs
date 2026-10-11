@@ -160,7 +160,7 @@ test('ask_other_ai sends the question with the header token and shows each answe
     assert.equal(seen[0].url, '/api/ai/ask');
     assert.equal(seen[0].headers['x-session-map-token'], TOKEN);
     assert.equal(seen[0].headers.cookie, undefined);
-    assert.deepEqual(seen[0].body, { kind: 'review', sensitivity: 'internal', prompt: 'Review: function add(a,b){return a-b}', fanout: 2 });
+    assert.deepEqual(seen[0].body, { kind: 'review', sensitivity: 'internal', prompt: 'Review: function add(a,b){return a-b}', fanout: 2, cwd: process.cwd() });
     assert.equal(result.isError, false);
     const text = textOf(result);
     assert.match(text, /openai/);
@@ -180,7 +180,7 @@ test('ask_other_ai passes schemaHint and author only when given', async () => {
   const replies = { ask: () => [200, { ok: true, answers: [{ provider: 'openai', model: 'm', value: { a: 1 }, costUSD: 0, ms: 1 }], skipped: [] }], others: () => [200, LIST] };
   await withMcp({ replies }, async ({ call, seen }) => {
     await call('ask_other_ai', { kind: 'bulk', sensitivity: 'public', prompt: 'p', schemaHint: '{"a": number}', author: 'openai' });
-    assert.deepEqual(seen[0].body, { kind: 'bulk', sensitivity: 'public', prompt: 'p', schemaHint: '{"a": number}', author: 'openai' });
+    assert.deepEqual(seen[0].body, { kind: 'bulk', sensitivity: 'public', prompt: 'p', schemaHint: '{"a": number}', author: 'openai', cwd: process.cwd() });
   });
 });
 
@@ -345,7 +345,7 @@ test('ask_other_ai offers exclude and passes it on, so the AI that failed is not
     assert.equal(ask.inputSchema.properties.exclude.type, 'array');
     assert.equal(ask.inputSchema.properties.exclude.maxItems, 20);
     const result = await call('ask_other_ai', { kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'] });
-    assert.deepEqual(seen[0].body, { kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'] });
+    assert.deepEqual(seen[0].body, { kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'], cwd: process.cwd() });
     assert.match(textOf(result), /openai: left out: it failed this work before/);
   });
 });

@@ -43,16 +43,19 @@ function whenOf(t, alert) {
   return alert.resetsText || t('alert.when.unknown');
 }
 
+// A project's monthly budget (or07) in dollars, in the person's language.
+const dollars = (t, usd) => (Number.isFinite(usd) ? new Intl.NumberFormat(t.lang || 'en', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(usd) : '');
+
 // The words of a group: what it is, why, what to do now, and the button; title and body for a notification.
 // content false (the phone, through an outside service): the project and the situation only.
 export function alertText(t, group, { content = true } = {}) {
   const [first] = group.alerts;
   const many = group.alerts.length > 1;
-  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '' };
+  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '', pct: first.pct ?? '', used: dollars(t, first.usedUSD), limit: dollars(t, first.limitUSD) };
   const what = many ? t(`alert.many.${group.kind}`, { n: group.alerts.length }) : t(`alert.what.${first.reason}`);
   const why = many ? t('alert.why.many') : t(`alert.why.${first.reason}`, vars);
   const todo = many ? t('alert.do.many') : t(`alert.do.${first.reason}`);
-  const action = group.kind === 'clash' ? t('alert.openMap') : group.kind === 'limit' ? t('alert.openApp') : t('alert.open');
+  const action = group.kind === 'clash' ? t('alert.openMap') : group.kind === 'limit' ? t('alert.openApp') : group.kind === 'budget' ? t('alert.openBudget') : t('alert.open');
   // A plan limit belongs to the account, not to a project.
   const project = group.projectName ? ` · ${group.projectName}` : '';
   if (!content) return { what, why, todo, action, title: `session-map${project}`, body: what };
@@ -80,7 +83,7 @@ const CARDS_MAX = 3;
 const FRESH_MS = 10 * 60_000;
 const SEEN_KEY = 'sm.alerts.seen';
 const KINDS = ['finished', 'waiting', 'error', 'clash'];
-const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash', limit: 'waiting' };
+const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash', limit: 'waiting', budget: 'waiting' };
 const DEFAULTS = { browser: true, desktop: true, sound: false, ntfy: { enabled: false, topic: null }, perProject: {} };
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 

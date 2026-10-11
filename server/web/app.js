@@ -23,6 +23,7 @@ import { conversationsOf, createConvList, conversationCounts, listConversations,
 import { jobBadges, needsYou, nextUnseen, nowJobs, pendingCount } from './now.js';
 import { createMenu } from './menu.js';
 import { orchChip, orchSection, orchState } from './orchview.js';
+import { budgetSection } from './budgetview.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
@@ -975,6 +976,28 @@ async function openOrchestrator() {
 }
 
 // "Organizar sozinho" (or18): the switch of the project; the state brings the new value on the next look.
+// The project's monthly budget (or07): the field shows the owner's currency, the server keeps dollars.
+const budgetCurrency = () => ({ label: state?.currency?.code === 'USD' ? 'US$' : (state?.currency?.code ?? 'US$'), rate: state?.currency?.rate ?? 1 });
+
+async function setBudget(p, usd, field, button) {
+  if (Number.isNaN(usd)) return toast(errorText('bad-budget'));
+  button.disabled = true;
+  const res = await api.setProjectBudget(p.id, usd);
+  button.disabled = false;
+  if (!res.ok) return toast(errorText(res.error));
+  toast(usd === null ? t('budget.cleared') : t('budget.saved', { limit: money(usd) }));
+  return poll();
+}
+
+async function continueBudget(p, button) {
+  button.disabled = true;
+  const res = await api.continueProjectBudget(p.id);
+  button.disabled = false;
+  if (!res.ok) return toast(errorText(res.error));
+  toast(t('budget.continuedSaved'));
+  return poll();
+}
+
 async function setTidy(p, on, input) {
   input.disabled = true;
   const res = await api.setProjectTidy(p.id, on);
@@ -1429,6 +1452,7 @@ function projectDetails(node) {
     return [
       h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
       orchSection({ h, icon, t }, orchState(p), { onOpen: openOrchestrator, onTidy: (on, input) => setTidy(p, on, input) }),
+      budgetSection({ h, t, money, currency: budgetCurrency() }, p.budget, { onSave: (usd, field, button) => setBudget(p, usd, field, button), onContinue: (button) => continueBudget(p, button) }),
       sizes?.total ? h('p', { class: 'meta num' }, joinDots([h('span', {}, plural('size.files', sizes.total.files)), h('span', {}, plural('size.lines', sizes.total.lines))]),
         unowned ? linkTo(plural('size.unowned', unowned), () => setPointTab('files'), 'meta-link is-unowned') : null) : null,
       waiting.length ? section(t('waiting.title'),
@@ -2192,6 +2216,8 @@ function openFromAlert(group) {
   if (project?.id !== target.id) setProject(target.id);
   const [first] = group.alerts;
   if (group.kind === 'clash') return openWaiting();
+  // A project's monthly budget (or07): its panel, where the budget and "Continuar este mês" are.
+  if (group.kind === 'budget') return requestAnimationFrame(() => { if (tree) openPoint(tree); });
   if (group.alerts.length !== 1 || !first.sessionId) return undefined;
   const out = listConversations(state, { projectId: target.id, scope: 'all', showArchived: true });
   const hit = [...out.working, ...out.cutoff, ...out.waiting, ...out.recent].find((e) => e.row.sessionId === first.sessionId);

@@ -1,6 +1,7 @@
 // What a project chat reads first (orchestration or01, first step): a compact summary of the whole project built from the
 // state, never the history of its conversations. Pure: it receives the project and returns text.
 // Keep code-shaped tokens out of the fixed texts: the transcript reader counts them as item codes.
+import { projectBudgetLine } from '../budget.mjs';
 
 // The whole summary, in bytes: a first message that stays cheap however big the project grows.
 export const PROJECT_CONTEXT_MAX = 3800;
@@ -79,6 +80,8 @@ export function projectSections(project, rule) {
     hasArch ? null : 'This project has no architecture map yet.',
     // The arsenal (orchestration, all the AIs at once): the conductor knows the tool and the routing rule.
     'You may ask other AIs with the ask_other_ai tool (list_other_ais shows who is on): send a review to another family than the author\'s, DeepSeek only for public data, and verify what they answer.',
+    // The project's month against its own budget, when the person set one.
+    projectBudgetLine(project.budget) || null,
   ].filter(Boolean).join('\n');
   // The blank line before each section after the head is counted here, so each share holds only its own section.
   const fixed = size(head) + (rule ? size(rule) : 0) + SEPARATOR * (Object.keys(SHARE).length + 1);

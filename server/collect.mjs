@@ -5,6 +5,7 @@ import { digestOf } from './ai/digest.mjs';
 import { aiPlacements, aiStatus, explainRelations, lifeOf, placeChanged, withRelationWhys } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { alwaysOn, backgroundOf, isWorking, tidyOn } from './background.mjs';
+import { attachBudgets, readLedger } from './budget.mjs';
 import { attachToParts, codesInPart, filesVotingFor, itemByCodes, linkParts, ownersOf, partByCodes, partOfFiles, partsTouched, waitingItems } from './arch/attach.mjs';
 import { readArch } from './arch/detect.mjs';
 import { withLocalParts } from './arch/local.mjs';
@@ -683,6 +684,8 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     log('warn', 'changes-failed', { error: err.message });
   }
   const projects = built.map((b) => b.project);
+  // Each project's month against its own budget (or07): Claude's rows plus the outside AIs' ledger.
+  attachBudgets(built, userConfig, readLedger(smDir), now.getTime());
 
   const sum = (key) => round6(projects.reduce((s, p) => s + p.cost[key], 0));
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();

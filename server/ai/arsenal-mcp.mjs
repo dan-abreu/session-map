@@ -200,6 +200,8 @@ async function ask(args) {
   const body = { kind: a.kind, sensitivity: a.sensitivity, prompt: a.prompt };
   for (const k of ['fanout', 'author', 'schemaHint', 'why', 'exclude']) if (a[k] !== undefined) body[k] = a[k];
   if (SESSION_ID) body.sessionId = SESSION_ID;
+  // The folder this conversation runs in: its outside calls count in that project's monthly budget (or07).
+  body.cwd = process.cwd();
   const r = await callServer('POST', '/api/ai/ask', body, ASK_TIMEOUT_MS, token);
   if (r.impostor) return result(IMPOSTOR, true);
   if (r.down) return result(downText(r), true);

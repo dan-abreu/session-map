@@ -7,6 +7,7 @@
 import { join } from 'node:path';
 import { logAction, runAction } from '../actions.mjs';
 import { setTidy, tidyOn } from '../background.mjs';
+import { pauseRefusal } from '../budget.mjs';
 import { readRemoved } from '../hidden.mjs';
 import { log } from '../log.mjs';
 import { waitingFor } from '../parse/waiting.mjs';
@@ -246,6 +247,10 @@ export function createOrchestra({
 
   // ---- the tools ----
 
+  // The project's monthly budget used up and not continued (or07): nothing new starts and no chat is sent a new step; what
+  // runs goes on to the end of its turn. The person lifts it on the page. → the refusal, or null.
+  const paused = (project) => (project?.budget?.paused === true ? pauseRefusal(project.budget) : null);
+
   function itemOf(project, code) {
     if (typeof code !== 'string' || !code.trim()) return null;
     const want = code.trim().toLowerCase();
@@ -283,6 +288,7 @@ export function createOrchestra({
     if (!found) return fail(`unknown code: ${oneLine(args.code, 40)} is not an item of this project's map`);
     const run = runOf(args);
     if (!run) return fail(BAD_RUN);
+    if (paused(project)) return fail(paused(project));
     const opened = await serially(async () => {
       const refused = await refusal(orchId, true);
       if (refused) return fail(refused);
@@ -315,6 +321,7 @@ export function createOrchestra({
     if (!target) return fail('unknown key: not one of your chats (see list_chats)');
     const sessionId = target.sessionId ?? (target.chat ? await named(target.chat.key) : null);
     if (!sessionId) return fail('not ready yet: try again');
+    if (paused(project)) return fail(paused(project));
     const { chat } = target;
     if (chat && !chat.ended && busy(chat)) return queue(sessionId, args.instructions);
     // Open and idle it still holds its place, but back at work it is one of the 3 working. What waited for it (held
@@ -395,6 +402,7 @@ export function createOrchestra({
     if (!isText(args.instructions)) return fail('instructions: say what it must do');
     const run = runOf(args);
     if (!run) return fail(BAD_RUN);
+    if (paused(project)) return fail(paused(project));
     return serially(async () => {
       const refused = untouchable(orchId, project, args.sessionId) ?? await refusal(orchId, true);
       if (refused) return fail(refused);
@@ -666,7 +674,7 @@ export function createOrchestra({
 
   // One project: a pass when it is due, starting the orchestrator when there is none. → a pass went.
   async function tidy(project, state) {
-    if (opening.has(project.id)) return false;
+    if (opening.has(project.id) || paused(project)) return false;
     const orch = orchestratorOf(project.id);
     const orchId = orch?.sessionId ?? null;
     const pages = hub.pageChats();

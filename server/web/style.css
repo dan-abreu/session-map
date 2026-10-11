@@ -1469,6 +1469,19 @@ body.is-resizing .sheet { animation: none; }
 .orch-lede { margin: 0; max-width: 62ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-2); }
 .orch-switch { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; align-items: start; cursor: pointer; }
 .orch-switch input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--active); }
+/* The project's monthly budget (or07): under the orchestrator's block, the bar of the costs screen. */
+.budget-block { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.budget-status { display: grid; gap: 6px; }
+.budget-used, .budget-split, .budget-note { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.budget-split, .budget-label { font-size: var(--fs-sm); color: var(--ink-2); }
+.budget-note { max-width: 62ch; }
+.budget-block .br-track { width: 100%; }
+.budget-block.tone-warn .br-track span { background: var(--waiting); }
+.budget-block.tone-over .br-track span { background: var(--clash); }
+.budget-block.tone-warn .budget-used { color: var(--waiting-ink); font-weight: 650; }
+.budget-block.tone-over .budget-used { color: var(--clash-ink); font-weight: 650; }
+.budget-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.budget-row input { width: 12ch; }
 
 /* the session-map answer given for the person, and the blocks folded out of a reply */
 .msg-auto { justify-self: end; max-width: 88%; padding: 6px 12px; border: 1px dashed var(--line); border-radius: var(--r-lg); font-size: var(--fs-xs); color: var(--ink-2); }
