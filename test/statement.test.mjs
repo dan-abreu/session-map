@@ -84,12 +84,12 @@ test('a statement counts each reply once, keeps what it read and did, and splits
   const chat = st.byChat.get('s1');
   assert.equal(chat.title, 'Conversa de teste');
   assert.equal(chat.project, 'demo');
-  assert.deepEqual([...chat.agents.keys()].sort(), ['agente: Ler o código', 'conversa principal']);
+  assert.deepEqual([...chat.agents.keys()].sort(), ['ajudante: Ler o código', 'conversa principal']);
 
   const csv = detailCsv(st);
   assert.ok(csv.startsWith('\uFEFFdata;hora;projeto'));
   assert.equal(csv.trim().split('\r\n').length, 4);
-  assert.match(chatsCsv(st), /agente: Ler o código/);
+  assert.match(chatsCsv(st), /ajudante: Ler o código/);
   assert.match(statementHtml(st, { since: 0, pricesAsOf: '2026-10-11' }), /Extrato de gastos com Claude/);
 });
 

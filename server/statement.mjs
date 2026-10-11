@@ -17,6 +17,7 @@ import { basename, dirname, join, relative, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { loadPrices, priceKeyFor } from './cost.mjs';
+import { actOf } from './ledger.mjs';
 
 const PER_MILLION = 1_000_000;
 const WEB_SEARCH_USD = 10 / 1000; // $10 per 1,000 searches
@@ -97,7 +98,8 @@ export function placeOf(projectsDir, file) {
   let meta = {};
   try { meta = JSON.parse(readFileSync(file.replace(/\.jsonl$/, '.meta.json'), 'utf8')); } catch { /* no meta */ }
   const wf = parts.find((p) => p.startsWith('wf_'));
-  const kind = wf ? `agente de workflow${meta.workflowPhase ? ` (${meta.workflowPhase})` : ''}` : 'agente';
+  // In plain words: a helper the chat called, or a helper of a team (a workflow) with the team's step.
+  const kind = wf ? `ajudante da equipe${meta.workflowPhase ? ` (${meta.workflowPhase})` : ''}` : 'ajudante';
   const what = meta.description ? oneLine(meta.description, 70) : basename(file, '.jsonl');
   return { folder, sessionId, agent: `${kind}: ${what}`, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null };
 }
@@ -164,7 +166,7 @@ export async function readTranscript(file, { since = 0 } = {}) {
       r = {
         key, ts, model: msg.model ?? 'unknown', speed: msg.usage.speed ?? null, geo: msg.usage.inference_geo ?? null,
         effort: o.effort ?? null, sessionId: o.sessionId ?? null, ...usageOf(msg.usage),
-        did: [], wroteWords: 0, readWords: pendingRead.words, readWhat: pendingRead.items, ask: pendingAsk, keep: ts >= since,
+        did: [], acts: [], wroteWords: 0, readWords: pendingRead.words, readWhat: pendingRead.items, ask: pendingAsk, keep: ts >= since,
       };
       byKey.set(key, r);
       replies.push(r);
@@ -179,6 +181,7 @@ export async function readTranscript(file, { since = 0 } = {}) {
       if (r.model === 'unknown' && msg.model) r.model = msg.model;
     }
     r.did.push(...tools.map(toolLabel));
+    r.acts.push(...tools.map(actOf));
     r.wroteWords += words(texts);
   }
   const kept = replies.filter((r) => r.keep && r.model !== '<synthetic>').map(({ keep, ...r }) => ({
@@ -234,6 +237,8 @@ function addTo(b, r) {
 // what each file gave, by its path, size and time: a file that did not change is not read again. onProgress(done, of).
 export async function buildStatement({ projectsDir = join(homedir(), '.claude', 'projects'), since, prices = loadPrices(), cache = null, onProgress = null } = {}) {
   const seen = new Map();
+  const allSeen = new Set();
+  const allTime = new Map();
   const rows = [];
   const sessions = new Map();
   const events = new Map();
@@ -258,6 +263,16 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
     }
     onProgress?.(++done, files.length);
     const { titles, cwd } = data;
+    // Every reply of the chat, also before the period, for what the chat cost since it began.
+    for (const r of data.replies) {
+      if (allSeen.has(r.key)) continue;
+      allSeen.add(r.key);
+      const a = allTime.get(place.sessionId) ?? { usd: 0, first: Infinity, replies: 0 };
+      a.usd += priceReply(r, prices)?.total ?? 0;
+      a.first = Math.min(a.first, r.ts);
+      a.replies++;
+      allTime.set(place.sessionId, a);
+    }
     const replies = data.replies.filter((r) => r.ts >= since).map((r) => ({ ...r }));
     for (const e of data.events ?? []) {
       const k = `${e.text}|${Math.floor(e.at / 600_000)}`;
@@ -309,7 +324,7 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
     addTo(chat, r);
     addTo(get(chat.agents, r.who), r);
   }
-  return { rows, sessions, total, byDay, byHour, byChat, byModel, byProject, unpriced, events: [...events.values()].sort((a, b) => a.at - b.at) };
+  return { rows, sessions, allTime, total, byDay, byHour, byChat, byModel, byProject, unpriced, events: [...events.values()].sort((a, b) => a.at - b.at) };
 }
 
 // ---- writing -------------------------------------------------------------------------------------------------
@@ -324,6 +339,12 @@ const csvCell = (v) => {
 const csv = (header, lines) => `﻿${[header, ...lines].map((l) => l.map(csvCell).join(';')).join('\r\n')}\r\n`;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// The files a reply created or changed, with the lines it wrote and removed: "criou a.mjs (+40) | alterou b.mjs (+3 −1)".
+function filesWritten(r) {
+  return (r.acts ?? []).filter((a) => a.t && (a.k === 'create' || a.k === 'edit'))
+    .map((a) => `${a.k === 'create' ? 'criou' : 'alterou'} ${a.t} (+${a.add ?? 0}${a.del ? ` −${a.del}` : ''})`).join(' | ');
+}
+
 export function detailCsv(st, rows = st.rows) {
   const dayTotals = new Map();
   const lines = [...rows].sort((a, b) => a.ts - b.ts).map((r) => {
@@ -336,12 +357,12 @@ export function detailCsv(st, rows = st.rows) {
       c.input, c.cacheWrite, c.cacheRead, c.output, c.webSearch, c.total, dayTotals.get(day),
       r.ask ? `pedido de ${r.ask.words} palavras: ${r.ask.text}` : '',
       r.readWords ? `${r.readWords} palavras: ${r.readWhat}` : '',
-      r.did, r.wroteWords, r.cost ? '' : 'modelo sem preço conhecido'];
+      r.did, filesWritten(r), r.wroteWords, r.cost ? '' : 'modelo sem preço conhecido'];
   });
   return csv(['data', 'hora', 'projeto', 'conversa', 'id da conversa', 'quem respondeu', 'modelo', 'esforço', 'velocidade',
     'tokens de entrada novos', 'tokens gravados no cache', 'tokens lidos do cache', 'tokens de saída', 'dos quais pensamento', 'buscas na web',
     'US$ entrada', 'US$ gravação de cache', 'US$ leitura de cache', 'US$ saída', 'US$ buscas', 'US$ total da resposta', 'US$ acumulado no dia',
-    'o que você pediu (se foi agora)', 'o que leu antes de responder', 'o que fez nesta resposta', 'palavras que escreveu', 'observação'], lines);
+    'o que você pediu (se foi agora)', 'o que leu antes de responder', 'o que fez nesta resposta', 'arquivos criados ou alterados (linhas)', 'palavras que escreveu', 'observação'], lines);
 }
 
 export function chatsCsv(st) {
@@ -489,7 +510,7 @@ export function rowOut(st, r) {
     effort: r.effort, speed: r.speed ?? 'standard', priced: Boolean(r.cost),
     input: r.input, cacheWrite: r.cacheWrite5m + r.cacheWrite1h, cacheRead: r.cacheRead, output: r.output, thinking: r.thinking, webSearch: r.webSearch,
     usd: { input: round6(c.input), cacheWrite: round6(c.cacheWrite), cacheRead: round6(c.cacheRead), output: round6(c.output), webSearch: round6(c.webSearch), total: round6(c.total) },
-    ask: r.ask, readWords: r.readWords, readWhat: r.readWhat, did: r.did, wroteWords: r.wroteWords,
+    ask: r.ask, readWords: r.readWords, readWhat: r.readWhat, did: r.did, wroteWords: r.wroteWords, acts: r.acts ?? [],
   };
 }
 
