@@ -302,4 +302,4 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the New project window (`id95`) gets a choice: only the folder on this computer, or the folder plus a GitHub repository (private unless the person ticks public), created with the GitHub login already on the computer, with a first save sent there.
   - How to confirm it is done: create a project choosing "on the computer and on GitHub": the folder exists, the repository shows on github.com under your account, private, with a README; choosing "only on the computer" nothing goes to GitHub.
   - Where it went: `sv15`, `mm51`.
-  - Status: in progress (started on 2026-10-11).
+  - Status: built on main on 2026-10-11 (`sv15`, `mm51` done and tested; checked on the running session-map); waiting for the owner to try it.
