@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.0
+
+Claude now conducts a whole team: the other AIs work under it, a chat can finish a request on its own, and the
+screen around the map is calmer.
+
+- New: a calmer screen. One slim top bar with one amber "needs you" count, the map's options in one quiet row, the
+  conversation list as an inbox (Needs you, Working, Cut off, Recent, Archived) and a chat header on one line.
+- New: Home and Conversations, a navigation shell with help and a short tour.
+- New: other AIs (OpenAI, Gemini, DeepSeek, OpenRouter) work under Claude. You paste the keys, switch each one on or
+  off and set one daily cap; Claude picks the AI per task by kind, privacy, cost and measured accuracy, sends reviews
+  to another family, never sends client data to DeepSeek and checks what comes back. A panel shows what each AI did,
+  how much of it Claude accepted and what it cost; a measuring bench keeps the choice honest.
+- New: the Autonomous way, the default of a new chat: it finishes the request without asking, lists the decisions it
+  took and what was left for you, never force-pushes and keeps a safety copy before deleting. It only stops before
+  spending past the monthly limit, set on a card on Home.
+- New: an orchestrator chat per project that opens activity chats, follows them and gathers their results, with brakes
+  on how many run at once and per day; "Organize on its own" stays off until you turn it on.
+- New: an agreed restart: session-map waits for the chats to finish their turn, restarts and resumes them.
+- New: a Cut off panel brings back everything that was working when the PC restarted, with Continue on each.
+- New: the project's folders and files grow on the left of the root box; pointing at a file lights its parts, a live
+  dot marks the files a conversation edits now, and the files with no box stand out.
+- New: the map only works (and spends) on projects someone works on; a "Keep always up to date" switch keeps one
+  project fresh anyway.
+- New: the Flow in three levels (the general view with people and outside services, inside a part, and Journeys),
+  moved by hand like the map, and exported in more formats; the mind map exports to Markdown, XMind and FreeMind.
+- New: cards made and dragged by hand on the Board; the AI's plain-words reason for a relation and for where a chat
+  was placed; a savings report and an explanation of a high cost in Costs; a watch on the plan's weekly limit.
+- New: a look-only link for showing the map to someone, with no chat and no buttons.
+- Fixed: opening a chat never waits for the map; a page chat reopens whole and quickly; archive and delete answer at
+  once; a chat opened in the home folder no longer makes session-map count the whole disk.
+- In progress, not on screen yet: the Foundation (exact facts about a project, its health, versions, care and
+  practices). Its pieces ship unhooked and keep growing in the next versions.
+
+
 ## 0.2.5
 
 Everything you asked for, in one place: the Requests tab shows each request in your own words and the work it became.
