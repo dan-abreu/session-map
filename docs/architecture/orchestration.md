@@ -56,9 +56,9 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Research of 2026-10-10 (official price pages and independent leaderboards): Haiku 5.5 costs the same as the cheapest outside models (US$ 0.10 / 0.50 per million tokens), so an outside AI earns its place by diversity, not price: GPT-6.1 Sol as the reviewer from another family when Claude wrote the code, DeepSeek V4 Pro as a cheap try on public code only, Gemini Flash for fast reading of long pieces. Personal or client data, keys and `.env` never go to DeepSeek (stored in China, trains by default); Gemini only on a paid key. Portuguese, code review and bulk accuracy have no independent comparison yet: measure them in our own trial (`or12`) before trusting any routing, and keep the routing configurable.
 - [x] **Lean context for activity chats** `or06`
   - Each gets only its part's context; long chats are summarized automatically.
-- [ ] **Monthly budget per project** `or07`
+- [ ] **in progress:** **Monthly budget per project** `or07`
   - Alert at 80% and a polite pause at 100%.
-- [ ] **Priority queue** `or08`
+- [ ] **in progress:** **Priority queue** `or08`
   - Urgent work first; detail inspection and Flow polish in the gaps. The important never stops at a limit (see `wa09`).
 
 ### Board of roles
@@ -79,9 +79,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [x] **important:** A panel of the AIs measured by real use `or16`
   - Done 2026-10-10 (deb1ed8), reviewed by GPT-6.1 Sol through the arsenal (4 findings, all fixed). The cap is US$ 5 a day.
   - Per AI and per kind of work, from what really happened (activity log and Claude's accept/refuse): calls, share accepted, cost per accepted piece, time, today's spend against the one daily cap (US$ 5, set by the owner on 2026-10-10), next to the bench's score. Real-use results with at least 20 decided pieces feed the routing like the bench does. Asked on 2026-10-10: "voce só fez testes, não está usando elas, pode colocar algum painel para acessar os dados delas, para fazer as medições de acordo como vamos usando".
-- [ ] **important:** The conductor's teams use the other AIs in real work `or19`
+- [x] **important:** The conductor's teams use the other AIs in real work `or19`
+  - Done 2026-10-11: one rule in the conductor's prompt for every way that conducts (`server/chat/run.mjs`) and the plugin skill `session-map:arsenal` (`skills/arsenal/SKILL.md`), with a ready line for workflow agents' prompts. Reviewed by GPT-6.1 Sol through the arsenal (US$ 0.012, 5 points, all applied).
   - Asked on 2026-10-11 ("voce ta usando as outras IA´s para fazer essas taferas? pra ver se batareia o projeto"): until now the outside AIs did one review; the teams were all Claude. In every workflow and helper team: the reviewer from another family goes through ask_other_ai (GPT-6.1 Sol when Claude wrote), long reading through Gemini, self-contained code drafts through GPT-6.1 Sol with Claude applying and running the tests, and every piece ends with report_result, so the panel (`or16`) shows the saving with real numbers.
-- [ ] **important:** Watch the outside AIs' versions `or15`
+- [ ] **in progress · important:** Watch the outside AIs' versions `or15`
   - Refinements kept here (2026-10-11): measure GPT-6 Astra; re-measure Gemini 3.8 Flash with its new request settings; grow the bench's code set from 15 to 20+ tasks so code results count in the routing (MIN_MEASURED 20).
   - Once a day, ask each provider for its model list and warn when a model in use disappears, is scheduled to retire or changes the version behind its name (e.g. `deepseek-flash`); re-run the bench on just that model under a small cap so the routing follows; re-check prices on a schedule (Gemini 3.8 Flash doubles on 2027-01-01). Asked on 2026-10-10 ("as API tem versao?") after OpenAI's gpt-6 models started refusing `max_tokens`.
 - [ ] **in progress · detail:** Arsenal: the conductor calls the right AI for each task `or11`
