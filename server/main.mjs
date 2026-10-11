@@ -49,6 +49,7 @@ import { setPlacement } from './placements.mjs';
 import { addCard, moveCard, readCards, removeCard } from './cards.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
 import { LISTEN_RETRY_MS, createRestarter, listenWithRetry, resumeAfterRestart } from './restart.mjs';
+import { createStatementStore, isStatementPath, statementRoute } from './statement-route.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
@@ -187,6 +188,8 @@ export function createApp({
     // The project's month against its own budget (or07), from the newest finished state: a chat start never waits a collect.
     projectBudget: (projectId) => newest?.projects?.find((p) => p.id === projectId)?.budget ?? null,
   });
+  // The spend statement (sb09): built in the background from the transcripts, on the page's Costs tab.
+  const statements = demo ? null : createStatementStore({ projectsDir: join(dir, 'projects'), smDir });
   // The last good state on disk: a restart answers with it at once while the first collect (up to a minute) runs.
   const stateCopy = smDir ? join(smDir, 'state-cache.json') : null;
   let ready = false;
@@ -790,6 +793,12 @@ export function createApp({
       return cardsRoute(req, res, parts);
     }
     if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
+    // Every reply with what it read and did is as private as the chats: the page's token only, never the look-only key.
+    if (isStatementPath(path)) {
+      const allowed = !statements ? { ok: false, status: 403, error: 'demo' } : look ? { ok: false, status: 403, error: 'look-only' }
+        : sameToken(cookieToken(req), token) ? { ok: true } : { ok: false, status: 401, error: 'token-required' };
+      return statementRoute({ store: statements, send, HttpError }, req, res, url, allowed);
+    }
       if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
       if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');
       return send(res, 200, { ok: true });

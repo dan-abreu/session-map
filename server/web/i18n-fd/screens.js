@@ -5,8 +5,9 @@ import nav from './screens-nav.js';
 import home from './screens-home.js';
 import saude from './screens-saude.js';
 import guide from './screens-guide.js';
+import statement from './screens-statement.js';
 
-const PARTS = [nav, home, saude, guide];
+const PARTS = [nav, home, saude, guide, statement];
 const merge = (lang) => Object.assign({}, ...PARTS.map((p) => p[lang] ?? {}));
 
 const mergeTech = (lang) => Object.assign({}, ...PARTS.map((p) => p.tech?.[lang] ?? {}));

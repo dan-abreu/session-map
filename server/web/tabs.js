@@ -10,6 +10,7 @@ import { costSignal } from './signals.js';
 import { emptyState } from './empty.js';
 import { requestsOf } from './requests.js';
 import { providerSpend, usdText } from './aihelpers.js';
+import { createStatement } from './statementview.js';
 
 const HISTORY_DEBOUNCE_MS = 250;
 
@@ -28,6 +29,9 @@ export function createTabs(ctx) {
     h, t, toast: (m) => ctx.toast(m), errorText: (c) => ctx.errorText(c), confirm: (text, label, opts) => ctx.confirm(text, label, opts),
     project: () => ctx.project(), redraw: () => { if (boardRoot) renderBoard(boardRoot, false); },
   });
+
+  // The detailed statement (sb09) keeps its own element, so a redraw of the tab keeps its filters and pages.
+  const statement = createStatement({ h, t, lang: () => ctx.lang(), errorText: (c) => ctx.errorText(c) });
 
   const partName = (p, id) => p.arch.parts.find((x) => x.id === id)?.name ?? '';
   const empty = (art, title, text, compact = false) => emptyState({ h, icon: ctx.icon }, { art, title, text, compact });
@@ -231,6 +235,7 @@ export function createTabs(ctx) {
           h('span', { class: 'br-name' }, p.name),
           h('span', { class: 'br-value num' }, fmt.money(spent(p))),
           h('span', { class: 'br-track', 'aria-hidden': 'true' }, h('span', { style: `width:${((spent(p) / maxProject) * 100).toFixed(1)}%` })))))),
+      statement.el(),
       savingsSection(),
       h('section', { class: 'tree-block', id: 'aiCosts' }, h('h3', {}, tt('costs.aiTitle')), h('p', { class: 'view-note' }, tt('costs.aiLede')), aiList, providerList(tt)),
       estimates.length ? h('section', { class: 'tree-block' }, h('h3', {}, tt('costs.estimates')),

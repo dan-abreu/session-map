@@ -80,7 +80,7 @@ test('a statement counts each reply once, keeps what it read and did, and splits
   close(st.total.usd, 3 * (10 * 4 + 1000 * 20) / M);
   const second = st.rows.find((r) => r.key === 'm2');
   assert.equal(second.readWords, 4);
-  assert.match(second.readWhat[0], /Read a\.txt \(4 palavras\)/);
+  assert.match(second.readWhat, /Read a\.txt \(4 palavras\)/);
   const chat = st.byChat.get('s1');
   assert.equal(chat.title, 'Conversa de teste');
   assert.equal(chat.project, 'demo');
