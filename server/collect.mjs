@@ -31,6 +31,7 @@ import { autoFetch } from './sources/fetch.mjs';
 import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
 import { planLimits } from './sources/limits.mjs';
 import { runGit } from './sources/gitqueue.mjs';
+import { createdRoots } from './newproject.mjs';
 import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
@@ -649,6 +650,13 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
       known.add(key);
       groups.push({ root: t.root, items: [] });
     }
+  }
+  // A folder the page created for a new project (sv14) is a project before its first conversation runs there.
+  for (const root of createdRoots(userConfig)) {
+    const key = normalizePath(root);
+    if (known.has(key) || !isDir(root)) continue;
+    known.add(key);
+    groups.push({ root, items: [] });
   }
   // One broken project must not blank the page for the others.
   const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {

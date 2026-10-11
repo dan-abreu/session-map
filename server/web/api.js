@@ -73,6 +73,8 @@ export const api = {
   conversation: (id) => call('GET', `/api/conversation/${seg(id)}`),
   deleteConversation: (id) => call('DELETE', `/api/conversation/${seg(id)}`),
   placeConversation: (id, body) => call('POST', `/api/conversation/${seg(id)}/place`, body),
+  newProjectPlace: () => call('GET', '/api/projects/new'),
+  createProject: (body) => call('POST', '/api/projects/new', body),
   // The cards the owner makes by hand in the Board (mm14), kept in session-map's own folder.
   cards: () => call('GET', '/api/cards'),
   addCard: (body) => call('POST', '/api/cards', body),

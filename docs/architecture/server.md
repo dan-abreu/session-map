@@ -51,6 +51,11 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
   - From `id89`. The restart waits until no chat is in the middle of a step (or each one saved where it was), and the chats it cut off continue without a click.
   - Built on 2026-10-11 (`server/restart.mjs`, `POST /api/restart`, the `restart_session_map` tool of the arsenal): one pending restart, fired when no page chat is mid-turn or after 10 minutes; the chats are resumed with a note by the new process. Not yet tried against the real server: the first real restart is its end-to-end test.
 
+### New projects
+
+- [ ] **in progress:** Create a new project's folder and show it as a project before any conversation runs there `sv14`
+  - From `id95`. `POST /api/projects/new` creates the folder (a safe name, inside a folder that exists, never over one that exists) and remembers it in the person's `config.json`; the map lists it until its first conversation makes it a project like the others.
+
 ### Later (ideas, not committed)
 
 - [x] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`

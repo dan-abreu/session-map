@@ -291,3 +291,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Decided: 2026-10-11 — both: talk directly with the AI one chooses, and keep Claude (or any AI the person picks) as the orchestrator with the person setting the order of the AIs and turning the automatic rules off.
   - Decided: 2026-10-11 — four steps in this order: 1) a professional chat (model picker, edit and resend, regenerate, code blocks, context, usage meter, history, professional terms); 2) talk directly with GPT, Gemini and DeepSeek through the owner's keys; 3) the owner's own rules for the AIs (order, on/off, optional daily cap and privacy rules, with warnings); 4) the other AIs working on files and orchestrating through each company's official agent (Codex, Gemini CLI; DeepSeek through Claude Code's engine) — "jeito 1".
   - Status: in progress (step 1, the professional chat, started on 2026-10-11 after the new look went live).
+- [ ] **in progress:** Create the folder of a new project from session-map `id95`
+  - Asked: 2026-10-11 — "preciso com urgente poder criar pasta, para criar um novo projeto"
+  - What it means: a "New project" button on the page asks for the project's name and where to put it, creates that folder on the computer and shows the new project on the map at once, with its project chat ready to start, without opening Claude Code in a terminal first.
+  - How to confirm it is done: in the project picker, click "New project", type a name, keep the suggested place and confirm: the folder exists on the disk, the map opens on the new project and its chat starts there.
+  - Where it went: `sv14`, `mm50`.
+  - Status: in progress (started on 2026-10-11).
