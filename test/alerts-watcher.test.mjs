@@ -91,3 +91,13 @@ test('start never reads the state in the same tick: a restart must open the port
   assert.equal(reads, 1);
   watcher.stop();
 });
+
+test('wa09: a plan limit reaches delivery and the feed even though it has no project, and a project\'s switches do not hide it', async () => {
+  const { watcher, states, delivered } = setup({ prefs: { perProject: { 'shop-1': { finished: false, waiting: false, error: false, clash: false } } } });
+  const week = { hit: true, resetsAt: '2026-10-12T21:00:00.000Z', resetsText: '6pm' };
+  states.push(stateOf(), { ...stateOf(), limits: { weekly: week, session: { hit: false, resetsAt: null, resetsText: null } } });
+  await watcher.tick();
+  await watcher.tick();
+  assert.deepEqual(delivered[0].map((a) => [a.kind, a.reason, a.projectId]), [['limit', 'weekly', null]]);
+  assert.deepEqual(watcher.since(0).alerts.map((a) => a.kind), ['limit']);
+});

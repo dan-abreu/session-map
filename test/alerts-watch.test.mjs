@@ -58,3 +58,27 @@ test('conversations the page itself drives are left to it', () => {
   const after = snapshotOf(stateOf([chat('a', { status: 'idle' }), chat('b', { status: 'idle' })]));
   assert.deepEqual(transitionsOf(before, after, { skip: new Set(['a']) }).map((e) => e.sessionId), ['b']);
 });
+
+// wa09: the plan's limits sit in the state beside the projects; they belong to the account, so the alert has no project.
+const limitsOf = (weekly, session = { hit: false, resetsAt: null, resetsText: null }) => ({ weekly, session });
+const WEEK = { hit: true, resetsAt: '2026-10-12T21:00:00.000Z', resetsText: 'Oct 12, 6pm (America/Fortaleza)' };
+const OFF = { hit: false, resetsAt: null, resetsText: null };
+const withLimits = (limits) => ({ ...stateOf([]), limits });
+
+test('hitting the weekly limit is told once, with the reset time and no project', () => {
+  const events = diff(withLimits(limitsOf(OFF)), withLimits(limitsOf(WEEK)));
+  assert.deepEqual(events, [{ kind: 'limit', reason: 'weekly', projectId: null, projectName: '', sessionId: null, resetsAt: WEEK.resetsAt, resetsText: WEEK.resetsText }]);
+  assert.deepEqual(diff(withLimits(limitsOf(WEEK)), withLimits(limitsOf(WEEK))), [], 'still the same limit: no news');
+});
+
+test('the 5-hour limit is told as its own reason, and a limit that lifts says nothing', () => {
+  const session = { hit: true, resetsAt: '2026-10-10T18:00:00.000Z', resetsText: '3pm' };
+  assert.deepEqual(diff(withLimits(limitsOf(OFF)), withLimits(limitsOf(OFF, session))).map((e) => [e.kind, e.reason]), [['limit', 'session']]);
+  assert.deepEqual(diff(withLimits(limitsOf(WEEK)), withLimits(limitsOf(OFF))), []);
+});
+
+test('a new week limit with another reset time is news again; a state with no limits at all is quiet', () => {
+  assert.equal(diff(withLimits(limitsOf(WEEK)), withLimits(limitsOf({ ...WEEK, resetsAt: '2026-10-19T21:00:00.000Z' }))).length, 1);
+  assert.deepEqual(diff(stateOf([]), stateOf([])), []);
+  assert.deepEqual(transitionsOf(null, snapshotOf(withLimits(limitsOf(WEEK)))), [], 'the first look is only a baseline');
+});

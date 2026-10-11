@@ -25,4 +25,4 @@ The convention that makes a project's architecture a folder of plain markdown: a
 
 - [x] **Claude:** Layers from a mermaid block or from `##` headings `am01`
 - [x] **Claude:** English and Portuguese section names and tokens `am02`
-- [ ] **detail:** Tables in a part file as items `am03`
+- [x] **detail:** Tables in a part file as items `am03`

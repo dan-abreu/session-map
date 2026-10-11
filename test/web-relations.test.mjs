@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  relationKey, strengthOf, declaredPairs, isDeclared, sortRelations, parseIgnored, serializeIgnored, splitIgnored, relationTip,
+  relationKey, strengthOf, declaredPairs, isDeclared, sortRelations, parseIgnored, serializeIgnored, splitIgnored, relationTip, relationWhy,
 } from '../server/web/relations.js';
 
 const link = (a, b, weight, kinds = ['shared-chat']) => ({ a, b, weight, since: null, reasons: kinds.map((kind) => ({ kind, text: kind })) });
@@ -57,4 +57,11 @@ test('splitIgnored: what stays on the map, and what the person asked to stop see
 test('relationTip: "A ↔ B · 3 reasons" for the hover', () => {
   const tip = relationTip(link('a', 'b', 3, ['shared-chat', 'shared-branch', 'lineage']), (id) => id.toUpperCase(), (n) => `${n} reasons`);
   assert.equal(tip, 'A ↔ B · 3 reasons');
+});
+
+test('relationWhy: the AI\'s sentence for a relation, tidied; nothing when there is none', () => {
+  assert.equal(relationWhy({ ...link('api', 'web', 1), why: '  They share the basket.  ' }), 'They share the basket.');
+  assert.equal(relationWhy(link('api', 'web', 1)), '');
+  assert.equal(relationWhy({ ...link('api', 'web', 1), why: '   ' }), '');
+  assert.equal(relationWhy({ ...link('api', 'web', 1), why: 7 }), '');
 });

@@ -1,19 +1,17 @@
 // The census of a project (fd01): every file, counted letter by letter by the program (no AI, no dependency), with sums
 // per folder, per part of the map and in total, what was left out apart, and the difference since the last round.
 // Contract: .dev/fundacao/00-contratos.md section 1. `censusOf` only reads the disk; the refresh writes census.json.
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { isSecretsFile } from '../files.mjs';
 import { log } from '../log.mjs';
 import { kindOfFile, lineCount } from '../sources/count.mjs';
+import { runGit } from '../sources/gitqueue.mjs';
 import { lex } from './lex.mjs';
 
-const run = promisify(execFile);
-const GIT = { timeout: 10_000, maxBuffer: 64 * 1024 * 1024, windowsHide: true };
+const GIT = { timeout: 10_000, maxBuffer: 64 * 1024 * 1024 };
 const DEP_DIRS = new Set(['node_modules', 'vendor', 'vendors', 'third_party', 'third-party', 'bower_components', '.venv', 'venv', 'site-packages', 'pods', '.yarn', '.pnpm-store']);
 // A library folder is only counted, never listed, and counting stops here: a number, not a walk of a whole disk.
 const DEP_WALK_MAX = 200_000;
@@ -62,12 +60,8 @@ function wordCount(text) {
 }
 
 async function git(root, args) {
-  try {
-    return (await run('git', args, { ...GIT, cwd: root })).stdout;
-  } catch (err) {
-    if (err.killed || err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') log('warn', 'git-too-slow', { command: args.join(' '), code: err.code ?? err.signal });
-    return null;
-  }
+  const { err, stdout } = await runGit(root, args, GIT);
+  return err ? null : stdout;
 }
 
 const split0 = (out) => out.split('\0').filter(Boolean);

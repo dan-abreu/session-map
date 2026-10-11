@@ -149,3 +149,21 @@ test('the team tree file and commit lists clamp their column, so a long path ell
     assert.ok(rules.some(([, , body]) => /grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(body)), `${sel} has grid-template-columns: minmax(0, 1fr)`);
   }
 });
+
+test('workflowView shows the words the conversation gave the team next to the owner message, and a box with no code as just the box (mm37)', async () => {
+  const { workflowView } = await import('../server/web/workflows.js');
+  const base = { text: 'about the currency', ts: ago(30) };
+  const el = workflowView(viewCtx, flow('wf_a', [agent('a1')], { request: { ...base, words: 'Taxes per city', item: { projectId: 'shop', partId: 'orders', code: null } } }));
+  assert.match(find(el, 'wf-ask-words')[0].text, /wf\.told:Taxes per city/, 'what the team was told, since the owner message may answer something else');
+  assert.match(find(el, 'wf-item')[0].text, /wf\.itemBox:shop › orders$/, 'a box the chat was opened on, with no item code');
+  const plain = workflowView(viewCtx, flow('wf_a', [agent('a1')], { request: { ...base, item: null } }));
+  assert.equal(find(plain, 'wf-ask-words').length, 0);
+  assert.equal(find(plain, 'wf-item').length, 0);
+});
+
+test('the texts of mm37 exist in both languages', async () => {
+  const { LANGS } = await import('../server/web/i18n.js');
+  for (const lang of ['en', 'pt-BR']) {
+    for (const key of ['wf.told', 'wf.itemBox', 'now.teamDotTitle', 'now.teamsAria.one', 'now.teamsAria.other', 'changes.askedWords', 'changes.askedByHelper']) assert.ok(LANGS[lang][key], `${lang} ${key}`);
+  }
+});

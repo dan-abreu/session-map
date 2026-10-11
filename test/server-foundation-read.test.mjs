@@ -295,8 +295,13 @@ const keys = (o) => Object.keys(o).sort();
 const LINES = ['blank', 'code', 'comment', 'total'];
 const SUM = ['bytes', 'chars', 'files', 'lines', 'words'];
 
-test('demo: exactly the five files of the B1 contract', () => {
-  assert.deepEqual(readdirSync(join(DEMO_DIR, ID)).sort(), ['census-log.jsonl', 'census.json', 'facts.json', 'read-ledger.json', 'sections.json']);
+// Block 5 (B5-T12) owns four more demo files in the same folder; nothing else may land there.
+test('demo: the five files of the B1 contract, plus only the guide files of block 5', () => {
+  const B1 = ['census-log.jsonl', 'census.json', 'facts.json', 'read-ledger.json', 'sections.json'];
+  const B5 = ['compass.json', 'ideas.json', 'practices.json', 'profile.json'];
+  const names = readdirSync(join(DEMO_DIR, ID));
+  for (const name of B1) assert.ok(names.includes(name), `missing ${name}`);
+  assert.deepEqual(names.filter((n) => !B1.includes(n) && !B5.includes(n)), [], 'only B1 and B5 files');
 });
 
 test('demo census.json keeps the census contract and its sums add up', () => {

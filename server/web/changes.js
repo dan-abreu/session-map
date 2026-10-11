@@ -75,6 +75,20 @@ export function whoWords(tt, row) {
   return [who, title, model].filter(Boolean).join(' · ');
 }
 
+// The way back from a changed file to what the owner asked (mm31): the owner message before the launch, the words the
+// conversation gave the team or the helper (mm37), and who did it. null when no request is on record. ctx: h, t, icon, relative.
+export function askView({ h, t, icon, relative }, agent) {
+  const ask = agent?.request;
+  if (!ask?.text) return null;
+  const team = agent.workflow;
+  const label = agent.label || t('changes.who.helperUnnamed');
+  return h('div', { class: 'chg-ask', ...(team ? { style: `--wf-h:${workflowHue(team.id)}` } : {}) },
+    h('p', { class: 'chg-ask-head' }, icon('chat', 'chg-ask-icon'), t('changes.asked'), ask.ts ? h('span', { class: 'chg-ask-when num' }, relative(ask.ts)) : null),
+    h('p', { class: 'chg-ask-text' }, ask.text),
+    ask.words ? h('p', { class: 'chg-ask-words' }, t('changes.askedWords', { words: ask.words })) : null,
+    h('p', { class: 'chg-ask-by' }, team ? h('span', { class: 'chg-ask-swatch', 'aria-hidden': 'true' }) : null, team ? t('changes.askedBy', { team: team.name, label }) : t('changes.askedByHelper', { label })));
+}
+
 // What session-map itself did to a project (fd14): a row with origin 'session-map', its care mode and, while it still can, Undo.
 export const isOwnRow = (row) => row?.origin === 'session-map';
 export const canUndo = (row) => isOwnRow(row) && row.undoable === true && row.undone !== true;
@@ -380,13 +394,8 @@ export function createChangesView(ctx) {
     if (!res.ok) return body.replaceChildren(h('p', { class: 'view-note' }, ctx.errorText(res.error)));
     const parts = [];
     // The way back from a changed file to what the owner asked (mm31).
-    const ask = row.agent?.request;
-    if (ask?.text) {
-      parts.push(h('div', { class: 'chg-ask', style: `--wf-h:${workflowHue(row.agent.workflow.id)}` },
-        h('p', { class: 'chg-ask-head' }, ctx.icon('chat', 'chg-ask-icon'), tt('changes.asked'), ask.ts ? h('span', { class: 'chg-ask-when num' }, ctx.relative(ask.ts)) : null),
-        h('p', { class: 'chg-ask-text' }, ask.text),
-        h('p', { class: 'chg-ask-by' }, h('span', { class: 'chg-ask-swatch', 'aria-hidden': 'true' }), tt('changes.askedBy', { team: row.agent.workflow.name, label: row.agent.label || tt('changes.who.helperUnnamed') }))));
-    }
+    const ask = askView({ h, t: tt, icon: ctx.icon, relative: ctx.relative }, row.agent);
+    if (ask) parts.push(ask);
     if (row.from) parts.push(h('p', { class: 'chg-note' }, tt('changes.renamedFrom', { from: row.from })));
     if (res.error === 'sensitive') parts.push(h('p', { class: 'chg-note' }, tt('changes.sensitive')));
     else if (typeof res.before === 'string') {

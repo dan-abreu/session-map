@@ -613,6 +613,7 @@ test('Configurações is one sheet of the page, opened from the run menu of both
   assert.match(app, /openSettings: \(binding, opener\) => runSettings\.open\(binding, opener\)/);
   assert.match(app, /id: 'settings', label: t\('settings\.title'\)[^\n]*runSettings\.open\(chat\.isOpen\(\) \? chat\.settings\(\) : flow\.chatSettings\(\), \$\('#tab-more'\)\)/);
   assert.match(read('server/web/flowview.js'), /openSettings: ctx\.openSettings/);
+  assert.match(app, /if \(!lookMode\) entries\.push\(\{ id: 'settings'/, 'a look-only page gets no Configurações');
   // The ⋯ of the map's chat gets every action of a conversation, in the spec's order.
   const more = app.slice(app.indexOf('function chatMore('), app.indexOf('// ---- move or rename'));
   const ids = [...more.matchAll(/id: '(\w+)'/g)].map((m) => m[1]);

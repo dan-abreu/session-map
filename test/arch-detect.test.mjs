@@ -195,3 +195,16 @@ test('readArch shows the files again when origin/main moves', async () => {
     assert.equal(shows, 4);
   } finally { cleanup(root); }
 });
+
+// collect already asked git which branch is main; a project with none must not pay two more rev-parse on every read.
+test('a main branch already known to be missing is not looked for again', async () => {
+  const root = repo({ 'a.txt': 'a' });
+  const asked = [];
+  const exec = async (cwd, args) => { asked.push(args.join(' ')); return ''; };
+  try {
+    assert.equal((await readArch(root, {}, { exec, mainBranch: null })).source, 'none');
+    assert.deepEqual(asked.filter((a) => a.startsWith('rev-parse')), []);
+    assert.deepEqual((await detectArch(root, {}, { exec, mainBranch: null })).source, 'none');
+    assert.deepEqual(asked.filter((a) => a.startsWith('rev-parse')), []);
+  } finally { cleanup(root); }
+});

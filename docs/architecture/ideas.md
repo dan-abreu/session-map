@@ -7,13 +7,13 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28, id73
-- Following the work live: id30, id33
+- The model, the orchestration and other AIs: id22, id23, id24, id25, id26, id27, id28, id73, id93
+- Following the work live: id30, id33, id92
 - Files, terminal and the first use of a repository: id41, id42
-- The Flow: id45, id46, id47, id48, id49, id50
-- Clarity and polish: id51, id52, id53, id54, id55, id56
+- The Flow: id45, id46, id47, id48, id49, id50, id85
+- Clarity and polish: id51, id52, id53, id54, id55, id56, id83, id87
 - Reading every detail: id57, id58, id59, id60, id61
-- Everything up to date and professional: id62, id63, id64, id70, id71, id72
+- Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
 - This registry: id65, id66, id67
 
 ## How it works
@@ -62,7 +62,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: every relevant AI by category (text and code, image, video, voice, transcription, web search, document reading, vector search, browser automation, workflows, gateways), with what it is good for, price, API, open weights and privacy notes, from official price pages where possible.
   - How to confirm it is done: the "Which AI for each task" section in the tool lists each category with at least one choice, its price, the source and the date the price was checked.
   - Where it went: `mm19` (the research itself was done on 2026-10-09 and kept in the maintainers' notes).
-  - Status: accepted.
+  - Status: later (owner's choice on 2026-10-10, `op06`).
 - [ ] Discover kept up to date in full, and for every AI `id24`
   - Asked: 2026-10-09 11:42 — "como está sendo essa busca de repositorios e skills no github?"; 2026-10-09 11:43 — "sim, e quero saber como ela é atualizada na integra"; 2026-10-09 11:44 — "tem que ser para todas as IA, porque vamos trabalhar com outra IA também, como falamos antes para voce orquestrar e outra IA fazer"
   - What it means: Discover refreshes itself in the background and pages past 50 results per topic; it also lists what works with Codex, Gemini, Cursor and any MCP client, with a "Works with" filter; and it recommends what fits the open project.
@@ -80,7 +80,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the orchestration chat weighs each relevant proposal as CEO, Product, Marketing, Finance, Operations, Technology and Legal would (value, cost to build and run, return, timing, positioning, legal risk) and ends with a recommendation; decisions on money, accounts and business priority stay with the owner.
   - How to confirm it is done: a proposal put to the orchestration chat comes back with one paragraph per applicable role and a recommendation, and a money decision waits for the owner's one-click confirmation.
   - Where it went: `or09`, `or10`.
-  - Status: accepted.
+  - Status: later (owner's choice on 2026-10-10, `op06`).
 - [ ] A general project chat, an orchestration chat and activity chats, and doing the work through session-map `id27`
   - Asked: 2026-10-09 12:53 — "é bom já usar o nosso programa pra ir fazendo as coisas o que acha? assim fica facil eu acompanhar e gastar menos token"; 2026-10-09 12:57 — "vamos trabalhar por la ou continuar aqui?"; 2026-10-09 12:58 — "podemos sim só me avisa quando for por la"; 2026-10-09 12:59 — "era bom o chat geral para ir colocando a conversa do projeto como estamos fazendo e abrir chat especificos, tipo um chat de orquestração e um chat de atividades"
   - What it means: one orchestration chat per project, pinned on top, where the owner says what he wants; it opens focused activity chats on items (after a confirmation), hears back from each and keeps itself short; the owner follows everything from session-map instead of one long chat.
@@ -101,13 +101,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a second key that shows the live map with no chat and no buttons, safe to give to another person.
   - How to confirm it is done: opening the look-only link shows the map and Live, while every write and chat button is absent and a write request with that key is refused.
   - Where it went: `sv04`.
-  - Status: later.
+  - Status: in progress (built and tested on 2026-10-10; waits to be saved and released).
 - [ ] **in progress:** The AIs must not stop in the middle of the work `id78`
   - Asked: 2026-10-10 — "é impressão minha ou parece que as IA param de trabalhar?"; 2026-10-10 12:23 — "está trabalhando ou está parado?"; 2026-10-10 12:24 — "qual o problema porque fica parando?"; 2026-10-10 — "os agentes ficam parando, porque isso acontece?"
   - What it means: a chat opened from the page keeps running while its team of helpers is still working, instead of being closed 30 minutes after its last reply.
   - How to confirm it is done: start a long background team from a page chat, leave it quiet for more than 30 minutes: the team is still working and the chat reports when it finishes.
   - Where it went: `pc12`.
-  - Status: in progress.
+  - Status: in progress (built and tested on 2026-10-10; waits to be saved and released).
 - [ ] **in progress:** A page chat reopens whole and quickly `id79`
   - Asked: 2026-10-10 — "e as conversas nao estão ficando salvas? essa conversa aqui apagou o dialogo todo agora"; 2026-10-10 — "eu não entendi bem, mas isso vai fazer os chats que vou abrindo ficarem salvos?"; 2026-10-10 — "parece que ta demorando carregar o chat"; 2026-10-10 — "sim, pode fazer"
   - What it means: the conversations were always saved on disk; the page showed a chat it reopened empty or cut and took a while to draw it. Reopening a chat shows the whole dialogue at once.
@@ -140,7 +140,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the middle path decided: it builds a complete architecture and Flow without asking, as a draft in session-map's own storage; a big "Save to project" writes them; a switch saves automatically; Redo and Erase are there.
   - How to confirm it is done: adding a repository with no map produces a draft map and Flow with nothing written in the repository; Save to project writes the folder; Erase removes the draft.
   - Where it went: `bi01`, `bi02`, `bi03`, `bi04`.
-  - Status: accepted.
+  - Status: later (owner's choice on 2026-10-10, `op06`).
 
 ### The Flow
 
@@ -168,7 +168,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: level 1 shows the actors and outside services with a label on every arrow; a double click opens a part's inner flow; the Journeys tab shows 3 to 6 numbered journeys, each step tied to a part.
   - Asked: 2026-10-10 — "preciso que comece a trabalhar dentro da aba fluxo para deixar o fluxo como pedi"
   - Where it went: `fl07`, `fl08`, `fl09`, `fl10`.
-  - Status: in progress (step 1: `fl07`, `fl08`).
+  - Status: in progress (`fl08`, `fl09` and `fl10` built and checked on screen, not yet saved; `fl07` done without the AI, the AI wording is left).
 - [ ] Golden rule: map, Flow and architecture move together `id49`
   - Asked: 2026-10-09 13:43 — "outra coisa o que for adicionado no mapa vira fluxo se for função e se for adicionado no fluxo vira arquitetura automaticamente. também pedidos, `quero isso assim assassado` se é fluxo vira fluxo, mas vira também arquitetura, nada de criar coisas sem criar arquitetura e fluxo"
   - What it means: a new feature or part in the map gives a box and arrows in the Flow; a new box in the Flow gives a part in the architecture; a request in any chat does both; a small task is only an item; new code outside the map is flagged or added.
@@ -181,9 +181,21 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the architecture-core pipeline is built and every node and arrow in the model carries its origin and evidence.
   - Where it went: `fd03`, `fd02`.
   - Status: accepted.
+- [ ] Move the Flow drawing with the hand, like the map `id85`
+  - Asked: 2026-10-10 — "como vai editar se você nao colocou a maozinha como tem no mapa para movimentar o quadro no fluxo?"
+  - What it means: in the Flow, the cursor becomes a hand over the drawing and dragging it moves the picture around, as on the mind map; the mouse wheel zooms; clicking and double-clicking a box keep working.
+  - How to confirm it is done: on the Flow tab, hold the mouse on an empty spot and drag: the whole drawing follows; the wheel zooms around the pointer; a click on a box still opens it.
+  - Where it went: `fl15`.
+  - Status: in progress (built and checked with a scripted drag, not yet saved; a real mouse and a phone still to try).
 
 ### Clarity and polish
 
+- [ ] Deleting and archiving a chat answer at once `id83`
+  - Asked: 2026-10-10 — "Tem um problema na hora de apagar os chats e arquivar também, clica, clica e nao responde, ou está demorando responder"
+  - What it means: the Delete and Archive buttons waited for session-map to read every project again before answering (up to half a minute with many chats running); now they answer on the newest reading already done.
+  - How to confirm it is done: with many conversations open, archive or delete a chat: the message "archived" / "deleted" shows in about a second.
+  - Where it went: `sv08`.
+  - Status: in progress (the fix is ready and tested; the owner confirms after session-map restarts).
 - [ ] Understood at a glance, like for a child, in the whole program `id51`
   - Asked: 2026-10-09 12:56 — "mas tem que ser visivelmente facil de entender o programa como se fosse pra crianca, auto explicativo, bateu o olho entendeu"; 2026-10-09 12:57 — "falo sobre todo o programa e nao apenas isso"
   - What it means: plain words in every screen, message, skill reply, terminal view and README, with icon plus text, a "?" per area, empty screens that say what to do, a five-step welcome tour and a "technical details" mode.
@@ -220,6 +232,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a reply with a table and a code block renders both; the empty input is one line high and grows while typing, then scrolls; the header takes one line.
   - Where it went: `mm08`, `mm22`, `mm23`.
   - Status: in progress (markdown replies, the growing input box and the folding controls are released in v0.2.3 with `mm22` and `mm08`; the header shipped as two short lines, and the one-line header is open in `mm23`).
+- [ ] Review the design warnings of the page (side borders and pulsing dot) `id87`
+  - Asked: 2026-10-10 — "sim" (to: "Quer que eu revise os quatro depois que o Fluxo terminar?")
+  - What it means: after the Flow work, look at the four warnings the design checker raised in the page shell and fix the real ones.
+  - How to confirm it is done: the design checker no longer reports them, or each one left is explained.
+  - Where it went: `mm45`.
+  - Status: in progress (done and checked by the design tests, not yet saved).
 
 ### Reading every detail
 
@@ -292,6 +310,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: see `fd15`.
   - Where it went: `fd15`.
   - Status: in progress (part of the foundation delivery started on 2026-10-10).
+- [ ] Open session-map like a program: one click, without VS Code `id86`
+  - Asked: 2026-10-10 20:05 — "se fizesse .exe desse programa não ficaria melhor?"; 2026-10-10 20:12 — "podia ser em pwa né? como é web, mas ai quando clica ja abre tudo? porque toda vez tenho que entrar no vscode pra abrir o programa"; 2026-10-10 20:21 — "adciona isso como solicitação para ver mais tarde"
+  - What it means: the map turns on by itself when the owner logs in to Windows, hidden, with a watcher that turns it back on when it falls or freezes; the page becomes an installable app (PWA: icon in the Start menu and taskbar, its own window) that shows "the map is turning on…" until the server answers. Not an .exe: an unsigned .exe is blocked by Windows and antivirus, signing costs about US$ 200–400 a year, and updates would stop coming with the plugin.
+  - How to confirm it is done: after a restart of the PC, a click on the "Session Map" icon opens the map without opening VS Code; killing the server brings it back within a minute; `session-map uninstall-startup` undoes it all.
+  - Where it went: `pt07`.
+  - Status: later (the owner asked to look at it later).
 
 ### This registry
 
@@ -319,3 +343,29 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the map shows almost every file with an owner part; a new file or test lands in its part by itself; after a change the Flow and "Where in the code" match the code.
   - Where it went: `fd16`, with `fd01`, `fd12` and `fd14`.
   - Status: in progress (the check and the first step done on 2026-10-10).
+- [ ] **in progress:** The app is fast and light, like a high-end app `id84`
+  - Asked: 2026-10-10 — "estamos com um problema serio, o session ele está lento de mais, porque faz muitos serviços ao mesmo tempo, acaba que demora para abrir, demora para atualizar, demora para quase tudo, até para abrir os chats ele demora, precisamos que trabalhe com velocidade, seja leve e funcione bem como um app de alto padrao"
+  - What it means: the page stops downloading and redrawing everything every 5 seconds (today 1.9 MB per poll, the whole screen redrawn even when nothing changed); the server stops running many heavy jobs (git, re-reading every project) at the same time; opening a chat, a project or the page answers at once.
+  - How to confirm it is done: the page opens in under 1 second, a poll with no change sends almost nothing and redraws nothing, a chat opens in under half a second, and the PC's CPU stays low with the map open.
+  - Where it went: `sv09`, `sv10`, `mm44`, `pc15`.
+  - Status: in progress (reinforced way approved on 2026-10-10).
+- [ ] Finish and polish everything that is open `id88`
+  - Asked: 2026-10-10 — "tem muita coisa em aberto, agora da pra focar para finalizar tudo, acho que já deixamos o programa como deve ser agora tem que só polir ele terminar todas as atividades em aberto"
+  - What it means: no new big features; close the open activities of every part, first the ones already in progress, then the small ones, and move to "later" what the owner decides not to do now.
+  - How to confirm it is done: the map shows few or no open items, each one left is either "with the owner" or marked as later by his choice.
+  - Where it went: `op06`.
+  - Status: in progress (reinforced way approved on 2026-10-10; the big new ideas went to later, `op06`).
+- [ ] The projects come alive as a small city (or office) whose people are the agents `id92`
+  - Asked: 2026-10-11 — "estava pensando em uma ideia, para ficar visualmente legal, criar vida aos projeto, como se estivesse dentro de um escritorio ou como se fosse uma cidade, estilo citiesskyline, que os agentes ou sub agente são a população, não sei se daria para usar com outras pessoas, que usam o programa a cidade ir crescendo, com os carrinho, igual cities skyline mas em qualidade grafica bem menor"
+  - What it means: a playful, simple-graphics view where each project is a place (a neighbourhood or an office), the agents and subagents working right now are the people walking and the cars driving, and the city grows as the project grows; maybe later shared with other people who use session-map.
+  - How to confirm it is done: to be defined once the design is agreed (brainstorming started on 2026-10-11).
+  - Where it went: not yet; first the design.
+  - Status: new (on 2026-10-11 the owner only wants to think it through and check if it is viable: "eu não quero fazer ainda nada").
+- [ ] **in progress:** A complete, professional chat, like Claude's, Copilot's, ChatGPT's, Gemini's and Cursor's, choosing the other AIs freely `id93`
+  - Asked: 2026-10-11 — "não gostei do chat, precisamos dele mais completo igual é o chat do claud, chat do copillot, chat do gpt, chat do gemini, chat do curse, aqui ta muito limitado e o programa acaba que se torna muito limitado, eu tenho varias APIS de outras IAs e nao tenho como ordenar as que eu quero usar sem travas alem de outras coisas as opções ter termos mais profissionais do que termos do jeito que está o chat tem que sem bem profissional mesmo"; 2026-10-11 — "C, quero que as pessoas tenham independencia também de escolher qual IA quer para orquestrar, me ajuda deixar bem profissional esse chat e toda a engrenagem"; 2026-10-11 — "jeito 1, mas acho que ja da pra usar a nova cada do programa ne?"; 2026-10-11 — "acho que ultra code quem decide é o orquestrador, dependendo da atividade … tem que ser bem mais organizado o que é orquestrador o que é automatico o que é o nivel das ias e modelos, porque estamos fazendo para pessoas que trabalham manualmente e pessoas que trabalham sem entender … teve uma vez que estourei tudo, porque a IA fica nivel alto o tempo todo ou ultra code … quero bem organizado, quero com termos profissionais, mas facil entendimento"; 2026-10-11 — "eu queria que visse a fundo mesmo, desse uma pesquisada como poderiamos encaixar as coisas de uma maneira de facil entendimento, organizada, limpa, com termos corretos, quando tiver duvida abre um pequeno dialogo falando o que aquela ferramente faz quando para o mouse em cima, mas com textos profissionais e nao alto tipo \"para quem entende\" o programa nao fica profissional"; 2026-10-11 — "pode segiur"; 2026-10-11 — "eu gostei muito de tudo, mas acho que na questão dos niveis, poderia ter o automatico, porque eu quero que o programa consiga entender no automatico o nivel de tudo, fazendo as coisas em alta qualidade e o maximo de economia, sempre quem usa vibe coding quer isso, então é bom ter os niveis mas ter o nivel automático também para pessoas leigas"; 2026-10-11 — "no automatico até isso pode ser usando sozinho, mas a IA tem quer ser muito meticulosa para fazer isso sozinha, sem alucinacoes, mas acoes que realmente precisam desse nivel de qualidade"; 2026-10-11 — "também que a IA entenda o contexto do chat e refaça os titulos automaticamente"
+  - What it means: the page chat gets the features people expect from the big AI chats, the owner picks and orders the AIs he wants to use (his keys) without the automatic limits deciding for him, and the chat's options use professional terms.
+  - How to confirm it is done: the owner uses the chat for a day as he uses Claude's or Cursor's, picks any of his AIs for a conversation, and does not miss a feature or a term.
+  - Where it went: step 1 `pc20`, `pc21`, `pc22`, `pc23`, `pc24`; steps 2–4 come next.
+  - Decided: 2026-10-11 — both: talk directly with the AI one chooses, and keep Claude (or any AI the person picks) as the orchestrator with the person setting the order of the AIs and turning the automatic rules off.
+  - Decided: 2026-10-11 — four steps in this order: 1) a professional chat (model picker, edit and resend, regenerate, code blocks, context, usage meter, history, professional terms); 2) talk directly with GPT, Gemini and DeepSeek through the owner's keys; 3) the owner's own rules for the AIs (order, on/off, optional daily cap and privacy rules, with warnings); 4) the other AIs working on files and orchestrating through each company's official agent (Codex, Gemini CLI; DeepSeek through Claude Code's engine) — "jeito 1".
+  - Status: in progress (step 1, the professional chat, started on 2026-10-11 after the new look went live).

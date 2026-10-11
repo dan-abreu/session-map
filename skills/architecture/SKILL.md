@@ -46,6 +46,10 @@ In Portuguese the sections are `## Onde está no código` and `## O que falta`; 
 
 Change only that line; leave the rest of the file byte for byte. If the section has a line like "4 open items: ...", update its numbers. Cite the item code in your replies and in the board card: that is how the map hangs the conversation on the part.
 
+## Architecture and Flow together
+
+The Flow is the mermaid drawing in the architecture folder's `README.md`. A new feature, part or link means an item or part in the architecture and a box or arrow in the Flow, in the same change: never one without the other. A small task is only an item; it shows in the Flow as a signal. This holds in every chat, VS Code included.
+
 ## The person's requests
 
 Write every request of the person down the same day, in their own words, never only in your memory. The page's Requests tab reads them.

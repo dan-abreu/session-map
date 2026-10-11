@@ -2,6 +2,7 @@ import { api } from './api.js';
 import { fileTree, findInLines, langOf, markTokens, tokenize } from './code.js';
 import { kindCounts } from './tree.js';
 import { changedLines } from './views.js';
+import { createCensusView } from './censusview.js';
 
 const LIST_TTL_MS = 30_000;
 // ponytail: a 1 MB file can have tens of thousands of lines; the page draws them in slices. Virtual scrolling when someone needs it.
@@ -11,13 +12,23 @@ const OPEN_ALL_MAX = 40;
 const SEARCH_MS = 120;
 const LINKS_OPEN_MAX = 12;
 
+// The server never shows a secrets file (files.mjs isSecretsFile): .env and its variants, but not the templates. The page does
+// not even ask for one; it shows the notice.
+const SECRETS_RE = /^.env(..+)?$/i;
+const TEMPLATE_RE = /.(example|sample|template|dist)$/i;
+export const isSecretPath = (path) => {
+  const name = String(path).split('/').pop();
+  return SECRETS_RE.test(name) && !TEMPLATE_RE.test(name);
+};
+
 // The files a file uses and that use it start open when the list is short, but never on a phone: there the code comes first.
 export const linksOpen = (links, { phone = false } = {}) => !phone && links.uses.length + links.usedBy.length <= LINKS_OPEN_MAX;
 
 // Read-only files of a part or a branch (desenho-2 § 29, mm26): a folder tree like the editor's explorer and a viewer with the
 // code in colors, line numbers, search in the file, the files it uses and that use it, and Open in VS Code at the line.
-// ctx: dialog (the viewer), h, t (translator getter), toast, errorText, project (getter of the current project).
-export function createFiles({ dialog, h, t, toast, errorText, project, phone = () => false }) {
+// ctx: dialog (the viewer), h, t (translator getter), toast, errorText, project (getter of the current project), phone, lang
+// (getter of the language, for the numbers of the census).
+export function createFiles({ dialog, h, t, toast, errorText, project, phone = () => false, lang = () => 'en' }) {
   const lists = new Map();
   // Folders the person opened or closed, kept while the page lives, so a refresh of the panel keeps the tree as it was.
   const folded = new Map();
@@ -104,6 +115,10 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
   // The code shows at once; what it uses and what uses it comes a moment later, since the first file of a big project
   // builds that map (seconds on a few thousand files).
   async function open(path, workCell, { line = null } = {}) {
+    if (isSecretPath(path)) {
+      toast(errorText('sensitive'));
+      return;
+    }
     const res = await api.file(project().id, path, workCell, false);
     if (!res.ok) {
       toast(errorText(res.error));
@@ -242,5 +257,12 @@ export function createFiles({ dialog, h, t, toast, errorText, project, phone = (
     return slot;
   }
 
-  return { tree, open, pathRow, close: () => dialog.close() };
+  // The detailed census of the repository (id77, Complete mode) in a place of the page, its file names opening here.
+  let censusView = null;
+  function census(place, { icon } = {}) {
+    censusView ??= createCensusView({ h, t, lang, project, errorText, icon, openFile: (path, line) => open(path, undefined, { line }) });
+    return censusView.refresh(place);
+  }
+
+  return { tree, open, openPath: open, census, pathRow, close: () => dialog.close() };
 }

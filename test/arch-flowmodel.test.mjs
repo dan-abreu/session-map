@@ -173,13 +173,14 @@ test('actors: terminal from bin, Claude Code from hooks, the browser and the pho
   assert.equal(m.edges.filter((e) => e.to === 'svc:git').length, 0, 'but draws no arrow');
 });
 
-test('the model has no journeys yet, and the same input always gives the same model, with nothing from the AI', () => {
+test('journeys are found in the model, and the same input always gives the same model, with nothing from the AI', () => {
   const input = { scans: { 'src/api/a.mjs': { signals: [sig('command', 'git', 3), sig('sdk', '@anthropic-ai/sdk', 1)], imports: [] } } };
   const a = build(input);
   const b = build(input);
   assert.deepEqual(a, b);
-  assert.deepEqual(a.journeys, []);
-  for (const x of [...a.nodes, ...a.edges]) {
+  // Customers → Web → API → … : one plain journey from the people, found on the README's arrows (fl10).
+  assert.deepEqual(a.journeys.map((j) => [j.id, j.origin, j.ai]), [['j:from:actor:customer', 'detected', null]]);
+  for (const x of [...a.nodes, ...a.edges, ...a.journeys]) {
     assert.notEqual(x.origin, 'ai');
     assert.equal(x.ai, null);
     assert.equal(x.ownerConfirmed, null);

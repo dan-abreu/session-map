@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { countRepo, kindOfFile, lineCount } from '../server/sources/count.mjs';
+import { gitStats } from '../server/sources/gitqueue.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'user.name=Ana', '-c', 'user.email=ana@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
 
@@ -64,5 +65,29 @@ test('countRepo answers an empty count outside a git repository', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'sm-count-none-')));
   try {
     assert.deepEqual(await countRepo(root, { ttlMs: 0 }), { files: [], left: { dep: [], generated: [], binary: [] } });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// ls-files ran for every project every 30 s; the list of tracked files only changes when the index does.
+test('countRepo asks git for the tracked files again only when the index changed, and still sees edits', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sm-count-idx-')));
+  try {
+    git(root, 'init', '-q', '-b', 'main');
+    writeFileSync(join(root, 'a.js'), 'one\n');
+    git(root, 'add', 'a.js');
+    git(root, 'commit', '-q', '-m', 'first');
+    const start = gitStats().spawned;
+    await countRepo(root, { ttlMs: 0 });
+    const first = gitStats().spawned;
+    assert.ok(first > start, 'the first count asks git');
+    writeFileSync(join(root, 'a.js'), 'one\ntwo\n');
+    const edited = await countRepo(root, { ttlMs: 0 });
+    assert.equal(gitStats().spawned, first, 'an edit leaves the index alone: no git');
+    assert.equal(edited.files.find((x) => x.path === 'a.js').lines, 2, 'the edit is still counted');
+    writeFileSync(join(root, 'b.js'), 'b\n');
+    git(root, 'add', 'b.js');
+    const added = await countRepo(root, { ttlMs: 0 });
+    assert.ok(gitStats().spawned > first, 'a file added to the index is asked for');
+    assert.ok(added.files.some((x) => x.path === 'b.js'));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

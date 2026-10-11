@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { runGit } from '../sources/gitqueue.mjs';
 import { parseArch } from './parse.mjs';
 
 const DEFAULT_DIRS = ['docs/arquitetura', 'docs/architecture', 'docs/arch'];
@@ -8,10 +8,8 @@ const MAX_FILE_BYTES = 512 * 1024;
 const TIMEOUT_MS = 5000;
 
 // Same contract as git.mjs: any failure becomes '' so "no such folder" is just an empty answer.
-function defaultExec(cwd, args) {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout));
-  });
+async function defaultExec(cwd, args) {
+  return (await runGit(cwd, args, { timeout: TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, quiet: true })).stdout;
 }
 
 // A configured folder is relative to the project and must stay inside it.
@@ -79,13 +77,14 @@ async function fromBranch(root, branch, dir, exec) {
 }
 
 // Finds the architecture folder: the configured one, else the first conventional name; work tree first, then main branch.
-export async function detectArch(root, config = {}, { exec = defaultExec, mainBranch = null } = {}) {
+// mainBranch: the name collect already found, or null when it found none (not asked again); left out, it is looked up.
+export async function detectArch(root, config = {}, { exec = defaultExec, mainBranch } = {}) {
   const candidates = candidatesOf(config);
   for (const dir of candidates) {
     const files = fromWorktree(root, dir);
     if (files) return { source: 'worktree', dir, files };
   }
-  const branch = mainBranch ?? (await mainBranchName(root, exec));
+  const branch = mainBranch !== undefined ? mainBranch : await mainBranchName(root, exec);
   if (branch) {
     const ref = await freshestRef(root, branch, exec, await branchHeads(root, branch, exec));
     for (const dir of candidates) {
@@ -128,9 +127,9 @@ export async function readArch(root, config, opts = {}) {
     const s = folderStamp(root, dir);
     if (s !== null) { stamp = `worktree|${dir}|${s}`; break; }
   }
-  let mainBranch = opts.mainBranch ?? null;
+  let mainBranch = opts.mainBranch;
   if (stamp === null) {
-    mainBranch ??= await mainBranchName(root, exec);
+    if (mainBranch === undefined) mainBranch = await mainBranchName(root, exec);
     const heads = mainBranch ? await branchHeads(root, mainBranch, exec) : {};
     stamp = `branch|${mainBranch}|${heads.local}|${heads.remote}`;
   }

@@ -275,3 +275,42 @@ test('toolDetails gives the live chat the same step, diff and task list', () => 
   assert.equal(multi.diff.hunks.length, 2);
   assert.equal(toolDetails('Bash', { command: 'ls' }, '').diff, undefined);
 });
+
+// A conversation still being written grows by whole lines: the read goes on from where the last one stopped instead of
+// parsing the whole file again on every mirror ask (a 39 MB transcript took 0.3 s, blocking the server each time).
+test('a transcript that grows is read only from where the last read stopped', async () => {
+  const { appendFileSync, readFileSync } = await import('node:fs');
+  withTranscript([human(0, 'Hi'), assistant(1, 'm1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }])], (path) => {
+    readConversation(path, { prices: PRICES });
+    // The head changes under the read without changing size: only a read that starts over would see it.
+    writeFileSync(path, readFileSync(path, 'utf8').replace('"Hi"', '"Ho"'));
+    appendFileSync(path, `${JSON.stringify(result(2, 't1', 'a.txt'))}\n${JSON.stringify(assistant(3, 'm2', [{ type: 'text', text: 'Done' }]))}\n`);
+    const { items } = readConversation(path, { prices: PRICES });
+    assert.equal(items[0].text, 'Hi', 'what was read before is not read again');
+    assert.equal(items[1].result, 'a.txt', 'a result for a step read before lands on it');
+    assert.equal(items.at(-1).text, 'Done');
+  });
+});
+
+test('a transcript read in pieces as it grew reads the same as one read whole', async () => {
+  const { appendFileSync, copyFileSync } = await import('node:fs');
+  const head = [human(0, 'First'), assistant(1, 'm1', [{ type: 'text', text: 'a' }]), assistant(1, 'm1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }])];
+  const tail = [
+    assistant(1, 'm1', [{ type: 'text', text: 'b' }], { input_tokens: 1000, output_tokens: 300 }),
+    result(2, 't1', 'a.txt'),
+    human(3, 'Second'),
+    assistant(4, 'm2', [{ type: 'text', text: 'c' }], { input_tokens: 2000, output_tokens: 0 }),
+  ];
+  withTranscript(head, (path, dir) => {
+    readConversation(path, { prices: PRICES });
+    appendFileSync(path, `${JSON.stringify(tail[0])}\n${JSON.stringify(tail[1])}\n`);
+    readConversation(path, { prices: PRICES });
+    appendFileSync(path, `${JSON.stringify(tail[2])}\n${JSON.stringify(tail[3])}\n`);
+    const pieces = readConversation(path, { prices: PRICES });
+    const whole = join(dir, 'whole.jsonl');
+    copyFileSync(path, whole);
+    const once = readConversation(whole, { prices: PRICES });
+    assert.deepEqual(pieces.items, once.items);
+    assert.equal(pieces.costUSD, once.costUSD);
+  });
+});

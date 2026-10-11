@@ -4,6 +4,8 @@ import {
   sizeOf, shareText, chatPointOf, noFiles,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
+import { mapFileName, outlineOf, freeMindOf, xmindOf } from './mmexport.js';
+import { saveBlob } from './flowexport.js';
 import { createOutline } from './outline.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
@@ -12,6 +14,7 @@ import { createRunSettings } from './runsettings.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createRepoSide } from './reposide.js';
+import { branchWhy, placedWhy } from './placedwhy.js';
 import { createChangesView, freshFor } from './changes.js';
 import { createRequestsView } from './requestsview.js';
 import { createResizer, createSplit } from './resize.js';
@@ -25,21 +28,24 @@ import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWord
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
 import { createAiHelpers } from './aihelpers.js';
+import { applyLook, createLookShare } from './lookshare.js';
 import { createCutPanel } from './cutoff.js';
 import { visibleProject, chatButtons, waitingEntries, waitingSections, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
 import { emptyState } from './empty.js';
+import { costWhyNote } from './costwhy.js';
 import { createTour, tourWanted } from './tour.js';
-import { AREAS, normalizeView } from './nav.js';
+import { AREAS, LOOK_AREAS, deepLinkParams, normalizeView } from './nav.js';
 import { createNavbar } from './navbar.js';
 import { createAreas, sectionOf } from './areas.js';
+import { minuteOf, stateSigs } from './statesig.js';
 import { createHelp } from './help.js';
 import { clashSignal, waitingSignal, blocksSignal, relationSignal, costSignal, clashKey, signalWords } from './signals.js';
-import { INFO_KINDS, CHAT_TAB, pointTabs, projectTabs, openingTab, kindDigest } from './kinds.js';
+import { INFO_KINDS, CHAT_TAB, pointTabs, projectTabs, openingTab, kindDigest, lookTabs } from './kinds.js';
 import { inRange, parseSel, resolveRange, serializeSel, spanWords } from './range.js';
 import {
-  declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, serializeIgnored, sortRelations, splitIgnored, strengthOf,
+  declaredPairs, isDeclared, parseIgnored, relationKey, relationTip, relationWhy, serializeIgnored, sortRelations, splitIgnored, strengthOf,
 } from './relations.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -1375,7 +1381,8 @@ function detailsOf(node) {
 function renderPointDetails() {
   const node = pointNode && nodeById(tree, pointNode);
   if (!node) return;
-  const { tabs, labels, body } = detailsOf(node);
+  const { tabs: all, labels, body } = detailsOf(node);
+  const tabs = lookMode ? lookTabs(all) : all;
   if (!tabs.includes(pointTab)) pointTab = 'summary';
   renderFold(node);
   const strip = $('#pointTabs');
@@ -1485,7 +1492,7 @@ function renderWorkCellPanel(w) {
     w.openspec ? section(t('wc.plan'),
       h('div', { class: 'progress', role: 'img', 'aria-label': t('chat.openspec', w.openspec) },
         h('span', { style: `width:${Math.round((w.openspec.done / Math.max(1, w.openspec.total)) * 100)}%` })),
-      h('p', { class: 'muted small' }, `${w.openspec.change} · ${t('chat.openspec', w.openspec)}`)) : null,
+      h('p', { class: 'muted small' }, `${w.openspec.tool ? w.openspec.tool + ' · ' : ''}${w.openspec.change} · ${t('chat.openspec', w.openspec)}`)) : null,
     kblock('tasks', { from: t('kind.tasks.fromBranch') }, list(w.nucleus.todo)),
     filesSection({ workCell: w.id, files: w.files, folder: Boolean(!w.remote || w.path) }),
     kblock('chats', { empty: t('wc.noChats') }, chatRows(chats)),
@@ -1611,6 +1618,7 @@ function renderLinkPanel(link) {
   $('#panelBody').replaceChildren(...[
     off ? h('p', { class: 'note' }, t('rel.ignoredNote')) : null,
     h('div', { class: `callout rel-kind-note ${declared ? 'is-declared' : 'is-detected'}` }, h('h3', {}, t(declared ? 'rel.declared' : 'rel.detected')), h('p', {}, t(declared ? 'rel.declaredWhy' : 'rel.detectedWhy'))),
+    relationWhy(link) ? section(t('rel.aiWhy'), h('p', { class: 'rel-why' }, relationWhy(link)), h('p', { class: 'note' }, t('rel.aiWhyNote'))) : null,
     section(t('rel.parts'), h('div', { class: 'rel-pair' }, partLink(a), h('span', { 'aria-hidden': 'true' }, '↔'), partLink(b))),
     section(t('link.why'), h('ul', { class: 'plain rows' }, reasons)),
     chatIds.length ? kblock('chats', { title: t('rel.chats') }, chatRows(chatIds)) : null,
@@ -1660,7 +1668,7 @@ function placeName(p) {
 const wfCtx = () => ({
   h, t, icon, relative, modelName, list: listText, nowMs: Date.parse(state.generatedAt), placeWords: placeName,
   stepWords: (step) => stepWords(t, step),
-  onItem: (item) => goTo(item.projectId, { type: 'node', id: `i:${item.partId}:${item.code}` }),
+  onItem: (item) => goTo(item.projectId, { type: 'node', id: item.code ? `i:${item.partId}:${item.code}` : `pt:${item.partId}` }),
   onFile: (f) => {
     if (f.projectId !== project.id) goTo(f.projectId);
     files.open(f.path);
@@ -1680,7 +1688,8 @@ function renderChatPanel(c) {
   const facts = [
     [t('chat.cost'), h('span', { class: 'num' }, money(c.costUSD))],
     [t('chat.branch'), wc ? branchLink(wc) : h('span', { class: 'branch-name' }, project.mainBranch || '—')],
-    [t('chat.placed'), t(`chat.placedBy.${c.partSource}`)],
+    [t('chat.placedWhy'), placedWhy(c, t, listText)],
+    wc ? [t('chat.branchWhy'), branchWhy(c, t)] : null,
     [t('chat.started'), shortDate(Date.parse(c.startedAt))],
     [t('chat.updated'), relative(c.updatedAt)],
     parent ? [t('chat.from'), chatLink(parent)] : null,
@@ -1737,6 +1746,8 @@ function renderProjectPanel() {
         h('dt', {}, t('range.d7')), h('dd', { class: 'num' }, money(p.cost.d7)),
         h('dt', {}, t('range.d30')), h('dd', { class: 'num' }, money(p.cost.d30)),
         p.fetchedAt ? [h('dt', {}, t('project.fetched')), h('dd', {}, clock(p.fetchedAt))] : null),
+      // Money with no chat to show for it (sb06): say where it went.
+      costWhyNote(p) ? h('div', { class: 'muted small' }, costWhyNote(p).map((l) => h('p', {}, t(l.key, { n: l.n })))) : null,
       programFiles(p.arch.sizes),
       section(hasMap() ? t('project.offMap') : t('project.chats'), chatRows(loose)),
       section(t('project.ai'), p.ai
@@ -1921,25 +1932,41 @@ function renderAll() {
   return undefined;
 }
 
+// The signatures the screen was last drawn from (mm44): a poll redraws only the parts whose input moved.
+let drawnSigs = null;
+
 function applyState(next) {
   const before = project;
+  const sigs = stateSigs(next, before?.id);
+  const drawn = drawnSigs;
+  drawnSigs = sigs;
+  const openSame = !!before && drawn?.project === sigs.project;
+  // The open project did not move: keep the object the map and the panel were drawn from.
+  if (openSame) {
+    const i = next.projects.findIndex((p) => p.id === before.id);
+    if (i >= 0) next.projects[i] = before;
+  }
   state = next;
+  if (openSame && drawn.global === sigs.global && !document.body.classList.contains('is-empty')) return undefined;
   trackUnseen();
   renderWaiting();
   if (!state.projects.length) return renderNoProjects();
   if (!before || document.body.classList.contains('is-empty')) return renderAll();
   project = state.projects.find((p) => p.id === before.id) || state.projects[0];
   if (project.id !== before.id) return setProject(project.id);
-  shown = visibleProject(project, showArchived);
-  tree = archTree(shown);
-  refreshMarks();
-  renderSummary();
-  renderBanner();
-  renderMap();
+  // Only another project moved: the map, the summary and the open panel stay as drawn.
+  if (!openSame) {
+    shown = visibleProject(project, showArchived);
+    tree = archTree(shown);
+    refreshMarks();
+    renderSummary();
+    renderBanner();
+    renderMap();
+  }
   convs.render();
   live.render();
   renderNow();
-  if (!editing) rerender();
+  if (!openSame && !editing) rerender();
   refreshView();
   return undefined;
 }
@@ -1949,8 +1976,13 @@ function poll() {
   if (polling) return polling;
   polling = (async () => {
     const res = await api.state();
-    if (res.ok) {
-      const { ok, status, error, ...next } = res;
+    // The browser switched between the owner and the look-only link (sv11): only a fresh page shows the right areas.
+    if (res.ok && Boolean(res.look) !== lookMode) return location.reload();
+    if (res.ok && res.same) {
+      // Nothing new (304): only a new minute redraws, so relative times and working marks still age.
+      if (state && res.generatedAt && minuteOf(res.generatedAt) !== minuteOf(state.generatedAt)) applyState({ ...state, generatedAt: res.generatedAt });
+    } else if (res.ok) {
+      const { ok, status, error, look, ...next } = res;
       applyState(next);
       if (next.refreshing) setTimeout(poll, 2000);
     } else if (state) {
@@ -1964,7 +1996,7 @@ function poll() {
 // The bar's areas (navbar.js). On a phone, Conversations is the inbox over the map (mm49), as on a computer it is the column
 // beside it; Board and History wait one tap further, at its foot.
 function pickArea(area) {
-  if (area === 'convs' && PHONE.matches) {
+  if (area === 'convs' && PHONE.matches && !lookMode) {
     if (view !== 'map') showView('map');
     convs.openDrawer();
     return;
@@ -1974,7 +2006,7 @@ function pickArea(area) {
 }
 
 function showView(name, sub = null) {
-  const to = normalizeView(name);
+  const to = normalizeView(name, { look: lookMode });
   view = to.area;
   viewSub = sub ?? to.sub;
   navbar.setCurrent(view);
@@ -2051,6 +2083,7 @@ let picker = null;
 let navbar = null;
 let areas = null;
 let demoMode = false; // learnt from the server's answer: the demo writes nothing, so Home stops offering "Read now"
+let lookMode = false; // opened with the "look only" link (sv04, sv11): the map's reads only, so only the areas they draw
 let homeRow = null; // the project of the Home row last clicked, for a heads-up button that leads into that project
 
 // An area opened from somewhere else (Home's heads-up buttons): its project first, then the area and its sub-part.
@@ -2085,14 +2118,31 @@ function openFromAlert(group) {
   return hit ? openConversation(hit) : toast(t('alert.notFound'));
 }
 
-// The menus around the map (mm47, mm48): "Novo" at the head of the conversations, "Vista" over the map. One
-// behaviour for both (menu.js); the period picker opened from Vista counts as Vista's own, so a press in it
+// The menus around the map (mm47, mm48): "Novo" at the head of the conversations, "Vista" over the map with its export
+// list. One behaviour for both (menu.js); the period picker opened from Vista counts as Vista's own, so a press in it
 // leaves Vista open. The ⋯ of the bar is the navbar's own menu (help and Configurações).
 function wireMenus() {
+  const exportMenu = $('#mapExportMenu');
+  const exportBtn = $('#mapExportBtn');
+  const setExport = (on) => {
+    exportMenu.hidden = !on;
+    exportBtn.setAttribute('aria-expanded', String(on));
+    if (on) exportMenu.querySelector('button')?.focus();
+  };
   menus = [
     createMenu({ button: $('#newBtn'), pop: $('#newMenu') }),
-    createMenu({ button: $('#viewBtn'), pop: $('#viewMenu'), inside: (el) => Boolean(el.closest?.('.rp, .rp-scrim')), onOpen: renderChanged }),
+    createMenu({ button: $('#viewBtn'), pop: $('#viewMenu'), inside: (el) => Boolean(el.closest?.('.rp, .rp-scrim')), onOpen: renderChanged, onClose: () => setExport(false) }),
   ];
+  exportBtn.addEventListener('click', () => setExport(exportMenu.hidden));
+  exportBtn.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') { e.preventDefault(); setExport(true); } });
+  // ArrowLeft or Esc closes only the export list and goes back to its item; Vista stays open.
+  exportMenu.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    setExport(false);
+    exportBtn.focus();
+  });
   $('#bgSwitch').addEventListener('click', (e) => { if (project?.background && e.currentTarget.getAttribute('aria-disabled') !== 'true') setBackground(project, !project.background.always, e.currentTarget); });
   // "/" goes to the map's search, as the hint in the field says, unless the person is typing somewhere.
   document.addEventListener('keydown', (e) => {
@@ -2123,14 +2173,15 @@ function setTech(on) {
   refreshView(true);
 }
 
-// What the ⋯ of the bar holds under the areas (navbar.js): help and Configurações, in the order a person looks for them.
+// What the ⋯ of the bar holds under the areas (navbar.js): help and Configurações, in the order a person looks for them. A
+// look-only page gets no Configurações, no other AIs and no look link: the server refuses them anyway.
 function moreEntries() {
   const entries = [{ id: 'tour', label: t('tour.replay'), icon: 'compass', onActivate: () => tour.start() }];
-  entries.push({ id: 'ai', label: t('aih.open'), icon: 'connect', popup: true, onActivate: () => aiHelpers.open() });
+  if (!lookMode) entries.push({ id: 'ai', label: t('aih.open'), icon: 'connect', popup: true, onActivate: () => aiHelpers.open() });
   entries.push({ id: 'full', label: t('more.full'), desc: t('more.fullHint'), kind: 'switch', checked: tech, onActivate: () => setTech(!tech) });
   entries.push({ id: 'help', label: t('more.help'), icon: 'help', popup: true, onActivate: () => help.open() });
   // Configurações for the conversation on screen (the map's or the workshop's), or for none.
-  entries.push({ id: 'settings', label: t('settings.title'), icon: 'sliders', popup: true, onActivate: () => runSettings.open(chat.isOpen() ? chat.settings() : flow.chatSettings(), $('#tab-more')) });
+  if (!lookMode) entries.push({ id: 'settings', label: t('settings.title'), icon: 'sliders', popup: true, onActivate: () => runSettings.open(chat.isOpen() ? chat.settings() : flow.chatSettings(), $('#tab-more')) });
   return entries;
 }
 
@@ -2138,7 +2189,7 @@ function wire() {
   document.body.classList.toggle('is-tech', tech);
   // The bar draws the table of areas (nav.js): Simple shows the five main areas and a "More" menu, Full shows them all.
   navbar = createNavbar({
-    h, icon, root: $('#navbar'), t: () => t, tech: () => tech, phone: () => PHONE.matches, current: view, onPick: pickArea, extras: moreEntries,
+    h, icon, root: $('#navbar'), t: () => t, tech: () => tech, phone: () => PHONE.matches, look: () => lookMode, current: view, onPick: pickArea, extras: moreEntries,
   });
   tour = createTour({ h, t: () => t, phone: () => PHONE.matches, onEnd: (how) => store.set('sm.tour', how) });
   help = createHelp({
@@ -2226,6 +2277,9 @@ function wire() {
       // A job that finished while the page was closed or on another project is still "finished and not seen".
       for (const a of fresh) if (a.kind === 'finished' && a.sessionId && a.sessionId !== (chat.isOpen() ? chat.current() : null)) unseen.add(a.sessionId);
       saveUnseen();
+      // The marks are the page's own: a poll that finds the server unchanged (304) would never draw them.
+      renderNow();
+      convs?.render();
       setTimeout(poll, 400);
     },
     pending: () => (jobs ? pendingCount(jobs) : 0),
@@ -2253,6 +2307,16 @@ function wire() {
   });
   requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
   aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name, root: p.root })), openers: [] });
+  // The look-only link (sv04), made and turned off by the owner from the help menu.
+  const lookShare = createLookShare({
+    box: $('#lookShareBox'), h, t: () => t, api, toast,
+    // Off a secure address the clipboard may be shut: the link is selected so the owner copies it by hand.
+    copy: async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch { $('#lookShareBox .look-link')?.select(); return false; } },
+  });
+  $('#lookShareOpen').addEventListener('click', async () => {
+    await lookShare.open();
+    $('#lookShareOpen').setAttribute('aria-expanded', String(!$('#lookShareBox').hidden));
+  });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
@@ -2323,6 +2387,19 @@ function wire() {
   });
   $('#zoomIn').addEventListener('click', () => mindmap.zoomBy(1.4));
   $('#zoomOut').addEventListener('click', () => mindmap.zoomBy(1 / 1.4));
+  // Export (mm16): the whole tree, open or folded, as a Markdown outline, a FreeMind file or an XMind file.
+  $('#mapExport').addEventListener('click', (e) => {
+    const kind = e.target.closest('[data-map-export]')?.dataset.mapExport;
+    if (!kind || !tree) return;
+    const name = mapFileName(project.name, kind);
+    const file = {
+      md: () => new Blob([outlineOf(tree)], { type: 'text/markdown;charset=utf-8' }),
+      mm: () => new Blob([freeMindOf(tree)], { type: 'application/x-freemind' }),
+      xmind: () => new Blob([xmindOf(tree)], { type: 'application/vnd.xmind.workbook' }),
+    }[kind];
+    saveBlob(file(), name);
+    toast(t('mapexport.saved', { name }));
+  });
   const search = $('#search');
   search.addEventListener('input', () => { query = search.value.trim(); renderResults(); });
   search.addEventListener('keydown', (e) => {
@@ -2364,7 +2441,7 @@ function wire() {
 // Deep link for screenshots and sharing a view: ?view=<tab>&project=<id>&open=<ids|all>&select=node:<id> (or chat:, workcell:,
 // link:, project:)&tab=details&relations=1&changed=d7&q=<search>&conv=<sessionId>&convfilter=<box id>&drawer=1&live=1&alerts=1.
 function applyDeepLink() {
-  const params = new URLSearchParams(location.search);
+  const params = deepLinkParams(location.search, { look: lookMode });
   if (params.get('project')) setProject(params.get('project'));
   if (params.has('relations')) relationsOn = params.get('relations') === '1';
   if (params.has('changed')) { rangeSel = parseSel(params.get('changed')); store.set(rangeKey(project.id), serializeSel(rangeSel)); }
@@ -2400,7 +2477,7 @@ function applyDeepLink() {
   if (params.get('convfilter')) setTimeout(() => convs.filterTo(params.get('convfilter')), 60);
   if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
   if (params.get('live') === '1') setTimeout(openLive, 60);
-  if (params.get('alerts') === '1') setTimeout(() => alerts.openSettings(), 200);
+  if (!lookMode && params.get('alerts') === '1') setTimeout(() => alerts.openSettings(), 200);
   // &place=<sessionId> opens "Move or rename"; &picker=1 opens the project list; &waiting=1 (and the old &nowopen=1)
   // open the list behind the amber pill; &menu=new|view|more opens one of the menus, for screenshots.
   const placeId = params.get('place');
@@ -2413,7 +2490,7 @@ function applyDeepLink() {
   if (params.get('nowopen') === '1' || params.get('waiting') === '1') setTimeout(openWaiting, 120);
   const menuBtn = { new: '#newBtn', view: '#viewBtn', more: '#tab-more' }[params.get('menu')];
   if (menuBtn) setTimeout(() => $(menuBtn).click(), 160);
-  if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
+  if (!lookMode && params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);
   // ?view=flow&flowmode=workshop&flowtool=box&flowtext=1, or &flowimport=1: the Flow tab's states, for screenshots.
@@ -2440,10 +2517,17 @@ async function main() {
     notice.classList.add('is-error');
     return;
   }
-  const { ok, status, error, ...first } = res;
+  const { ok, status, error, look, ...first } = res;
+  // Opened with the look-only link (sv04): the map only, no chat, no buttons, no alerts.
+  applyLook(document.body, look);
+  // ...and only the areas whose reads the server lets through (sv11): no Home, Conversations or foundation.
+  lookMode = Boolean(look);
+  // An area picked on the bar while the state was on its way is checked again (refreshView waits for the state).
+  if (lookMode && !LOOK_AREAS.includes(view)) showView('map');
+  navbar.render();
   state = first;
   trackUnseen();
-  alerts.start();
+  if (!look) alerts.start();
   notice.hidden = true;
   renderAll();
   if (state.projects.length) {
@@ -2452,9 +2536,9 @@ async function main() {
     if (saved.area !== 'map' && !params.get('view') && !params.get('select')) showView(saved.area, saved.sub);
     applyDeepLink();
     // A reload keeps the conversation that was open in the sheet.
-    if (view === 'map' && !params.get('select')) chat.restore(project.id);
+    if (view === 'map' && !params.get('select') && !look) chat.restore(project.id);
     // The welcome tour plays once by itself on the first visit; the help menu plays it again.
-    if (tourWanted(store.get('sm.tour'))) setTimeout(() => tour.start(), 600);
+    if (!look && tourWanted(store.get('sm.tour'))) setTimeout(() => tour.start(), 600);
   }
 }
 

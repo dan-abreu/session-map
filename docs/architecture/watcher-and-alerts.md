@@ -46,7 +46,7 @@ The server compares each session's state from one read to the next and turns the
 
 ### Limits and the map
 
-- [ ] **Watch the plan's weekly limit** `wa09`
+- [x] **Watch the plan's weekly limit** `wa09`
   - Read the limit warnings in the histories (such as "hit your weekly limit" and the reset time) and hold what is not urgent.
 - [ ] **Warn about new code outside the map and the Flow** `wa10`
   - "New feature outside the map: add it?"; in `flow.sync` mode `auto` it adds it. Part of the golden rule in `fl12`.

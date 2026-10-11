@@ -64,6 +64,15 @@ test('architecture skill: an item names a person only when it truly needs one; c
   assert.match(body, /(not|never)[^.]*who owns|who will write the code|who knows the area/i);
 });
 
+test('architecture skill: a new feature, part or link updates the architecture and the Flow together; a small task is only an item', () => {
+  const body = read('skills/architecture/SKILL.md');
+  assert.match(body, /## Architecture and Flow together/);
+  assert.match(body, /new feature, part or link means an item or part in the architecture and a box or arrow in the Flow[^.]*same change/i);
+  assert.match(body, /Flow is the mermaid drawing in the architecture folder's `README\.md`/);
+  assert.match(body, /small task[^.]*only an item[^.]*signal/i);
+  assert.match(body, /every chat[^.]*VS Code/i);
+});
+
 test('the example part file in the architecture skill is read by the parser as the skill says', () => {
   const body = read('skills/architecture/SKILL.md');
   const example = /```markdown\r?\n([\s\S]*?)```/.exec(body);

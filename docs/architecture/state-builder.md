@@ -34,17 +34,17 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 
 - [x] **Claude:** Place a chat by the item code it cites, then by files, then by the AI `sb01`
 - [x] **Claude:** Relate parts that share chats, branches or file links `sb02`
-- [ ] **important:** Show why a chat was placed where it is `sb03`
+- [x] **important:** Show why a chat was placed where it is `sb03`
 
 ### Cost
 
 - [x] **Claude:** Estimate cost from the tokens in local history `sb04`
-- [ ] **Savings report in the Costs tab** `sb05`
+- [x] **Savings report in the Costs tab** `sb05`
   - Cost per task and per model, with suggestions: a long chat should become a new one opened from the map; a task that would fit a smaller model.
 
 ### Later (ideas, not committed)
 
-- [ ] **detail:** Explain a project that looks empty but shows a high 30-day cost `sb06`
+- [x] **detail:** Explain a project that looks empty but shows a high 30-day cost `sb06`
   - Say "chats older than 24 h are in History" or show the recent ones that were deleted.
 - [ ] **in progress · detail:** Other AIs for session-map's own AI tasks `sb07`
   - A DeepSeek, Gemini or OpenRouter key in place of the cheap Claude model.

@@ -292,3 +292,38 @@ test('a conversation removed from session-map (mm43) is named by no change and n
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('a change made by a helper started on its own leads back to the request before its launch and to the words it was given (mm37)', async () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'sm-chg-solo-')));
+  const dir = join(base, 'claude');
+  const smDir = join(base, 'sm');
+  mkdirSync(dir);
+  mkdirSync(smDir);
+  try {
+    const shop = repo(join(base, 'shop'), { ...ARCH, 'src/billing/old.js': 'x\n' });
+    const invoice = join(shop, 'src', 'billing', 'invoice.js');
+    writeFileSync(invoice, 'one\ntwo\n');
+    const lines = [
+      { sessionId: A, cwd: shop, timestamp: iso(30 * MIN), type: 'user', origin: { kind: 'human' }, message: { role: 'user', content: [{ type: 'text', text: 'write the invoice file' }] } },
+      { sessionId: A, cwd: shop, timestamp: iso(20 * MIN), type: 'user', toolUseResult: { isAsync: true, status: 'async_launched', agentId: 'h1', description: 'Write the invoice', prompt: 'p' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'zz', content: 'launched' }] } },
+    ];
+    const projDir = join(dir, 'projects', 'shop');
+    mkdirSync(join(projDir, A, 'subagents'), { recursive: true });
+    writeFileSync(join(projDir, `${A}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const helper = pair(shop, 2 * MIN, 'Write', { file_path: invoice, content: 'one\ntwo\n' }, { type: 'create', filePath: invoice, content: 'one\ntwo\n', structuredPatch: [] }, 'claude-haiku-4');
+    writeFileSync(join(projDir, A, 'subagents', 'agent-h1.jsonl'), helper.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    writeFileSync(join(projDir, A, 'subagents', 'agent-h1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'Write the invoice', model: 'haiku' }));
+    const t = (NOW.getTime() - MIN) / 1000;
+    utimesSync(join(projDir, `${A}.jsonl`), t, t);
+
+    const state = await collect({ dir, smDir, now: NOW, isAlive: () => true, ai: { bin: null } });
+    const project = state.projects.find((p) => p.id === projectIdOf(shop));
+    const made = changesOf(state, project.id).find((r) => r.path === 'src/billing/invoice.js');
+    assert.deepEqual(made.agent, {
+      label: 'Write the invoice', model: 'claude-haiku-4',
+      request: { text: 'write the invoice file', ts: iso(30 * MIN), words: 'Write the invoice' },
+    });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

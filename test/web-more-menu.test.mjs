@@ -23,8 +23,10 @@ test('the top bar keeps only the project, the areas and the amber count: no "?" 
   assert.deepEqual([...end.matchAll(/<button[^>]*id="(\w+)"/g)].map((m) => m[1]), ['waitingBtn'], 'one button at the right end');
 });
 
-test('the help panel keeps what is read, not clicked: the glossary; the rest moved into ⋯', () => {
+test('the help panel keeps what is read, not clicked: the look-only link and the glossary; the rest moved into ⋯', () => {
   const panel = html.slice(html.indexOf('id="helpMenu"'), html.indexOf('id="helpTip"'));
+  assert.match(panel, /id="lookShareOpen"/);
+  assert.match(panel, /id="lookShareBox"/);
   assert.match(panel, /id="helpGlossary"/);
   for (const moved of ['id="tourReplay"', 'id="techToggle"', 'id="aiHelpersOpen"']) assert.ok(!panel.includes(moved), moved);
 });
@@ -41,6 +43,7 @@ test('Full mode puts every area that has a page on the bar of a computer; Simple
   assert.deepEqual(onBar.sort(), AREAS.filter((a) => !a.waitsForPage).map((a) => a.id).sort(), 'every area but the two still waiting for a page');
   assert.ok(tabsFor({ tech: true, ready: { route: true, ideas: true } }).project.includes('route'), 'an area with its page joins the bar');
   assert.deepEqual(tabsFor({ tech: true, phone: true }), tabsFor({ tech: false, phone: true }), 'the bottom bar stays four and More');
+  assert.deepEqual(tabsFor({ tech: true, look: true }), tabsFor({ look: true }), 'the look-only page keeps its two areas');
 });
 
 // ---- the ⋯ menu ----
@@ -157,6 +160,15 @@ test('on a phone the same ⋯ (Mais) of the bottom bar holds them', () => {
   const s = setup({ phone: true });
   open(s);
   assert.deepEqual(menuItems(s).slice(-5).map((b) => b.attrs['data-more']), ['tour', 'ai', 'full', 'help', 'settings']);
+});
+
+test('on a look-only page the ⋯ holds only what the page gives it, and no area', () => {
+  const s = setup({ look: true, extras: () => [{ id: 'help', label: 'Help', icon: 'help', onActivate() {} }] });
+  assert.ok(s.tab('more'), 'the ⋯ is there');
+  open(s);
+  assert.deepEqual(menuItems(s).map((b) => b.attrs['data-more']), ['help']);
+  const quiet = setup({ look: true, extras: () => [] });
+  assert.equal(quiet.tab('more'), null, 'nothing to hold: no ⋯');
 });
 
 // ---- Configurações holds every setting ----

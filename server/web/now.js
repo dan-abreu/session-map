@@ -4,6 +4,7 @@
 import { archTree } from './tree.js';
 import { nodeOfConversation, placeOf, projectHue, workWords, orchestratorOf, activityOf } from './convlist.js';
 import { runningWorkflows } from './live.js';
+import { workflowHue } from './workflows.js';
 
 const DAY_MS = 86_400_000;
 const KIND_ORDER = { waiting: 0, working: 1, finished: 2 };
@@ -45,7 +46,7 @@ function orchestraOf(state) {
 
 // Never takes the open project: the strip reads the same with any project selected (mm09).
 // Each card: {kind, project, hue, chat, nodeId, place, lastStep, work (born in · working in, mm24), origin, model,
-// helpers {done, total} | null, since}.
+// helpers {done, total} | null, teams [{id, name}] (each team still at work, mm37), since}.
 export function nowJobs(state, { unseen = new Set(), nowMs = Date.parse(state.generatedAt) } = {}) {
   const cards = [];
   for (const project of state.projects) {
@@ -67,6 +68,7 @@ export function nowJobs(state, { unseen = new Set(), nowMs = Date.parse(state.ge
         work: workWords(chat, project),
         origin: listed?.origin ?? null,
         model: chat.model ?? null,
+        teams: workflows.map((w) => ({ id: w.id, name: w.name })),
         helpers: workflows.length ? { done: workflows.reduce((n, w) => n + w.done, 0), total: workflows.reduce((n, w) => n + w.started, 0) } : null,
         since: kind === 'working' ? chat.turnStartedAt ?? lastStep?.ts ?? chat.updatedAt : chat.updatedAt,
       });
@@ -117,4 +119,12 @@ export function orchestraLine(t, orchestra) {
   if (!orchestra?.working) return null;
   const where = orchestra.projects.map((p) => `${p.name}: ${p.working}`).join(', ');
   return { text: t('now.orchestra', { n: orchestra.working }), title: t('now.orchestraTitle', { where }) };
+}
+
+// One dot per team of helpers at work on the card, each in the team's colour (the same one the map and Live use, mm37).
+// ctx: h, t (with t.count). null when no team works.
+export function teamDots({ h, t }, teams) {
+  if (!teams.length) return null;
+  return h('span', { class: 'now-teams', role: 'img', 'aria-label': t.count('now.teamsAria', teams.length) },
+    teams.map((team) => h('span', { class: 'now-team-dot', style: `--wf-h:${workflowHue(team.id)}`, title: t('now.teamDotTitle', { team: team.name }) })));
 }

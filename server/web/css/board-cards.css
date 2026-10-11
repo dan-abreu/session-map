@@ -1,0 +1,35 @@
+/* Cards made by hand in the Board (mm14): the "New card" form and the cards, which can be dragged between columns. */
+.hand-bar { margin-top: var(--sp-3); }
+.hand-form {
+  display: grid; gap: var(--sp-3); max-width: 520px; margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-2);
+}
+.hand-form .dv-field input, .hand-form .dv-field select, .hand-form .dv-field textarea {
+  width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg); color: var(--ink); font: inherit; font-size: var(--fs-sm);
+}
+.hand-form .dv-field textarea { resize: vertical; }
+.hand-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.hand-card { cursor: grab; }
+.hand-card .hand-body { cursor: inherit; border-style: dashed; }
+.hand-card .hand-body:hover { border-color: var(--line); }
+.hand-card .hand-body:active { transform: none; }
+.hand-card.is-dragging { opacity: 0.45; cursor: grabbing; }
+.hand-card.is-over .hand-body { border-color: var(--ink); }
+.col.is-over { outline: 2px dashed var(--ink-2); outline-offset: -2px; }
+.hand-note { color: var(--ink-2); font-size: var(--fs-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
+.hand-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-top: 2px; }
+.hand-move {
+  min-height: 32px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg); color: var(--ink); font: inherit; font-size: var(--fs-xs);
+}
+
+@media (max-width: 719px) {
+  .hand-bar .btn, .hand-actions .btn, .hand-delete { min-height: 44px; }
+  .hand-move { min-height: 44px; }
+  .hand-form { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hand-card, .hand-card .hand-body { transition: none; }
+}

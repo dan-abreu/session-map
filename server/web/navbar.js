@@ -1,9 +1,9 @@
 // The navigation bar (fd10, mm47). It draws whatever nav.js says: Home, Map and Conversations, a "More" menu with the
 // other areas that have a page, and on a phone a bottom bar of four. It keeps no list of areas of its own.
 // ctx: h, icon(name, cls)?, root (the element it fills), t (getter of the translator), onPick(area), phone()
-// getter, tech() getter (the Full switch), extras() (what the ⋯ holds under the areas, after a rule: help,
-// Configurações. Each {id, label, icon, desc?, kind: 'item' | 'switch', checked?, onActivate()}), current (area id at
-// the start), doc (the document; defaults to the page's).
+// getter, look() getter (opened with the "look only" link: only the areas it may show), tech() getter (the Full switch),
+// extras() (what the ⋯ holds under the areas, after a rule: help, Configurações. Each {id, label, icon, desc?, kind:
+// 'item' | 'switch', checked?, onActivate()}), current (area id at the start), doc (the document; defaults to the page's).
 // The page calls render() when the language or the width changes; setCurrent / setMode / setReady redraw by themselves.
 import { AREAS, tabsFor } from './nav.js';
 
@@ -115,7 +115,7 @@ export function createNavbar(ctx) {
     const focusId = doc?.activeElement && root.contains(doc.activeElement) ? ids.get(doc.activeElement) : null;
     byId.clear();
     barButtons = [];
-    const t = tabsFor({ tech: Boolean(ctx.tech?.()), phone, ready });
+    const t = tabsFor({ tech: Boolean(ctx.tech?.()), phone, look: Boolean(ctx.look?.()), ready });
     const onBar = phone ? t.bottom.filter((id) => id !== 'more') : [...t.global, ...t.project];
     const extras = ctx.extras?.() ?? [];
     const hasMore = t.bottom.includes('more') || t.more.length > 0 || extras.length > 0;

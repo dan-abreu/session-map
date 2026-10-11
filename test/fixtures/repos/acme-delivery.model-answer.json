@@ -1,0 +1,714 @@
+{
+ "version": 1,
+ "fixture": "acme-delivery",
+ "notes": [
+  "This is the key the model builder (B2-T3) is held to: every node and edge below must be built, with the same id, level, kind, parentId, partId, tech, origin and label, and the model must build nothing else (invention 0). Evidence is matched as a floor: each evidence listed here must be among the ones of the built item; extra evidence is fine if it resolves (file, line, sha). `needle` is a piece of the text on the line, written here only so a test can prove the line is the right one; the model does not output it.",
+  "All ids are in the contract (section 4). Sorted by id. `sys` has no origin or evidence; its name is the project name the caller gives and is not compared. Persons and externals have parentId null (they sit beside the system, not under it).",
+  "Container = every package.json / pubspec.yaml / composer.json below the root of the repository (a repository with none would be one container at the root). id `ctr:<dir>`, name = last folder of dir, origin EXTRACTED, evidence = the line of the manifest that holds the name. tech = framework or library of the first fact found under it, looking at route, then screen, then queue, then table (route/screen: attrs.framework, queue: attrs.lib, table: attrs.source); null if none.",
+  "Component, rule of fixed depth (decision 6): take the source files of the container (types ts tsx js jsx dart php blade prisma; kind code or screen; no tests, no docs). Remove ONE leading folder if it is src, lib, app or routes. If the file is then directly in that folder it belongs to `cmp:<dir>#root` (name \"(root)\"); otherwise its component is the first folder left: `cmp:<dir>/<removed folder>/<first folder>` or `cmp:<dir>/<first folder>` when nothing was removed. origin INFERRED. Evidence: every source file of the component, at its first non-blank line, so a change in any of them makes the component out of date.",
+  "partId of a component = the owner of its files from the architecture (`owner` of the census, `ownersOf`). Both fixtures have one owner per component, so no component is AMBIGUOUS here; the builder test for a two-owner component must make its own facts.",
+  "Persons: one `person:<container folder>` (name capitalized, origin INFERRED) for each container that holds at least one `screen` fact whose framework is not blade (a Blade view is rendered by the server for a mail or a page, it is not an app someone opens). Evidence = those screen facts. One edge `person:<x>->ctr:<dir>:uses`, params { via: \"screens\", count } (count = number of screen facts).",
+  "Externals: `ext:<package or host>` for each integration fact (EXTRACTED, evidence = the fact), `ext:queue:<name>` for each queue fact (EXTRACTED, evidence = the fact where the queue is defined), `ext:db` (name \"database\", INFERRED, evidence = every table fact) once if there is any table fact. Variables (env facts) are never nodes.",
+  "Edge labels are the program's (decision 5), msg `edge.<kind>`: imports { count } (how many import facts the edge sums), enqueues / consumes { queue }, uses { via: \"sdk\" | \"url\", name } for an integration, { via: \"db\" } for the database, { via: \"screens\", count } for a person. The container that holds the file of the fact is the one that acts: integration -> `uses`; the container of the table facts -> `uses` ext:db (INFERRED: nothing in the fixtures imports the Prisma package, so the schema owner is the one that reads and writes); queue: producers (job facts with role producer or cron, and the refs of a consumer job = the dispatch places) -> `enqueues`, consumers (job facts with role consumer, and the refs of the queue fact = the `new Worker` places) -> `consumes`.",
+  "Imports: every `import` fact between two source files of different components gives (or adds to) the edge `<from component>-><to component>:imports`, EXTRACTED, evidence = those facts. Imports inside one component are not edges. Imports between containers would be container edges; there is none in these fixtures. A library import is not a fact, so not an edge.",
+  "Only L1-L3 are in this key. Functions and `calls` edges (L4) have their own tests in B2-T5.",
+  "No `http` edge: the customer app calls hosts (api.acme-delivery.example, feedback.acme-delivery.example) that are integrations with no path, so nothing says which route of the backend is called. They stay externals. If the model draws customer -> backend it is an invention.",
+  "The Blade view `screen:backend:receipt` gives no person: it is rendered by the backend. Only the Flutter app has one.",
+  "The queue `mail` is both enqueued and consumed by the backend container (the controller dispatches the job that the same container handles): two edges between the same pair, one per kind."
+ ],
+ "forbidden": [
+  "ctr:apps/customer->ctr:backend:http",
+  "person:backend",
+  "ext:ghost.example",
+  "ext:queue:SendReceipt",
+  "ext:flutter"
+ ],
+ "goldenRule": {
+  "partsWithoutNode": [],
+  "nodesWithoutPart": []
+ },
+ "nodes": [
+  {
+   "id": "cmp:apps/customer#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:apps/customer",
+   "partId": "customer",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/api.dart",
+     "line": 1,
+     "needle": "import 'package:dio/dio."
+    },
+    {
+     "file": "apps/customer/lib/main.dart",
+     "line": 1,
+     "needle": "import 'package:flutter/"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/customer/lib/screens",
+   "level": 3,
+   "kind": "component",
+   "name": "screens",
+   "parentId": "ctr:apps/customer",
+   "partId": "customer",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/screens/home_screen.dart",
+     "line": 1,
+     "needle": "import 'package:flutter/"
+    },
+    {
+     "file": "apps/customer/lib/screens/order_screen.dart",
+     "line": 1,
+     "needle": "import 'package:flutter/"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/customer/lib/widgets",
+   "level": 3,
+   "kind": "component",
+   "name": "widgets",
+   "parentId": "ctr:apps/customer",
+   "partId": "customer",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/widgets/price_tag.dart",
+     "line": 1,
+     "needle": "import 'package:flutter/"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/routes/api.php",
+     "line": 1,
+     "needle": "<?php"
+    },
+    {
+     "file": "backend/routes/web.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Http",
+   "level": 3,
+   "kind": "component",
+   "name": "Http",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/app/Http/Controllers/OrderController.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Jobs",
+   "level": 3,
+   "kind": "component",
+   "name": "Jobs",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Models",
+   "level": 3,
+   "kind": "component",
+   "name": "Models",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/app/Models/Order.php",
+     "line": 1,
+     "needle": "<?php"
+    },
+    {
+     "file": "backend/app/Models/OrderItem.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/config",
+   "level": 3,
+   "kind": "component",
+   "name": "config",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/config/services.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/database",
+   "level": 3,
+   "kind": "component",
+   "name": "database",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+     "line": 1,
+     "needle": "<?php"
+    },
+    {
+     "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+     "line": 1,
+     "needle": "<?php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/resources",
+   "level": 3,
+   "kind": "component",
+   "name": "resources",
+   "parentId": "ctr:backend",
+   "partId": "backend",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/resources/views/receipt.blade.php",
+     "line": 1,
+     "needle": "<main class=\"receipt\">"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/customer",
+   "level": 2,
+   "kind": "container",
+   "name": "customer",
+   "parentId": "sys",
+   "tech": "flutter",
+   "files": [
+    "apps/customer/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/pubspec.yaml",
+     "line": 1,
+     "needle": "name:"
+    }
+   ]
+  },
+  {
+   "id": "ctr:backend",
+   "level": 2,
+   "kind": "container",
+   "name": "backend",
+   "parentId": "sys",
+   "tech": "laravel",
+   "files": [
+    "backend/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/composer.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ext:api.acme-delivery.example",
+   "level": 1,
+   "kind": "external",
+   "name": "api.acme-delivery.example",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/api.dart",
+     "line": 13,
+     "needle": "https://api.acme-delivery.example/orders",
+     "factId": "integration:api.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ext:db",
+   "level": 1,
+   "kind": "external",
+   "name": "database",
+   "parentId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+     "line": 11,
+     "needle": "Schema::create('orders'",
+     "factId": "table:orders"
+    },
+    {
+     "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+     "line": 11,
+     "needle": "Schema::create('order_items'",
+     "factId": "table:order_items"
+    }
+   ]
+  },
+  {
+   "id": "ext:feedback.acme-delivery.example",
+   "level": 1,
+   "kind": "external",
+   "name": "feedback.acme-delivery.example",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/api.dart",
+     "line": 18,
+     "needle": "https://feedback.acme-delivery.example/v1/messages",
+     "factId": "integration:feedback.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ext:mail.acme-delivery.example",
+   "level": 1,
+   "kind": "external",
+   "name": "mail.acme-delivery.example",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 22,
+     "needle": "https://mail.acme-delivery.example/send",
+     "factId": "integration:mail.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ext:queue:mail",
+   "level": 1,
+   "kind": "external",
+   "name": "mail",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 16,
+     "needle": "'mail'",
+     "factId": "queue:mail"
+    }
+   ]
+  },
+  {
+   "id": "person:customer",
+   "level": 1,
+   "kind": "person",
+   "name": "Customer",
+   "parentId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/screens/home_screen.dart",
+     "line": 4,
+     "needle": "HomeScreen",
+     "factId": "screen:customer:/"
+    },
+    {
+     "file": "apps/customer/lib/screens/order_screen.dart",
+     "line": 5,
+     "needle": "OrderScreen",
+     "factId": "screen:customer:/orders/:id"
+    }
+   ]
+  },
+  {
+   "id": "sys",
+   "level": 1,
+   "kind": "system",
+   "parentId": null
+  }
+ ],
+ "edges": [
+  {
+   "id": "cmp:apps/customer#root->cmp:apps/customer/lib/screens:imports",
+   "from": "cmp:apps/customer#root",
+   "to": "cmp:apps/customer/lib/screens",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 2
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/main.dart",
+     "line": 3,
+     "needle": "package:acme_customer/screens/home_screen.dart",
+     "factId": "import:apps/customer/lib/main.dart->apps/customer/lib/screens/home_screen.dart"
+    },
+    {
+     "file": "apps/customer/lib/main.dart",
+     "line": 4,
+     "needle": "package:acme_customer/screens/order_screen.dart",
+     "factId": "import:apps/customer/lib/main.dart->apps/customer/lib/screens/order_screen.dart"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/customer/lib/screens->cmp:apps/customer#root:imports",
+   "from": "cmp:apps/customer/lib/screens",
+   "to": "cmp:apps/customer#root",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/screens/order_screen.dart",
+     "line": 2,
+     "needle": "../api.dart",
+     "factId": "import:apps/customer/lib/screens/order_screen.dart->apps/customer/lib/api.dart"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/customer/lib/screens->cmp:apps/customer/lib/widgets:imports",
+   "from": "cmp:apps/customer/lib/screens",
+   "to": "cmp:apps/customer/lib/widgets",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 2
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/screens/home_screen.dart",
+     "line": 2,
+     "needle": "package:acme_customer/widgets/price_tag.dart",
+     "factId": "import:apps/customer/lib/screens/home_screen.dart->apps/customer/lib/widgets/price_tag.dart"
+    },
+    {
+     "file": "apps/customer/lib/screens/order_screen.dart",
+     "line": 3,
+     "needle": "../widgets/price_tag.dart",
+     "factId": "import:apps/customer/lib/screens/order_screen.dart->apps/customer/lib/widgets/price_tag.dart"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend#root->cmp:backend/app/Http:imports",
+   "from": "cmp:backend#root",
+   "to": "cmp:backend/app/Http",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/routes/api.php",
+     "line": 3,
+     "needle": "App\\Http\\Controllers\\OrderController",
+     "factId": "import:backend/routes/api.php->backend/app/Http/Controllers/OrderController.php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend#root->cmp:backend/app/Models:imports",
+   "from": "cmp:backend#root",
+   "to": "cmp:backend/app/Models",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/routes/api.php",
+     "line": 4,
+     "needle": "App\\Models\\Order",
+     "factId": "import:backend/routes/api.php->backend/app/Models/Order.php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Http->cmp:backend/app/Jobs:imports",
+   "from": "cmp:backend/app/Http",
+   "to": "cmp:backend/app/Jobs",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Http/Controllers/OrderController.php",
+     "line": 5,
+     "needle": "App\\Jobs\\SendReceipt",
+     "factId": "import:backend/app/Http/Controllers/OrderController.php->backend/app/Jobs/SendReceipt.php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Http->cmp:backend/app/Models:imports",
+   "from": "cmp:backend/app/Http",
+   "to": "cmp:backend/app/Models",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Http/Controllers/OrderController.php",
+     "line": 6,
+     "needle": "App\\Models\\Order",
+     "factId": "import:backend/app/Http/Controllers/OrderController.php->backend/app/Models/Order.php"
+    }
+   ]
+  },
+  {
+   "id": "cmp:backend/app/Jobs->cmp:backend/app/Models:imports",
+   "from": "cmp:backend/app/Jobs",
+   "to": "cmp:backend/app/Models",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 5,
+     "needle": "App\\Models\\Order",
+     "factId": "import:backend/app/Jobs/SendReceipt.php->backend/app/Models/Order.php"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/customer->ext:api.acme-delivery.example:uses",
+   "from": "ctr:apps/customer",
+   "to": "ext:api.acme-delivery.example",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "url",
+     "name": "api.acme-delivery.example"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/api.dart",
+     "line": 13,
+     "needle": "https://api.acme-delivery.example/orders",
+     "factId": "integration:api.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/customer->ext:feedback.acme-delivery.example:uses",
+   "from": "ctr:apps/customer",
+   "to": "ext:feedback.acme-delivery.example",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "url",
+     "name": "feedback.acme-delivery.example"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/api.dart",
+     "line": 18,
+     "needle": "https://feedback.acme-delivery.example/v1/messages",
+     "factId": "integration:feedback.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ctr:backend->ext:db:uses",
+   "from": "ctr:backend",
+   "to": "ext:db",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "db"
+    }
+   },
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "backend/database/migrations/2024_01_01_000000_create_orders_table.php",
+     "line": 11,
+     "needle": "Schema::create('orders'",
+     "factId": "table:orders"
+    },
+    {
+     "file": "backend/database/migrations/2024_01_02_000000_create_order_items_table.php",
+     "line": 11,
+     "needle": "Schema::create('order_items'",
+     "factId": "table:order_items"
+    }
+   ]
+  },
+  {
+   "id": "ctr:backend->ext:mail.acme-delivery.example:uses",
+   "from": "ctr:backend",
+   "to": "ext:mail.acme-delivery.example",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "url",
+     "name": "mail.acme-delivery.example"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 22,
+     "needle": "https://mail.acme-delivery.example/send",
+     "factId": "integration:mail.acme-delivery.example"
+    }
+   ]
+  },
+  {
+   "id": "ctr:backend->ext:queue:mail:consumes",
+   "from": "ctr:backend",
+   "to": "ext:queue:mail",
+   "kind": "consumes",
+   "label": {
+    "msg": "edge.consumes",
+    "params": {
+     "queue": "mail"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Jobs/SendReceipt.php",
+     "line": 10,
+     "needle": "SendReceipt",
+     "factId": "job:mail/SendReceipt"
+    }
+   ]
+  },
+  {
+   "id": "ctr:backend->ext:queue:mail:enqueues",
+   "from": "ctr:backend",
+   "to": "ext:queue:mail",
+   "kind": "enqueues",
+   "label": {
+    "msg": "edge.enqueues",
+    "params": {
+     "queue": "mail"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "backend/app/Http/Controllers/OrderController.php",
+     "line": 18,
+     "needle": "SendReceipt::dispatch(",
+     "factId": "job:mail/SendReceipt"
+    }
+   ]
+  },
+  {
+   "id": "person:customer->ctr:apps/customer:uses",
+   "from": "person:customer",
+   "to": "ctr:apps/customer",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "screens",
+     "count": 2
+    }
+   },
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/customer/lib/screens/home_screen.dart",
+     "line": 4,
+     "needle": "HomeScreen",
+     "factId": "screen:customer:/"
+    },
+    {
+     "file": "apps/customer/lib/screens/order_screen.dart",
+     "line": 5,
+     "needle": "OrderScreen",
+     "factId": "screen:customer:/orders/:id"
+    }
+   ]
+  }
+ ]
+}

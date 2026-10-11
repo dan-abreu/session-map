@@ -212,3 +212,49 @@ test('with a requests registry, every chat is told to write the request the same
   assert.ok(all(contextOf(fromMain, { kind: 'part', partId: 'pagamentos' })).includes('pedidos.md'), 'also when the map is read from the main branch');
   assert.ok(!all(contextOf(PT, { kind: 'part', partId: 'pagamentos' })).includes('pedidos.md'), 'no registry, no rule');
 });
+
+// ---- good practices at the right time (B5-T11) ----------------------------------------------------------------------
+
+const PRACTICE_PKG = { id: 'general-quality', kind: 'general', applies: {}, items: [{ id: 'q.tests', front: 'quality', ladder: 'N1', severity: 'E', title: { en: 'Run the tests on every change', 'pt-BR': 'Rodar os testes a cada mudança' }, what: { en: 'A suite runs before merging.', 'pt-BR': 'Uma suíte roda antes de juntar.' } }] };
+const FOCUS_IN = {
+  practices: { version: 1, items: [{ id: 'q.tests', pkg: 'general-quality', front: 'quality', ladder: 'N1', severity: 'E', state: 'fail', reason: null, evidence: [], attested: null }] },
+  packages: [PRACTICE_PKG],
+  profile: { detected: { stacks: [] }, owner: {} },
+};
+
+test('a part, a group and an item get the practices block after the point and before the upkeep rule', () => {
+  const nodes = [{ kind: 'part', partId: 'vitrine' }, { kind: 'group', partId: 'vitrine', group: 'Busca' }, { kind: 'item', partId: 'vitrine', code: 'vi01' }];
+  for (const node of nodes) {
+    const plain = contextOf(PT, node);
+    const withFocus = contextOf(PT, node, { practices: FOCUS_IN });
+    assert.equal(withFocus.error, undefined, node.kind);
+    assert.equal(withFocus.sections.length, plain.sections.length + 1, node.kind);
+    const block = withFocus.sections.at(-2);
+    assert.match(block, /Rodar os testes a cada mudança/, 'in the language of the map');
+    assert.deepEqual(withFocus.sections.slice(0, -2), plain.sections.slice(0, -1), 'the point sections are untouched');
+    assert.equal(withFocus.sections.at(-1), plain.sections.at(-1), 'the upkeep rule stays last');
+    assert.deepEqual(codesIn(block), [], 'no code-shaped tokens');
+  }
+  const en = contextOf(EN, { kind: 'part', partId: EN.arch.parts[0].id }, { practices: FOCUS_IN });
+  assert.match(en.sections.at(-2), /Run the tests on every change/);
+});
+
+test('without practices, or with nothing failing, every kind comes out byte for byte as before', () => {
+  const passing = { ...FOCUS_IN, practices: { version: 1, items: [{ ...FOCUS_IN.practices.items[0], state: 'pass' }] } };
+  const nodes = [{ kind: 'part', partId: 'vitrine' }, { kind: 'group', partId: 'vitrine', group: 'Busca' }, { kind: 'item', partId: 'vitrine', code: 'vi01' }];
+  for (const node of nodes) {
+    const plain = JSON.stringify(contextOf(PT, node));
+    for (const practices of [undefined, null, passing, { practices: null }]) assert.equal(JSON.stringify(contextOf(PT, node, { practices })), plain, node.kind);
+  }
+});
+
+test('layer, flow, idea, create-arch, clash and project never carry the block, even with practices to give', () => {
+  const nodes = [
+    [PT, { kind: 'layer', layerId: 'motor' }], [PT, { kind: 'flow' }], [PT, { kind: 'idea' }], [NONE, { kind: 'create-arch' }],
+    [PT, { kind: 'project' }], [NONE, { kind: 'project' }], [PT, { kind: 'clash', workCellIds: ['a', 'b'] }],
+  ];
+  for (const [p, node] of nodes) {
+    const plain = JSON.stringify(contextOf(p, node, { draft: 'flowchart TD' }));
+    assert.equal(JSON.stringify(contextOf(p, node, { draft: 'flowchart TD', practices: FOCUS_IN })), plain, node.kind);
+  }
+});

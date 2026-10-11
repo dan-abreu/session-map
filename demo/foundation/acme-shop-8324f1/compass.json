@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-10T09:40:00.000Z",
+  "stage": {
+    "key": "prototype",
+    "origin": "guessed",
+    "reason": "level-below-n2"
+  },
+  "stages": [
+    "idea",
+    "prototype",
+    "first-client",
+    "growth",
+    "company"
+  ],
+  "fronts": [
+    {
+      "front": "organization",
+      "state": "warning",
+      "pass": 1,
+      "fail": 1,
+      "unverified": 15
+    },
+    {
+      "front": "quality",
+      "state": "warning",
+      "pass": 1,
+      "fail": 2,
+      "unverified": 21
+    },
+    {
+      "front": "security",
+      "state": "warning",
+      "pass": 0,
+      "fail": 4,
+      "unverified": 25
+    },
+    {
+      "front": "operation",
+      "state": "warning",
+      "pass": 4,
+      "fail": 1,
+      "unverified": 21
+    },
+    {
+      "front": "legal",
+      "state": "warning",
+      "pass": 0,
+      "fail": 3,
+      "unverified": 31
+    },
+    {
+      "front": "product",
+      "state": "unverified",
+      "pass": 0,
+      "fail": 0,
+      "unverified": 11
+    },
+    {
+      "front": "marketing",
+      "state": "warning",
+      "pass": 0,
+      "fail": 3,
+      "unverified": 20
+    },
+    {
+      "front": "finance",
+      "state": "unverified",
+      "pass": 0,
+      "fail": 0,
+      "unverified": 18
+    }
+  ],
+  "next3": [
+    {
+      "itemId": "org.gitignore",
+      "front": "organization",
+      "example": null,
+      "ask": {
+        "text": {
+          "en": "Help me with this best practice in my project: \"A .gitignore keeps junk and secrets out\".\nWhat it is: A .gitignore lists what must never be saved: secrets, builds, dependencies.\nWhy it matters: What is saved by mistake stays in the history forever.\nHow to do it: Create .gitignore with .env, the dependencies folder and the build output of your stack.\nDone when: git status shows no secret or build file waiting to be saved.\nIf they exist, use these skills: session-map:architecture.\nShow me the plan and wait for my OK before changing any file.",
+          "pt-BR": "Me ajude com esta boa prática no meu projeto: \"Um .gitignore deixa lixo e segredos de fora\".\nO que é: O .gitignore lista o que nunca deve ser salvo: segredos, builds, dependências.\nPor que importa: O que é salvo por engano fica no histórico para sempre.\nComo fazer: Crie o .gitignore com .env, a pasta de dependências e a saída de build da sua stack.\nPronto quando: git status não mostra segredo nem arquivo de build esperando para ser salvo.\nSe existirem, use estas skills: session-map:architecture.\nMostre o plano e espere o meu OK antes de mudar qualquer arquivo."
+        },
+        "skills": [
+          "session-map:architecture"
+        ],
+        "role": "technology"
+      }
+    },
+    {
+      "itemId": "org.readme",
+      "front": "organization",
+      "example": null,
+      "ask": {
+        "text": {
+          "en": "Help me with this best practice in my project: \"A README says what the project is\".\nWhat it is: The README tells what the project is, who it is for and how to run it.\nWhy it matters: It is the front door: without it nobody, human or AI, knows where to start.\nHow to do it: Write 3 short parts in README.md: what it is, who uses it, the command to run it.\nDone when: A stranger reads only the README and can say what the project does.\nIf they exist, use these skills: session-map:architecture.\nShow me the plan and wait for my OK before changing any file.",
+          "pt-BR": "Me ajude com esta boa prática no meu projeto: \"Um README diz o que o projeto é\".\nO que é: O README diz o que o projeto é, para quem é e como rodar.\nPor que importa: É a porta de entrada: sem ele ninguém, pessoa ou IA, sabe por onde começar.\nComo fazer: Escreva 3 partes curtas no README.md: o que é, quem usa, o comando para rodar.\nPronto quando: Alguém de fora lê só o README e consegue dizer o que o projeto faz.\nSe existirem, use estas skills: session-map:architecture.\nMostre o plano e espere o meu OK antes de mudar qualquer arquivo."
+        },
+        "skills": [
+          "session-map:architecture"
+        ],
+        "role": "technology"
+      }
+    },
+    {
+      "itemId": "qual.lockfile",
+      "front": "quality",
+      "example": null,
+      "ask": {
+        "text": {
+          "en": "Help me with this best practice in my project: \"A lockfile is saved in git\".\nWhat it is: The lockfile (package-lock.json, composer.lock, pubspec.lock...) is saved with the code.\nWhy it matters: Without it, each install may bring different versions and break the build.\nHow to do it: Run the install once and save the generated lockfile.\nDone when: The lockfile is tracked by git and the CI installs from it.\nIf they exist, use these skills: superpowers:test-driven-development.\nShow me the plan and wait for my OK before changing any file.",
+          "pt-BR": "Me ajude com esta boa prática no meu projeto: \"O arquivo de travamento de versões está no git\".\nO que é: O lockfile (package-lock.json, composer.lock, pubspec.lock...) é salvo junto com o código.\nPor que importa: Sem ele, cada instalação pode trazer versões diferentes e quebrar o build.\nComo fazer: Rode a instalação uma vez e salve o lockfile gerado.\nPronto quando: O lockfile está no git e o CI instala a partir dele.\nSe existirem, use estas skills: superpowers:test-driven-development.\nMostre o plano e espere o meu OK antes de mudar qualquer arquivo."
+        },
+        "skills": [
+          "superpowers:test-driven-development"
+        ],
+        "role": "quality"
+      }
+    }
+  ],
+  "disclaimers": [
+    "finance-basics",
+    "legal-company-br",
+    "legal-lgpd-br",
+    "marketing-basics",
+    "sales-support-basics"
+  ]
+}

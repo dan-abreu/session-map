@@ -4,9 +4,10 @@
 import { api } from './api.js';
 import { createChat } from './chat.js';
 import { addBox, addLayer, connect, matchParts, moveToLayer, parseFlow, printFlow, removeNode, rename } from './flow.js';
-import { exportFileName, isAutoDraft, markdownOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
+import { drawioOf, exportFileName, isAutoDraft, markdownOf, plantumlDeploymentOf, plantumlOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
 import { drawGrid, gridLayout, pageMeasure } from './flowgrid.js';
-import { boxTitle, exportTextFor, factRows, journeyChoices, legendKeys, legendWords, level1Flow, levelNote, nodeName } from './flowlevel.js';
+import { boxTitle, exportTextFor, factRows, innerNotes, journeyChoices, journeyFlow, journeyName, journeySteps, legendKeys, legendWords, level1Flow, level2Flow, levelNote, nodeName } from './flowlevel.js';
+import { DRAG_THRESHOLD, clampZoom, dragScroll, dragStarted, anchoredScroll, svgLeftIn, wheelFactor } from './flowpan.js';
 import { createResizer } from './resize.js';
 import { nodeById } from './tree.js';
 
@@ -21,7 +22,33 @@ const MODEL_WAIT_MS = 1500;
 const MODEL_WAIT_MAX = 20;
 
 // The tab opens on the general view; the person's last choice is kept on this browser.
-export const levelOf = (saved) => (saved === 'parts' ? 'parts' : '1');
+export const levelOf = (saved) => (saved === 'parts' || saved === 'journeys' ? saved : '1');
+// The levels drawn from the single model (the general view and the journeys); the Parts level draws the README.
+export const usesModel = (level) => level === '1' || level === 'journeys';
+
+// ---- the view inside a part (flow.md fl09) ----
+
+// The way back: where the person came from (a button) and the part they are in. inner: { partId, from } or null.
+export function crumbsOf(inner, partName, tt) {
+  if (!inner) return [];
+  const from = levelOf(inner.from);
+  const key = { parts: 'flow.level.parts', journeys: 'flow.level.journeys' }[from] ?? 'flow.level.one';
+  return [{ label: tt(key), level: from }, { label: partName || inner.partId, level: null }];
+}
+
+// Only a part of the program opens from the inside (the requests registry and the operation part are drawn on the
+// Parts level but hold no code), and only while looking: in the workshop a click picks a box.
+export function canOpenInside({ mode, partId, project }) {
+  if (mode !== 'view' || !partId) return false;
+  const part = project?.arch?.parts?.find((p) => p.id === partId);
+  return Boolean(part) && part.role !== 'requests' && part.role !== 'operation';
+}
+
+// The inside view stays open while the same project still has its part; another project or a part gone closes it.
+export const keepInner = (inner, project) => (inner && project && inner.projectId === project.id && canOpenInside({ mode: 'view', partId: inner.partId, project }) ? inner : null);
+
+// A drawing opens whole: each project, level, mode and part starts at "fit".
+export const innerZoomKey = (projectId, level, mode, inner) => `${projectId}|${level}|${mode}|${inner?.partId ?? ''}`;
 
 // What a part's box says at a glance: a chat working there now beats items in progress, then all done, then still to do.
 export function partTone(counts, live) {
@@ -172,7 +199,41 @@ function fitWidth(svg, area, minZoom = ZOOM_MIN) {
   svg.style.minWidth = minZoom ? `${Math.round(w * minZoom)}px` : '';
 }
 
-// The zoom of the view: null is "the whole drawing fits the area"; a number is how many screen pixels per drawing pixel.
+// How small the view may open and still be read: the boxes' 14px text stays at about 12px.
+export const READ_MIN = 0.85;
+// The whole drawing in the area (Fit to screen), never more than ZOOM_MAX times its own size. w, h: the drawing;
+// roomW, roomH: the area inside its padding.
+export const wholeScale = ({ w, h, roomW, roomH }) => Math.min(roomW / w, roomH / h, ZOOM_MAX);
+// The size the view opens at: whole when that still reads; else as wide as the area, never past life size, and the
+// story is scrolled down (the general view reads top to bottom). A drawing that fits the area whole at a third of its
+// size is a grey map nobody can read.
+export function openScale(size, { readMin = READ_MIN } = {}) {
+  const whole = wholeScale(size);
+  return whole >= readMin ? whole : Math.min(size.roomW / size.w, 1);
+}
+
+// Inside a part the drawing opens whole a little smaller than the general view would: its boxes are few and short,
+// and seeing every band at once (what comes in down to where it hands on) matters more than the last pixel of size.
+export const INNER_READ_MIN = 0.6;
+
+// The general view with a journey picked opens on the journey, near life size, instead of the whole map at a size
+// where the dimmed boxes become blots. box: what the journey covers, in drawing units; size: sizeOf (w, h, roomW,
+// roomH) plus vx, vy (where the drawing's viewBox starts). → { scale, cx, cy, x0, x1 }: the zoom, the point (in screen
+// pixels from the drawing's top left) to put in the middle of the area (a journey taller than the area shows from its
+// top), and the journey's left and right edges with some room, so the page scrolls across only as far as it must and
+// the band titles on the left stay in sight when they can.
+export function journeyFrame(box, size, { min = 0.95, max = 1.25, pad = 36 } = {}) {
+  const fit = Math.min(size.roomW / (box.w + 2 * pad), size.roomH / (box.h + 2 * pad));
+  const scale = Math.max(Math.min(max, Math.max(min, fit)), Math.min(max, openScale(size)));
+  const cx = (box.x + box.w / 2 - (size.vx ?? 0)) * scale;
+  const tall = (box.h + 2 * pad) * scale > size.roomH;
+  const cy = tall ? (box.y - pad - (size.vy ?? 0)) * scale + size.roomH / 2 : (box.y + box.h / 2 - (size.vy ?? 0)) * scale;
+  const x0 = (box.x - pad - (size.vx ?? 0)) * scale;
+  const x1 = (box.x + box.w + pad - (size.vx ?? 0)) * scale;
+  return { scale: Math.round(scale * 1000) / 1000, cx, cy, x0, x1 };
+}
+
+// The zoom of the view: null is the opening size (openScale); a number is how many screen pixels per drawing pixel.
 export const ZOOM_STEP = 1.25;
 export const ZOOM_RANGE = [0.15, 3];
 export function nextZoom(current, dir) {
@@ -181,13 +242,13 @@ export function nextZoom(current, dir) {
   return Math.min(hi, Math.max(lo, Math.round(z * 1000) / 1000));
 }
 
-// mermaid names an arrow's path "L_<from>_<to>_<n>", n how many links between the same two boxes, in the same
-// direction, come before it in the text. The layout copy of the general view writes a backward arrow the other way
-// round; this is the path id to find it by.
+// mermaid names an arrow's path "L_<from>_<to>_<n>": the first link between two boxes (in that direction) gets 0, and
+// the next ones get how many came before plus one (mermaid 11 flowDb: counter length + 1), so 0, 2, 3, ... The layout
+// copy of the general view writes a backward arrow the other way round; this is the path id to find it by.
 export function edgePathId(edges, index) {
   const e = edges[index];
   const n = edges.slice(0, index).filter((x) => x.from === e.from && x.to === e.to).length;
-  return `L_${e.from}_${e.to}_${n}`;
+  return `L_${e.from}_${e.to}_${n === 0 ? 0 : n + 1}`;
 }
 
 // Where a drawing wider than its area opens: on the first group written in the text (mermaid may lay it out far right).
@@ -250,11 +311,29 @@ export function createFlowView(ctx) {
   let modelStamp = null;
   let modelWaitTimer = 0;
   let journey = '';
+  // The journey open on the Journeys level (fl10), and whether the model is still being worked out on the server (a
+  // journey picked then is kept by its id until the model settles).
+  let route = '';
+  let routeFor = null;
+  let modelBuilding = false;
   let showHidden = false;
   let l1 = null;
   let failedNote = false;
   let zoom = null;
   let zoomKey = null;
+  let framedZoom = null;
+  // The view inside a part (fl09): which part and where the person came from; the server's view of it, its colours,
+  // when its structure was last asked for, and the part last clicked (the "See inside" button names it).
+  let inner = null;
+  let innerView = null;
+  let innerLive = null;
+  let innerAt = 0;
+  let innerWait = 0;
+  let innerBuilding = false;
+  let innerKeyed = false;
+  let l2 = null;
+  let picked = null;
+  let clickTimer = 0;
 
   const project = () => ctx.project();
   const model = () => parseFlow(hist?.now ?? '');
@@ -294,6 +373,8 @@ export function createFlowView(ctx) {
     for (const b of root.querySelectorAll('.fl-levels button')) b.setAttribute('aria-pressed', String(b.dataset.level === level));
     for (const b of root.querySelectorAll('.fl-modes button')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
     root.dataset.mode = mode;
+    syncPan();
+    if (mode !== 'view' || inner || level !== 'journeys' || arch.source === 'none') $('#flowJourneys').hidden = true;
     $('#flowTools').hidden = mode !== 'workshop';
     const none = arch.source === 'none';
     const nothing = mode === 'view' && (none || !currentText());
@@ -333,12 +414,13 @@ export function createFlowView(ctx) {
     if (modelKey !== key) return;
     modelAt = Date.now();
     flowModel = res.ok && res.model?.nodes ? res.model : null;
-    if (flowModel && res.building && attempt < MODEL_WAIT_MAX) {
+    modelBuilding = Boolean(flowModel && res.building && attempt < MODEL_WAIT_MAX);
+    if (modelBuilding) {
       modelWaitTimer = setTimeout(async () => {
         if (!visible || modelKey !== key) return;
         const before = modelStamp;
         await loadModel(true, attempt + 1);
-        if (visible && mode === 'view' && level === '1' && flowModel && flowModel.stamp !== before) renderView();
+        if (visible && mode === 'view' && usesModel(level) && !inner && flowModel && (flowModel.stamp !== before || !modelBuilding)) renderView();
       }, MODEL_WAIT_MS);
     }
   }
@@ -376,6 +458,26 @@ export function createFlowView(ctx) {
       const outside = info && (info.kind === 'actor' || info.kind === 'service');
       const part = partId ? p.arch.parts.find((x) => x.id === partId) : null;
       g.dataset.flowNode = nodeId;
+      // A piece inside a part: its colour is what changed in its files now (none without the key), its title says what
+      // it is, how many files it holds and what changed.
+      if (info && (info.kind === 'component' || info.kind === 'group')) {
+        g.classList.add('fl-piece', `fl-piece-${info.kind === 'group' ? 'group' : 'file'}`);
+        if (info.tone) g.classList.add(`fl-${info.tone}`);
+        const words = [boxTitle(info, info.name, tt)];
+        if (info.sub && info.sub !== info.name) words.splice(1, 0, info.sub);
+        // A comment in another language than the page is not on the box; it is still one hover away, as written.
+        if (info.quote) words.push(tt('flow.l2.quote', { text: info.quote }));
+        if (info.changedFiles) words.push(t().count('flow.l2.changed', info.changedFiles));
+        if (info.unsaved) words.push(t().count('flow.l2.unsaved', info.unsaved));
+        const title = svgEl('title', {});
+        title.textContent = words.join(' · ');
+        g.prepend(title);
+        if (info.unsaved) {
+          const box = g.getBBox();
+          g.append(svgEl('circle', { class: 'fl-flag fl-flag-unsaved', cx: box.x + box.width - 2, cy: box.y + 2, r: 5 }));
+        }
+        continue;
+      }
       g.classList.add(part ? 'fl-part' : outside ? (info.kind === 'actor' ? 'fl-actor' : info.where === 'this-pc' ? 'fl-local' : 'fl-svc') : 'fl-free');
       let label = node.label;
       if (part) {
@@ -389,6 +491,11 @@ export function createFlowView(ctx) {
         flags.forEach((f, i) => g.append(svgEl('circle', { class: `fl-flag fl-flag-${f}`, cx: box.x + box.width - 2 - i * 13, cy: box.y + 2, r: 5.5 })));
       } else if (outside) label = boxTitle(info, node.label, tt);
       else label = `${node.label}: ${t()('flow.tone.free')}`;
+      const opens = !workshop && part && canOpenInside({ mode, partId, project: p }) && !(inner && inner.partId === partId);
+      if (opens) {
+        label = `${label} · ${tt('flow.l2.openHint')}`;
+        g.classList.add('fl-opens');
+      }
       const title = svgEl('title', {});
       title.textContent = label;
       g.prepend(title);
@@ -405,52 +512,189 @@ export function createFlowView(ctx) {
     }
   }
 
-  // One listener for every box, so a redraw or a recolour never stacks handlers.
-  function actOn(target) {
+  // One listener for every box, so a redraw or a recolour never stacks handlers. A click on a part opens it beside the
+  // drawing; on a computer that click waits a moment, so a double click (see inside) does not open the panel first.
+  const DOUBLE_MS = 260;
+  const insideOf = (g) => (g && canOpenInside({ mode, partId: g.dataset.partId, project: project() }) ? g.dataset.partId : null);
+  function actOn(target, { now = false } = {}) {
     const g = target.closest?.('g.node[role="button"]');
     if (!g || !canvas.contains(g)) return false;
     if (mode === 'workshop') pick(g.dataset.flowNode);
-    else if (g.dataset.partId) ctx.onOpenPart(g.dataset.partId);
+    else if (g.dataset.partId) {
+      const partId = g.dataset.partId;
+      picked = insideOf(g) ? partId : null;
+      renderCrumbs();
+      clearTimeout(clickTimer);
+      if (now || ctx.phone.matches || !picked) ctx.onOpenPart(partId);
+      else clickTimer = setTimeout(() => ctx.onOpenPart(partId), DOUBLE_MS);
+    }
     return true;
   }
-  canvas.addEventListener('click', (e) => actOn(e.target));
+  canvas.addEventListener('click', (e) => { if (e.detail < 2) actOn(e.target); });
+  canvas.addEventListener('dblclick', (e) => {
+    const partId = insideOf(e.target.closest?.('g.node[data-part-id]'));
+    if (!partId) return;
+    clearTimeout(clickTimer);
+    e.preventDefault();
+    openInner(partId);
+  });
   canvas.addEventListener('keydown', (e) => {
-    if ((e.key === 'Enter' || e.key === ' ') && actOn(e.target)) e.preventDefault();
+    if (e.key === 'Enter' && e.shiftKey) {
+      const partId = insideOf(e.target.closest?.('g.node[data-part-id]'));
+      if (partId) { e.preventDefault(); openInner(partId); }
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && actOn(e.target, { now: true })) e.preventDefault();
   });
 
   function renderLegend() {
     const tt = t();
-    const keys = mode === 'workshop' ? [] : legendKeys(level === '1' && flowModel && !failedNote ? '1' : 'parts');
+    const keys = mode === 'workshop' ? [] : legendKeys(inner ? '2' : drawnLevel === 'journeys' && level === 'journeys' ? 'journeys' : level === '1' && flowModel && !failedNote ? '1' : 'parts', { journey: level === '1' && Boolean(journey) });
     legend.replaceChildren(...keys.map((k) => h('li', { class: `lg lg-${k}` }, h('span', { class: 'lg-mark', 'aria-hidden': 'true' }), legendWords(k, tt))));
     legend.hidden = !keys.length;
+    // The legend floats over the bottom of the area: the drawing keeps that much room below it, so its last band can
+    // always be scrolled clear of the legend and "fit" never puts boxes behind it.
+    const floats = !legend.hidden && getComputedStyle(legend).position === 'absolute';
+    canvas.style.paddingBottom = floats ? `${Math.ceil(legend.offsetHeight) + 30}px` : '';
   }
 
-  // The size of the drawing: the workshop keeps reading size and scrolls; the view opens with the whole drawing in the
-  // area, and the zoom buttons take it from there.
+  // The drawing's size and the room the area gives it, inside its padding.
+  function sizeOf(svg) {
+    const vb = svg?.viewBox.baseVal;
+    if (!vb?.width || !vb?.height) return null;
+    const css = getComputedStyle(canvas);
+    const px = (k) => Number.parseFloat(css[k]) || 0;
+    return {
+      w: vb.width, h: vb.height,
+      roomW: Math.max(1, canvas.clientWidth - px('paddingLeft') - px('paddingRight')),
+      roomH: Math.max(1, canvas.clientHeight - px('paddingTop') - px('paddingBottom')),
+    };
+  }
+
+  // The size of the drawing: the workshop keeps reading size and scrolls; the view opens at a size that reads (whole
+  // when it can, else as wide as the area), and the zoom buttons take it from there.
   function sizeDrawing(svg) {
     if (mode === 'workshop') return fitWidth(svg, canvas);
     fitWidth(svg, canvas, 0);
-    if (zoom == null) return undefined;
-    const w = svg.viewBox.baseVal?.width;
-    if (!w) return undefined;
-    svg.setAttribute('width', String(Math.round(w * zoom)));
+    const size = sizeOf(svg);
+    if (!size) return undefined;
+    svg.setAttribute('width', String(Math.round(size.w * (zoom ?? openScale(size, inner ? { readMin: INNER_READ_MIN } : undefined)))));
     svg.style.maxWidth = 'none';
     svg.style.minWidth = '';
     return undefined;
   }
 
+  // dir: 1 in, -1 out, 0 the whole drawing in the area.
   function zoomBy(dir) {
     const svg = canvas.querySelector('svg');
-    const w = svg?.viewBox.baseVal?.width;
-    if (!w) return;
-    const now = svg.getBoundingClientRect().width / w;
+    const size = sizeOf(svg);
+    if (!size) return;
+    const now = svg.getBoundingClientRect().width / size.w;
     const cx = (canvas.scrollLeft + canvas.clientWidth / 2) / Math.max(1, canvas.scrollWidth);
     const cy = (canvas.scrollTop + canvas.clientHeight / 2) / Math.max(1, canvas.scrollHeight);
-    zoom = dir === 0 ? null : nextZoom(zoom ?? now, dir);
+    zoom = dir === 0 ? wholeScale(size) : nextZoom(zoom ?? now, dir);
     sizeDrawing(svg);
     canvas.scrollLeft = dir === 0 ? 0 : cx * canvas.scrollWidth - canvas.clientWidth / 2;
     canvas.scrollTop = dir === 0 ? 0 : cy * canvas.scrollHeight - canvas.clientHeight / 2;
   }
+
+  // ---- the hand (fl15) ----
+  // Like the mind map: the cursor over the drawing is a hand, dragging an empty spot or a box moves the whole drawing,
+  // the wheel (or a trackpad pinch) zooms around the pointer. The workshop keeps its clicks while a drawing tool is
+  // picked, and has no zoom (it keeps reading size and scrolls). A press that moves less than DRAG_THRESHOLD is still a
+  // click, so picking and opening boxes works as before.
+  const panOn = () => mode !== 'workshop' || !tool;
+  function syncPan() {
+    canvas.classList.toggle('can-pan', panOn());
+  }
+  let press = null; // { id, x, y, left, top, moved } while a button or finger is down on the drawing
+  let swallowClick = false;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!panOn() || (e.pointerType === 'mouse' && e.button !== 0) || !e.isPrimary) return;
+    if (e.target.closest?.('button, a, input, select, textarea, summary, label')) return;
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, left: canvas.scrollLeft, top: canvas.scrollTop, moved: false };
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    const dx = e.clientX - press.x;
+    const dy = e.clientY - press.y;
+    if (!press.moved) {
+      if (!dragStarted(dx, dy, DRAG_THRESHOLD)) return;
+      press.moved = true;
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
+      canvas.classList.add('is-panning');
+      clearTimeout(clickTimer);
+    }
+    const to = dragScroll({
+      startLeft: press.left, startTop: press.top, dx, dy,
+      maxLeft: canvas.scrollWidth - canvas.clientWidth, maxTop: canvas.scrollHeight - canvas.clientHeight,
+    });
+    canvas.scrollLeft = to.left;
+    canvas.scrollTop = to.top;
+  });
+  const endPress = (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    if (press.moved) {
+      // The click the browser sends after a drag must not open or pick the box the drag began on.
+      swallowClick = true;
+      setTimeout(() => { swallowClick = false; }, 0);
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    }
+    press = null;
+    canvas.classList.remove('is-panning');
+  };
+  canvas.addEventListener('pointerup', endPress);
+  canvas.addEventListener('pointercancel', endPress);
+  const stopSwallowed = (e) => { if (swallowClick) { e.stopImmediatePropagation(); e.preventDefault(); } };
+  canvas.addEventListener('click', stopSwallowed, true);
+  canvas.addEventListener('dblclick', stopSwallowed, true);
+
+  // Zoom keeping the point under the pointer where it is. factor: 1.1 is ten percent closer. The new scroll is worked out
+  // from the numbers and applied on the next frame (a browser may not have laid the new size out before that, and
+  // would hold the scroll back to the old size); wheel turns that come in between build on the scroll still wanted.
+  let wanted = null; // { left, top }: where the area is about to be scrolled
+  let wantedFrame = 0;
+  function zoomAt(factor, clientX, clientY) {
+    const svg = canvas.querySelector('svg');
+    const size = sizeOf(svg);
+    if (!size) return;
+    const attr = Number.parseFloat(svg.getAttribute('width'));
+    const width = attr > 0 && !String(svg.getAttribute('width')).endsWith('%') ? attr : svg.getBoundingClientRect().width;
+    const now = width / size.w;
+    const next = clampZoom((zoom ?? now) * factor, ZOOM_RANGE);
+    if (!(now > 0) || next === now) return;
+    const css = getComputedStyle(canvas);
+    const padLeft = Number.parseFloat(css.paddingLeft) || 0;
+    const padTop = Number.parseFloat(css.paddingTop) || 0;
+    const at = canvas.getBoundingClientRect();
+    const sl = wanted?.left ?? canvas.scrollLeft;
+    const st = wanted?.top ?? canvas.scrollTop;
+    const u = (clientX - at.left + sl - svgLeftIn(width, size.roomW, padLeft)) / now;
+    const v = (clientY - at.top + st - padTop) / now;
+    const width2 = Math.round(size.w * next);
+    zoom = next;
+    svg.setAttribute('width', String(width2));
+    svg.style.maxWidth = 'none';
+    wanted = anchoredScroll({ u, v, scale: width2 / size.w, left: svgLeftIn(width2, size.roomW, padLeft), top: padTop, clientX, clientY, canvasLeft: at.left, canvasTop: at.top });
+    cancelAnimationFrame(wantedFrame);
+    let tries = 0;
+    const apply = () => {
+      if (!wanted) return;
+      canvas.scrollLeft = wanted.left;
+      canvas.scrollTop = wanted.top;
+      // The scroll is held back while the new size is not laid out yet: ask again on the next frames, a few times.
+      const short = Math.abs(canvas.scrollLeft - wanted.left) > 1 || Math.abs(canvas.scrollTop - wanted.top) > 1;
+      if (short && ++tries < 30) { wantedFrame = requestAnimationFrame(apply); return; }
+      wanted = null;
+    };
+    wantedFrame = requestAnimationFrame(apply);
+  }
+  canvas.addEventListener('wheel', (e) => {
+    if (mode === 'workshop' || !canvas.querySelector('svg')) return;
+    e.preventDefault();
+    zoomAt(wheelFactor(e), e.clientX, e.clientY);
+  }, { passive: false });
+  syncPan();
 
   // The general view lays out a copy where backward arrows are written the other way round: their heads go back to
   // where the facts say. Arrows drawn once for several parts name the others on hover.
@@ -523,15 +767,278 @@ export function createFlowView(ctx) {
     lastModel = { ...view.flow, ok: true };
     lastMeta = view.meta;
     decorate(svg, lastModel, view.meta);
+    markJourney(svg, view.meta);
     canvas.scrollLeft = 0;
     canvas.scrollTop = 0;
+    // Framed again on every redraw until the person zooms on their own.
+    if ((zoom == null || zoom === framedZoom) && view.meta?.journey && drawnLevel === '1' && !inner) frameJourney(svg);
     return undefined;
   }
 
-  // The hover words of an arrow: its label, and the other parts an arrow drawn once for several stands for.
+  // A journey picked on the general view: the drawing opens on the journey's boxes and labels, near life size.
+  function frameJourney(svg) {
+    const lit = [...svg.querySelectorAll('g.node.fl-on-path, g.edgeLabel.fl-on-path')].map((g) => g.getBBox()).filter((b) => b.width || b.height);
+    const size = sizeOf(svg);
+    if (!lit.length || !size) return;
+    const x0 = Math.min(...lit.map((b) => b.x));
+    const y0 = Math.min(...lit.map((b) => b.y));
+    const x1 = Math.max(...lit.map((b) => b.x + b.width));
+    const y1 = Math.max(...lit.map((b) => b.y + b.height));
+    const vb = svg.viewBox.baseVal;
+    const f = journeyFrame({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, { ...size, vx: vb.x, vy: vb.y });
+    zoom = f.scale;
+    framedZoom = f.scale;
+    sizeDrawing(svg);
+    // The drawing is centred when narrower than the area; its left edge is then where the svg starts.
+    const left = svg.getBoundingClientRect().left - canvas.getBoundingClientRect().left + canvas.scrollLeft;
+    const top = svg.getBoundingClientRect().top - canvas.getBoundingClientRect().top + canvas.scrollTop;
+    const css = getComputedStyle(canvas);
+    const room = canvas.clientWidth - Number.parseFloat(css.paddingRight);
+    canvas.scrollLeft = Math.max(0, Math.min(left + f.x0, left + f.x1 - room));
+    canvas.scrollTop = Math.max(0, top + f.cy - Number.parseFloat(css.paddingTop) - size.roomH / 2);
+  }
+
+  // The hover words of an arrow: its label, the other parts an arrow drawn once for several stands for, and inside a
+  // part what the code takes (the names it imports) or why an arrow has no file behind it.
   function edgeWords(p, meta) {
-    const names = (meta.edges[p.index]?.also ?? []).map((id) => nodeNameOf(id)).filter(Boolean);
-    return [p.text, names.length ? t()('flow.l1.also', { names: names.join(', ') }) : ''].filter(Boolean).join(' · ');
+    const tt = t();
+    const m = meta.edges[p.index] ?? {};
+    const names = (m.also ?? []).map((id) => nodeNameOf(id)).filter(Boolean);
+    const took = m.names?.length ? tt('flow.l2.names', { names: m.names.slice(0, 6).join(', ') + (m.names.length > 6 ? ', …' : '') }) : '';
+    const real = m.back ? flowModel?.edges?.find((e) => e.id === m.edgeId) : null;
+    const why = m.readme ? tt('flow.l2.fromReadme') : m.manifest ? tt('flow.l2.fromManifest') : real ? tt('flow.j.backNote', { to: nodeNameOf(real.from) ?? '', from: nodeNameOf(real.to) ?? '' }) : '';
+    return [p.text, names.length ? tt('flow.l1.also', { names: names.join(', ') }) : '', took, why].filter(Boolean).join(' · ');
+  }
+
+  // ---- journeys (fl10) ----
+
+  // A drawing with a journey on it: the journey's boxes, arrows and labels stand out, everything else steps back. Run
+  // after every draw and recolour. A label shared by several arrows stays lit when any of them is on the journey. On
+  // the mermaid fallback the arrows carry no index, so nothing is dimmed there.
+  function markJourney(svg, meta) {
+    const on = meta?.journey ?? null;
+    for (const el of svg.querySelectorAll('.fl-dim, .fl-on-path, .fl-step-on')) el.classList.remove('fl-dim', 'fl-on-path', 'fl-step-on');
+    svg.classList.toggle('fl-has-journey', Boolean(on));
+    if (!on || !svg.querySelector('path[data-edge]')) return;
+    for (const g of svg.querySelectorAll('g.node')) g.classList.add(on.nodes.has(g.dataset.flowNode ?? g.dataset.id) ? 'fl-on-path' : 'fl-dim');
+    for (const path of svg.querySelectorAll('path[data-edge]')) path.classList.add(on.edges.has(Number(path.dataset.edge)) ? 'fl-on-path' : 'fl-dim');
+    for (const g of svg.querySelectorAll('g.edgeLabel[data-edges]')) {
+      const lit = g.dataset.edges.split(' ').some((i) => on.edges.has(Number(i)));
+      g.classList.add(lit ? 'fl-on-path' : 'fl-dim');
+    }
+  }
+
+  // One step pointed at in the list: its arrow, its label and its two boxes light up on the drawing.
+  function lightStep(index) {
+    const svg = canvas.querySelector('svg');
+    if (!svg) return;
+    for (const el of svg.querySelectorAll('.fl-step-on')) el.classList.remove('fl-step-on');
+    svg.classList.toggle('fl-stepping', index != null);
+    if (index == null || !l1?.flow.edges[index]) return;
+    const e = l1.flow.edges[index];
+    svg.querySelector(`path[data-edge="${index}"]`)?.classList.add('fl-step-on');
+    for (const g of svg.querySelectorAll('g.edgeLabel[data-edges]')) if (g.dataset.edges.split(' ').includes(String(index))) g.classList.add('fl-step-on');
+    for (const id of [e.from, e.to]) svg.querySelector(`g.node[data-id="${CSS.escape(id)}"]`)?.classList.add('fl-step-on');
+  }
+
+  // The column beside the drawing on the Journeys level: the journeys found, then the steps of the one open, each tied
+  // to its part (a button opens the part, as a click on its box does).
+  function renderJourneys() {
+    const tt = t();
+    const panel = $('#flowJourneys');
+    const list = flowModel?.journeys ?? [];
+    panel.hidden = false;
+    const head = h('header', { class: 'fl-j-head' },
+      h('h3', { id: 'flowJourneysTitle', class: 'fl-j-title' }, tt('flow.j.list')),
+      h('p', { class: 'fl-j-lede' }, tt('flow.j.lede')),
+      modelBuilding ? h('p', { class: 'fl-j-note', role: 'status' }, tt('flow.j.building')) : '');
+    if (!list.length) {
+      panel.replaceChildren(head, h('p', { class: 'fl-j-none' }, tt('flow.j.none')));
+      return;
+    }
+    const tabs = h('div', { class: 'fl-j-tabs', role: 'tablist', 'aria-orientation': 'vertical', 'aria-labelledby': 'flowJourneysTitle' },
+      ...list.map((j, i) => {
+        const on = j.id === route;
+        return h('button', {
+          type: 'button', role: 'tab', class: 'fl-j-tab', id: `flowJTab${i}`, 'aria-selected': String(on), 'aria-controls': 'flowSteps', tabindex: on ? '0' : '-1',
+          'data-journey': j.id,
+          onclick: () => pickRoute(j.id),
+        },
+        h('span', { class: 'fl-j-num num', 'aria-hidden': 'true' }, String(i + 1)),
+        h('span', { class: 'fl-j-name' }, journeyName(flowModel, j, tt)),
+        h('span', { class: 'fl-j-meta' }, tt.count('flow.j.stepCount', j.steps?.length ?? 0)));
+      }));
+    tabs.addEventListener('keydown', (e) => {
+      const keys = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1, Home: -1e9, End: 1e9 };
+      if (!(e.key in keys)) return;
+      e.preventDefault();
+      const at = list.findIndex((j) => j.id === route);
+      const next = Math.max(0, Math.min(list.length - 1, at + keys[e.key]));
+      pickRoute(list[next].id, { focus: true });
+    });
+    const j = list.find((x) => x.id === route);
+    const steps = journeySteps(flowModel, route, tt);
+    const indexOf = (n) => l1?.meta.edges.find((m) => m.step === n)?.index ?? null;
+    const partsById = new Map(project().arch.parts.map((p) => [p.id, p]));
+    const ol = h('ol', { class: 'fl-j-steps', id: 'flowSteps', role: 'tabpanel', 'aria-labelledby': `flowJTab${list.indexOf(j)}` },
+      ...steps.map((st) => {
+        const part = st.partId ? partsById.get(st.partId) : null;
+        const li = h('li', { class: `fl-j-step${st.back ? ' is-back' : ''}`, tabindex: '0' },
+          h('span', { class: 'fl-j-stepnum num', 'aria-hidden': 'true' }, String(st.n)),
+          h('div', { class: 'fl-j-stepbody' },
+            h('p', { class: 'fl-j-who' }, h('span', { class: 'visually-hidden' }, `${st.n}. `), st.from, h('span', { class: 'fl-j-arrow', 'aria-hidden': 'true' }, ' → '), h('span', { class: 'visually-hidden' }, ` ${tt('flow.to')} `), st.to),
+            st.words ? h('p', { class: 'fl-j-words' }, st.words) : null,
+            part ? h('button', { type: 'button', class: 'fl-j-chip', onclick: (e) => { e.stopPropagation(); ctx.onOpenPart(part.id); } }, tt('flow.j.openPart', { name: part.name })) : null));
+        const index = indexOf(st.n);
+        li.addEventListener('mouseenter', () => lightStep(index));
+        li.addEventListener('mouseleave', () => lightStep(null));
+        li.addEventListener('focusin', () => lightStep(index));
+        li.addEventListener('focusout', () => lightStep(null));
+        return li;
+      }));
+    const toMap = h('button', { type: 'button', class: 'btn fl-j-onmap', onclick: () => { journey = route; setLevel('1'); } }, h('span', {}, tt('flow.j.onMap')), ctx.icon('next', 'btn-icon'));
+    panel.replaceChildren(head, tabs,
+      h('section', { class: 'fl-j-detail', 'aria-label': tt('flow.j.steps', { name: journeyName(flowModel, j, tt) }) },
+        h('h4', { class: 'fl-j-subtitle' }, tt('flow.j.steps', { name: journeyName(flowModel, j, tt) })), ol, toMap));
+  }
+
+  function pickRoute(id, { focus = false } = {}) {
+    if (id === route) return;
+    route = id;
+    renderView().then(() => { if (focus) $(`#flowJourneys [data-journey="${CSS.escape(id)}"]`)?.focus(); });
+  }
+
+  function setLevel(next) {
+    level = levelOf(next);
+    safeSet('sm.flowLevel', level);
+    if (inner) { inner = null; innerView = null; l2 = null; clearTimeout(innerWait); }
+    return renderView();
+  }
+
+  // ---- the view inside a part (fl09) ----
+
+  const partName =(partId) => project().arch.parts.find((x) => x.id === partId)?.name ?? partId;
+
+  // The line above the drawing: on the general view and the parts, how to see a part from the inside (and a button for
+  // the part last clicked, which is the way in on a phone); inside, the way back.
+  function renderCrumbs() {
+    const tt = t();
+    const nav = $('#flowCrumbs');
+    const on = mode === 'view' && project().arch.source !== 'none';
+    nav.hidden = !on;
+    if (!on) return;
+    if (inner) {
+      const crumbs = crumbsOf(inner, partName(inner.partId), tt);
+      nav.replaceChildren(h('ol', { class: 'fl-crumb-list' }, ...crumbs.map((c, i) => h('li', { class: 'fl-crumb' },
+        c.level
+          ? h('button', { type: 'button', class: 'fl-crumb-back', title: tt('flow.l2.back', { name: c.label }), onclick: () => closeInner() },
+            ctx.icon('prev', 'fl-crumb-icon'), h('span', {}, c.label))
+          : h('span', { class: 'fl-crumb-here', 'aria-current': 'location' }, c.label),
+        i < crumbs.length - 1 ? h('span', { class: 'fl-crumb-sep', 'aria-hidden': 'true' }, '›') : ''))),
+      innerBuilding ? h('span', { class: 'fl-crumb-note', role: 'status' }, tt('flow.l2.building')) : '');
+      return;
+    }
+    const pickedName = picked && canOpenInside({ mode, partId: picked, project: project() }) ? partName(picked) : null;
+    nav.replaceChildren(
+      h('span', { class: 'fl-crumb-hint' }, tt(ctx.phone.matches ? 'flow.l2.hintPhone' : 'flow.l2.hint')),
+      pickedName ? h('button', { type: 'button', class: 'btn fl-inside-btn', onclick: () => openInner(picked) }, h('span', {}, tt('flow.l2.open', { name: pickedName })), ctx.icon('next', 'btn-icon')) : '');
+  }
+
+  function openInner(partId) {
+    if (!canOpenInside({ mode, partId, project: project() })) return;
+    clearTimeout(clickTimer);
+    inner = { partId, from: level, projectId: project().id };
+    innerView = null;
+    innerLive = null;
+    innerAt = 0;
+    picked = partId;
+    renderView();
+  }
+
+  function closeInner() {
+    if (!inner) return;
+    const back = inner.partId;
+    inner = null;
+    innerView = null;
+    l2 = null;
+    clearTimeout(innerWait);
+    renderView().then(() => canvas.querySelector(`g.node[data-part-id="${CSS.escape(back)}"]`)?.focus({ preventScroll: true }));
+  }
+
+  // Asks the server for the inside of the part: the whole view, or (only) the colours when the view is recent.
+  async function loadInner({ onlyLive = false } = {}) {
+    const p = project();
+    const want = inner;
+    const res = await api.flowPart(p.id, want.partId, onlyLive);
+    if (inner !== want || project().id !== p.id) return 'stale';
+    if (!res.ok) return res.error ?? 'network';
+    if (onlyLive) {
+      if (res.key !== innerView?.key) return loadInner();
+      innerLive = res.live ?? null;
+      innerKeyed = Boolean(res.keyed);
+      return 'live';
+    }
+    const before = innerView?.key ?? null;
+    innerView = res.view;
+    innerLive = res.live ?? null;
+    innerKeyed = Boolean(res.keyed);
+    innerAt = Date.now();
+    innerBuilding = Boolean(res.building);
+    clearTimeout(innerWait);
+    if (innerBuilding) innerWait = setTimeout(() => { if (visible && inner === want) refreshInner(true); }, MODEL_WAIT_MS);
+    return before === innerView.key ? 'same' : 'new';
+  }
+
+  async function renderInner() {
+    const tt = t();
+    renderHead();
+    renderCrumbs();
+    renderLegend();
+    if (!innerView || innerView.partId !== inner.partId) {
+      canvas.replaceChildren(h('p', { class: 'fl-loading' }, tt('flow.l2.loading', { name: partName(inner.partId) })));
+      $('#flowFilters').hidden = true;
+      const got = await loadInner();
+      if (got === 'stale') return;
+      if (got === 'unknown-part') { toast(tt('flow.l2.unknown')); return closeInner(); }
+      if (!['new', 'same'].includes(got)) {
+        canvas.replaceChildren(h('p', { class: 'fl-error', role: 'alert' }, errorText(got)));
+        return;
+      }
+    }
+    await drawInner();
+  }
+
+  async function drawInner() {
+    l2 = level2Flow(innerView, { tt: t(), live: innerLive, showHidden, narrow: ctx.phone.matches, perRow: ctx.phone.matches ? 2 : 5 });
+    drawnLevel = '2';
+    renderCrumbs();
+    renderLegend();
+    renderFilters();
+    await drawGeneral(l2);
+    renderHead();
+  }
+
+  // A poll while inside: the colours every time, the structure again after a while (or while the code is still read).
+  async function refreshInner(force = false) {
+    const stale = force || innerBuilding || Date.now() - innerAt > MODEL_RECHECK_MS;
+    const got = await loadInner({ onlyLive: !stale });
+    if (got === 'stale') return;
+    if (got === 'unknown-part') { toast(t()('flow.l2.unknown')); closeInner(); return; }
+    if (got === 'new') { await drawInner(); return; }
+    if (got !== 'same' && got !== 'live') return;
+    l2 = level2Flow(innerView, { tt: t(), live: innerLive, showHidden, narrow: ctx.phone.matches, perRow: ctx.phone.matches ? 2 : 5 });
+    recolour(l2.meta);
+    renderFilters();
+  }
+
+  function recolour(meta) {
+    const svg = canvas.querySelector('svg');
+    if (!svg || !lastModel?.ok) return;
+    for (const el of svg.querySelectorAll('.fl-flag, g.node > title')) el.remove();
+    for (const g of svg.querySelectorAll('g.node')) g.classList.remove('fl-live', 'fl-doing', 'fl-done', 'fl-todo', 'fl-changed', 'fl-quiet', 'fl-opens', 'fl-piece', 'fl-piece-file', 'fl-piece-group');
+    lastMeta = meta;
+    decorate(svg, lastModel, meta);
+    markJourney(svg, meta);
   }
 
   async function renderView() {
@@ -545,16 +1052,25 @@ export function createFlowView(ctx) {
       return;
     }
     failedNote = false;
-    // A drawing opens whole: on a new project, level or mode the zoom goes back to "fit".
-    const zk = `${p.id}|${level}|${mode}`;
+    inner = keepInner(inner, p);
+    // A drawing opens whole: on a new project, level, mode or part the zoom goes back to "fit".
+    // A journey picked on the general view is a drawing of its own: it opens framed on the journey (frameJourney).
+    const zk = innerZoomKey(p.id, level === 'journeys' ? `journeys:${route}` : level === '1' && journey ? `1:${journey}` : level, mode, inner);
     if (zk !== zoomKey) { zoomKey = zk; zoom = null; }
-    if (level === '1') {
+    if (inner) return renderInner();
+    l2 = null;
+    renderCrumbs();
+    if (usesModel(level)) {
+      const want = level;
       if (!flowModel) canvas.replaceChildren(h('p', { class: 'fl-loading' }, t()('flow.loading')));
       await loadModel();
-      if (mode !== 'view' || level !== '1') return;
+      if (mode !== 'view' || level !== want || inner) return;
       if (flowModel) {
         modelStamp = flowModel.stamp ?? null;
-        if (journey && !journeyChoices(flowModel, t()).some((j) => j.id === journey)) journey = '';
+        const ids = (flowModel.journeys ?? []).map((j) => j.id);
+        // While the model is still being worked out a journey may be missing for a moment: the pick is kept by its id.
+        if (journey && !ids.includes(journey) && !modelBuilding) journey = '';
+        if (level === 'journeys') return renderRoute(ids);
         l1 = level1Flow(flowModel, { journey: journey || null, showHidden, tt: t() });
         drawnLevel = '1';
         renderLegend();
@@ -581,13 +1097,60 @@ export function createFlowView(ctx) {
     renderHead();
   }
 
+  // The Journeys level: the list and steps beside, the open journey drawn alone.
+  async function renderRoute(ids) {
+    const tt = t();
+    if (routeFor !== project().id) { routeFor = project().id; route = ''; }
+    if (!ids.includes(route)) {
+      if (route && !modelBuilding && ids.length) toast(tt('flow.j.gone'));
+      if (!route || !modelBuilding || !ids.length) route = ids[0] ?? '';
+    }
+    const zk = innerZoomKey(project().id, `journeys:${route}`, mode, null);
+    if (zk !== zoomKey) { zoomKey = zk; zoom = null; }
+    l1 = route ? journeyFlow(flowModel, route, { tt }) : null;
+    drawnLevel = 'journeys';
+    renderJourneys();
+    renderLegend();
+    renderFilters();
+    if (!l1) {
+      canvas.replaceChildren(h('div', { class: 'fl-empty fl-j-empty' }, h('h3', {}, tt('flow.level.journeys')), h('p', {}, tt('flow.j.none'))));
+      legend.hidden = true;
+      return;
+    }
+    await drawGeneral(l1);
+    renderHead();
+  }
+
   // Above the drawing in the general view: the journey filter, the links seen only in the code, a note, and the facts.
   function renderFilters() {
     const tt = t();
     const box = $('#flowFilters');
-    const on = mode === 'view' && project().arch.source !== 'none' && (level === '1' || failedNote);
+    const inside = Boolean(inner && l2 && innerView);
+    const alone = !inside && drawnLevel === 'journeys' && Boolean(l1);
+    const on = mode === 'view' && project().arch.source !== 'none' && (inside || alone || level === '1' || failedNote);
     box.hidden = !on;
     if (!on) return;
+    if (alone) {
+      // A journey alone: no filter to pick, the facts behind its boxes and arrows stay one click away.
+      box.querySelector('.fl-filter-row').hidden = true;
+      box.querySelector('.fl-facts').hidden = false;
+      $('#flowLevelNote').textContent = levelNote(l1.meta, tt);
+      if ($('#flowFacts').open) fillFacts($('#flowFactsList'));
+      return;
+    }
+    if (inside) {
+      // Inside a part only the switch for the links seen only in the code stays; journeys belong to the general view.
+      for (const el of box.querySelectorAll('.fl-filter-row, .fl-facts')) el.hidden = false;
+      $('#flowJourney').closest('label').hidden = true;
+      $('#flowJourneyNote').textContent = '';
+      $('#flowShowHidden').checked = showHidden;
+      const notes = innerNotes(innerView, tt, { live: innerLive, keyed: innerKeyed, hiddenNear: l2.meta.hiddenNear, showHidden, hubs: l2.meta.hubs });
+      const missing = levelNote(l2.meta, tt);
+      $('#flowLevelNote').textContent = [missing, ...notes].filter(Boolean).join(' ');
+      if ($('#flowFacts').open) fillFacts($('#flowFactsList'));
+      return;
+    }
+    $('#flowJourney').closest('label').hidden = false;
     const general = drawnLevel === '1' && Boolean(flowModel);
     for (const el of box.querySelectorAll('.fl-filter-row, .fl-facts')) el.hidden = !general;
     const select = $('#flowJourney');
@@ -595,7 +1158,7 @@ export function createFlowView(ctx) {
     select.replaceChildren(h('option', { value: '' }, tt('flow.l1.journey.all')), ...choices.map((c) => h('option', { value: c.id, selected: c.id === journey }, c.label)));
     select.disabled = !choices.length;
     select.value = journey;
-    $('#flowJourneyNote').textContent = general && !choices.length ? tt('flow.l1.journey.none') : '';
+    $('#flowJourneyNote').textContent = general && !choices.length ? tt('flow.l1.journey.none') : general && journey && modelBuilding ? tt('flow.j.building') : '';
     $('#flowShowHidden').checked = showHidden;
     const notes = [];
     if (failedNote) notes.push(tt('flow.l1.failed'));
@@ -613,8 +1176,13 @@ export function createFlowView(ctx) {
   }
 
   function fillFacts(list) {
-    const rows = factRows(flowModel, l1.meta, t());
-    list.replaceChildren(...rows.map((r) => h('li', {},
+    const tt = t();
+    const inside = drawnLevel === '2' && l2 && innerView;
+    const rows = inside ? factRows(l2.model, l2.meta, tt) : factRows(flowModel, l1.meta, tt);
+    const how = inside && innerView.how
+      ? h('li', { class: 'fl-how' }, h('p', { class: 'fl-how-title' }, tt('flow.l2.how', { file: `${innerView.how.file}:${innerView.how.line}` })), h('p', { class: 'fl-how-text' }, innerView.how.text))
+      : null;
+    list.replaceChildren(...(how ? [how] : []), ...rows.map((r) => h('li', {},
       h('div', { class: 'fl-fact-head' },
         h('span', { class: 'fl-fact-name' }, r.text),
         r.label ? h('span', { class: 'fl-fact-label' }, r.label) : null,
@@ -788,6 +1356,7 @@ export function createFlowView(ctx) {
 
   function openTool(name) {
     tool = tool === name ? null : name;
+    syncPan();
     renderForm();
     if (tool) form.querySelector('input:not([type="hidden"]), select')?.focus();
   }
@@ -827,7 +1396,7 @@ export function createFlowView(ctx) {
 
   // ---- export --------------------------------------------------------------------------------
 
-  const currentText = () => (mode === 'workshop' ? hist?.now : exportTextFor(drawnLevel, exportText, l1?.text));
+  const currentText = () => (mode === 'workshop' ? hist?.now : exportTextFor(drawnLevel, exportText, drawnLevel === '2' ? l2?.text : l1?.text));
 
   async function copyText() {
     const text = currentText();
@@ -840,9 +1409,10 @@ export function createFlowView(ctx) {
     }
   }
 
-  // The drawing as it is on screen (SVG, PNG) or the mermaid text behind it (Markdown, .mmd). One click, one file.
+  // The drawing as it is on screen (SVG, PNG), the mermaid text behind it (Markdown, .mmd) or that text turned into draw.io
+  // and PlantUML (same layers, boxes and arrows). One click, one file.
   async function exportAs(kind) {
-    const name = project().name;
+    const name = mode === 'view' && inner && drawnLevel === '2' ? `${project().name} ${inner.partId}` : mode === 'view' && drawnLevel === 'journeys' && l1?.journey ? `${project().name} ${l1.journey.key ?? 'journey'}` : project().name;
     const text = currentText();
     const svg = canvas.querySelector('svg');
     const done = (file) => toast(t()('flow.exported', { name: file }));
@@ -853,6 +1423,15 @@ export function createFlowView(ctx) {
         const body = kind === 'md' ? markdownOf(name, text, t()('flow.mode.view')) : `${text}
 `;
         saveBlob(new Blob([body], { type: 'text/plain;charset=utf-8' }), file);
+        done(file);
+        return;
+      }
+      if (kind === 'drawio' || kind === 'puml' || kind === 'pumld') {
+        if (!text) return;
+        const body = kind === 'drawio' ? drawioOf(text, name) : (kind === 'puml' ? plantumlOf : plantumlDeploymentOf)(text, name);
+        if (!body) { toast(t()(kind === 'pumld' ? 'flow.exportNoDeploy' : 'flow.exportFailed')); return; }
+        const file = exportFileName(kind === 'pumld' ? `${name} deployment` : name, kind === 'drawio' ? 'drawio' : 'puml');
+        saveBlob(new Blob([body], { type: kind === 'drawio' ? 'application/vnd.jgraph.mxfile' : 'text/plain;charset=utf-8' }), file);
         done(file);
         return;
       }
@@ -978,10 +1557,8 @@ export function createFlowView(ctx) {
   for (const b of root.querySelectorAll('.fl-levels button')) {
     b.addEventListener('click', () => {
       const next = levelOf(b.dataset.level);
-      if (next === level) return;
-      level = next;
-      safeSet('sm.flowLevel', level);
-      renderView();
+      if (next === level && !inner) return;
+      setLevel(next);
     });
   }
   $('#flowZoomIn').addEventListener('click', () => zoomBy(1));
@@ -989,7 +1566,15 @@ export function createFlowView(ctx) {
   $('#flowZoomFit').addEventListener('click', () => zoomBy(0));
   $('#flowJourney').addEventListener('change', (e) => { journey = e.target.value; renderView(); });
   $('#flowShowHidden').addEventListener('change', (e) => { showHidden = e.target.checked; renderView(); });
-  $('#flowFacts').addEventListener('toggle', () => { if ($('#flowFacts').open && l1 && flowModel && drawnLevel === '1') fillFacts($('#flowFactsList')); });
+  $('#flowFacts').addEventListener('toggle', () => {
+    if ($('#flowFacts').open && ((l1 && flowModel && usesModel(drawnLevel)) || (l2 && innerView && drawnLevel === '2'))) fillFacts($('#flowFactsList'));
+  });
+  // Escape leaves the inside of a part, when the keys are on the Flow and no dialog or field takes them.
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !inner || mode !== 'view' || dialog.open || exportMenu.open || e.target.closest('input, textarea, select, details[open]')) return;
+    e.preventDefault();
+    closeInner();
+  });
   $('#flowCopy').addEventListener('click', copyText);
   const exportMenu = $('#flowExport');
   $('#flowExportBtn').addEventListener('click', (e) => { if ($('#flowExportBtn').getAttribute('aria-disabled') === 'true') e.preventDefault(); });
@@ -1063,7 +1648,7 @@ export function createFlowView(ctx) {
       if (mode === 'view') {
         if (exportKey !== archKey(project())) canvas.replaceChildren(h('p', { class: 'fl-loading' }, t()('flow.loading')));
         await loadExport();
-        if (level === '1') await loadModel(Date.now() - modelAt > MODEL_RECHECK_MS);
+        if (usesModel(level)) await loadModel(Date.now() - modelAt > MODEL_RECHECK_MS);
         return renderView();
       }
       await loadDraft();
@@ -1084,22 +1669,28 @@ export function createFlowView(ctx) {
         draftFor = null;
         hist = null;
       }
+      if (mode === 'view' && inner) {
+        const kept = keepInner(inner, p);
+        if (!kept) {
+          inner = null;
+          innerView = null;
+          l2 = null;
+          return renderView();
+        }
+        if (exportKey !== archKey(p)) await loadExport();
+        return refreshInner();
+      }
       if (mode === 'view') {
         const changed = exportKey !== archKey(p);
         await loadExport();
-        if (level === '1') {
+        if (usesModel(level)) {
           const stale = Date.now() - modelAt > MODEL_RECHECK_MS;
           const before = flowModel?.stamp ?? null;
           await loadModel(stale);
           if (changed || (stale && (flowModel?.stamp ?? null) !== before)) return renderView();
         }
         if (changed) return renderView();
-        const svg = canvas.querySelector('svg');
-        if (svg && lastModel?.ok) {
-          for (const el of svg.querySelectorAll('.fl-flag, g.node > title')) el.remove();
-          for (const g of svg.querySelectorAll('g.node')) g.classList.remove('fl-live', 'fl-doing', 'fl-done', 'fl-todo');
-          decorate(svg, lastModel, lastMeta);
-        }
+        recolour(lastMeta);
         return undefined;
       }
       if (!hist) {

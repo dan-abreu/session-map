@@ -20,10 +20,20 @@ function itemOfCodes(codes, projects) {
   return null;
 }
 
+// The box (and item) a page chat was opened on: {projectId, partId, code | null}, or null for a chat the page did not open
+// or a point that is no box (a layer, the whole project). page: what page-chats.json keeps of it.
+function pointOf(page, project) {
+  const node = page?.node;
+  const part = (project.arch?.parts ?? []).find((p) => p.id === page?.partId);
+  if (!part || !['part', 'group', 'item'].includes(node?.kind)) return null;
+  const code = node.kind === 'item' && typeof node.code === 'string' ? itemOfCodes([node.code.toLowerCase()], [project]) : null;
+  return { projectId: project.id, partId: part.id, code: code?.code ?? null };
+}
+
 // w: one workflow from readWorkflows; launch: the request of its run (summary.launches) or null; items: [{id, arch}], the
 // project the conversation is listed in first; place(absolutePath) → {projectId, name, partId, path} | null;
-// commitOf(commit) → {projectId, tag} | null.
-export function workflowView(w, { launch, items, place, commitOf }) {
+// commitOf(commit) → {projectId, tag} | null; point: pointOf the page chat, the item when the owner's words name none.
+export function workflowView(w, { launch, items, place, commitOf, point = null }) {
   const agents = w.agents.map(({ lastFile, editedFiles, commits, ...agent }) => {
     const files = editedFiles.map(place).filter(Boolean);
     return {
@@ -44,14 +54,14 @@ export function workflowView(w, { launch, items, place, commitOf }) {
   }
   return {
     ...w,
-    request: launch ? { text: launch.text, ts: launch.ts, item: itemOfCodes(launch.codes, items) } : null,
+    request: launch ? { text: launch.text, ts: launch.ts, ...(launch.words ? { words: launch.words } : {}), item: itemOfCodes(launch.codes, items) ?? point } : null,
     agents: agents.map(({ allFiles, ...a }) => a),
     places: [...places.values()].map((p) => ({ projectId: p.projectId, name: p.name, files: p.paths.size, partIds: [...p.partIds] })),
   };
 }
 
 // Hangs the trace on every conversation's workflows, in the project it is listed in. built: [{project, key, ownersOf,
-// commits}] from collect; groups: [{root, items}]; skip: folders whose files never count. Visitors copy the chat's
+// commits, pageOf}] from collect; groups: [{root, items}]; skip: folders whose files never count. Visitors copy the chat's
 // workflows later, so this runs before the footprints are hung.
 export async function hangWorkflows(built, groups, { skip, nowMs }) {
   const homes = new Map(built.map((b) => [b.key, b]));
@@ -96,6 +106,7 @@ export async function hangWorkflows(built, groups, { skip, nowMs }) {
     };
     // The request's item is looked for in the conversation's own map first, then in the others.
     const items = [b, ...built.filter((x) => x !== b)].map((x) => ({ id: x.project.id, arch: x.project.arch }));
-    chat.workflows = chat.workflows.map((w) => (Array.isArray(w.agents) ? workflowView(w, { launch: s.launches?.[w.id] ?? null, items, place: placeFile, commitOf }) : w));
+    const point = pointOf(b.pageOf?.(s.sessionId), b.project);
+    chat.workflows = chat.workflows.map((w) => (Array.isArray(w.agents) ? workflowView(w, { launch: s.launches?.[w.id] ?? null, items, place: placeFile, commitOf, point }) : w));
   }
 }

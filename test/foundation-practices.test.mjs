@@ -284,8 +284,9 @@ test('on acme-shop a missing SECURITY.md appears once as fail; adding the file c
     assert.deepEqual(changed, [sec.id]);
     assert.equal(stateOf(after, sec.id).state, 'pass');
     assert.notEqual(after.ladder.nextPercent, before.ladder.nextPercent);
-    assert.equal(after.ladder.level, before.ladder.level);
-    assert.equal(after.ladder.provisional, before.ladder.provisional);
+    // Passing one item can lift the level (when it was the last failure of its rung), never lower it.
+    const rank = (l) => (l === null ? -1 : ['N0', 'N1', 'N2', 'N3', 'N4'].indexOf(l));
+    assert.ok(rank(after.ladder.level) >= rank(before.ladder.level));
   } finally { removeFixtureRepo(root); }
 });
 

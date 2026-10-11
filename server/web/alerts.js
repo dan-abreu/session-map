@@ -36,23 +36,32 @@ export const wantsAlert = (prefs, alert) => prefs?.perProject?.[alert.projectId]
 
 const LIST_MAX = 3;
 
+// When a plan limit comes back, in the person's language and clock; the written time when only that is known.
+function whenOf(t, alert) {
+  const at = alert.resetsAt ? new Date(alert.resetsAt) : null;
+  if (at && !Number.isNaN(at.getTime())) return at.toLocaleString(t.lang, { weekday: 'long', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  return alert.resetsText || t('alert.when.unknown');
+}
+
 // The words of a group: what it is, why, what to do now, and the button; title and body for a notification.
 // content false (the phone, through an outside service): the project and the situation only.
 export function alertText(t, group, { content = true } = {}) {
   const [first] = group.alerts;
   const many = group.alerts.length > 1;
-  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), n: first.resumed ?? 0, reason: first.because ?? '' };
+  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '' };
   const what = many ? t(`alert.many.${group.kind}`, { n: group.alerts.length }) : t(`alert.what.${first.reason}`);
   const why = many ? t('alert.why.many') : t(`alert.why.${first.reason}`, vars);
   const todo = many ? t('alert.do.many') : t(`alert.do.${first.reason}`);
-  const action = group.kind === 'clash' ? t('alert.openMap') : t('alert.open');
-  if (!content) return { what, why, todo, action, title: `session-map · ${group.projectName}`, body: what };
+  const action = group.kind === 'clash' ? t('alert.openMap') : group.kind === 'limit' ? t('alert.openApp') : t('alert.open');
+  // A plan limit belongs to the account, not to a project.
+  const project = group.projectName ? ` · ${group.projectName}` : '';
+  if (!content) return { what, why, todo, action, title: `session-map${project}`, body: what };
   const named = (a) => a.title || t('chat.untitled');
   const where = !many && first.origin ? ` · ${t(`convs.origin.${first.origin}`)}` : '';
   let body;
   if (many) body = group.alerts.slice(0, LIST_MAX).map(named).join(' · ') + (group.alerts.length > LIST_MAX ? ' …' : '');
   else body = first.sessionId ? `${named(first)} — ${first.summary || why}` : why;
-  return { what, why, todo, action, title: `${what} · ${group.projectName}${where}`, body };
+  return { what, why, todo, action, title: `${what}${project}${where}`, body };
 }
 
 export const tabTitle = (base, unseen) => (unseen > 0 ? `(${unseen}) ${base}` : base);
@@ -60,13 +69,18 @@ export const tabTitle = (base, unseen) => (unseen > 0 ? `(${unseen}) ${base}` : 
 // ---- the page: cards, browser notifications, sound, tab title and the settings dialog -----------------------------
 
 const POLL_MS = 5000;
+// A hidden page asks every sixth tick (30 s): enough for the tab title's count, without a request every 5 s per hidden tab.
+const HIDDEN_EVERY = 6;
+
+// Whether this tick asks the server: always while seen, and while hidden only when a browser alert or the beep could fire.
+export const alertsDue = ({ hidden, notifying, sound = false, tick }) => !hidden || notifying || sound || tick % HIDDEN_EVERY === 0;
 const CARD_MS = 14_000;
 const CARDS_MAX = 3;
 // A page opened on a server it has not seen yet shows only what happened in the last minutes.
 const FRESH_MS = 10 * 60_000;
 const SEEN_KEY = 'sm.alerts.seen';
 const KINDS = ['finished', 'waiting', 'error', 'clash'];
-const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash' };
+const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'clash', limit: 'waiting' };
 const DEFAULTS = { browser: true, desktop: true, sound: false, ntfy: { enabled: false, topic: null }, perProject: {} };
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 
@@ -111,10 +125,13 @@ export function createAlerts(ctx) {
   }
 
   // The PC already shows its own desktop alert: the browser's is for another device, or when that one is off.
-  function notify(groups) {
+  const canNotify = () => {
     const p = current();
-    if (!document.hidden || !p.browser || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    if (p.desktop && desktopAvailable && onThisPc) return;
+    if (!p.browser || typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+    return !(p.desktop && desktopAvailable && onThisPc);
+  };
+  function notify(groups) {
+    if (!document.hidden || !canNotify()) return;
     const tt = ctx.t();
     for (const g of groups) {
       const words = alertText(tt, g);
@@ -139,7 +156,8 @@ export function createAlerts(ctx) {
   function card(g) {
     const tt = ctx.t();
     const words = alertText(tt, g);
-    const test = g.alerts[0].reason === 'test';
+    // A plan limit has nothing to open: it is read, not answered.
+    const test = g.alerts[0].reason === 'test' || g.kind === 'limit';
     const el = h('li', { class: `al-card tone-${TONE[g.kind] ?? 'active'}`, role: 'group', 'aria-label': words.title },
       h('span', { class: 'al-dot', 'aria-hidden': 'true' }),
       h('div', { class: 'al-text' },
@@ -172,6 +190,7 @@ export function createAlerts(ctx) {
   }
 
   let polling = false;
+  let started = false;
   async function poll() {
     if (polling) return;
     polling = true;
@@ -307,6 +326,8 @@ export function createAlerts(ctx) {
     if (document.hidden) return;
     unseen = 0;
     renderTitle();
+    // Back in view: what happened while hidden shows at once, not on the next tick.
+    if (started) poll();
   });
   // A browser plays sound only after the person touched the page once.
   document.addEventListener('pointerdown', () => { audio?.resume?.(); }, { passive: true });
@@ -315,8 +336,10 @@ export function createAlerts(ctx) {
   return {
     start() {
       loadPrefs();
+      started = true;
       poll();
-      setInterval(poll, POLL_MS);
+      let tick = 0;
+      setInterval(() => { if (alertsDue({ hidden: document.hidden, notifying: canNotify(), sound: current().sound, tick: ++tick })) poll(); }, POLL_MS);
     },
     relabel() { if (dialog.open) renderDialog(); if (canEdit) save({ lang: ctx.lang() }, { quiet: true }); },
     isOpen: () => dialog.open,

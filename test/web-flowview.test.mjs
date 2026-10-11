@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   partTone, partFlags, historyStart, historyPush, historyUndo, historyRedo, foldMermaid, svgNodeId, mmdFileName, forLayout, startScroll,
-  nextZoom, edgePathId, ZOOM_RANGE,
+  nextZoom, edgePathId, ZOOM_RANGE, openScale, wholeScale, READ_MIN,
 } from '../server/web/flowview.js';
 
 const counts = (o = {}) => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, ...o });
@@ -112,7 +112,23 @@ test('nextZoom: steps in and out by a quarter and stays inside the range', () =>
   assert.equal(nextZoom(0.4, 1), 0.5);
 });
 
-test('edgePathId: the id mermaid gives the path of a link counts only the links between the same two boxes before it', () => {
-  const edges = [{ from: 'SB', to: 'RD' }, { from: 'A', to: 'B' }, { from: 'SB', to: 'RD' }, { from: 'RD', to: 'SB' }];
-  assert.deepEqual(edges.map((_, i) => edgePathId(edges, i)), ['L_SB_RD_0', 'L_A_B_0', 'L_SB_RD_1', 'L_RD_SB_0']);
+test('edgePathId: mermaid 11 numbers the links between the same two boxes 0, then 2, 3, ... (flowDb counter: length + 1)', () => {
+  const edges = [{ from: 'SB', to: 'RD' }, { from: 'A', to: 'B' }, { from: 'SB', to: 'RD' }, { from: 'RD', to: 'SB' }, { from: 'SB', to: 'RD' }];
+  assert.deepEqual(edges.map((_, i) => edgePathId(edges, i)), ['L_SB_RD_0', 'L_A_B_0', 'L_SB_RD_2', 'L_RD_SB_0', 'L_SB_RD_3']);
+});
+
+test('openScale: the view opens whole when that still reads; else as wide as the area (never past life size) and scrolls down', () => {
+  // A small drawing fits whole and may grow a little.
+  assert.equal(openScale({ w: 600, h: 300, roomW: 1200, roomH: 800 }), 1.6);
+  // A drawing that fits whole at a readable size opens whole.
+  assert.equal(openScale({ w: 1000, h: 900, roomW: 1300, roomH: 800 }), 800 / 900);
+  // The general view of session-map at 1600x1000: whole it would be about 0.58, too small to read, so it opens as
+  // wide as the area and the owner scrolls down the story.
+  const z = openScale({ w: 1381, h: 969, roomW: 1296, roomH: 560 });
+  assert.ok(z >= READ_MIN, 'readable');
+  assert.equal(z, 1296 / 1381);
+  // A wide screen does not blow it up past life size.
+  assert.equal(openScale({ w: 1381, h: 969, roomW: 2400, roomH: 560 }), 1);
+  // Fit to screen is always the whole drawing, however small.
+  assert.equal(wholeScale({ w: 1381, h: 969, roomW: 1296, roomH: 560 }), 560 / 969);
 });

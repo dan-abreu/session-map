@@ -40,6 +40,8 @@ The `map` command starts the server and prints the links. `board` makes the curr
 
 - [x] **Claude:** One-step install from the marketplace `pt01`
 - [ ] **important:** Listing in more plugin directories `pt02`
+- [ ] Open the map like a program: it turns on with Windows, a watcher brings it back, and the page installs as an app `pt07`
+  - Task Scheduler entry at logon plus a watcher (`session-map install-startup` / `uninstall-startup`, no admin), a web app manifest with the map's icon, and a "turning on…" screen. From request `id86`; later.
 - [x] **Claude:** A text view for people who use only the terminal `pt06`
   - `node server/cli.mjs` prints the map with working, quiet and waiting marks, "Waiting for you" and costs; `--watch`, `--project`, `--json`. Released in v0.1.0.
 
@@ -52,5 +54,5 @@ The `map` command starts the server and prints the links. `board` makes the curr
 
 ### Architecture and Flow together
 
-- [ ] **Skill `architecture` requires updating both the architecture and the Flow** `pt04`
+- [x] **Skill `architecture` requires updating both the architecture and the Flow** `pt04`
   - A new feature, part or link means an item or part in the architecture and a box or arrow in the Flow; a small task is only an item (it shows in the Flow as a signal). Applies in every chat, VS Code included. Part of `fl12`.

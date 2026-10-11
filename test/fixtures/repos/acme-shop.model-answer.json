@@ -1,0 +1,733 @@
+{
+ "version": 1,
+ "fixture": "acme-shop",
+ "notes": [
+  "This is the key the model builder (B2-T3) is held to: every node and edge below must be built, with the same id, level, kind, parentId, partId, tech, origin and label, and the model must build nothing else (invention 0). Evidence is matched as a floor: each evidence listed here must be among the ones of the built item; extra evidence is fine if it resolves (file, line, sha). `needle` is a piece of the text on the line, written here only so a test can prove the line is the right one; the model does not output it.",
+  "All ids are in the contract (section 4). Sorted by id. `sys` has no origin or evidence; its name is the project name the caller gives and is not compared. Persons and externals have parentId null (they sit beside the system, not under it).",
+  "Container = every package.json / pubspec.yaml / composer.json below the root of the repository (a repository with none would be one container at the root). id `ctr:<dir>`, name = last folder of dir, origin EXTRACTED, evidence = the line of the manifest that holds the name. tech = framework or library of the first fact found under it, looking at route, then screen, then queue, then table (route/screen: attrs.framework, queue: attrs.lib, table: attrs.source); null if none.",
+  "Component, rule of fixed depth (decision 6): take the source files of the container (types ts tsx js jsx dart php blade prisma; kind code or screen; no tests, no docs). Remove ONE leading folder if it is src, lib, app or routes. If the file is then directly in that folder it belongs to `cmp:<dir>#root` (name \"(root)\"); otherwise its component is the first folder left: `cmp:<dir>/<removed folder>/<first folder>` or `cmp:<dir>/<first folder>` when nothing was removed. origin INFERRED. Evidence: every source file of the component, at its first non-blank line, so a change in any of them makes the component out of date.",
+  "partId of a component = the owner of its files from the architecture (`owner` of the census, `ownersOf`). Both fixtures have one owner per component, so no component is AMBIGUOUS here; the builder test for a two-owner component must make its own facts.",
+  "Persons: one `person:<container folder>` (name capitalized, origin INFERRED) for each container that holds at least one `screen` fact whose framework is not blade (a Blade view is rendered by the server for a mail or a page, it is not an app someone opens). Evidence = those screen facts. One edge `person:<x>->ctr:<dir>:uses`, params { via: \"screens\", count } (count = number of screen facts).",
+  "Externals: `ext:<package or host>` for each integration fact (EXTRACTED, evidence = the fact), `ext:queue:<name>` for each queue fact (EXTRACTED, evidence = the fact where the queue is defined), `ext:db` (name \"database\", INFERRED, evidence = every table fact) once if there is any table fact. Variables (env facts) are never nodes.",
+  "Edge labels are the program's (decision 5), msg `edge.<kind>`: imports { count } (how many import facts the edge sums), enqueues / consumes { queue }, uses { via: \"sdk\" | \"url\", name } for an integration, { via: \"db\" } for the database, { via: \"screens\", count } for a person. The container that holds the file of the fact is the one that acts: integration -> `uses`; the container of the table facts -> `uses` ext:db (INFERRED: nothing in the fixtures imports the Prisma package, so the schema owner is the one that reads and writes); queue: producers (job facts with role producer or cron, and the refs of a consumer job = the dispatch places) -> `enqueues`, consumers (job facts with role consumer, and the refs of the queue fact = the `new Worker` places) -> `consumes`.",
+  "Imports: every `import` fact between two source files of different components gives (or adds to) the edge `<from component>-><to component>:imports`, EXTRACTED, evidence = those facts. Imports inside one component are not edges. Imports between containers would be container edges; there is none in these fixtures. A library import is not a fact, so not an edge.",
+  "Only L1-L3 are in this key. Functions and `calls` edges (L4) have their own tests in B2-T5.",
+  "No `http` edge: apps/web builds the URL from the env name API_BASE_URL (apps/web/lib/api.ts:1), there is no literal URL of the project that matches a route of the api, so by decision 4 nothing links them. If the model draws web -> api it is an invention.",
+  "The golden rule here is NOT empty on one side: apps/admin has no part in docs/architecture (the gap `no-owner` of the reading key), so `cmp:apps/admin/pages` is in nodesWithoutPart. The brief of B2-T3 said both lists are empty in acme-shop; it cannot be true with this fixture. Use acme-delivery for both empty and this one for exactly this component.",
+  "All source files of apps/api are owned by `orders`, and so are the two of packages/adapters: the part `orders` has four components. The part `db` has one (`cmp:packages/db/prisma`)."
+ ],
+ "forbidden": [
+  "ctr:apps/web->ctr:apps/api:http",
+  "ctr:apps/api->ext:db:uses",
+  "ext:redis",
+  "ext:queue:digest",
+  "ext:queue:welcome",
+  "cmp:apps/api/src/legacy",
+  "ext:ghost.example"
+ ],
+ "goldenRule": {
+  "partsWithoutNode": [],
+  "nodesWithoutPart": [
+   "cmp:apps/admin/pages"
+  ]
+ },
+ "nodes": [
+  {
+   "id": "cmp:apps/admin/pages",
+   "level": 3,
+   "kind": "component",
+   "name": "pages",
+   "parentId": "ctr:apps/admin",
+   "partId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/admin/pages/api/users.ts",
+     "line": 1,
+     "needle": "export default function "
+    },
+    {
+     "file": "apps/admin/pages/dashboard.tsx",
+     "line": 1,
+     "needle": "export default function "
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/api#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:apps/api",
+   "partId": "orders",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/api/src/log.ts",
+     "line": 1,
+     "needle": "export function logStart"
+    },
+    {
+     "file": "apps/api/src/server.ts",
+     "line": 1,
+     "needle": "import Fastify from 'fas"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/api/src/routes",
+   "level": 3,
+   "kind": "component",
+   "name": "routes",
+   "parentId": "ctr:apps/api",
+   "partId": "orders",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/api/src/routes/orders.ts",
+     "line": 1,
+     "needle": "import type { FastifyIns"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/api/src/services",
+   "level": 3,
+   "kind": "component",
+   "name": "services",
+   "parentId": "ctr:apps/api",
+   "partId": "orders",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/api/src/services/notify.ts",
+     "line": 1,
+     "needle": "type Order = { id: strin"
+    },
+    {
+     "file": "apps/api/src/services/orders.ts",
+     "line": 1,
+     "needle": "import { notifier } from"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/web#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:apps/web",
+   "partId": "web",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/page.tsx",
+     "line": 1,
+     "needle": "export default function "
+    },
+    {
+     "file": "apps/web/lib/api.ts",
+     "line": 1,
+     "needle": "export const apiUrl = (p"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/web/app/(shop)",
+   "level": 3,
+   "kind": "component",
+   "name": "(shop)",
+   "parentId": "ctr:apps/web",
+   "partId": "web",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/(shop)/cart/page.tsx",
+     "line": 1,
+     "needle": "export default function "
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/web/app/api",
+   "level": 3,
+   "kind": "component",
+   "name": "api",
+   "parentId": "ctr:apps/web",
+   "partId": "web",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/api/health/route.ts",
+     "line": 1,
+     "needle": "export async function GE"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/web/app/orders",
+   "level": 3,
+   "kind": "component",
+   "name": "orders",
+   "parentId": "ctr:apps/web",
+   "partId": "web",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/orders/[id]/page.tsx",
+     "line": 1,
+     "needle": "import { fetchOrder } fr"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/worker#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:apps/worker",
+   "partId": "worker",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/worker/src/queues.ts",
+     "line": 1,
+     "needle": "import { Queue } from 'b"
+    },
+    {
+     "file": "apps/worker/src/templates.ts",
+     "line": 1,
+     "needle": "export function renderWe"
+    },
+    {
+     "file": "apps/worker/src/worker.ts",
+     "line": 1,
+     "needle": "import { Worker } from '"
+    }
+   ]
+  },
+  {
+   "id": "cmp:packages/adapters#root",
+   "level": 3,
+   "kind": "component",
+   "name": "(root)",
+   "parentId": "ctr:packages/adapters",
+   "partId": "orders",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "packages/adapters/src/mailer.ts",
+     "line": 1,
+     "needle": "// The mailer talks to t"
+    },
+    {
+     "file": "packages/adapters/src/payments.ts",
+     "line": 1,
+     "needle": "import Stripe from 'stri"
+    }
+   ]
+  },
+  {
+   "id": "cmp:packages/db/prisma",
+   "level": 3,
+   "kind": "component",
+   "name": "prisma",
+   "parentId": "ctr:packages/db",
+   "partId": "db",
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 1,
+     "needle": "// Data model for acme-s"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/admin",
+   "level": 2,
+   "kind": "container",
+   "name": "admin",
+   "parentId": "sys",
+   "tech": "next-pages",
+   "files": [
+    "apps/admin/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/admin/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/api",
+   "level": 2,
+   "kind": "container",
+   "name": "api",
+   "parentId": "sys",
+   "tech": "fastify",
+   "files": [
+    "apps/api/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/api/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/web",
+   "level": 2,
+   "kind": "container",
+   "name": "web",
+   "parentId": "sys",
+   "tech": "next-app",
+   "files": [
+    "apps/web/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/web/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/worker",
+   "level": 2,
+   "kind": "container",
+   "name": "worker",
+   "parentId": "sys",
+   "tech": "bullmq",
+   "files": [
+    "apps/worker/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/worker/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ctr:packages/adapters",
+   "level": 2,
+   "kind": "container",
+   "name": "adapters",
+   "parentId": "sys",
+   "tech": null,
+   "files": [
+    "packages/adapters/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/adapters/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ctr:packages/db",
+   "level": 2,
+   "kind": "container",
+   "name": "db",
+   "parentId": "sys",
+   "tech": "prisma",
+   "files": [
+    "packages/db/"
+   ],
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/db/package.json",
+     "line": 2,
+     "needle": "\"name\""
+    }
+   ]
+  },
+  {
+   "id": "ext:api.mailer.example",
+   "level": 1,
+   "kind": "external",
+   "name": "api.mailer.example",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/adapters/src/mailer.ts",
+     "line": 4,
+     "needle": "https://api.mailer.example/send",
+     "factId": "integration:api.mailer.example"
+    }
+   ]
+  },
+  {
+   "id": "ext:db",
+   "level": 1,
+   "kind": "external",
+   "name": "database",
+   "parentId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 16,
+     "needle": "model Customer",
+     "factId": "table:Customer"
+    },
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 22,
+     "needle": "model Order",
+     "factId": "table:Order"
+    },
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 34,
+     "needle": "model Tag",
+     "factId": "table:Tag"
+    }
+   ]
+  },
+  {
+   "id": "ext:queue:emails",
+   "level": 1,
+   "kind": "external",
+   "name": "emails",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/worker/src/queues.ts",
+     "line": 5,
+     "needle": "'emails'",
+     "factId": "queue:emails"
+    }
+   ]
+  },
+  {
+   "id": "ext:stripe",
+   "level": 1,
+   "kind": "external",
+   "name": "stripe",
+   "parentId": null,
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/adapters/src/payments.ts",
+     "line": 1,
+     "needle": "'stripe'",
+     "factId": "integration:stripe"
+    }
+   ]
+  },
+  {
+   "id": "person:admin",
+   "level": 1,
+   "kind": "person",
+   "name": "Admin",
+   "parentId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/admin/pages/dashboard.tsx",
+     "line": 1,
+     "needle": "Dashboard",
+     "factId": "screen:admin:/dashboard"
+    }
+   ]
+  },
+  {
+   "id": "person:web",
+   "level": 1,
+   "kind": "person",
+   "name": "Web",
+   "parentId": null,
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/page.tsx",
+     "line": 1,
+     "needle": "HomePage",
+     "factId": "screen:web:/"
+    },
+    {
+     "file": "apps/web/app/orders/[id]/page.tsx",
+     "line": 3,
+     "needle": "OrderPage",
+     "factId": "screen:web:/orders/[id]"
+    },
+    {
+     "file": "apps/web/app/(shop)/cart/page.tsx",
+     "line": 1,
+     "needle": "CartPage",
+     "factId": "screen:web:/cart"
+    }
+   ]
+  },
+  {
+   "id": "sys",
+   "level": 1,
+   "kind": "system",
+   "parentId": null
+  }
+ ],
+ "edges": [
+  {
+   "id": "cmp:apps/api#root->cmp:apps/api/src/routes:imports",
+   "from": "cmp:apps/api#root",
+   "to": "cmp:apps/api/src/routes",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/api/src/server.ts",
+     "line": 2,
+     "needle": "./routes/orders",
+     "factId": "import:apps/api/src/server.ts->apps/api/src/routes/orders.ts"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/api/src/routes->cmp:apps/api/src/services:imports",
+   "from": "cmp:apps/api/src/routes",
+   "to": "cmp:apps/api/src/services",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/api/src/routes/orders.ts",
+     "line": 2,
+     "needle": "../services/orders",
+     "factId": "import:apps/api/src/routes/orders.ts->apps/api/src/services/orders.ts"
+    }
+   ]
+  },
+  {
+   "id": "cmp:apps/web/app/orders->cmp:apps/web#root:imports",
+   "from": "cmp:apps/web/app/orders",
+   "to": "cmp:apps/web#root",
+   "kind": "imports",
+   "label": {
+    "msg": "edge.imports",
+    "params": {
+     "count": 1
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/web/app/orders/[id]/page.tsx",
+     "line": 1,
+     "needle": "../../../lib/api",
+     "factId": "import:apps/web/app/orders/[id]/page.tsx->apps/web/lib/api.ts"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/worker->ext:queue:emails:consumes",
+   "from": "ctr:apps/worker",
+   "to": "ext:queue:emails",
+   "kind": "consumes",
+   "label": {
+    "msg": "edge.consumes",
+    "params": {
+     "queue": "emails"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/worker/src/worker.ts",
+     "line": 10,
+     "needle": "'emails'",
+     "factId": "queue:emails"
+    }
+   ]
+  },
+  {
+   "id": "ctr:apps/worker->ext:queue:emails:enqueues",
+   "from": "ctr:apps/worker",
+   "to": "ext:queue:emails",
+   "kind": "enqueues",
+   "label": {
+    "msg": "edge.enqueues",
+    "params": {
+     "queue": "emails"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "apps/worker/src/queues.ts",
+     "line": 8,
+     "needle": "'welcome'",
+     "factId": "job:emails/welcome"
+    },
+    {
+     "file": "apps/worker/src/queues.ts",
+     "line": 12,
+     "needle": "'digest'",
+     "factId": "job:emails/digest"
+    }
+   ]
+  },
+  {
+   "id": "ctr:packages/adapters->ext:api.mailer.example:uses",
+   "from": "ctr:packages/adapters",
+   "to": "ext:api.mailer.example",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "url",
+     "name": "api.mailer.example"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/adapters/src/mailer.ts",
+     "line": 4,
+     "needle": "https://api.mailer.example/send",
+     "factId": "integration:api.mailer.example"
+    }
+   ]
+  },
+  {
+   "id": "ctr:packages/adapters->ext:stripe:uses",
+   "from": "ctr:packages/adapters",
+   "to": "ext:stripe",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "sdk",
+     "name": "stripe"
+    }
+   },
+   "origin": "EXTRACTED",
+   "evidence": [
+    {
+     "file": "packages/adapters/src/payments.ts",
+     "line": 1,
+     "needle": "'stripe'",
+     "factId": "integration:stripe"
+    }
+   ]
+  },
+  {
+   "id": "ctr:packages/db->ext:db:uses",
+   "from": "ctr:packages/db",
+   "to": "ext:db",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "db"
+    }
+   },
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 16,
+     "needle": "model Customer",
+     "factId": "table:Customer"
+    },
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 22,
+     "needle": "model Order",
+     "factId": "table:Order"
+    },
+    {
+     "file": "packages/db/prisma/schema.prisma",
+     "line": 34,
+     "needle": "model Tag",
+     "factId": "table:Tag"
+    }
+   ]
+  },
+  {
+   "id": "person:admin->ctr:apps/admin:uses",
+   "from": "person:admin",
+   "to": "ctr:apps/admin",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "screens",
+     "count": 1
+    }
+   },
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/admin/pages/dashboard.tsx",
+     "line": 1,
+     "needle": "Dashboard",
+     "factId": "screen:admin:/dashboard"
+    }
+   ]
+  },
+  {
+   "id": "person:web->ctr:apps/web:uses",
+   "from": "person:web",
+   "to": "ctr:apps/web",
+   "kind": "uses",
+   "label": {
+    "msg": "edge.uses",
+    "params": {
+     "via": "screens",
+     "count": 3
+    }
+   },
+   "origin": "INFERRED",
+   "evidence": [
+    {
+     "file": "apps/web/app/page.tsx",
+     "line": 1,
+     "needle": "HomePage",
+     "factId": "screen:web:/"
+    },
+    {
+     "file": "apps/web/app/orders/[id]/page.tsx",
+     "line": 3,
+     "needle": "OrderPage",
+     "factId": "screen:web:/orders/[id]"
+    },
+    {
+     "file": "apps/web/app/(shop)/cart/page.tsx",
+     "line": 1,
+     "needle": "CartPage",
+     "factId": "screen:web:/cart"
+    }
+   ]
+  }
+ ]
+}

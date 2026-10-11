@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutTree, edgePath, joinSides } from '../server/web/tree.js';
-import { withStatus, repoNodes, ownerIndex, partsOf, reach, editTargets, matchPaths } from '../server/web/reposide.js';
+import { withStatus, repoNodes, ownerIndex, partsOf, reach, editTargets, matchPaths, censusLine, listSig } from '../server/web/reposide.js';
 import { settledOpacity } from '../server/web/mindmap.js';
 
 const pending = (path, kind, extra = {}) => ({ id: `x:${path}:${kind}`, path, kind, state: 'pending', inFolder: true, added: 0, removed: 0, ts: '2026-10-10T10:00:00Z', ...extra });
@@ -207,4 +207,47 @@ test('repoNodes marks the files no part of the map counts (owners read and empty
 test('a box that settled leaves its opacity to the stylesheet, so a dimmed box can fade; one growing in keeps its own', () => {
   assert.equal(settledOpacity('1'), '');
   assert.equal(settledOpacity('0.4'), '0.4');
+});
+
+// ---- the census on the files side (id77): counts, left-out files in grey, new files ----
+
+const counted = (path, extra = {}) => ({ path, lines: 10, kind: 'code', owners: ['w'], census: { code: 6, comment: 3, blank: 1 }, excluded: null, new: false, ...extra });
+
+test('repoNodes: a file carries its census counts, its reason for being left out and whether it is new', () => {
+  const nodes = repoNodes(withStatus([
+    counted('src/a.js'), counted('src/fresh.js', { lines: null, census: null, new: true }), counted('dist/out.js', { census: null, excluded: 'generated' }),
+  ], []));
+  const [src, dist] = [nodes.find((n) => n.path === 'src'), nodes.find((n) => n.path === 'dist')];
+  const [a, fresh] = src.children;
+  assert.deepEqual(a.census, { code: 6, comment: 3, blank: 1 });
+  assert.equal(a.excluded, null);
+  assert.deepEqual([fresh.status, fresh.census], ['A', null], 'a file git sees and no count has read yet is new, with no counts (not zero)');
+  assert.equal(dist.children[0].excluded, 'generated');
+});
+
+test('repoNodes: a folder sums the counts of its files, turns grey when everything in it is left out, and counts what is new', () => {
+  const nodes = repoNodes(withStatus([
+    counted('src/a.js'), counted('src/sub/b.js', { census: { code: 1, comment: 2, blank: 3 } }), counted('src/fresh.js', { census: null, new: true }),
+    counted('dist/o1.js', { census: null, excluded: 'generated' }), counted('dist/o2.js', { census: null, excluded: 'generated' }),
+    counted('mix/x.js', { census: null, excluded: 'dep' }), counted('mix/y.js'),
+  ], []));
+  const by = Object.fromEntries(nodes.map((n) => [n.path, n]));
+  assert.deepEqual(by.src.census, { code: 7, comment: 5, blank: 4 });
+  assert.equal(by.src.changed, 1, 'the new file counts among what is new, changed or removed');
+  assert.deepEqual([by.src.excluded, by.dist.excluded, by.mix.excluded], [false, true, false]);
+  assert.equal(by.dist.census, null, 'a folder with nothing counted has no counts');
+});
+
+test('censusLine: code, comments and blank, in the words the census table uses; nothing when not counted', () => {
+  const tt = (key) => ({ 'census.col.code': 'Code', 'census.col.comment': 'Comments', 'census.col.blank': 'Blank' })[key];
+  assert.equal(censusLine({ code: 6, comment: 3, blank: 1 }, tt), 'Code: 6 · Comments: 3 · Blank: 1');
+  assert.equal(censusLine(null, tt), '');
+});
+
+test('listSig changes when the census fields of a row do, so the side is drawn again', () => {
+  const base = [counted('a.js')];
+  assert.notEqual(listSig(base), listSig([counted('a.js', { census: { code: 7, comment: 3, blank: 1 } })]));
+  assert.notEqual(listSig(base), listSig([counted('a.js', { new: true })]));
+  assert.notEqual(listSig(base), listSig([counted('a.js', { census: null, excluded: 'dep' })]));
+  assert.equal(listSig(base), listSig([counted('a.js')]));
 });

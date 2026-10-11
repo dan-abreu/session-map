@@ -140,3 +140,25 @@ test('a refused undo says in plain words why, and a done one says how many files
     for (const e of ['changed-since', 'not-found', 'already-undone', 'unknown']) assert.ok(texts[lang][`changes.op.err.${e}`], `${lang} ${e}`);
   }
 });
+
+test('askView leads a changed file back to the request: the owner message, the words the team was given, and who did it (mm37)', async () => {
+  const { askView } = await import('../server/web/changes.js');
+  const h = (tag, attrs = {}, ...children) => ({
+    tag, attrs: attrs ?? {}, children: children.flat(Infinity).filter((c) => c != null && c !== false),
+    get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); },
+  });
+  const find = (el, cls) => (typeof el === 'string' ? [] : [...((el.attrs.class ?? '').split(' ').includes(cls) ? [el] : []), ...el.children.flatMap((c) => find(c, cls))]);
+  const t = (key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key);
+  const ctx = { h, t, icon: () => h('svg'), relative: () => '5 min' };
+  assert.equal(askView(ctx, null), null);
+  assert.equal(askView(ctx, { label: 'x' }), null, 'a helper with no request on record');
+  const solo = askView(ctx, { label: 'Write the invoice', request: { text: 'write the invoice file', ts: null, words: 'Invoice file' } });
+  assert.equal(find(solo, 'chg-ask-text')[0].text, 'write the invoice file');
+  assert.equal(find(solo, 'chg-ask-words')[0].text, 'changes.askedWords:Invoice file');
+  assert.equal(find(solo, 'chg-ask-by')[0].text.trim(), 'changes.askedByHelper:Write the invoice', 'a helper on its own has no team colour');
+  assert.equal(solo.attrs.style, undefined);
+  const team = askView(ctx, { label: 'Tests', workflow: { id: 'wf_a', name: 'trace' }, request: { text: 'do it', ts: null } });
+  assert.match(team.attrs.style, /^--wf-h:\d+$/);
+  assert.equal(find(team, 'chg-ask-words').length, 0);
+  assert.match(find(team, 'chg-ask-by')[0].text, /changes\.askedBy:trace\|Tests/);
+});

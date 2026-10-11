@@ -1,11 +1,12 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
+import { statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { logAction, runAction } from './actions.mjs';
+import { listActionOn, logAction, runAction } from './actions.mjs';
 import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
@@ -15,11 +16,14 @@ import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
 import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
 import { readConversation, readImage } from './sources/claude-conversation.mjs';
-import { applyImport, deleteDraft, exportMermaid, planImport, readDraft, writeDraft } from './arch/flow.mjs';
+import { applyImport, deleteDraft, exportMermaid, planImport, programOnly, readDraft, writeDraft } from './arch/flow.mjs';
+import { liveOf, partView, publicView } from './arch/flowinner.mjs';
+import { versionText } from './web/statesig.js';
 import { readArch } from './arch/detect.mjs';
 import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
-import { authorize, cookieToken, isLocal, loadToken, sameToken } from './auth.mjs';
-import { setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
+import { authorize, cookieToken, dropLookKey, isLocal, loadLookKey, loadToken, lookAllows, newLookKey, sameToken } from './auth.mjs';
+import { lookState } from './lookstate.mjs';
+import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
@@ -36,6 +40,7 @@ import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mj
 import { claudeDir } from './sources/claude.mjs';
 import { countRepo } from './sources/count.mjs';
 import { setPlacement } from './placements.mjs';
+import { addCard, moveCard, readCards, removeCard } from './cards.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
 import { LISTEN_RETRY_MS, createRestarter, listenWithRetry, resumeAfterRestart } from './restart.mjs';
 
@@ -108,6 +113,31 @@ function send(res, status, body, headers = {}) {
   res.end(json ? JSON.stringify(body) : body);
 }
 
+// A state's version is its content without the time it was collected and the rolling costs that slide with it: a collect
+// that found nothing new keeps it, and a poll that already has it gets a 304 with no body (sv09). Made once per state.
+const stamps = new WeakMap();
+function stampOf(s, mark = '') {
+  let stamp = stamps.get(s);
+  if (!stamp) {
+    const body = JSON.stringify(s);
+    stamp = { body, etag: `"${mark}${createHash('sha1').update(versionText(s)).digest('hex')}"` };
+    stamps.set(s, stamp);
+  }
+  return stamp;
+}
+
+// The disk copy goes out without a tag, so the page never keeps it as current and asks again until the real one comes.
+// look: the "look only" link (sv04) gets the map's part of the state only, under a tag of its own.
+function sendState(req, res, s, look = false) {
+  if (look) s = lookState(s);
+  if (s.refreshing) return send(res, 200, s);
+  const { body, etag } = stampOf(s, look ? 'look-' : '');
+  const headers = { 'content-type': TYPES['.json'], 'cache-control': 'no-store', etag, ...(s.generatedAt ? { 'x-generated-at': String(s.generatedAt) } : {}) };
+  const asked = String(req.headers['if-none-match'] ?? '').split(',').map((tag) => tag.trim());
+  res.writeHead(asked.includes(etag) ? 304 : 200, headers);
+  return res.end(asked.includes(etag) ? undefined : body);
+}
+
 async function serveFile(res, path) {
   const rel = path === '/' ? 'index.html' : path.replace(/^\/(static\/)?/, '');
   const file = normalize(join(WEB_DIR, rel));
@@ -125,16 +155,19 @@ async function serveFile(res, path) {
 // helpers ({backend, apiRun, textRun}): the lock for the other AIs' keys and their call, replaceable for tests; askAi ({ask}):
 // askOthers behind POST /api/ai/ask (tests).
 // collectFn, ai, catalog ({token, fetchFn, exec, bin}) and deliver (the desktop and phone alerts) are replaceable for tests;
-// addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page. restart ({now,
-// every, stopEvery, spawn, exit, execPath, argv, env}): the agreed restart's clock, check, spawn and exit (restart.mjs), fakes in tests.
+// addressOf stands in for the socket's remote address. baseUrl: where a click on a desktop alert opens the page; lanUrl:
+// the page's address on the network (--lan), which the look-only link carries. restart ({now, every, stopEvery, spawn,
+// exit, execPath, argv, env}): the agreed restart's clock, check, spawn and exit (restart.mjs), fakes in tests.
 // The demo never writes to the user's disk, so its token lives only in memory.
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
   catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
-  restart = {},
+  lanUrl = null, restart = {},
 } = {}) {
   let watcher = null;
+  // The look-only key (sv04): null while the owner has none; read once here, then changed only by lookRoute.
+  let lookKey = demo || !smDir ? null : loadLookKey(smDir);
   // readState/changed: the orchestrator's tools read the newest state and drop it after an archive or a rename (or17).
   const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({
     smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
@@ -159,7 +192,7 @@ export function createApp({
         ready = true;
         if (!demo && stateCopy && Date.now() - savedAt >= STATE_SAVE_MS) {
           savedAt = Date.now();
-          try { writeAtomic(stateCopy, JSON.stringify(s)); } catch (err) { log('warn', 'state-copy-failed', { error: err.message }); }
+          try { writeAtomic(stateCopy, stampOf(s).body); } catch (err) { log('warn', 'state-copy-failed', { error: err.message }); }
         }
       }, () => { if (cached === entry) cached = null; });
     }
@@ -180,6 +213,9 @@ export function createApp({
     return { ...copy, refreshing: true };
   };
   const fresh = () => { cached = null; };
+  // A poll answers at once with the newest finished state and starts the next collect meanwhile, so "nothing new" (304)
+  // never waits seconds for one. Only a state a write threw away (fresh) is waited for: the page must see its own change.
+  const pollState = () => (ready && cached && newest ? quickState() : firstAnswer());
   const foundationRoute = createFoundationRoute({ smDir, demo, token, projects: async () => (await firstAnswer()).projects, fresh });
   const prefsNow = () => notifyPrefs(readJsonFile(join(smDir, 'config.json'), {}) ?? {});
   // The chats the restart before this one resumes (sv13): no news as cut off.
@@ -213,7 +249,11 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && key === 'history' && parts.length === 5) {
-      const result = chat.history(verb, await quickState(), { since: url.searchParams.get('since') ?? undefined });
+      // before/from: a page of the history (pc15); anything but a plain index is left out.
+      const index = (name) => (/^\d{1,7}$/.test(url.searchParams.get(name) ?? '') ? Number(url.searchParams.get(name)) : undefined);
+      // The mirror asks every 3 s, mostly to hear "nothing new": the newest finished state answers it and no collect is
+      // started from here; the watcher and the page's poll keep that state fresh.
+      const result = chat.history(verb, newest ?? await quickState(), { since: url.searchParams.get('since') ?? undefined, before: index('before'), from: index('from') });
       return send(res, result.status, result.body);
     }
     // An image of a conversation (mm22): only the image kinds a browser shows, never anything it could run.
@@ -292,6 +332,40 @@ export function createApp({
     logAction(smDir, { action: 'place', sessionId, projectId: target.id }, 200);
     fresh();
     return send(res, 200, { ok: true, placement });
+  }
+
+  // The cards made by hand in the Board (mm14), in session-map's own folder. A read is open like the state; a write needs the
+  // token (route). The project's files are never written.
+  async function cardsRoute(req, res, parts) {
+    if (req.method === 'GET' && parts.length === 3) return send(res, 200, { ok: true, cards: demo ? {} : readCards(smDir) });
+    if (demo) throw new HttpError(403, 'demo');
+    const id = parts[3];
+    if (req.method === 'POST' && parts.length === 3) {
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body) || typeof body.projectId !== 'string') throw new HttpError(400, 'bad-card');
+      const { projects } = await state();
+      const target = projects.find((p) => p.id === body.projectId);
+      if (!target) throw new HttpError(404, 'unknown-project');
+      if (body.partId && !target.arch.parts.some((p) => p.id === body.partId)) throw new HttpError(400, 'unknown-part');
+      const made = addCard(smDir, target.id, body);
+      if (!made.ok) throw new HttpError(400, made.error);
+      logAction(smDir, { action: 'card-add', projectId: target.id }, 200);
+      return send(res, 200, made);
+    }
+    if (req.method === 'POST' && parts[4] === 'move' && parts.length === 5) {
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'bad-column');
+      const moved = moveCard(smDir, id, body);
+      if (!moved.ok) throw new HttpError(moved.error === 'unknown-card' ? 404 : 400, moved.error);
+      logAction(smDir, { action: 'card-move', column: body.column }, 200);
+      return send(res, 200, moved);
+    }
+    if (req.method === 'DELETE' && parts.length === 4) {
+      if (!removeCard(smDir, id)) throw new HttpError(404, 'unknown-card');
+      logAction(smDir, { action: 'card-delete' }, 200);
+      return send(res, 200, { ok: true });
+    }
+    throw new HttpError(404, 'not-found');
   }
 
   // The permission mode in the user's own settings.json, which every Claude on this PC reads (desenho-3 § 3).
@@ -376,6 +450,20 @@ export function createApp({
     return send(res, status, result);
   }
 
+  // The "look only" link (sv04): the owner makes it (a new one replaces the old), sees it again, or turns it off.
+  async function lookRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method === 'POST') lookKey = newLookKey(smDir);
+    else if (req.method === 'DELETE') {
+      dropLookKey(smDir);
+      lookKey = null;
+    } else if (req.method !== 'GET') throw new HttpError(404, 'not-found');
+    if (req.method !== 'GET') logAction(smDir, { action: 'look-link', on: lookKey !== null }, 200);
+    const base = lanUrl ?? `http://${req.headers.host}`;
+    return send(res, 200, { ok: true, on: lookKey !== null, link: lookKey === null ? null : `${base}/?look=${lookKey}` });
+  }
+
   // The agreed restart (sv13): a conversation asks for a fresh session-map instead of killing it. The arsenal's lock:
   // the stdio tool's header token or the page's cookie, from this computer only, never in the demo.
   async function restartRoute(req, res) {
@@ -391,7 +479,7 @@ export function createApp({
   }
 
   // The other AIs for bulk work (sb07): keys, which one takes the bulk work, a test call. Nothing here ever answers a key.
-  const helperRoutes = demo || !smDir ? null : createHelperRoutes({ smDir, ai, roots: async () => ((await quickState()).projects ?? []).map((p) => p.root), ...helpers });
+  const helperRoutes =demo || !smDir ? null : createHelperRoutes({ smDir, ai, roots: async () => ((await quickState()).projects ?? []).map((p) => p.root), ...helpers });
   // Claude asks the other AIs itself (or14): the page's cookie or the stdio tool's header token, loopback only.
   const askRoutes = createAskRoutes({ smDir, demo, token, ai, ...helpers, ...askAi });
   async function helpersRoute(req, res, path, url) {
@@ -499,8 +587,10 @@ export function createApp({
     const run = modelRuns.get(project.id) ?? { at: 0, model: null, running: null };
     modelRuns.set(project.id, run);
     if (run.model && !run.running && Date.now() - run.at < MODEL_FRESH_MS) return { model: run.model, building: false, stale: false };
-    run.running ??= buildFlowModel({ root: project.root, arch, smDir, projectId: project.id, source: arch.source })
-      .then((model) => Object.assign(run, { model, at: Date.now() }).model)
+    // side: what the view inside a part needs (fl09), kept in memory with the model, never sent with it.
+    const side = {};
+    run.running ??= buildFlowModel({ root: project.root, arch, smDir, projectId: project.id, source: arch.source, side })
+      .then((model) => Object.assign(run, { model, side, at: Date.now() }).model)
       .catch((err) => {
         log('warn', 'flow-model-failed', { projectId: project.id, error: err.message });
         return null;
@@ -516,7 +606,55 @@ export function createApp({
     const declared = await buildFlowModel({ root: null, arch, source: arch.source, projectId: project.id });
     return { model: declared, building: done === undefined, stale: false };
   }
-  async function flowRoute(req, res, parts) {
+  // Level 2 of the Flow, inside a part (fl09): made on request from the model build kept in memory and remembered per
+  // part until that build or the part file changes; nothing is written. Its key changes only when the view does, so a
+  // page that already has it just recolours. The colours from what the conversations changed need the key, like the
+  // Changes tab (server.md), and carry only counts: titles and sessions stay in the chat routes.
+  const innerMemo = new Map();
+  const partFileStamp = (project, part) => {
+    if (!project.root || !part?.file) return '-';
+    const st = statSync(join(project.root, part.file), { throwIfNoEntry: false });
+    return st ? `${st.mtimeMs}:${st.size}` : '-';
+  };
+  const keyed = (req) => !demo && sameToken(cookieToken(req), token);
+  async function liveFor(req, projectId, view) {
+    if (!view || !keyed(req)) return null;
+    let s = newest;
+    if (!s) {
+      let timer;
+      s = await Promise.race([state().catch(() => null), new Promise((resolve) => { timer = setTimeout(resolve, MODEL_WAIT_MS, null); timer.unref?.(); })]);
+      clearTimeout(timer);
+    }
+    if (!s) return null;
+    const p = s.projects?.find((x) => x.id === projectId);
+    return liveOf(view, changesOf(s, projectId), p?.chats ?? [], Date.now());
+  }
+  async function partRoute(req, res, project, partId, url) {
+    const arch = demo ? project.arch : await currentArch(project);
+    const part = programOnly(arch).parts.find((p) => p.id === partId);
+    if (!part) throw new HttpError(404, 'unknown-part');
+    const memo = innerMemo.get(project.id) ?? new Map();
+    innerMemo.set(project.id, memo);
+    if (url.searchParams.get('only') === 'live' && memo.has(partId)) {
+      const hit = memo.get(partId);
+      return send(res, 200, { ok: true, key: hit.key, keyed: keyed(req), live: await liveFor(req, project.id, hit.view) });
+    }
+    const { model, building, stale } = await flowModelOf(project);
+    const run = demo ? null : modelRuns.get(project.id);
+    const side = run?.side?.ready ? run.side : null;
+    const stamp = JSON.stringify([model.stamp ?? null, run?.at ?? 0, Boolean(side), partFileStamp(project, part), arch.source]);
+    let hit = memo.get(partId);
+    if (!hit || hit.stamp !== stamp) {
+      const view = partView({ root: demo ? null : project.root, arch, partId, model, side });
+      const key = createHash('sha256').update(JSON.stringify(view)).digest('hex').slice(0, 16);
+      hit = { stamp, key, view };
+      memo.set(partId, hit);
+    }
+    const live = await liveFor(req, project.id, hit.view);
+    return send(res, 200, { ok: true, view: { ...publicView(hit.view), key: hit.key }, keyed: keyed(req), live, building: Boolean(building || run?.running), stale: Boolean(stale) });
+  }
+
+  async function flowRoute(req, res, parts, url) {
     // A read is open on this PC (authorize already let only a local or keyed one in); every write needs the key.
     if (req.method !== 'GET' && !demo && !sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
     // The disk copy is enough here: the map itself is read from the folder, and only the project's root and name come from the state.
@@ -525,6 +663,7 @@ export function createApp({
     const route = parts.slice(4).join('/');
     if (req.method === 'GET' && route === 'mermaid') return send(res, 200, { ok: true, text: exportMermaid(await currentArch(project)) });
     if (req.method === 'GET' && route === 'model') return send(res, 200, { ok: true, ...(await flowModelOf(project)) });
+    if (req.method === 'GET' && parts[4] === 'model' && parts[5] === 'part' && parts.length === 7) return partRoute(req, res, project, parts[6], url);
     if (req.method === 'POST' && route === 'mermaid/preview') {
       const plan = planImport(await currentArch(project), flowText(await readBody(req)));
       return send(res, plan.ok ? 200 : FLOW_ERRORS[plan.error] ?? 400, plan);
@@ -561,15 +700,16 @@ export function createApp({
 
   // One GitHub round at a time, however many tabs ask.
   let catalogRun = null;
-  const loadCatalog = (force) => {
-    catalogRun ??= fetchCatalog({ smDir, dir, force, ...catalog }).finally(() => { catalogRun = null; });
+  const loadCatalog = (force, deep = false) => {
+    catalogRun ??= fetchCatalog({ smDir, dir, force, deep, ...catalog }).finally(() => { catalogRun = null; });
     return catalogRun;
   };
 
-  async function route(req, res, url) {
+  // look: the request came with the look-only key (sv04); the gate already let only map reads through.
+  async function route(req, res, url, look = false) {
     const path = url.pathname;
     const parts = path.split('/').map((p) => decodeURIComponent(p));
-    if (req.method === 'GET' && path === '/api/state') return send(res, 200, await firstAnswer());
+    if (req.method === 'GET' && path === '/api/state') return sendState(req, res, await pollState(), look);
     // As open as the state it is made from: titles and summaries, never a token or a file.
     if (req.method === 'GET' && path === '/api/alerts') {
       const since = Number.parseInt(url.searchParams.get('since') ?? '0', 10) || 0;
@@ -585,6 +725,10 @@ export function createApp({
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20, from: ms('from'), to: ms('to') }) });
     }
     if (req.method === 'POST' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'place' && parts.length === 5) return placeRoute(req, res, parts[3]);
+    if (parts[1] === 'api' && parts[2] === 'cards') {
+      if (look) throw new HttpError(403, 'look-only');
+      return cardsRoute(req, res, parts);
+    }
     if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
       if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');
@@ -623,14 +767,23 @@ export function createApp({
     }
     if (req.method === 'POST' && path === '/api/action') {
       if (demo) throw new HttpError(403, 'demo');
-      const result = await runAction(await readBody(req), { state: await state(), dir, smDir, driving: chat?.drivingIds?.() ?? new Set(), exec: catalog.exec, bin: catalog.bin });
+      const body = await readBody(req);
+      // Archive or delete of a conversation the newest finished state already holds answers at once: they must not wait for
+      // a collect of every project. One born since then, and open or close, wait for the next collect.
+      const quick = await quickState();
+      const current = listActionOn(quick, body) ? quick : await state();
+      const result = await runAction(body, { state: current, dir, smDir, driving: chat?.drivingIds?.() ?? new Set(), closeIdle: chat?.closeIdle, exec: catalog.exec, bin: catalog.bin });
       fresh();
       return send(res, result.status, result.body);
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'changes' || (parts[2] === 'change' && parts[3] !== '*')) && parts.length === 4) return changesRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
-    if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) return flowRoute(req, res, parts);
+    if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) {
+      // A second lock behind the gate: the look-only key reads the Flow's model, never the draft or the export.
+      if (look && !(req.method === 'GET' && parts[4] === 'model' && (parts.length === 5 || (parts[5] === 'part' && parts.length === 7)))) throw new HttpError(403, 'look-only');
+      return flowRoute(req, res, parts, url);
+    }
     if (parts[1] === 'api' && (parts[2] === 'foundation' || (parts[2] === 'library' && parts.length === 3))) return foundationRoute(req, res, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
@@ -638,6 +791,7 @@ export function createApp({
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
+    if (path === '/api/settings/look-key') return lookRoute(req, res);
     if (path === '/api/restart') return restartRoute(req, res);
     if (askRoutes.handles(path)) {
       const r = await askRoutes.handle(req, url, addressOf(req));
@@ -660,11 +814,17 @@ export function createApp({
     }
     const auth = askRoutes.authorizeHeader(req, url, addressOf(req))
       ?? (url.pathname === '/api/restart' ? headerAuth(req, addressOf(req), token) : null)
-      ?? authorize(req, url, { token, address: addressOf(req) });
+      ?? authorize(req, url, { token, look: lookKey, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
     if (auth.status !== 200) return send(res, auth.status, auth.status === 401 ? 'token required' : 'forbidden');
+    // The look-only key (sv04) reads the map and nothing else, by an allow-list: a route not on it is refused here,
+    // before any of them runs. The mark tells the page to hide the chat and the buttons.
+    if (auth.look) {
+      res.setHeader('x-look-only', '1');
+      if (!lookAllows(req.method, url.pathname)) return send(res, 403, 'forbidden');
+    }
     try {
-      await route(req, res, url);
+      await route(req, res, url, Boolean(auth.look));
     } catch (err) {
       if (err instanceof HttpError) return send(res, err.status, { ok: false, error: err.message });
       if (err instanceof URIError || /^invalid project id/.test(err.message)) return send(res, 400, { ok: false, error: 'bad-path' });
@@ -674,15 +834,24 @@ export function createApp({
   });
   server.watcher = watcher;
   // The 5-minute sweep reads every project's code again (one round at a time per project); the demo reads nothing.
-  server.refreshFoundations = async () => {
-    if (demo) return;
-    try {
-      // Only where the person works now, or where they asked for it: a project nobody touches is left alone.
-      for (const project of sweepable((await state()).projects)) await refreshFoundation(project, smDir);
-    } catch (err) {
-      log('warn', 'foundation-sweep-failed', { error: err.message });
-    }
+  // A sweep still running when the next one is due is shared, never doubled. It reads the newest state at once instead
+  // of waiting for a new collect.
+  let sweeping = null;
+  server.refreshFoundations = () => {
+    if (demo) return Promise.resolve();
+    sweeping ??= (async () => {
+      try {
+        // Only where the person works now, or where they asked for it: a project nobody touches is left alone.
+        for (const project of sweepable((await quickState()).projects)) await refreshFoundation(project, smDir);
+      } catch (err) {
+        log('warn', 'foundation-sweep-failed', { error: err.message });
+      }
+    })().finally(() => { sweeping = null; });
+    return sweeping;
   };
+  // Discover keeps itself up to date: the same sweep asks, the catalog's 24 h cache decides if GitHub is called. The demo has no network.
+  const catalogRefresher = createCatalogRefresher({ load: loadCatalog });
+  server.refreshCatalog = () => (demo ? Promise.resolve() : catalogRefresher.refresh());
   // The agreed restart (sv13). The port is let go for the copy: an open page's event stream would hold it, so every
   // connection is closed with it.
   const closeHttp = () => new Promise((resolve) => {
@@ -716,7 +885,8 @@ export function start(argv = process.argv.slice(2)) {
   const dir = values.dir ?? claudeDir();
   const smDir = join(claudeDir(), 'session-map');
   const token = values.demo ? randomBytes(32).toString('hex') : loadToken(smDir);
-  const app = createApp({ dir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}` });
+  const ip = values.lan && lanAddress();
+  const app = createApp({ dir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}`, lanUrl: ip ? `http://${ip}:${port}` : null });
   const host = values.lan ? '0.0.0.0' : '127.0.0.1';
   // A copy started by the agreed restart (sv13) waits a moment for the old process to free the port. The mark is
   // dropped at once, so no claude this server starts inherits it.
@@ -726,7 +896,6 @@ export function start(argv = process.argv.slice(2)) {
   app.once('listening', () => {
     // The person's own terminal: the links carry the token, the only way a page gets the cookie it needs to write.
     const links = { local: `http://127.0.0.1:${port}/?k=${token}` };
-    const ip = values.lan && lanAddress();
     if (ip) links.lan = `http://${ip}:${port}/?k=${token}`;
     log('info', 'listening', links);
   });
@@ -740,6 +909,7 @@ export function start(argv = process.argv.slice(2)) {
         log('warn', 'archive-sweep-failed', { error: err.message });
       }
       app.refreshFoundations();
+      app.refreshCatalog();
     };
     setTimeout(sweep, 10_000).unref();
     setInterval(sweep, SWEEP_MS).unref();

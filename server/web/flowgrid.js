@@ -10,9 +10,10 @@
 export const GRID = {
   font: 14, labelFont: 12.5, titleFont: 15,
   boxText: 150, boxPadX: 14, boxPadY: 9, boxLine: 18, minBoxW: 96,
-  labelText: 132, labelPadX: 5, labelPadY: 3, labelLine: 15.5,
-  boxGap: 28, groupGap: 64, portGap: 15, passW: 8, passGap: 10, labelGap: 14,
-  bandPad: 16, lanePad: 10, titleH: 30, gapMin: 44, gapPad: 18, margin: 8, sweeps: 8, settle: 24,
+  subFont: 12, subText: 178, subLine: 15, subGap: 3, subMax: 3,
+  labelText: 116, labelPadX: 5, labelPadY: 3, labelLine: 15.5,
+  boxGap: 28, groupGap: 64, portGap: 15, passW: 8, passGap: 10, passBoxGap: 22, labelGap: 14,
+  bandPad: 16, lanePad: 10, titleH: 38, gapMin: 44, gapPad: 18, margin: 8, sweeps: 8, settle: 24,
 };
 
 // A rough measure for tests and for a page that cannot measure: the width of a line of text in pixels.
@@ -58,7 +59,20 @@ export function spread(want, gaps, weight = want.map(() => 1)) {
 
 const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
 
-// scene: { rows: [{ groups: [{ id, title, cls }] }], nodes: [{ id, label, group, shape }], edges: [{ index, from, to,
+// The few words under a piece's name (level 2): at most subMax lines, the last one cut with "…" when there is more.
+function subLines(text, measure) {
+  const G = GRID;
+  if (!text) return [];
+  const lines = wrapText(text, G.subText, (s) => measure(s, G.subFont));
+  if (lines.length <= G.subMax) return lines;
+  const kept = lines.slice(0, G.subMax);
+  let last = kept.at(-1);
+  while (last && measure(`${last}…`, G.subFont) > G.subText) last = last.split(' ').slice(0, -1).join(' ');
+  kept[kept.length - 1] = `${last || kept.at(-1)}…`;
+  return kept;
+}
+
+// scene: { rows: [{ groups: [{ id, title, cls }] }], nodes: [{ id, label, sub, group, shape }], edges: [{ index, from, to,
 // label, kind, headAtStart }] } with the rows top to bottom and each edge written from the upper box to the lower one
 // (headAtStart: the arrow's head belongs at `from`). → { width, height, bands, boxes, labels, paths }.
 export function gridLayout(scene, { measure = roughMeasure } = {}) {
@@ -74,12 +88,13 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
     const at = groupOf.get(n.group ?? null);
     if (!at || boxes.has(n.id)) continue;
     const lines = wrapText(n.label, G.boxText, (s) => measure(s, G.font));
-    const text = Math.max(0, ...lines.map((l) => measure(l, G.font)));
+    const sub = subLines(n.sub, measure);
+    const text = Math.max(0, ...lines.map((l) => measure(l, G.font)), ...sub.map((l) => measure(l, G.subFont)));
     const extra = n.shape === 'hex' ? 26 : n.shape === 'stadium' ? 18 : 0;
     boxes.set(n.id, {
-      key: `b:${n.id}`, id: n.id, type: 'box', level: 3 * at.row, row: at.row, gi: at.gi, group: n.group ?? null, shape: n.shape ?? 'box', lines,
+      key: `b:${n.id}`, id: n.id, type: 'box', level: 3 * at.row, row: at.row, gi: at.gi, group: n.group ?? null, shape: n.shape ?? 'box', lines, sub,
       w: Math.ceil(Math.max(G.minBoxW, text + 2 * G.boxPadX + extra)),
-      h: Math.ceil(lines.length * G.boxLine + 2 * G.boxPadY + (n.shape === 'db' ? 14 : 0)),
+      h: Math.ceil(lines.length * G.boxLine + (sub.length ? G.subGap + sub.length * G.subLine : 0) + 2 * G.boxPadY + (n.shape === 'db' ? 14 : 0) + (n.shape === 'folder' ? 6 : 0)),
     });
   }
   const members = [];
@@ -95,8 +110,10 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
     members.push({ index: e.index, s, t, inner: s.row === t.row, text: String(e.label ?? '').trim(), kind: e.kind ?? 'arrow', headAtStart, also: e.also ?? [] });
   }
   const sig = (m) => `${m.text}|${m.kind}|${m.headAtStart}`;
-  const outKey = (m) => `o|${m.s.id}|${m.inner ? 'in' : m.t.row}|${sig(m)}`;
-  const inKey = (m) => `i|${m.t.id}|${m.inner ? 'in' : m.s.row}|${sig(m)}`;
+  // Arrows with the same words leaving one box downward share one label right under it, whatever row they go to (and
+  // the same for arrows coming into one box): one "uses" under a box instead of one per row below it.
+  const outKey = (m) => `o|${m.s.id}|${m.inner ? 'in' : 'down'}|${sig(m)}`;
+  const inKey = (m) => `i|${m.t.id}|${m.inner ? 'in' : 'down'}|${sig(m)}`;
   const tally = new Map();
   const bump = (k) => tally.set(k, (tally.get(k) ?? 0) + 1);
   for (const m of members) if (m.text) { bump(outKey(m)); bump(inKey(m)); }
@@ -242,6 +259,8 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
   // ---- across: each slot drawn toward what it links to, never closer to its neighbour than the gap between them ----
   const between = (a, b) => {
     if (a.type === 'box' && b.type === 'box') return a.gi !== b.gi ? G.groupGap : G.boxGap;
+    // An arrow passing a row of boxes keeps clear of them, so it never seems to run over or into one.
+    if ((a.type === 'pass' && b.type === 'box') || (a.type === 'box' && b.type === 'pass')) return G.passBoxGap;
     if (a.type === 'pass' || b.type === 'pass') return G.passGap;
     return G.labelGap;
   };
@@ -286,8 +305,10 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
     const inRow = levels[3 * ri].filter((v) => v.type === 'box');
     const tall = Math.max(36, ...inRow.map((b) => b.h));
     const top = y;
-    for (const b of inRow) b.y = top + G.titleH + tall / 2;
-    const boxBottom = top + G.titleH + tall + G.bandPad / 2;
+    // A row with no title keeps no room for one (a band that goes on in the row under it, a journey drawn alone).
+    const head = r.groups.some((g) => g.title) ? G.titleH : G.bandPad;
+    for (const b of inRow) b.y = top + head + tall / 2;
+    const boxBottom = top + head + tall + G.bandPad / 2;
     const lane = levels[3 * ri + 1] ?? [];
     const laneH = tallest(lane) ? tallest(lane) + 2 * G.lanePad : 0;
     for (const v of lane) v.y = boxBottom + laneH / 2;
@@ -304,6 +325,15 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
     r.groups.forEach((g, gi) => {
       const x0 = cuts[gi];
       const x1 = cuts[gi + 1];
+      // A row that goes on with the band above (cont) makes that band taller, so a long band reads as one, titled once.
+      const goesOn = g.cont ? bands.find((b) => b.id === g.cont) : null;
+      if (goesOn) {
+        const right = Math.max(goesOn.x + goesOn.w, x1 - (gi < r.groups.length - 1 ? 4 : 0));
+        goesOn.x = Math.min(goesOn.x, x0 + (gi ? 4 : 0));
+        goesOn.w = right - goesOn.x;
+        goesOn.h = y - goesOn.y;
+        return;
+      }
       if (x1 - x0 > 1 && inRow.some((b) => b.gi === gi)) bands.push({ id: g.id, title: g.title ?? '', cls: g.cls ?? null, x: x0 + (gi ? 4 : 0), y: top, w: x1 - x0 - (gi ? 4 : 0) - (gi < r.groups.length - 1 ? 4 : 0), h: y - top });
     });
     if (ri < R - 1) {
@@ -375,7 +405,7 @@ export function gridLayout(scene, { measure = roughMeasure } = {}) {
     paths.push({ index: m.index, d, kind: m.kind, head: m.kind === 'line' || m.kind === 'dotted-line' ? 'none' : m.headAtStart ? 'start' : 'end', from: m.s.id, to: m.t.id, text: m.text, also: m.also });
   }
   const labels = all.filter((u) => u.text).map((u) => ({ text: u.text, lines: u.lines, x: u.node.x, y: u.node.y, w: u.w, h: u.h, indexes: u.members.map((m) => m.index) }));
-  const outBoxes = [...boxes.values()].map((b) => ({ id: b.id, group: b.group, shape: b.shape, lines: b.lines, x: b.x, y: b.y, w: b.w, h: b.h }));
+  const outBoxes = [...boxes.values()].map((b) => ({ id: b.id, group: b.group, shape: b.shape, lines: b.lines, sub: b.sub, x: b.x, y: b.y, w: b.w, h: b.h }));
   return { width, height, bands, boxes: outBoxes, labels, paths, crossings: fewest };
 }
 
@@ -422,6 +452,12 @@ function shapeOf(b) {
     const pts = [[x0 + k, y0], [x0 + b.w - k, y0], [x0 + b.w, b.y], [x0 + b.w - k, y0 + b.h], [x0 + k, y0 + b.h], [x0, b.y]];
     return el('polygon', { points: pts.map((p) => p.join(',')).join(' '), class: 'fl-shape' });
   }
+  if (b.shape === 'folder') {
+    // A folder: a card with a tab on its top left.
+    const tab = Math.min(46, b.w * 0.4);
+    const d = `M${x0},${y0 + 6} v${-2} q0,-4 4,-4 h${tab - 8} l6,6 h${b.w - tab - 6} q4,0 4,4 v${b.h - 14} q0,4 -4,4 h${-(b.w - 8)} q-4,0 -4,-4 z`;
+    return el('path', { d, class: 'fl-shape' });
+  }
   if (b.shape === 'db') {
     const ry = 6;
     const d = `M${x0},${y0 + ry} a${b.w / 2},${ry} 0 0 0 ${b.w},0 a${b.w / 2},${ry} 0 0 0 ${-b.w},0 v${b.h - 2 * ry} a${b.w / 2},${ry} 0 0 0 ${b.w},0 v${-(b.h - 2 * ry)}`;
@@ -442,13 +478,15 @@ export function drawGrid(layout, { idPrefix = 'flg', titleOf = () => '' } = {}) 
   const root = el('g', {});
   svg.append(el('defs', {}, marker), root);
   const bandsG = el('g', { class: 'clusters' });
+  // The titles go over the arrows (with a halo of the band's colour), so an arrow passing by never hides them.
+  const titlesG = el('g', { class: 'fl-band-titles' });
   for (const b of layout.bands) {
     const g = el('g', { class: `cluster fl-band fl-band-${b.cls ?? 'parts'}`, id: b.id ?? undefined },
       el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 10 }));
     if (b.title) {
       const t = el('text', { x: b.x + 14, y: b.y + 21, 'font-size': G.titleFont, class: 'fl-band-title' });
       t.textContent = b.title;
-      g.append(t);
+      titlesG.append(t);
     }
     bandsG.append(g);
   }
@@ -470,10 +508,13 @@ export function drawGrid(layout, { idPrefix = 'flg', titleOf = () => '' } = {}) 
   }
   const nodesG = el('g', { class: 'nodes' });
   for (const b of layout.boxes) {
-    const g = el('g', { class: 'node', 'data-id': b.id }, shapeOf(b),
-      textLines(b.lines, b.x, b.y - (b.lines.length * G.boxLine) / 2 + (b.shape === 'db' ? 5 : 0), G.boxLine, G.font, 'fl-box-text'));
+    const sub = b.sub ?? [];
+    const block = b.lines.length * G.boxLine + (sub.length ? G.subGap + sub.length * G.subLine : 0);
+    const top = b.y - block / 2 + (b.shape === 'db' ? 5 : 0) + (b.shape === 'folder' ? 3 : 0);
+    const g = el('g', { class: 'node', 'data-id': b.id }, shapeOf(b), textLines(b.lines, b.x, top, G.boxLine, G.font, 'fl-box-text'));
+    if (sub.length) g.append(textLines(sub, b.x, top + b.lines.length * G.boxLine + G.subGap, G.subLine, G.subFont, 'fl-box-sub'));
     nodesG.append(g);
   }
-  root.append(bandsG, edgesG, labelsG, nodesG);
+  root.append(bandsG, edgesG, labelsG, titlesG, nodesG);
   return svg;
 }

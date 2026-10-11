@@ -69,7 +69,7 @@ test('locally the page and an empty state open without a token', async () => {
 });
 
 test('from the network: no token is 401 and leaks nothing; ?k= sets the cookie and drops the k', async () => {
-  await withServer(REMOTE, async ({ call, token }) => {
+  await withServer(REMOTE, async ({ call, token, port }) => {
     const denied = await call('GET', '/api/state');
     assert.equal(denied.status, 401);
     assert.doesNotMatch(denied.text, /projects/);
@@ -78,7 +78,7 @@ test('from the network: no token is 401 and leaks nothing; ?k= sets the cookie a
     const ok = await call('GET', `/?k=${token}`);
     assert.equal(ok.status, 302);
     assert.equal(ok.headers.location, '/');
-    assert.match(ok.headers['set-cookie'][0], new RegExp(`^sm_token=${token}; `));
+    assert.match(ok.headers['set-cookie'][0], new RegExp(`^sm_token_${port}=${token}; `));
     assert.equal((await call('GET', '/api/state', { headers: { cookie: `sm_token=${token}` } })).status, 200);
     assert.equal((await call('GET', '/api/state', { headers: { cookie: 'sm_token=nope' } })).status, 401);
   });
@@ -96,7 +96,24 @@ test('a plain local GET never hands out the token cookie; only the ?k= link does
     assert.equal((await call('POST', '/api/action', { headers: write, body })).status, 401);
     const link = await call('GET', `/?k=${token}`);
     assert.equal(link.status, 302);
-    assert.match(link.headers['set-cookie'][0], /^sm_token=[0-9a-f]{64}; .*HttpOnly.*SameSite=Strict/);
+    assert.match(link.headers['set-cookie'][0], new RegExp(`^sm_token_${port}=[0-9a-f]{64}; .*HttpOnly.*SameSite=Strict`));
+  });
+});
+
+// A browser sends a host's cookies to every port of it: the demo or a copy on another port, opened with its own ?k=, must
+// not replace this server's key, or every chat answers "open the page with the key link".
+test('the key cookie is named by the port, so a ?k= link of a server on another port never locks this one out', async () => {
+  await withServer({}, async ({ call, token, port }) => {
+    const link = await call('GET', `/?k=${token}`);
+    assert.match(link.headers['set-cookie'][0], new RegExp(`^sm_token_${port}=${token}; .*HttpOnly.*SameSite=Strict`));
+    const write = (cookie) => call('POST', '/api/action', {
+      headers: { cookie, 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' },
+      body: { action: 'open', sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+    });
+    const other = 'f'.repeat(64);
+    assert.equal((await write(`sm_token=${other}; sm_token_${port}=${token}`)).status, 404, 'this port\'s cookie wins over the shared one');
+    assert.equal((await write(`sm_token_${port + 1}=${other}; sm_token=${token}`)).status, 404, 'another port\'s cookie is not read');
+    assert.equal((await write(`sm_token_${port}=${other}; sm_token=${token}`)).status, 401, 'a wrong cookie of this port is not rescued by the old one');
   });
 });
 
@@ -356,5 +373,54 @@ test('delete from session-map (mm43) needs the token like every write, and hands
     const busy = await call('POST', '/api/action', { headers: good, body: { action: 'delete', sessionId: DRIVEN } });
     assert.equal(busy.status, 409, 'the hub runs it now');
     assert.ok(seen.length > 0 && seen.every((d) => d instanceof Set && d.has(DRIVEN)));
+  });
+});
+
+test('archive and delete answer on the newest finished state, never waiting for the next collect', { timeout: 10_000 }, async () => {
+  const ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const NEW = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const row = (sessionId) => ({ sessionId, status: 'closed', live: false, archived: false, updatedAt: '2026-10-09T10:00:00.000Z' });
+  const stateWith = (...ids) => ({ generatedAt: new Date().toISOString(), waitingCount: 0, projects: [{ id: 'shop-abc123', name: 'shop', root: '/work/shop', workCells: [], chats: ids.map(row), conversations: [] }] });
+  let runs = 0;
+  let release;
+  const collectFn = () => (++runs === 1 ? stateWith(ID) : new Promise((resolve) => { release = () => resolve(stateWith(ID, NEW)); }));
+  await withServer({ collectFn, stateTtlMs: 10 }, async ({ call, token, port, smDir }) => {
+    try {
+      assert.equal((await call('GET', '/api/state')).status, 200);
+      await new Promise((r) => setTimeout(r, 50));
+      const headers = { 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json', cookie: `sm_token=${token}` };
+      const late = Symbol('late');
+      const timer = (ms) => new Promise((r) => setTimeout(() => r(late), ms));
+      for (const action of ['archive', 'delete']) {
+        const res = await Promise.race([call('POST', '/api/action', { headers, body: { action, sessionId: ID } }), timer(1500)]);
+        assert.notEqual(res, late, `${action} waited for the collect`);
+        assert.equal(res.status, 200);
+      }
+      assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'archived.json'), 'utf8')), [ID]);
+      assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'removed.json'), 'utf8')), [ID]);
+      // A conversation born after the newest state is not lost, and open starts a process: both wait for the next collect.
+      const born = call('POST', '/api/action', { headers, body: { action: 'archive', sessionId: NEW } });
+      const opened = call('POST', '/api/action', { headers, body: { action: 'open', sessionId: ID } });
+      assert.equal(await Promise.race([born, opened, timer(300)]), late, 'they answered before the collect');
+      release();
+      assert.equal((await born).status, 200);
+      assert.equal((await opened).status, 409, 'no folder known in the test state: nothing is started');
+    } finally {
+      release?.();
+    }
+  });
+});
+
+test('delete from session-map (mm43) of a conversation the hub keeps idle asks the hub to close it, then removes it', async () => {
+  const IDLE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const row = { sessionId: IDLE, status: 'idle', live: true, archived: false, updatedAt: '2026-10-09T10:00:00.000Z' };
+  const collectFn = () => ({ generatedAt: new Date().toISOString(), waitingCount: 0, projects: [{ id: 'shop-abc123', name: 'shop', root: '/work/shop', workCells: [], chats: [row], conversations: [] }] });
+  const closed = [];
+  const chat = { drivingIds: () => new Set([IDLE]), closeIdle: async (id) => { closed.push(id); return true; } };
+  await withServer({ collectFn, chat, stateTtlMs: 0 }, async ({ call, token, port, smDir }) => {
+    const good = { 'x-session-map': '1', origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json', cookie: `sm_token=${token}` };
+    assert.equal((await call('POST', '/api/action', { headers: good, body: { action: 'delete', sessionId: IDLE } })).status, 200);
+    assert.deepEqual(closed, [IDLE]);
+    assert.deepEqual(JSON.parse(readFileSync(join(smDir, 'removed.json'), 'utf8')), [IDLE]);
   });
 });

@@ -17,6 +17,31 @@ async function call(method, path, body) {
   return { ...data, ok: res.ok, status: res.status, error: res.ok ? undefined : data.error ?? `http-${res.status}` };
 }
 
+// The state poll sends back the tag of the state it has: when nothing changed the server answers 304 and no body (sv09).
+let stateTag = null;
+async function stateCall() {
+  let res;
+  try {
+    res = await fetch('/api/state', { method: 'GET', headers: { accept: 'application/json', ...(stateTag ? { 'if-none-match': stateTag } : {}) } });
+  } catch {
+    return { ok: false, status: 0, error: 'network' };
+  }
+  // Opened with the look-only link (sv04): the server marks every answer, and the page hides the chat and the buttons.
+  const look = res.headers.get('x-look-only') === '1' ? { look: true } : {};
+  if (res.status === 304) return { ok: true, status: 304, same: true, generatedAt: res.headers.get('x-generated-at') ?? undefined, ...look };
+  const data = await res.json().catch(() => null);
+  if (res.status === 401) return { ok: false, status: 401, error: 'token-required' };
+  if (!res.ok) return { ...data, ok: false, status: res.status, error: data?.error ?? `http-${res.status}` };
+  // A cut body (a dropped connection) is a failed ask: keeping its tag would turn every later poll into a 304 on nothing.
+  if (!data || !Array.isArray(data.projects)) {
+    stateTag = null;
+    return { ok: false, status: res.status, error: 'bad-state' };
+  }
+  // An answer with no tag (the disk copy while the server starts) is never kept as current.
+  stateTag = res.headers.get('etag');
+  return { ...data, ok: true, status: res.status, error: undefined, ...look };
+}
+
 const seg = encodeURIComponent;
 
 // The foundation answers bare JSON (null before a file exists, arrays for logs), so it comes back as data, never spread.
@@ -43,11 +68,16 @@ function fdPath(projectId, what, params) {
 }
 
 export const api = {
-  state: () => call('GET', '/api/state'),
+  state: () => stateCall(),
   history: (q, project, range) => call('GET', `/api/history?${new URLSearchParams({ q, ...(project ? { project } : {}), ...(range ? { from: String(range.from), to: String(range.to) } : {}) })}`),
   conversation: (id) => call('GET', `/api/conversation/${seg(id)}`),
   deleteConversation: (id) => call('DELETE', `/api/conversation/${seg(id)}`),
   placeConversation: (id, body) => call('POST', `/api/conversation/${seg(id)}/place`, body),
+  // The cards the owner makes by hand in the Board (mm14), kept in session-map's own folder.
+  cards: () => call('GET', '/api/cards'),
+  addCard: (body) => call('POST', '/api/cards', body),
+  moveCard: (id, body) => call('POST', `/api/cards/${seg(id)}/move`, body),
+  deleteCard: (id) => call('DELETE', `/api/cards/${seg(id)}`),
   files: (projectId, scope) => call('GET', `/api/files/${seg(projectId)}?${new URLSearchParams(scope)}`),
   file: (projectId, path, workCell, links) => call('GET', `/api/file/${seg(projectId)}?${new URLSearchParams({ path, ...(workCell ? { workCell } : {}), ...(links ? { links: '1' } : {}) })}`),
   changes: (projectId) => call('GET', `/api/changes/${projectId === '*' ? '*' : seg(projectId)}`),
@@ -67,13 +97,18 @@ export const api = {
   orchestratorOpen: (body) => call('POST', '/api/chat/orchestrator', body),
   setProjectTidy: (projectId, tidy) => call('POST', '/api/settings/project-tidy', { projectId, tidy }),
   chatList: (query) => call('GET', `/api/chat/list?${new URLSearchParams(query)}`),
-  chatHistory: (sessionId, since) => call('GET', `/api/chat/history/${seg(sessionId)}${since ? `?since=${seg(since)}` : ''}`),
+  // cursor (pc15): {before} for the page older than the shown one, {from} for what follows the items the page holds.
+  chatHistory: (sessionId, since, cursor = {}) => {
+    const query = new URLSearchParams([...(since ? [['since', since]] : []), ...Object.entries(cursor).filter(([, n]) => Number.isInteger(n)).map(([k, n]) => [k, String(n)])]).toString();
+    return call('GET', `/api/chat/history/${seg(sessionId)}${query ? `?${query}` : ''}`);
+  },
   chatHelper: (sessionId, agentId) => call('GET', `/api/chat/helper/${seg(sessionId)}/${seg(agentId)}`),
   settingsMode: () => call('GET', '/api/settings/permission-mode'),
   setSettingsMode: (mode) => call('POST', '/api/settings/permission-mode', { mode }),
   undoSettingsMode: () => call('DELETE', '/api/settings/permission-mode'),
   flowExport: (projectId) => call('GET', `/api/arch/${seg(projectId)}/mermaid`),
   flowModel: (projectId) => call('GET', `/api/arch/${seg(projectId)}/model`),
+  flowPart: (projectId, partId, onlyLive = false) => call('GET', `/api/arch/${seg(projectId)}/model/part/${seg(partId)}${onlyLive ? '?only=live' : ''}`),
   flowPreview: (projectId, text) => call('POST', `/api/arch/${seg(projectId)}/mermaid/preview`, { text }),
   flowApply: (projectId, text, skip) => call('POST', `/api/arch/${seg(projectId)}/mermaid/apply`, { text, skip }),
   flowDraft: (projectId) => call('GET', `/api/arch/${seg(projectId)}/draft`),
@@ -92,6 +127,10 @@ export const api = {
   setAiKey: (provider, key) => call('POST', '/api/settings/ai-helpers', { provider, key }),
   setAiHelper: (body) => call('POST', '/api/settings/ai-helpers', body),
   removeAiKey: (provider) => call('DELETE', `/api/settings/ai-helpers?provider=${seg(provider)}`),
+  // The look-only link (sv04): the owner reads it, makes a new one or turns it off.
+  lookKey: () => call('GET', '/api/settings/look-key'),
+  makeLookKey: () => call('POST', '/api/settings/look-key', {}),
+  dropLookKey: () => call('DELETE', '/api/settings/look-key'),
   testAiKey: (provider) => call('POST', '/api/settings/ai-helpers/test', { provider }),
   // The foundation, for every block's screens (index § 3): one read, and one write (POST unless told PUT).
   fd: (projectId, what, params) => fdCall('GET', fdPath(projectId, what, params)),

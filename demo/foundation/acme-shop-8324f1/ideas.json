@@ -1,0 +1,1689 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-10T08:30:00.000Z",
+  "ideas": [
+    {
+      "id": "idea:4af37c22",
+      "text": "Cobrar por assinatura mensal na loja",
+      "createdAt": "2026-10-09T14:00:00.000Z",
+      "size": "large",
+      "sensitive": [
+        "money",
+        "publish"
+      ],
+      "origin": {
+        "size": "guessed",
+        "sensitive": "guessed"
+      },
+      "status": "open",
+      "doneAt": null,
+      "acceptedUnverified": [],
+      "checks": [
+        {
+          "id": "01.problema-e-publico-escritos-em-1-a-3-frases",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.especificacao-anterior-ao-codigo",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.criterio-de-aceite-verificavel-em-cada-tarefa",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.fora-de-escopo-escrito",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.metrica-de-sucesso-com-linha-de-base",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.validacao-com-pessoas-reais",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.impactos-cruzados-marcados",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.revisao-independente-da-especificacao",
+          "stage": "01",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "01.tamanho-da-especificacao",
+          "stage": "01",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.nenhuma-regra-de-importacao-violada",
+          "stage": "02",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.toda-caixa-e-seta-com-evidencia-que-resolve",
+          "stage": "02",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.todo-arquivo-novo-com-parte-dona",
+          "stage": "02",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.migracao-destrutiva-em-duas-releases",
+          "stage": "02",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.autorizacao-por-dono-do-objeto-prevista",
+          "stage": "02",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.adr-para-decisao-cara",
+          "stage": "02",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.modelo-de-ameacas-em-ideia-sensivel",
+          "stage": "02",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "02.custo-de-operar-estimado",
+          "stage": "02",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.testes-tipos-e-lint-verdes",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.teste-novo-junto-de-cada-mudanca-de-comportamento",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.nenhum-segredo-nos-arquivos-e-no-historico",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.env-fora-do-git-env-example-com-todos-os-nomes-usa",
+          "stage": "03",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.dependencia-nova-existe-tem-licenca-e-passou-na-au",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.lockfile-versionado-e-instalacao-congelada",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.mudanca-pequena",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.conventional-commits-e-rodape-de-coautoria",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.revisao-independente-antes-do-merge",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.branch-principal-protegida-com-ci-obrigatorio",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.sem-console-log-em-producao-sem-dado-pessoal-em-lo",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.complexidade-e-tamanho-no-codigo-novo",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.ci-roda-testes-tipos-lint-e-build-e-e-obrigatorio",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.todos-os-testes-verdes",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.fluxo-critico-com-teste-de-ponta-a-ponta",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.exercitado-de-verdade",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.cobertura-do-codigo-novo-no-limiar-escolhido",
+          "stage": "04",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.sem-teste-instavel-conhecido-sem-dono",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.mutacao-nas-regras-criticas-acima-do-limiar",
+          "stage": "04",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.acessibilidade-axe-sem-falhas-e-revisao-manual-dat",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.web-vitals-dentro-das-metas",
+          "stage": "04",
+          "severity": "R",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.inspecao-sem-achado-grave-aberto",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.avaliacao-de-ia-acima-da-nota-minima",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.teste-de-carga-antes-de-campanha",
+          "stage": "04",
+          "severity": "A",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.nenhum-segredo-no-repositorio-e-no-historico",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.sem-vulnerabilidade-conhecida-alta-ou-critica-sem",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.robo-de-atualizacao-configurado",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.ci-com-permissoes-minimas-e-sem-padrao-perigoso",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.teste-de-acesso-cruzado-em-cada-rota-com-identific",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.limite-de-requisicoes-em-login-e-rotas-caras",
+          "stage": "05",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.webhook-com-assinatura-sobre-o-corpo-bruto",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.registros-sem-dado-pessoal",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.dois-fatores-nas-contas-criticas",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.inventario-de-dados-e-bases-legais-validados",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.politica-publicada-e-linkada",
+          "stage": "05",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.rota-de-exportar-e-excluir-conta",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.fornecedores-com-contrato-e-pais",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.plano-de-incidente-com-o-prazo-de-3-dias-uteis",
+          "stage": "05",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "05.aviso-nao-e-parecer-juridico-em-toda-tela-de-lgpd",
+          "stage": "05",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.mesma-versao-em-todos-os-arquivos",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.secao-do-changelog-presente-para-a-versao",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.readme-cita-so-o-que-existe-links-resolvem",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.imagens-do-readme-da-mesma-versao",
+          "stage": "06",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.ci-verde-no-commit-publicado",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.verificacao-de-saude-configurada",
+          "stage": "06",
+          "severity": "E",
+          "state": "pass",
+          "reason": null,
+          "evidence": [
+            {
+              "file": "apps/api/src/server.ts",
+              "line": 13
+            }
+          ],
+          "attest": null
+        },
+        {
+          "id": "06.migracao-destrutiva-separada-e-backup-antes",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.interruptores-com-dono-e-data",
+          "stage": "06",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.teste-de-fumaca-pos-publicacao-verde",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.reversao-ensaiada-no-trimestre",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.confirmacao-do-fundador-para-publicar",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.registros-estruturados-com-identificador-de-requis",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.rastreador-de-erros-nos-apps",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.verificacao-de-saude",
+          "stage": "07",
+          "severity": "E",
+          "state": "pass",
+          "reason": null,
+          "evidence": [
+            {
+              "file": "apps/api/src/server.ts",
+              "line": 13
+            }
+          ],
+          "attest": null
+        },
+        {
+          "id": "07.monitor-externo-e-alerta-no-celular",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.backup-ligado-e-copia-fora-do-mesmo-ponto",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.ensaio-de-restauracao-nos-ultimos-90-dias",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.runbooks-dos-cenarios-principais",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.inventario-de-custos-com-limite-por-provedor",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.custo-de-ia-registrado-por-chamada",
+          "stage": "07",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.dominio-e-certificado-com-renovacao",
+          "stage": "07",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "07.runtime-e-framework-com-suporte",
+          "stage": "07",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.readme-responde-o-que-para-quem-como-rodar-e-testa",
+          "stage": "08",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.do-clone-ao-funcionamento-funciona",
+          "stage": "08",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.arquitetura-cobre-todo-o-codigo",
+          "stage": "08",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.referencia-de-api-gerada-e-batendo-com-as-rotas",
+          "stage": "08",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.nenhum-documento-cita-o-que-nao-existe",
+          "stage": "08",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.links-internos-validos",
+          "stage": "08",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.arquivo-de-instrucoes-do-agente-dentro-do-limite-e",
+          "stage": "08",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.documentos-dentro-dos-limiares-de-tamanho",
+          "stage": "08",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.ajuda-ao-cliente-para-cada-funcionalidade-que-ele",
+          "stage": "08",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "08.imagens-da-versao-atual",
+          "stage": "08",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.contraste-de-todas-as-combinacoes-de-texto-e-fundo",
+          "stage": "09",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.cores-fontes-e-espacamentos-so-das-fichas",
+          "stage": "09",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.componente-com-todos-os-estados-no-catalogo",
+          "stage": "09",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.toda-tela-com-estados-vazio-carregando-e-erro",
+          "stage": "09",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.textos-da-interface-na-fonte-unica",
+          "stage": "09",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.licenca-comercial-de-fontes-e-imagens",
+          "stage": "09",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.busca-de-anterioridade-da-marca-feita",
+          "stage": "09",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.teste-com-usuarios-reais-na-jornada-principal",
+          "stage": "09",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "09.alvos-de-toque-e-foco-visivel",
+          "stage": "09",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.posicionamento-escrito-nos-cinco-componentes",
+          "stage": "10",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.pagina-principal-com-titulo-descricao-e-chamada",
+          "stage": "10",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.pagina-indexavel",
+          "stage": "10",
+          "severity": "R",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.eventos-do-funil-disparando",
+          "stage": "10",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.links-de-divulgacao-com-utm",
+          "stage": "10",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.cada-peca-com-autorizacao-de-imagem-voz-e-musica",
+          "stage": "10",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.promessa-da-peca-confere-com-o-que-o-produto-faz",
+          "stage": "10",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.mensagem-ativa-so-com-consentimento",
+          "stage": "10",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.e-mail-com-spf-dkim-dmarc-e-descadastro",
+          "stage": "10",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "10.teste-de-canal-com-criterio-de-parada",
+          "stage": "10",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.canal-de-atendimento-publicado-no-site-na-ajuda-e",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.tempo-de-primeira-resposta-medido",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.desistencia-pela-mesma-ferramenta-da-contratacao-c",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.cancelamento-tao-facil-quanto-a-contratacao",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.ia-de-atendimento-se-identifica-e-passa-para-human",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.preco-total-e-condicoes-visiveis-antes-de-pagar",
+          "stage": "11",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.retencao-por-coorte-calculada",
+          "stage": "11",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.temas-do-atendimento-entram-na-priorizacao",
+          "stage": "11",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "11.verificacao-de-prestadores-e-politica-de-problema",
+          "stage": "11",
+          "severity": "E",
+          "state": "na",
+          "reason": "not-applicable",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.empresa-aberta-antes-de-cobrar",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.identificacao-do-fornecedor-no-site-razao-social-c",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.termos-e-politica-publicados-revisados-por-advogad",
+          "stage": "12",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.aceite-registrado-com-versao",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.coerencia-termos-politica-codigo",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.contrato-de-prestador-assinado",
+          "stage": "12",
+          "severity": "E",
+          "state": "na",
+          "reason": "not-applicable",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.cessao-de-direitos-de-quem-construiu",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.licencas-das-dependencias-compativeis",
+          "stage": "12",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.registros-de-acesso-guardados-por-6-meses",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.busca-e-pedido-de-marca",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "12.aviso-nao-e-parecer-juridico",
+          "stage": "12",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.margem-de-contribuicao-por-unidade-calculada-e-pos",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.gmv-e-receita-separados",
+          "stage": "13",
+          "severity": "E",
+          "state": "na",
+          "reason": "not-applicable",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.cac-por-canal-com-custos-completos",
+          "stage": "13",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.custo-de-ia-por-pedido-medido",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.fluxo-de-caixa-atualizado-na-semana",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.folego-acima-do-limiar-decidido",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.orcamento-com-alerta-em-cada-provedor",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.simulacao-de-impostos-revisada-pelo-contador",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "13.aviso-nao-e-orientacao-contabil",
+          "stage": "13",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.linha-de-anuncio-skills-agentes-por-que-no-inicio",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.modelo-e-nivel-explicitos-em-cada-agente",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.estimativa-de-custo-antes-e-comparacao-no-fim",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.revisao-independente-em-sensivel",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.afirmacoes-sobre-o-codigo-com-evidencia-que-resolv",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.leitura-100-registrada-quando-o-pedido-e-de-estudo",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.arquivo-de-instrucoes-curto-e-com-comandos-validos",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.ganchos-e-permissoes-revisados",
+          "stage": "14",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.coautoria-nos-commits",
+          "stage": "14",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "14.orcamento-com-alerta",
+          "stage": "14",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        }
+      ]
+    },
+    {
+      "id": "idea:519aa4dd",
+      "text": "Corrigir o texto do botão de finalizar pedido",
+      "createdAt": "2026-10-10T08:15:00.000Z",
+      "size": "trivial",
+      "sensitive": [],
+      "origin": {
+        "size": "guessed",
+        "sensitive": "guessed"
+      },
+      "status": "open",
+      "doneAt": null,
+      "acceptedUnverified": [],
+      "checks": [
+        {
+          "id": "03.testes-tipos-e-lint-verdes",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": {
+            "at": "2026-10-10T08:30:00.000Z",
+            "expiresAt": "2027-01-08T08:30:00.000Z",
+            "note": "Ana read the new text on the phone and on the computer."
+          }
+        },
+        {
+          "id": "03.teste-novo-junto-de-cada-mudanca-de-comportamento",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.nenhum-segredo-nos-arquivos-e-no-historico",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.env-fora-do-git-env-example-com-todos-os-nomes-usa",
+          "stage": "03",
+          "severity": "E",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.dependencia-nova-existe-tem-licenca-e-passou-na-au",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.lockfile-versionado-e-instalacao-congelada",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.mudanca-pequena",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.conventional-commits-e-rodape-de-coautoria",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.revisao-independente-antes-do-merge",
+          "stage": "03",
+          "severity": "E",
+          "state": "na",
+          "reason": "not-applicable",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.branch-principal-protegida-com-ci-obrigatorio",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.sem-console-log-em-producao-sem-dado-pessoal-em-lo",
+          "stage": "03",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "03.complexidade-e-tamanho-no-codigo-novo",
+          "stage": "03",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.ci-roda-testes-tipos-lint-e-build-e-e-obrigatorio",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.todos-os-testes-verdes",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.fluxo-critico-com-teste-de-ponta-a-ponta",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.exercitado-de-verdade",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.cobertura-do-codigo-novo-no-limiar-escolhido",
+          "stage": "04",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.sem-teste-instavel-conhecido-sem-dono",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.mutacao-nas-regras-criticas-acima-do-limiar",
+          "stage": "04",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.acessibilidade-axe-sem-falhas-e-revisao-manual-dat",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.web-vitals-dentro-das-metas",
+          "stage": "04",
+          "severity": "R",
+          "state": "fail",
+          "reason": null,
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.inspecao-sem-achado-grave-aberto",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.avaliacao-de-ia-acima-da-nota-minima",
+          "stage": "04",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "04.teste-de-carga-antes-de-campanha",
+          "stage": "04",
+          "severity": "A",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.mesma-versao-em-todos-os-arquivos",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.secao-do-changelog-presente-para-a-versao",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "no-data",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.readme-cita-so-o-que-existe-links-resolvem",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.imagens-do-readme-da-mesma-versao",
+          "stage": "06",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.ci-verde-no-commit-publicado",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.verificacao-de-saude-configurada",
+          "stage": "06",
+          "severity": "E",
+          "state": "pass",
+          "reason": null,
+          "evidence": [
+            {
+              "file": "apps/api/src/server.ts",
+              "line": 13
+            }
+          ],
+          "attest": null
+        },
+        {
+          "id": "06.migracao-destrutiva-separada-e-backup-antes",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.interruptores-com-dono-e-data",
+          "stage": "06",
+          "severity": "R",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.teste-de-fumaca-pos-publicacao-verde",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.reversao-ensaiada-no-trimestre",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        },
+        {
+          "id": "06.confirmacao-do-fundador-para-publicar",
+          "stage": "06",
+          "severity": "E",
+          "state": "unverified",
+          "reason": "needs-human",
+          "evidence": [],
+          "attest": null
+        }
+      ]
+    }
+  ]
+}

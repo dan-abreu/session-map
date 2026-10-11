@@ -1,1 +1,57 @@
 /* Styles of block B2 (model, Map and Flow). Only the tokens of style.css. */
+
+/* ---- The detailed census of the repository (id77, Complete mode): classes of censusview.js ---- */
+.fdc-view .fdc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3, 12px); margin-bottom: var(--s-3, 12px); }
+.fdc-crumb { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink-2); font-size: var(--fs-sm); }
+.fdc-where { font-family: var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
+button.fdc-where { padding: 0; border: 0; background: none; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); }
+button.fdc-where:hover { color: var(--ink); text-decoration-color: currentColor; }
+.fdc-folder { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.fdc-folder:hover { text-decoration-color: currentColor; }
+.fdc-folder:focus-visible, button.fdc-where:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
+
+/* A line no part of the map holds: in the colour of a clash, text kept readable. */
+.fdc-table .is-noowner { background: var(--clash-fill); color: var(--clash-ink); }
+.fdc-table .is-noowner .fdc-folder { color: var(--clash-ink); }
+.fdc-tag { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-sm); background: var(--clash-fill); color: var(--clash-ink); font-size: var(--fs-xs); font-weight: 600; }
+
+.fdc-files { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: var(--fs-sm); }
+.fdc-files code { font-family: var(--mono); overflow-wrap: anywhere; }
+.fdc-more { color: var(--ink-2); }
+.fdc-excluded { margin-top: var(--s-4, 16px); }
+.fdc-excluded summary { cursor: pointer; padding: 4px 0; }
+.fdc-reason { margin-top: var(--s-3, 12px); }
+.fdc-sub { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; }
+
+/* The statement: one folded line per count, the sums on the line, the files inside. */
+.fdc-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.fdc-line { border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px 10px; background: var(--bg-2); }
+.fdc-line > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; cursor: pointer; }
+.fdc-rev { font-weight: 600; }
+.fdc-cell small { color: var(--ink-2); }
+.fdc-line.is-off { border-color: var(--clash); background: var(--clash-fill); }
+.fdc-off { margin: 6px 0 0; color: var(--clash-ink); font-size: var(--fs-sm); }
+.fdc-kind { display: inline-block; min-width: 4.5em; padding: 0 6px; border-radius: var(--r-sm); font-size: var(--fs-xs); font-weight: 600; text-align: center; }
+.fdc-kind--added { background: var(--active-fill); color: var(--active-ink); }
+.fdc-kind--removed { background: var(--bg-3); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
+.fdc-kind--changed { background: var(--bg-3); color: var(--ink); }
+
+/* How much of the code was read: quiet when complete, plain when not read yet. */
+.fdc-read { margin-bottom: var(--s-4, 16px); }
+.fdc-read-line { margin: 0; }
+.fdc-read.is-complete .fdc-read-line { color: var(--active-ink); }
+.fdc-read.is-unread .fdc-read-line { color: var(--ink-2); }
+.fdc-error { color: var(--clash-ink); }
+
+/* ---- The repository on the phone (id77): a folded section under the project, the same rows as the map's left side ---- */
+.ol-repo { margin: 6px 0 0; }
+.ol-repo-title { display: flex; align-items: center; min-height: 36px; padding: 0 4px; color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.ol-repo-title:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
+.ol-item.k-folder > .ol-row .ol-box { --lv-bg: var(--bg-2); --lv-line: var(--line); --lv-ink: var(--ink); }
+.ol-item.k-file > .ol-row .ol-box, .ol-item.k-more > .ol-row .ol-box { padding: 6px 10px; }
+.ol-item.k-folder .bx-title, .ol-item.k-file .bx-title { font-family: var(--mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.ol-row.is-excluded .ol-box { --lv-bg: var(--bg-2); --lv-line: var(--line); --lv-ink: var(--ink-2); background: var(--bg-2); border-color: var(--line); box-shadow: none; }
+.ol-row.is-excluded .bx-title, .ol-row.is-excluded .bx-meta { color: var(--ink-2); }
+.ol-row.is-loose .ol-box { border-style: dotted; border-width: 2px; }
+.ol-row.is-part .ol-box { border-color: color-mix(in srgb, var(--lv2-ink) 45%, var(--lv2-line)); box-shadow: 0 0 0 3px var(--lv2-bg), var(--shadow-xs); }
+.ol-item.k-file:has(.st-A) > .ol-row .ol-box { border-color: color-mix(in srgb, var(--active) 55%, var(--lv-line)); }

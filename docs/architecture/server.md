@@ -26,6 +26,7 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 - [x] **Claude:** Token cookie, CSRF header and an action log `sv01`
 - [ ] **important:** HTTPS for the network link without Tailscale `sv02`
+  - Later, by the owner's choice on 2026-10-10 (`op06`).
 
 ### Reach
 
@@ -34,6 +35,15 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
   - Open where it runs (VS Code or a terminal), a new chat on the same point, close only a stopped chat (checking the process still belongs to that session), archive and show archived; every action in the action log. Released in v0.1.0.
 - [x] **Claude:** A part's files on the page, read-only, with Open in VS Code and Open terminal here `sv07`
   - New and changed files marked, the branch's changed lines highlighted, up to 1 MB, text only, never `.git` or `.env`. Released in v0.1.0.
+- [x] Archive and delete answer at once, on the newest finished state, never waiting for a collect of every project `sv08`
+  - A conversation born since that state still waits for the next collect, so it is never "unknown"; open and close, which start or stop a process, always wait for a fresh state.
+
+### Speed
+
+- [ ] **in progress:** The page asks "anything new?" and gets almost nothing back when nothing changed `sv09`
+  - Today every open page downloads the whole state (1.9 MB) every 5 seconds. From `id84`.
+- [ ] **in progress:** The server's heavy jobs (git, re-reading projects) wait in a short queue instead of piling up `sv10`
+  - Today the error log fills with "git too slow": many git commands at once until they time out. From `id84`.
 
 ### Restart
 
@@ -43,7 +53,10 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 ### Later (ideas, not committed)
 
-- [ ] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`
+- [x] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`
   - To show the live map to another person.
+- [x] **detail:** With the look-only link, the page also hides Home, Conversations and Foundation, whose reads the server already refuses `sv11`
+- [ ] **detail:** The Flow also shows with the look-only link: the page asks for its drawing (`/mermaid`) through a read the look-only key may use `sv12`
 - [ ] **detail:** Team plan in the cloud: a brain shared between machines `sv05`
   - Validate with an interest list after launch; nothing of it goes into v0.x.
+  - Later, by the owner's choice on 2026-10-10 (`op06`).

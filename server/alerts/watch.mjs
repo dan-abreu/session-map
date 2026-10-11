@@ -5,7 +5,11 @@ import { summaryOf } from '../web/alerts.js';
 const waitingOf = (w) => (w?.strong ? 'question' : w?.weak ? 'asks' : null);
 const clashKey = (projectId, d) => `${projectId}|${[...(d.workCellIds ?? [])].sort().join('|')}`;
 
-// Every conversation of every project (whatever tool runs it) and every open clash between branches, by key.
+// The plan limits that are hit now (wa09), by kind and reset time: the same hit stays one key until its reset changes.
+const limitsOf = (limits) => new Map(Object.entries(limits ?? {}).filter(([, l]) => l?.hit)
+  .map(([kind, l]) => [`${kind}|${l.resetsAt ?? l.resetsText ?? ''}`, { kind, resetsAt: l.resetsAt ?? null, resetsText: l.resetsText ?? null }]));
+
+// Every conversation of every project (whatever tool runs it), every open clash between branches, by key, and the plan limits hit.
 export function snapshotOf(state) {
   const chats = new Map();
   const clashes = new Map();
@@ -22,7 +26,7 @@ export function snapshotOf(state) {
       if (d.kind === 'clash') clashes.set(clashKey(p.id, d), { projectId: p.id, projectName: p.name, branches: d.branches ?? [], files: d.files ?? [] });
     }
   }
-  return { chats, clashes };
+  return { chats, clashes, limits: limitsOf(state?.limits) };
 }
 
 // What changed from one look to the next. prev null is the first look: what is already so is no news.
@@ -40,6 +44,10 @@ export function transitionsOf(prev, next, { skip = new Set() } = {}) {
   }
   for (const [key, c] of next.clashes) {
     if (!prev.clashes.has(key)) events.push({ kind: 'clash', reason: 'clash', projectId: c.projectId, projectName: c.projectName, sessionId: null, branches: c.branches, files: c.files });
+  }
+  // A limit belongs to the account, not to a project: no project, no conversation.
+  for (const [key, l] of next.limits) {
+    if (!prev.limits.has(key)) events.push({ kind: 'limit', reason: l.kind, projectId: null, projectName: '', sessionId: null, resetsAt: l.resetsAt, resetsText: l.resetsText });
   }
   return events;
 }

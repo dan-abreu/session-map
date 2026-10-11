@@ -33,13 +33,27 @@ export function paintCount(el, count, memo) {
 // Only a box still growing in carries its own opacity: a settled one leaves it to the stylesheet, so is-dim can fade it.
 export const settledOpacity = (opacity) => (opacity === '1' ? '' : opacity);
 
-const PULSE_MS = 1600;
+export const PULSE_MS = 1600;
 export function pulseOn(el) {
   el.classList.remove('is-pulse');
   void el.offsetWidth;
   el.classList.add('is-pulse');
   clearTimeout(el.pulseTimer);
   el.pulseTimer = setTimeout(() => el.classList.remove('is-pulse'), PULSE_MS);
+}
+
+// The files that arrived new on the files side (id77) since the last look: walks the whole side, closed folders too, so a
+// file in a folder not opened yet is already "seen" and does not blink when the folder is opened later. seen: the new files
+// of the last look, or null when there was none (the first look, or the side was off): nothing blinks then.
+export function newFiles(tree, seen) {
+  if (!tree) return { fresh: [], seen: null };
+  const now = new Set();
+  const walk = (node) => {
+    if (node.kind === 'file' && node.status === 'A') now.add(node.id);
+    node.children.forEach(walk);
+  };
+  tree.children.forEach(walk);
+  return { fresh: seen ? [...now].filter((id) => !seen.has(id)) : [], seen: now };
 }
 
 // The caption under a box where a conversation works now (live.js captionsAt): its last step, then which conversation and
@@ -97,6 +111,8 @@ export function createMindmap(root, ctx) {
   let rels = [];
   let relLit = null; // the key (a|b) of the line the Relations list lights
   let left = null; // the tree on the left of the root (mm39), as the last render had it
+  let seenNew = null; // the new files of the files side at the last render (newFiles)
+  let rootId = null;
   const ctxOf = (node) => (node.side === 'left' && left ? left.ctx : ctx);
   // The files side brings its own work going on (mm41) and its own light (mm40): view.left.live and view.left.lit.
   const isLive = (view, id) => view.live.has(id) || Boolean(left?.live?.has(id));
@@ -258,6 +274,12 @@ export function createMindmap(root, ctx) {
       }
     }
     for (const node of visible) paint(nodeEl(node), node, view);
+    // A file that arrives new blinks once, a project at a time (a map of another project is a first look).
+    if (rootId !== tree.id) seenNew = null;
+    rootId = tree.id;
+    const arrived = newFiles(left?.tree ?? null, seenNew);
+    seenNew = arrived.seen;
+    for (const id of arrived.fresh) if (nodes.has(id)) pulseOn(nodes.get(id).el);
     const sizes = new Map(visible.map((node) => {
       const n = nodes.get(node.id);
       n.pad = n.caption.hidden ? 0 : n.caption.offsetHeight + CAPTION_GAP;
@@ -367,6 +389,18 @@ export function createMindmap(root, ctx) {
     nodes.get(id)?.box.focus({ preventScroll: true });
   }
 
+  // A box picked from outside (the Flow's boxes of the same part, B2-T16): marked as picked here, brought into view, and no
+  // pick is announced back. false when the map has no such box; null clears. The next render marks from its own view again.
+  function select(id) {
+    if (id !== null && !nodes.has(id)) return false;
+    for (const [key, n] of nodes) {
+      n.el.classList.toggle('is-selected', key === id);
+      n.box.setAttribute('aria-current', key === id ? 'true' : 'false');
+    }
+    if (id !== null) reveal(id);
+    return true;
+  }
+
   // A short glow on the box a conversation of the list belongs to, once the map has brought it into view.
   function pulse(id) {
     const n = nodes.get(id);
@@ -380,5 +414,5 @@ export function createMindmap(root, ctx) {
     sel.transition().duration(reduced.matches ? 0 : 200).call(zoom.scaleBy, factor, [area.left + area.width / 2, area.top + area.height / 2]);
   }
 
-  return { render, fit, reveal, focus, pulse, zoomBy, touched: () => touched };
+  return { render, fit, reveal, focus, pulse, select, zoomBy, touched: () => touched };
 }

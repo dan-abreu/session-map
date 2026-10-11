@@ -4,7 +4,7 @@ import { parseArch } from '../server/arch/parse.mjs';
 import { planImport } from '../server/arch/flow.mjs';
 import { assembleModel } from '../server/arch/flowmodel.mjs';
 import { parseFlow } from '../server/web/flow.js';
-import { VIEW_MARKER, edgeLabel, exportTextFor, factRows, isViewText, layerOrder, level1Flow, nodeName, originWord } from '../server/web/flowlevel.js';
+import { HUB_MIN, VIEW_MARKER, edgeLabel, exportTextFor, factRows, innerNotes, isViewText, layerName, layerOrder, level1Flow, level2Flow, nodeName, originWord, ownName, pageLang, textLang } from '../server/web/flowlevel.js';
 import { translator } from '../server/web/i18n.js';
 
 const DIR = 'docs/architecture';
@@ -148,13 +148,41 @@ test('meta ties each drawn box to its node: parts by their README id, actors and
   assert.ok(meta.edges.every((e, i) => e.index === i));
 });
 
-test('a journey keeps only its boxes and arrows; an unknown journey draws everything', () => {
-  const model = { ...MODEL, journeys: [{ id: 'j1', kind: 'journey', name: 'Order', nodes: ['actor:browser', 'part:web'], edges: ['actor:browser>part:web#actor'] }] };
-  const only = level1Flow(model, { tt: en, journey: 'j1' });
-  assert.deepEqual([...only.meta.nodes.values()].map((x) => x.nodeId).sort(), ['actor:browser', 'part:web']);
-  assert.equal(only.flow.edges.length, 1);
-  const all = level1Flow(model, { tt: en, journey: 'nope' });
-  assert.equal(all.flow.nodes.length, level1Flow(model, { tt: en }).flow.nodes.length);
+test('a journey picked in the filter dims the rest: every box stays, the journey knows its boxes and numbered arrows', () => {
+  const steps = (pairs) => pairs.map(([from, to, edgeId], i) => ({ n: i + 1, from, to, edgeId, back: false, partId: null, note: null }));
+  const journeys = [
+    {
+      id: 'j:a', kind: 'journey', name: 'A', nodes: ['svc:claude-files', 'part:rd', 'part:sb', 'part:sv', 'part:mm'],
+      edges: ['svc:claude-files>part:rd#service', 'part:rd>part:sb#flow', 'part:sb>part:sv#flow', 'part:sv>part:mm#flow'],
+      steps: steps([['svc:claude-files', 'part:rd', 'svc:claude-files>part:rd#service'], ['part:rd', 'part:sb', 'part:rd>part:sb#flow'], ['part:sb', 'part:sv', 'part:sb>part:sv#flow'], ['part:sv', 'part:mm', 'part:sv>part:mm#flow']]),
+    },
+    // Readers' arrow to git is one of three with the same words: on a journey it is drawn on its own.
+    { id: 'j:git', kind: 'journey', name: 'Git', nodes: ['part:rd', 'svc:git'], edges: ['part:rd>svc:git#service'], steps: steps([['part:rd', 'svc:git', 'part:rd>svc:git#service']]) },
+    { id: 'j:ai', kind: 'journey', name: 'AI', nodes: ['part:sb', 'svc:claude'], edges: ['part:sb>svc:claude#service'], steps: steps([['part:sb', 'svc:claude', 'part:sb>svc:claude#service']]) },
+  ];
+  const model = { ...STORY, journeys };
+  const plain = level1Flow(model, { tt: en });
+  const one = level1Flow(model, { tt: en, journey: 'j:a' });
+  assert.equal(one.flow.nodes.length, plain.flow.nodes.length, 'no box leaves the drawing');
+  assert.equal(plain.meta.journey, null);
+  const drawOf = new Map([...one.meta.nodes].map(([draw, info]) => [info.nodeId, draw]));
+  assert.deepEqual([...one.meta.journey.nodes].sort(), journeys[0].nodes.map((id) => drawOf.get(id)).sort());
+  const onPath = one.meta.edges.filter((m) => one.meta.journey.edges.has(m.index)).map((m) => m.edgeId);
+  assert.deepEqual(onPath.sort(), [...journeys[0].edges].sort());
+  const label = (v, edgeId) => v.flow.edges[v.meta.edges.find((m) => m.edgeId === edgeId).index].label;
+  assert.equal(label(one, 'svc:claude-files>part:rd#service'), '1 · chats, settings and history');
+  assert.equal(label(one, 'part:sv>part:mm#flow'), '4 · what the screen shows');
+  assert.equal(label(one, 'part:sb>svc:git#service'), label(plain, 'part:sb>svc:git#service'), 'arrows off the journey keep their words');
+  const git = level1Flow(model, { tt: en, journey: 'j:git' });
+  const rdGit = git.meta.edges.find((m) => m.edgeId === 'part:rd>svc:git#service');
+  assert.ok(rdGit && git.meta.journey.edges.has(rdGit.index), 'never bundled under another part');
+  assert.equal(label(git, 'part:rd>svc:git#service'), '1 · lines of work, saved changes and what changed');
+  assert.ok(!git.meta.edges.find((m) => m.edgeId === 'part:sb>svc:git#service').also.includes('part:rd'));
+  const ai = level1Flow(model, { tt: en, journey: 'j:ai', maxOutside: 0 });
+  assert.ok([...ai.meta.nodes.values()].some((x) => x.nodeId === 'svc:claude'), 'its service is never cut into "more"');
+  const unknown = level1Flow(model, { tt: en, journey: 'nope' });
+  assert.equal(unknown.meta.journey, null);
+  assert.equal(unknown.flow.edges.length, plain.flow.edges.length);
 });
 
 test('too many outside boxes: the busiest stay, the rest are listed apart', () => {
@@ -207,4 +235,143 @@ test('a layer whose arrows go round in a circle is tied by all its boxes, so it 
   const ties = level1Flow(loop, { tt: en, showHidden: true }).drawText.split('\n').filter((l) => l.includes('~~~')).map((l) => l.trim());
   assert.ok(ties.includes('you_in_the_browser ~~~ SV') && ties.includes('you_in_the_browser ~~~ MM'), ties.join(' | '));
   assert.ok(ties.includes('SV ~~~ SB') && ties.includes('MM ~~~ SB'), ties.join(' | '));
+});
+
+// ---- level 2, inside a part (fl09) ----
+const box = (id, band, extra = {}) => ({ id, kind: 'component', name: id.replace(/^c:.*\//, ''), path: id.slice(2), folder: false, files: [id.slice(2)], fileCount: 1, other: 0, band, origin: 'detected', badges: ['detected'], declared: [], detected: [{ file: id.slice(2), line: 1, via: 'code' }], ...extra });
+const VIEW = {
+  partId: 'server', name: 'Server', file: 'docs/architecture/server.md', key: 'k1', how: { text: 'It serves.', file: 'docs/architecture/server.md', line: 7 },
+  nodes: [
+    box('c:server/main.mjs', 'entry', { head: 'Serves the page and the api.' }),
+    ...['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((x) => box(`c:server/${x}.mjs`, 'work')),
+    box('c:server/log.mjs', 'base'),
+    box('c:server/shared.mjs', 'shared'),
+    { id: 'c:server/css/', kind: 'component', name: 'css/', path: 'server/css/', folder: true, files: ['server/css/a.css'], fileCount: 0, other: 13, band: 'base', origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+    { id: 'c:server/web/*', kind: 'group', name: null, path: 'server/web/*', dir: 'server/web', folder: false, files: [], fileCount: 38, other: 2, band: 'base', origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+    { id: 'actor:browser', kind: 'actor', nameKey: 'flow.l1.actor.browser', name: 'x', side: 'in', band: 'in', origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+    { id: 'part:flow', kind: 'part', name: 'Flow', partId: 'flow', side: 'in', band: 'in', origin: 'declared', badges: ['declared'], declared: [], detected: [] },
+    { id: 'part:mind-map-page', kind: 'part', name: 'Mind map page', partId: 'mind-map-page', side: 'out', band: 'out', origin: 'declared', badges: ['declared'], declared: [], detected: [] },
+    { id: 'svc:git', kind: 'service', where: 'this-pc', nameKey: 'flow.l1.svc.git', side: 'out', band: 'out', origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+    { id: 'svc:github', kind: 'service', where: 'internet', nameKey: 'flow.l1.svc.github', side: 'out', band: 'out', origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+  ],
+  edges: [
+    { id: 'c:server/log.mjs>c:server/main.mjs#import', from: 'c:server/log.mjs', to: 'c:server/main.mjs', kind: 'import', label: { from: 'code', key: 'flow.l1.lbl.uses' }, names: ['log'], origin: 'detected', badges: ['detected'], declared: [], detected: [{ file: 'server/main.mjs', line: 3, via: 'import' }] },
+    { id: 'actor:browser>part:server#actor@c:server/main.mjs', from: 'actor:browser', to: 'c:server/main.mjs', kind: 'actor', label: { from: 'catalog', key: 'flow.l1.lbl.browser' }, origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+    { id: 'part:flow>part:server#flow@c:server/main.mjs', from: 'part:flow', to: 'c:server/main.mjs', kind: 'flow', label: { from: 'readme', text: 'the drawing' }, origin: 'declared', badges: ['declared'], declared: [{ file: 'docs/architecture/README.md', line: 9 }], detected: [] },
+    { id: 'part:server>part:mind-map-page#flow@c:server/main.mjs', from: 'c:server/main.mjs', to: 'part:mind-map-page', kind: 'flow', label: { from: 'none', missing: true }, readme: true, origin: 'declared', badges: ['declared'], declared: [{ file: 'docs/architecture/README.md', line: 10 }], detected: [] },
+    { id: 'part:server>svc:git#service@c:server/a.mjs', from: 'c:server/a.mjs', to: 'svc:git', kind: 'service', label: { from: 'catalog', key: 'flow.l1.lbl.git' }, origin: 'detected', badges: ['detected'], declared: [], detected: [] },
+  ],
+  notes: [{ key: 'notCode', paths: ['DESIGN.md'] }],
+  counts: { boxes: 13, files: 12, other: 15, grouped: 38, cut: 0, arrowsCut: 0, neighbours: 5, neighboursCut: 0 },
+};
+
+test('inside a part: rows from what comes in, through where it starts and the work, to what it hands on; long rows wrap', () => {
+  const v = level2Flow(VIEW, { tt: pt });
+  const titles = v.scene.rows.map((r) => r.groups.map((g) => g.title));
+  assert.deepEqual(titles.map((t) => t[0]), [pt('flow.l2.band.in'), pt('flow.l2.band.entry'), pt('flow.l2.band.shared'), pt('flow.l2.band.work'), '', pt('flow.l2.band.base'), pt('flow.l2.band.out')]);
+  const out = v.scene.rows.at(-1).groups.map((g) => g.cls);
+  assert.deepEqual(out, ['parts', 'thispc', 'outside'], 'the parts it feeds, this computer and the internet side by side');
+  const byGroup = (gid) => v.scene.nodes.filter((n) => n.group === gid).length;
+  for (const r of v.scene.rows) for (const g of r.groups) assert.ok(byGroup(g.id) <= 5, `${g.id} holds ${byGroup(g.id)}`);
+  // The file's English comment does not go under its name on a Portuguese page: it moves to the hover title, and the
+  // box says in Portuguese how it is tied to the other pieces.
+  const main = v.scene.nodes.find((n) => n.label === 'main.mjs');
+  assert.equal(main.sub, 'usada por 1 peça daqui');
+  assert.equal([...v.meta.nodes.values()].find((m) => m.nodeId === 'c:server/main.mjs').quote, 'Serves the page and the api.');
+  assert.equal(level2Flow(VIEW, { tt: en }).scene.nodes.find((n) => n.label === 'main.mjs').sub, 'Serves the page and the api.');
+  // A band that wraps stays one band: its second row says which band it goes on.
+  const work = v.scene.rows.filter((r) => r.groups[0].id.startsWith('work'));
+  assert.deepEqual(work.map((r) => r.groups[0].cont ?? null), [null, 'work']);
+  const group = v.scene.nodes.find((n) => n.shape === 'group');
+  assert.equal(group.label, '+40 arquivos', 'every file it holds, code or not');
+  assert.equal(group.sub, 'em server/web');
+  assert.equal(v.scene.nodes.find((n) => n.shape === 'folder').sub, '13 arquivos');
+  assert.equal(v.scene.edges.length, VIEW.edges.length);
+});
+
+test('inside a part: every arrow has words or is counted; the text is a view, never imported as parts', () => {
+  const v = level2Flow(VIEW, { tt: en });
+  assert.equal(v.meta.missing, 1);
+  assert.equal(v.scene.edges.filter((e) => e.label).length, VIEW.edges.length - 1);
+  assert.ok(v.text.startsWith('%% session-map:view part server\n'));
+  assert.equal(isViewText(v.text), true);
+  assert.deepEqual(planImport(ARCH, v.text), { ok: false, error: 'view-not-importable' });
+  assert.equal(parseFlow(v.text).ok, true);
+  assert.equal(exportTextFor('2', 'parts text', v.text), v.text);
+  const rows = factRows(v.model, v.meta, en);
+  assert.ok(rows.some((r) => r.type === 'box' && r.text === 'main.mjs' && r.label === en('flow.l1.kind.component')));
+  assert.ok(rows.some((r) => r.type === 'arrow' && r.text === 'log.mjs → main.mjs'));
+});
+
+test('inside a part: the colours of the pieces come from what changed now; neighbour parts keep theirs', () => {
+  const live = { 'c:server/main.mjs': { tone: 'live', files: 1, unsaved: 1 }, 'c:server/a.mjs': { tone: 'quiet', files: 0, unsaved: 2 } };
+  const v = level2Flow(VIEW, { tt: en, live });
+  const info = (nodeId) => [...v.meta.nodes.values()].find((m) => m.nodeId === nodeId);
+  assert.equal(info('c:server/main.mjs').tone, 'live');
+  assert.equal(info('c:server/a.mjs').tone, 'quiet');
+  assert.equal(info('c:server/a.mjs').unsaved, 2);
+  assert.equal(info('c:server/b.mjs').tone, 'quiet');
+  assert.equal(info('part:flow').tone, null);
+  assert.equal(info('part:flow').partId, 'flow');
+  assert.equal(level2Flow(VIEW, { tt: en, live: null }).meta.nodes.get([...v.meta.nodes.keys()][0]).tone, null, 'without the key no piece is coloured');
+});
+
+test('inside a part: parts linked only by code wait for the switch; a narrow screen stacks what is around in short rows', () => {
+  const hidden = { ...VIEW, nodes: [...VIEW.nodes, { id: 'part:readers', kind: 'part', name: 'Readers', partId: 'readers', side: 'in', band: 'in', hidden: true, origin: 'detected', badges: ['detected'], declared: [], detected: [] }],
+    edges: [...VIEW.edges, { id: 'part:readers>part:server#uses@c:server/main.mjs', from: 'part:readers', to: 'c:server/main.mjs', kind: 'uses', hidden: true, label: { from: 'catalog', key: 'flow.l1.lbl.uses' }, origin: 'detected', badges: ['detected'], declared: [], detected: [] }] };
+  const off = level2Flow(hidden, { tt: en });
+  assert.equal(off.scene.nodes.some((n) => n.label === 'Readers'), false);
+  assert.equal(off.meta.hiddenNear, 1);
+  assert.equal(off.scene.edges.length, VIEW.edges.length);
+  const on = level2Flow(hidden, { tt: en, showHidden: true });
+  assert.ok(on.scene.nodes.some((n) => n.label === 'Readers'));
+  assert.equal(on.scene.edges.length, VIEW.edges.length + 1);
+  const narrow = level2Flow(hidden, { tt: en, showHidden: true, narrow: true, perRow: 2 });
+  for (const r of narrow.scene.rows) {
+    assert.equal(r.groups.length, 1, 'one group per row');
+    assert.ok(narrow.scene.nodes.filter((n) => n.group === r.groups[0].id).length <= 2);
+  }
+});
+
+test('inside a part: a piece many others use is not reached by a bundle of arrows; its box and the facts say who uses it', () => {
+  const users = ['a', 'b', 'c', 'd'];
+  const imp = (from, to) => ({ id: `c:server/${from}.mjs>c:server/${to}.mjs#import`, from: `c:server/${from}.mjs`, to: `c:server/${to}.mjs`, kind: 'import', label: { from: 'code', key: 'flow.l2.lbl.uses' }, names: [], origin: 'detected', badges: ['detected'], declared: [], detected: [{ file: `server/${from}.mjs`, line: 2, via: 'import' }] });
+  const view = { ...VIEW, edges: [...VIEW.edges, ...users.map((x) => imp(x, 'log')), imp('a', 'b')] };
+  const v = level2Flow(view, { tt: en });
+  const into = (id) => v.scene.edges.filter((e) => e.to === [...v.meta.nodes].find(([, m]) => m.nodeId === id)[0]);
+  assert.equal(into('c:server/log.mjs').length, 0, 'no arrow drawn into the shared piece');
+  assert.equal(into('c:server/b.mjs').length, 1, 'an arrow into a piece only one other uses stays');
+  assert.equal(v.meta.hubs, 1);
+  assert.equal(v.meta.folded.length, 4);
+  const log = v.scene.nodes.find((n) => n.label === 'log.mjs');
+  assert.equal(log.sub, 'used by 4 pieces here · uses 1 piece here');
+  const rows = factRows(v.model, v.meta, en);
+  assert.equal(rows.filter((r) => r.type === 'arrow' && r.text.endsWith('→ log.mjs') && r.label.includes(en('flow.l2.folded'))).length, 4, 'every arrow not drawn is still listed');
+  assert.ok(innerNotes(view, en, { keyed: true, hubs: v.meta.hubs }).some((s) => s === en.count('flow.l2.note.hubs', 1)));
+  // Three users are not enough: the arrows are drawn.
+  const three = level2Flow({ ...VIEW, edges: [...VIEW.edges, ...users.slice(0, 3).map((x) => imp(x, 'log'))] }, { tt: en });
+  assert.equal(three.meta.hubs, 0);
+  assert.equal(three.meta.folded.length, 0);
+  assert.ok(HUB_MIN >= 3);
+});
+
+test('a README layer with a common name is said in the page language; any other keeps the README words', () => {
+  assert.equal(layerName({ id: 'l:surface', drawId: 'surface', name: 'What you touch' }, pt), 'O que você usa');
+  assert.equal(layerName({ id: 'l:sources', drawId: 'sources', name: 'What it reads' }, pt), 'O que ele lê');
+  assert.equal(layerName({ id: 'l:engine', drawId: 'engine', name: 'What it works out' }, pt), 'O que ele calcula');
+  assert.equal(layerName({ id: 'l:x', drawId: 'engine', name: 'Motor' }, pt), 'O que ele calcula', 'by the subgraph id when the name is not known');
+  assert.equal(layerName({ id: 'l:surface', drawId: 'surface', name: 'What you touch' }, en), 'What you touch', 'English keeps the README words');
+  assert.equal(layerName({ id: 'l:odd', drawId: 'odd', name: 'Os bastidores' }, pt), 'Os bastidores');
+  assert.equal(layerName({ id: 'l:actors', name: 'Who uses it', nameKey: 'flow.l1.layer.actors' }, pt), 'Quem usa');
+  assert.equal(pageLang(pt), 'pt-BR');
+  assert.equal(pageLang(en), 'en');
+});
+
+test('the language of a short sentence, by its little words', () => {
+  assert.equal(textLang('The Flow tab: the architecture as a mermaid flowchart, with its boxes tied to the parts.'), 'en');
+  assert.equal(textLang('Lê os arquivos do Claude Code e monta o estado de cada conversa.'), 'pt');
+  assert.equal(textLang('main.mjs'), null);
+  assert.equal(textLang(''), null);
+  assert.equal(ownName({ id: 'part:x', name: 'Mind map page' }, pt), '“Mind map page”');
+  assert.equal(ownName({ id: 'actor:browser', nameKey: 'flow.l1.actor.browser', name: 'x' }, pt), pt('flow.l1.actor.browser'));
 });

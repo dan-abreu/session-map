@@ -1,7 +1,7 @@
 // Pure view logic for the page: no DOM, no fetch, so node:test can load it.
 import { summaryOf } from './alerts.js';
 import { modelName } from './live.js';
-import { inRange } from './range.js';
+import { inRange, isoDay } from './range.js';
 import { clashKey } from './signals.js';
 import { needsYou } from './now.js';
 
@@ -70,6 +70,38 @@ export function costRows(state, range) {
   return state.projects
     .flatMap((project) => project.chats.filter((c) => inRange(Date.parse(c.updatedAt), range)).map((chat) => ({ project, chat })))
     .sort((a, b) => b.chat.costUSD - a.chat.costUSD);
+}
+
+// The savings report of the Costs tab (sb05), from what the server already worked out. byModel: what each model cost in the
+// period; tips: the suggestions of the conversations active in it, larger first; totalSavingUSD counts each conversation
+// once (its larger tip, since the two suggestions overlap); tasks: the lines of work with a conversation in the period.
+export function savingsReport(state, range) {
+  const modelUSD = new Map();
+  const tips = [];
+  const tasks = [];
+  let total = 0;
+  for (const project of state.projects) {
+    const lo = range ? isoDay(range.from) : '', hi = range ? isoDay(range.to) : '';
+    for (const [day, models] of Object.entries(project.costByModel ?? {})) {
+      if (range && (day < lo || day > hi)) continue;
+      for (const [model, usd] of Object.entries(models)) modelUSD.set(model, (modelUSD.get(model) ?? 0) + usd);
+    }
+    const active = new Set(project.chats.filter((c) => inRange(Date.parse(c.updatedAt), range)).map((c) => c.sessionId));
+    for (const chat of project.chats) {
+      if (!active.has(chat.sessionId) || !chat.advice?.tips?.length) continue;
+      for (const tip of chat.advice.tips) tips.push({ project, chat, tip });
+      total += Math.max(...chat.advice.tips.map((x) => x.savingUSD));
+    }
+    for (const workCell of project.workCells ?? []) {
+      if (workCell.costUSD > 0 && (workCell.chatIds ?? []).some((id) => active.has(id))) tasks.push({ project, workCell, costUSD: workCell.costUSD });
+    }
+  }
+  return {
+    byModel: [...modelUSD].map(([model, usd]) => ({ model, usd })).sort((a, b) => b.usd - a.usd),
+    tips: tips.sort((a, b) => b.tip.savingUSD - a.tip.savingUSD),
+    totalSavingUSD: total,
+    tasks: tasks.sort((a, b) => b.costUSD - a.costUSD),
+  };
 }
 
 export function estimateTone(costUSD, estimateUSD) {
