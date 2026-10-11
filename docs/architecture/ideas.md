@@ -144,7 +144,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: level 1 shows the actors and outside services with a label on every arrow; a double click opens a part's inner flow; the Journeys tab shows 3 to 6 numbered journeys, each step tied to a part.
   - Asked: 2026-10-10 — "preciso que comece a trabalhar dentro da aba fluxo para deixar o fluxo como pedi"
   - Where it went: `fl07`, `fl08`, `fl09`, `fl10`.
-  - Status: in progress (`fl08`, `fl09` and `fl10` built and checked on screen, not yet saved; `fl07` done without the AI, the AI wording is left).
+  - Status: in progress (`fl08`, `fl09` and `fl10` released in v0.3.0; `fl07` done without the AI, the AI wording is left).
 - [ ] Golden rule: map, Flow and architecture move together `id49`
   - Asked: 2026-10-09 13:43 — "outra coisa o que for adicionado no mapa vira fluxo se for função e se for adicionado no fluxo vira arquitetura automaticamente. também pedidos, `quero isso assim assassado` se é fluxo vira fluxo, mas vira também arquitetura, nada de criar coisas sem criar arquitetura e fluxo"
   - What it means: a new feature or part in the map gives a box and arrows in the Flow; a new box in the Flow gives a part in the architecture; a request in any chat does both; a small task is only an item; new code outside the map is flagged or added.
