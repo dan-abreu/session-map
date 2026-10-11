@@ -319,3 +319,81 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: on GitHub, the tag v0.3.0 and its release exist and the tests of that push are green.
   - Where it went: `op07`.
   - Status: done (released in v0.3.0).
+- [x] A general project chat, an orchestration chat and activity chats, and doing the work through session-map `id27`
+  - Asked: 2026-10-09 12:53 — "é bom já usar o nosso programa pra ir fazendo as coisas o que acha? assim fica facil eu acompanhar e gastar menos token"; 2026-10-09 12:57 — "vamos trabalhar por la ou continuar aqui?"; 2026-10-09 12:58 — "podemos sim só me avisa quando for por la"; 2026-10-09 12:59 — "era bom o chat geral para ir colocando a conversa do projeto como estamos fazendo e abrir chat especificos, tipo um chat de orquestração e um chat de atividades"
+  - What it means: one orchestration chat per project, pinned on top, where the owner says what he wants; it opens focused activity chats on items (after a confirmation), hears back from each and keeps itself short; the owner follows everything from session-map instead of one long chat.
+  - How to confirm it is done: the project's list shows the orchestration chat pinned; asking it for two items starts two activity chats on those items after one confirmation; when they finish, each posts its result in the orchestration thread and ticks its item.
+  - Where it went: `or01`, `or02`, `or03`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] A look-only link to show someone else `id30`
+  - Asked: 2026-10-09 10:53 — [can I send it to a family member to see how it is going? is there a link]
+  - What it means: a second key that shows the live map with no chat and no buttons, safe to give to another person.
+  - How to confirm it is done: opening the look-only link shows the map and Live, while every write and chat button is absent and a write request with that key is refused.
+  - Where it went: `sv04`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Understood at a glance, like for a child, in the whole program `id51`
+  - Asked: 2026-10-09 12:56 — "mas tem que ser visivelmente facil de entender o programa como se fosse pra crianca, auto explicativo, bateu o olho entendeu"; 2026-10-09 12:57 — "falo sobre todo o programa e nao apenas isso"
+  - What it means: plain words in every screen, message, skill reply, terminal view and README, with icon plus text, a "?" per area, empty screens that say what to do, a five-step welcome tour and a "technical details" mode.
+  - How to confirm it is done: a reviewer with a lay persona looks at screenshots of every screen and answers "I understand it in 5 seconds" for each; no raw error code reaches the screen.
+  - Where it went: `mm11`, `pt03`, `pt05`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Relations you can zoom, select and read `id52`
+  - Asked: 2026-10-09 13:31 — "a questão das relações, o zoom ficou pouco, não da para selecionar exatamente a linha que voce quer verificar e ficou pobre as informações"
+  - What it means: a wider zoom with buttons and pinch; a wide click area on every line; a sorted Relations list; a panel with both parts, strength, every reason with evidence, since when, and actions.
+  - How to confirm it is done: a line can be clicked anywhere within about 16 px; the panel lists each reason with a link to its evidence; "ignore" hides it for that project only.
+  - Where it went: `mm05`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Every sign says why it happens and what to do `id53`
+  - Asked: 2026-10-09 13:32 — "e nao tem o porque vai da conflito, não tem o porque as informações aparecerem mas elas não tem um porque aquilo ta acontecendo e o que deve ser feito para resolver"
+  - What it means: every sign anywhere has three parts (what it is, why it is happening, what to do now) and a button that does it; a branch clash names the branches, owners, shared files and the advice.
+  - How to confirm it is done: a test fails if any kind of sign has one of the three fields empty; the clash panel shows the shared files and a "Resolve with the AI" button.
+  - Where it went: `wa06`, `wa07`, `wa08`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] A date range like a bank statement `id54`
+  - Asked: 2026-10-09 13:36 — "também a data só tem, tudo, hoje, 7, 30, é bom colocar além delas a data que eu escolher por calendario inicio e fim"; 2026-10-09 13:37 — "escolher data igual de banco para pedir extrato"; 2026-10-09 13:37 — "sim concordo"
+  - What it means: Today, 7, 15, 30, 60, 90 days, This month, Last month and Custom with From and To and a two-month calendar, remembered per project, applied to What changed, History, Costs and Activity.
+  - How to confirm it is done: pick 3 to 9 of a month: the button reads that range, and What changed, History and Costs show only that period; the range is still there after a reload.
+  - Where it went: `mm06`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Information separated by kind, and a polished, beautiful program `id55`
+  - Asked: 2026-10-09 13:39 — "acabamento também colocar mas um pouco separada as conversas iterns e etc para entender o que realmente de onde sao aqueles dados, aparece tudo junto, com uma linha separando, é complexo de mais, certo que pessoas do mundo de code entender na hora que ver mas pessoas que nunca mexeram é muita informação e visulamente não ter algo mais organizado fazendo a pessoa entender que aquilo é aquilo mesmo"; 2026-10-09 13:40 — "em tudo, algo mais poligo e bonito visualmente"
+  - What it means: panels split into blocks by kind (tasks, chats, lines of work, what changed, files), each with its color, icon and where its data comes from; one visual system for the whole program written in `DESIGN.md`; screenshots approved by the owner before publishing.
+  - How to confirm it is done: a part's panel shows separate blocks with their own title and "comes from"; `DESIGN.md` exists with tokens and components; the owner approved the screenshots of the release.
+  - Where it went: `mm07`, `mm08`, `mm33`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] The AIs must not stop in the middle of the work `id78`
+  - Asked: 2026-10-10 — "é impressão minha ou parece que as IA param de trabalhar?"; 2026-10-10 12:23 — "está trabalhando ou está parado?"; 2026-10-10 12:24 — "qual o problema porque fica parando?"; 2026-10-10 — "os agentes ficam parando, porque isso acontece?"
+  - What it means: a chat opened from the page keeps running while its team of helpers is still working, instead of being closed 30 minutes after its last reply.
+  - How to confirm it is done: start a long background team from a page chat, leave it quiet for more than 30 minutes: the team is still working and the chat reports when it finishes.
+  - Where it went: `pc12`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] A page chat reopens whole and quickly `id79`
+  - Asked: 2026-10-10 — "e as conversas nao estão ficando salvas? essa conversa aqui apagou o dialogo todo agora"; 2026-10-10 — "eu não entendi bem, mas isso vai fazer os chats que vou abrindo ficarem salvos?"; 2026-10-10 — "parece que ta demorando carregar o chat"; 2026-10-10 — "sim, pode fazer"
+  - What it means: the conversations were always saved on disk; the page showed a chat it reopened empty or cut and took a while to draw it. Reopening a chat shows the whole dialogue at once.
+  - How to confirm it is done: in a page chat with several long replies, reload the page: the whole dialogue shows at once, from the first message.
+  - Where it went: `pc13`, `pc14`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Deleting and archiving a chat answer at once `id83`
+  - Asked: 2026-10-10 — "Tem um problema na hora de apagar os chats e arquivar também, clica, clica e nao responde, ou está demorando responder"
+  - What it means: the Delete and Archive buttons waited for session-map to read every project again before answering (up to half a minute with many chats running); now they answer on the newest reading already done.
+  - How to confirm it is done: with many conversations open, archive or delete a chat: the message "archived" / "deleted" shows in about a second.
+  - Where it went: `sv08`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Move the Flow drawing with the hand, like the map `id85`
+  - Asked: 2026-10-10 — "como vai editar se você nao colocou a maozinha como tem no mapa para movimentar o quadro no fluxo?"
+  - What it means: in the Flow, the cursor becomes a hand over the drawing and dragging it moves the picture around, as on the mind map; the mouse wheel zooms; clicking and double-clicking a box keep working.
+  - How to confirm it is done: on the Flow tab, hold the mouse on an empty spot and drag: the whole drawing follows; the wheel zooms around the pointer; a click on a box still opens it.
+  - Where it went: `fl15`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Review the design warnings of the page (side borders and pulsing dot) `id87`
+  - Asked: 2026-10-10 — "sim" (to: "Quer que eu revise os quatro depois que o Fluxo terminar?")
+  - What it means: after the Flow work, look at the four warnings the design checker raised in the page shell and fix the real ones.
+  - How to confirm it is done: the design checker no longer reports them, or each one left is explained.
+  - Where it went: `mm45`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] Finish and polish everything that is open `id88`
+  - Asked: 2026-10-10 — "tem muita coisa em aberto, agora da pra focar para finalizar tudo, acho que já deixamos o programa como deve ser agora tem que só polir ele terminar todas as atividades em aberto"
+  - What it means: no new big features; close the open activities of every part, first the ones already in progress, then the small ones, and move to "later" what the owner decides not to do now.
+  - How to confirm it is done: the map shows few or no open items, each one left is either "with the owner" or marked as later by his choice.
+  - Where it went: `op06`.
+  - Status: done (released in v0.3.0; every activity it became is done and tested).

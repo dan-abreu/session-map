@@ -243,6 +243,7 @@ test('shots-date: a manifest from yesterday fails only in --publish; no manifest
   assert.deepEqual(ids(await publish(root)), ['shots-date']);
 
   const none = copyRepo();
+  rmSync(join(none, 'docs', 'images', 'shots.json'), { force: true });
   const res = await check(none);
   assert.deepEqual(res.failures, []);
   assert.ok(res.notes.some((n) => /shots\.json/.test(n)));
