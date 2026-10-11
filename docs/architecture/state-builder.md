@@ -14,6 +14,7 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/ai/`
 - `server/brain/`
 - `server/cost.mjs`
+- `server/statement.mjs`
 - `server/placements.mjs`
 - `server/footprint.mjs`
 - `server/changes-state.mjs`
@@ -41,6 +42,10 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - [x] **Claude:** Estimate cost from the tokens in local history `sb04`
 - [x] **Savings report in the Costs tab** `sb05`
   - Cost per task and per model, with suggestions: a long chat should become a new one opened from the map; a task that would fit a smaller model.
+- [x] **Spend statement, reply by reply** `sb08`
+  - From `id98`. `node server/statement.mjs [--days 30]` writes, in Documents/Extrato-Claude, one line per Claude reply (day, hour, project, chat, who answered: the chat or which agent, model, input / cache / output tokens and dollars, what it read just before, what it did), the sums by day, hour, project, model and chat, the account counter Claude Code caches (plan, weekly limit, extra usage spent and why it stopped) and the limit notices from the chats. Prices checked against the official table on 2026-10-11 (Sonnet 5.5 cache reads are $0.10; Haiku 5.5 pays more over 100K tokens).
+- [ ] **important:** The statement in the Costs tab: the same lines on the page, filtered by day, chat and agent, with a download `sb09`
+  - From `id98`.
 
 ### Later (ideas, not committed)
 

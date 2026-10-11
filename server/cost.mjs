@@ -27,11 +27,14 @@ export function costOf(rows, prices) {
   let usd = 0;
   const unpriced = new Set();
   for (const row of rows) {
-    const price = priceFor(row.model ?? '', prices);
+    let price = priceFor(row.model ?? '', prices);
     if (!price) {
       unpriced.add(row.model ?? 'unknown');
       continue;
     }
+    // Claude Haiku 5.5 bills a prompt over 100,000 tokens (cache reads and writes included) at its higher prices.
+    const prompt = (row.input ?? 0) + (row.cacheWrite5m ?? 0) + (row.cacheWrite1h ?? 0) + (row.cacheRead ?? 0);
+    if (price.over100k && prompt > 100_000) price = { ...price, ...price.over100k };
     for (const field of FIELDS) usd += ((row[field] ?? 0) * (price[field] ?? 0)) / PER_MILLION;
   }
   return { usd, unpriced: [...unpriced] };
