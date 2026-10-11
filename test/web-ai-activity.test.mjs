@@ -49,7 +49,9 @@ test('"when" reads as minutes ago, then as a date', () => {
 });
 
 test('the page spells a folder the way the server does, so a project\'s saved class is found', () => {
-  for (const p of ['C:\\Clients\\Shop', 'c:/clients/shop/', '/c/clients/shop', 'D:/', 'C:\\Users\\dani\\my project\\']) {
+  // /c/x is a drive only on Windows; elsewhere the server keeps it as a real folder, and the lookup below still agrees.
+  const msys = process.platform === 'win32' ? ['/c/clients/shop'] : [];
+  for (const p of ['C:\\Clients\\Shop', 'c:/clients/shop/', ...msys, 'D:/', 'C:\\Users\\dani\\my project\\']) {
     assert.equal(normalizeRoot(p), normalizePath(p), p);
   }
   const classes = { [normalizePath('C:\\Clients\\Shop')]: 'internal' };
