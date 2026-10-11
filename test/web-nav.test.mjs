@@ -12,45 +12,57 @@ test('the table has twelve areas, each id once, each with a non-empty icon', () 
     assert.ok(['global', 'project'].includes(a.scope), a.id);
     assert.equal(typeof a.icon, 'string', a.id);
     assert.ok(a.icon.length > 0, a.id);
-    assert.equal(typeof a.simple, 'boolean', a.id);
+    assert.equal(typeof a.bar, 'boolean', a.id);
   }
   assert.deepEqual(Object.keys(iconsOf()).sort(), [...ids].sort());
   for (const id of ids) assert.ok(iconsOf()[id].length > 0, id);
 });
 
-test('Simple mode shows Home, then Route, Map, Conversations and Ideas; the other seven sit under More', () => {
+// Around the map (mm47): one row, Home · Map · Conversations · More; Full puts every area on the bar of a computer.
+const MORE = ['flow', 'requests', 'changes', 'health', 'costs', 'library', 'discover'];
+
+test('Simple: the bar shows Home, then Map and Conversations; the other areas sit under More', () => {
   const t = tabsFor({ tech: false });
   assert.deepEqual(t.global, ['home']);
-  assert.deepEqual(t.project, ['route', 'map', 'convs', 'ideas']);
-  assert.equal(t.more.length, 7);
-  assert.deepEqual([...t.more].sort(), ['changes', 'costs', 'discover', 'flow', 'health', 'library', 'requests']);
+  assert.deepEqual(t.project, ['map', 'convs']);
+  assert.deepEqual(t.more, MORE, 'in table order');
   assert.deepEqual(t.bottom, []);
 });
 
-test('Full mode puts nine project areas and two more global ones on the bar, and More is empty', () => {
+test('Full: every area with a page is on the bar, in table order, and nothing waits under More', () => {
   const t = tabsFor({ tech: true });
   assert.deepEqual(t.global, ['home', 'library', 'discover']);
-  assert.equal(t.project.length, 9);
-  assert.deepEqual(t.project, ['route', 'map', 'flow', 'requests', 'convs', 'changes', 'health', 'ideas', 'costs']);
+  assert.deepEqual(t.project, ['map', 'flow', 'requests', 'convs', 'changes', 'health', 'costs']);
   assert.deepEqual(t.more, []);
 });
 
-test('on desktop, global + project + more is every area once, in both modes', () => {
-  for (const tech of [false, true]) {
-    const t = tabsFor({ tech });
-    const all = [...t.global, ...t.project, ...t.more];
-    assert.equal(all.length, 12);
-    assert.deepEqual([...all].sort(), [...ids].sort());
+test('Route and Ideas stay out of the bar and of More until they have a page', () => {
+  for (const phone of [false, true]) {
+    const shown = (t) => [...t.global, ...t.project, ...t.more, ...t.bottom];
+    assert.ok(!shown(tabsFor({ phone })).includes('route'), `phone ${phone}: no Route`);
+    assert.ok(!shown(tabsFor({ phone })).includes('ideas'), `phone ${phone}: no Ideas`);
+    assert.ok(!shown(tabsFor({ phone, ready: { route: false, ideas: false } })).includes('route'));
+    const ready = tabsFor({ phone, ready: { route: true, ideas: true } });
+    assert.ok(ready.more.includes('route') && ready.more.includes('ideas'), 'once they have a page they wait in More');
   }
 });
 
-test('on a phone the bottom bar has five places and More covers every other area, in both modes', () => {
+test('on desktop, global + project + more is every area once but the two waiting for a page', () => {
+  for (const tech of [false, true]) {
+    const t = tabsFor({ tech });
+    const all = [...t.global, ...t.project, ...t.more];
+    assert.equal(all.length, 10);
+    assert.deepEqual([...all].sort(), ids.filter((id) => !['route', 'ideas'].includes(id)).sort());
+  }
+});
+
+test('on a phone the bottom bar has Home, Map, Conversations and More, and More covers every other area', () => {
   for (const tech of [false, true]) {
     const t = tabsFor({ tech, phone: true });
-    assert.deepEqual(t.bottom, ['home', 'route', 'map', 'convs', 'more']);
-    assert.deepEqual([...t.more].sort(), ids.filter((id) => !['home', 'route', 'map', 'convs'].includes(id)).sort());
+    assert.deepEqual(t.bottom, ['home', 'map', 'convs', 'more']);
+    assert.deepEqual(t.more, MORE);
     const reachable = new Set([...t.bottom.filter((x) => x !== 'more'), ...t.more]);
-    assert.deepEqual([...reachable].sort(), [...ids].sort());
+    assert.deepEqual([...reachable].sort(), ids.filter((id) => !['route', 'ideas'].includes(id)).sort());
   }
 });
 

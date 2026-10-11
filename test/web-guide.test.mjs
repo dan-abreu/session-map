@@ -49,8 +49,8 @@ test('the welcome tour has five steps (home, now, convs, map, help), each on a r
       const id = sel.match(/^#([\w-]+)$/)?.[1];
       assert.ok(id, `${sel} is an id`);
       const tab = id.match(/^tab-(\w+)$/)?.[1];
-      // A tab target must be an area of the table; the new bar reaches the page with B6-T8 (checked in web-shell).
-      if (tab) assert.ok(areaIds.has(tab), `${sel} is an area`);
+      // A tab target must be an area of the table, or the ⋯ (More) button that holds the help.
+      if (tab) assert.ok(areaIds.has(tab) || tab === 'more', `${sel} is an area`);
       else if (!['convsBtn', 'outline'].includes(id)) assert.ok(html.includes(`id="${id}"`), `${sel} is on the page`);
     }
     assert.ok(has(`tour.${step.id}.title`) && has(`tour.${step.id}.text`), `tour.${step.id} words`);
@@ -66,9 +66,30 @@ test('the tour starts once by itself, and only when it was never seen or skipped
   assert.equal(tourTarget(TOUR_STEPS[1], true), TOUR_STEPS[1].phoneTarget ?? TOUR_STEPS[1].target);
 });
 
+test('the last step lights the ⋯ of the bar, where the help lives (on a phone the one of the bottom bar), and its words say so', () => {
+  const help = TOUR_STEPS.find((s) => s.id === 'help');
+  assert.equal(tourTarget(help, true), '#tab-more', 'the bottom bar\'s Mais on a phone');
+  assert.equal(tourTarget(help, false), '#tab-more');
+  assert.ok(!html.includes('id="helpBtn"') && !html.includes('id="personBtn"'), 'no "?" and no person button in the bar');
+  assert.ok(help.phoneText && has(help.phoneText), 'its own words on a phone, in both languages');
+  for (const lang of ['en', 'pt-BR']) assert.notEqual(LANGS[lang][help.phoneText], LANGS[lang]['tour.help.text'], lang);
+  const tour = readFileSync(new URL('tour.js', WEB), 'utf8');
+  assert.match(tour, /step\.phoneText/, 'the card reads them on a phone');
+});
+
+test('the conversations step lights the inbox it describes on a computer, and the Conversations tab that opens it on a phone', () => {
+  const convs = TOUR_STEPS.find((s) => s.id === 'convs');
+  assert.equal(tourTarget(convs, false), '#convs', 'on a computer the inbox is the column on the left, not the tab of Board and History');
+  assert.ok(html.includes('id="convs"'));
+  assert.equal(tourTarget(convs, true), '#tab-convs', 'on a phone the bottom bar\'s Conversations opens the inbox');
+  // There is no pointer on a phone: its words say to tap, not to point at a row.
+  assert.ok(convs.phoneText && has(convs.phoneText), 'its own words on a phone, in both languages');
+  for (const lang of ['en', 'pt-BR']) assert.notEqual(LANGS[lang][convs.phoneText], LANGS[lang]['tour.convs.text'], lang);
+});
+
 test('every area of the page has a "?" with one sentence in both languages', () => {
   const fresh = ['home', 'route', 'health', 'ideas', 'library']; // their views arrive with B6-T8 and part B, which add data-help
-  const required = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', ...fresh];
+  const required = ['convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', ...fresh];
   assert.deepEqual([...HELP_AREAS].sort(), [...required].sort());
   for (const area of required) {
     assert.ok(has(`help.${area}`), `help.${area} words`);
@@ -77,8 +98,13 @@ test('every area of the page has a "?" with one sentence in both languages', () 
   }
 });
 
-test('the help menu holds the tour, the technical details switch and a glossary of plain and technical words', () => {
-  for (const id of ['helpBtn', 'helpMenu', 'techToggle', 'tourReplay']) assert.ok(html.includes(`id="${id}"`), id);
+test('the help lives in the ⋯: the tour and the Full switch are its entries, the panel holds a glossary of plain and technical words', () => {
+  assert.ok(html.includes('id="helpMenu"') && html.includes('id="helpGlossary"'));
+  const app = readFileSync(new URL('app.js', WEB), 'utf8');
+  const entries = app.slice(app.indexOf('function moreEntries('), app.indexOf('function wire()'));
+  assert.deepEqual([...entries.matchAll(/id: '(\w+)'/g)].map((m) => m[1]), ['tour', 'ai', 'full', 'help', 'settings']);
+  assert.ok(entries.includes('onActivate: () => tour.start()'));
+  assert.ok(entries.includes("kind: 'switch', checked: tech"));
   // Each glossary word is a plain text whose technical original sits in TECH: the menu shows both side by side.
   assert.ok(GLOSSARY.length >= 8);
   for (const key of GLOSSARY) {
@@ -96,7 +122,7 @@ test('the glossary knows the new words side by side, and the help menu names the
   }
   assert.equal(LANGS['pt-BR']['gloss.uptodate'], 'Tudo em dia?');
   assert.equal(LANGS['pt-BR']['gloss.health'], 'Nota de saúde');
-  assert.match(readFileSync(new URL('help.js', WEB), 'utf8'), /mode\.full/);
+  assert.ok(readFileSync(new URL('app.js', WEB), 'utf8').includes("t('more.full')"), 'the ⋯ names the switch "full mode"');
 });
 
 test('item codes (ca01) are technical: shown only with the technical words on', () => {

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { archTree, ancestorsOf } from '../server/web/tree.js';
-import { workingIn, liveWork, livePaths, captionsAt, modelName } from '../server/web/live.js';
+import { workingIn, liveWork, livePaths, captionsAt, modelName, createLivePanel } from '../server/web/live.js';
+import { translator } from '../server/web/i18n.js';
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -80,6 +81,36 @@ test('workingIn: a workflow agent silent for more than 30 minutes is left behind
   const [e] = workingIn(p, archTree(p), Date.parse(NOW));
   assert.deepEqual(e.workflows.map((w) => w.id), ['fresh']);
   assert.deepEqual(e.workflows[0].running.map((a) => a.label), ['Now']);
+});
+
+test('the map header\'s "N working" is the open project\'s, like the inbox\'s Working group; work elsewhere goes into its words', () => {
+  const state = shop([chat('a', { partId: 'orders' }), chat('b', { updatedAt: ago(2) })], { notes: [chat('n', { title: 'Sync', updatedAt: ago(1) })] });
+  const el = () => {
+    const classes = new Set();
+    return { textContent: '', title: '', attrs: {}, classes, classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) }, setAttribute(k, v) { this.attrs[k] = v; } };
+  };
+  let open = state.projects[0];
+  const label = el();
+  const count = el();
+  const button = Object.assign(el(), { querySelector: (s) => (s === '[data-live="label"]' ? label : count) });
+  const root = { hidden: true, querySelector: () => el() };
+  const panel = createLivePanel({ root, button, h: () => ({}), icon: () => null, t: () => translator('en'), relative: (x) => x, state: () => state, project: () => open });
+  panel.render();
+  assert.equal(count.textContent, '2', 'two at work in acme-shop; the one in notes-app is not counted beside acme-shop\'s name');
+  assert.equal(label.textContent, 'working');
+  assert.match(button.attrs['aria-label'], /2 conversations working now in this project/);
+  assert.match(button.attrs['aria-label'], /1 more working in another project/);
+  assert.match(button.title, /1 more working in another project/);
+  open = state.projects[1];
+  panel.render();
+  assert.equal(count.textContent, '1');
+  assert.equal(button.classes.has('is-zero'), false);
+  state.projects.push({ ...clone(state.projects[1]), id: 'quiet-one', chats: [], conversations: [] });
+  open = state.projects.at(-1);
+  panel.render();
+  assert.equal(count.textContent, '0');
+  assert.equal(button.classes.has('is-zero'), true, 'quiet when nothing works here, though three work elsewhere');
+  assert.match(button.title, /3 more working in other projects/);
 });
 
 test('liveWork: every project, the open one first, with the total', () => {

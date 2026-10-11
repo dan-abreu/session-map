@@ -1,9 +1,9 @@
-// The "Now" strip (mm09) and the project picker's badges (mm10): every job on the PC, whatever project the page has open.
-// The pure part on top is what node:test loads; createNowStrip touches the DOM only when called.
+// Every job on the PC, whatever project the page has open (mm09): the project picker's badges (mm10), the tab title and
+// the one count of what needs the person (needsYou, mm47). The Now strip that showed them left the page with mm47; the
+// inbox shows its groups. Pure, so node:test loads it.
 import { archTree } from './tree.js';
-import { nodeOfConversation, placeOf, projectHue, originIcon, workWords, orchestratorOf, activityOf } from './convlist.js';
-import { modelName, runningWorkflows, stepWords } from './live.js';
-import { kindMark } from './blocks.js';
+import { nodeOfConversation, placeOf, projectHue, workWords, orchestratorOf, activityOf } from './convlist.js';
+import { runningWorkflows } from './live.js';
 
 const DAY_MS = 86_400_000;
 const KIND_ORDER = { waiting: 0, working: 1, finished: 2 };
@@ -18,6 +18,19 @@ function kindOf(chat, unseen, nowMs) {
   if (fresh && (chat.status === 'busy' ? chat.waiting.strong : asksFor(chat.waiting))) return 'waiting';
   if (chat.status === 'busy') return 'working';
   return unseen.has(chat.sessionId) ? 'finished' : null;
+}
+
+const NO_UNSEEN = new Set();
+
+// What needs the person (mm47): every conversation of every project waiting for them now, by the rule of kindOf. The one
+// count of the page: the amber pill, the head of the waiting list it opens and the inbox's "Needs you" all read it.
+// Each entry: {project, chat}.
+export function needsYou(state, { nowMs = Date.parse(state.generatedAt) } = {}) {
+  const out = [];
+  for (const project of state.projects) {
+    for (const chat of project.chats) if (kindOf(chat, NO_UNSEEN, nowMs) === 'waiting') out.push({ project, chat });
+  }
+  return out;
 }
 
 // The activity chats each project's orchestrator has working now (or03): {working, projects [{id, name, hue, working}]}.
@@ -104,132 +117,4 @@ export function orchestraLine(t, orchestra) {
   if (!orchestra?.working) return null;
   const where = orchestra.projects.map((p) => `${p.name}: ${p.working}`).join(', ');
   return { text: t('now.orchestra', { n: orchestra.working }), title: t('now.orchestraTitle', { where }) };
-}
-
-// ---- the strip ----------------------------------------------------------------------------------
-
-const TEXT_MAX = 110;
-const waitingWords = (w) => (w.strong ? 'waiting.question' : w.items.length ? 'waiting.item' : 'waiting.ends');
-
-function shorten(text, max) {
-  const flat = String(text ?? '').replace(/\s+/g, ' ').trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…`;
-}
-
-// ctx: root (the strip), line (its one-line button), counts, cards (the list), h, t (translator getter), icon(name, cls),
-// relative(iso), list(names) (joined in the page's language), phone (media query), store {get, set}, onOpen(card). It is handed the jobs and never asks which project
-// the page has open, so switching project, tab or scrolling leaves it as it is (mm09).
-export function createNowStrip(ctx) {
-  const { root, line, h, icon, store } = ctx;
-  let folded = store.get('sm.now.folded') === '1';
-  let jobs = { cards: [], counts: { working: 0, waiting: 0, finished: 0 } };
-
-  function where(card) {
-    const tt = ctx.t();
-    const tail = card.place.special ? tt(`convs.place.${card.place.special}`) : card.place.path.slice(-2).join(' › ');
-    return [h('span', { class: 'cv-proj' }, h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, card.project.name)), tail ? h('span', { class: 'now-path' }, tail) : null];
-  }
-
-  function detail(card) {
-    const tt = ctx.t();
-    if (card.kind === 'waiting') return tt(waitingWords(card.chat.waiting));
-    if (card.kind === 'finished') return shorten(card.chat.lastAssistantText, TEXT_MAX) || tt('now.kind.finished');
-    return stepWords(tt, card.lastStep) || tt('chat.busy');
-  }
-
-  function cardView(card) {
-    const tt = ctx.t();
-    const title = card.chat.title || tt('chat.untitled');
-    const when = card.since ? (card.kind === 'working' ? tt('now.started', { when: ctx.relative(card.since) }) : ctx.relative(card.since)) : '';
-    const meta = [
-      card.origin ? h('span', { class: `cv-origin-badge o-${card.origin}`, title: tt('convs.origin.title', { origin: tt(`convs.origin.${card.origin}`) }) }, icon(originIcon(card.origin), 'cv-origin'), tt(`convs.origin.${card.origin}`)) : null,
-      card.model ? h('span', { class: 'now-model', title: tt('now.modelTitle') }, modelName(card.model)) : null,
-      card.helpers ? h('span', { class: 'now-helpers num', title: tt('now.helpersTitle', card.helpers) }, icon('auto', 'now-helpers-icon'), tt('now.helpers', card.helpers)) : null,
-    ].filter(Boolean);
-    const open = () => {
-      if (ctx.phone.matches) setOpen(false);
-      ctx.onOpen(card);
-    };
-    return h('li', { class: `now-card k-${card.kind}`, style: `--p-h:${card.hue}`, 'data-session': card.chat.sessionId },
-      h('button', { type: 'button', class: 'now-card-btn', 'aria-label': `${tt(`now.kind.${card.kind}`)}: ${tt('now.open', { title, project: card.project.name })}`, onclick: open },
-        h('span', { class: 'now-top' },
-          h('span', { class: 'now-kind' }, card.kind === 'finished' ? icon('check', 'now-kind-check') : h('span', { class: 'now-dot', 'aria-hidden': 'true' }), tt(`now.kind.${card.kind}`)),
-          when ? h('span', { class: 'now-when num' }, when) : null),
-        h('span', { class: 'now-card-title' }, kindMark({ h, icon, t: tt }, 'chats'), h('span', { class: 'now-card-name' }, title)),
-        h('span', { class: 'now-where' }, where(card)),
-        card.work ? h('span', { class: 'now-work', title: tt('convs.workTitle') }, icon('connect', 'now-work-icon'), h('span', { class: 'now-work-text' }, tt('convs.work', { born: card.work.born, where: ctx.list(card.work.working) }))) : null,
-        h('span', { class: 'now-detail' }, detail(card)),
-        meta.length ? h('span', { class: 'now-meta' }, meta) : null));
-  }
-
-  function countsView() {
-    const tt = ctx.t();
-    const c = jobs.counts;
-    const kinds = ['working', 'waiting', 'finished'].filter((k) => c[k] > 0);
-    if (!kinds.length) return [h('span', { class: 'now-count is-none' }, tt('now.nothing'))];
-    const orch = orchestraLine(tt, jobs.orchestra);
-    return [...kinds.map((k) => h('span', { class: `now-count k-${k}` },
-      k === 'finished' ? icon('check', 'now-count-check') : h('span', { class: 'now-dot', 'aria-hidden': 'true' }),
-      tt(`now.${k}`, { n: c[k] }))),
-    orch ? h('span', { class: 'now-count k-orchestra', title: orch.title }, icon('auto', 'now-count-orch'), orch.text) : null].filter(Boolean);
-  }
-
-  const isOpen = () => root.classList.contains('is-open');
-  function setOpen(on) {
-    root.classList.toggle('is-open', on);
-  }
-
-  // A phone shows one line that opens the list over the page; a desktop shows the cards, folded to the line on request.
-  function syncFold() {
-    const phone = ctx.phone.matches;
-    if (!phone) setOpen(false);
-    root.classList.toggle('is-folded', !phone && folded);
-    const shut = phone ? !isOpen() : folded;
-    line.setAttribute('aria-expanded', String(jobs.cards.length > 0 && !shut));
-    line.title = jobs.cards.length ? ctx.t()(shut ? 'now.unfold' : 'now.fold') : '';
-  }
-
-  function render(next) {
-    if (next) jobs = next;
-    const tt = ctx.t();
-    root.classList.toggle('is-empty', jobs.cards.length === 0);
-    ctx.counts.replaceChildren(...countsView());
-    ctx.cards.setAttribute('aria-label', nowLine(tt, jobs.counts).join(' · '));
-    const focused = ctx.cards.contains(document.activeElement) ? document.activeElement.closest('[data-session]')?.dataset.session : null;
-    const left = ctx.cards.scrollLeft;
-    ctx.cards.replaceChildren(...jobs.cards.map(cardView));
-    ctx.cards.scrollLeft = left;
-    if (focused) ctx.cards.querySelector(`[data-session="${CSS.escape(focused)}"] button`)?.focus({ preventScroll: true });
-    syncFold();
-  }
-
-  line.addEventListener('click', () => {
-    if (!jobs.cards.length) return;
-    if (ctx.phone.matches) setOpen(!isOpen());
-    else {
-      folded = !folded;
-      store.set('sm.now.folded', folded ? '1' : '0');
-    }
-    syncFold();
-  });
-  ctx.phone.addEventListener('change', syncFold);
-  // The alert cards sit below the strip, whatever its height.
-  new ResizeObserver(() => document.documentElement.style.setProperty('--now-h', `${root.offsetHeight}px`)).observe(root);
-  document.addEventListener('pointerdown', (e) => {
-    if (isOpen() && !root.contains(e.target)) {
-      setOpen(false);
-      syncFold();
-    }
-  });
-
-  return {
-    render,
-    isOpen,
-    close() {
-      if (!isOpen()) return;
-      setOpen(false);
-      syncFold();
-      line.focus({ preventScroll: true });
-    },
-  };
 }

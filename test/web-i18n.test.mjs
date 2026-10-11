@@ -54,6 +54,7 @@ test('keys built at runtime exist: server errors, permission states, columns, ra
     ...['clash', 'decision', 'question'].map((k) => `waiting.${k}`),
     ...['not-flowchart', 'empty-flowchart', 'fence-in-drawing', 'arch-not-here', 'view-not-importable'].map((c) => `flow.err.${c}`),
     ...['working', 'waiting', 'recent'].map((g) => `convs.group.${g}`),
+    ...['needs', 'cutoff', 'archived'].map((g) => `convs.group.${g}`), 'convs.need.question', 'convs.need.asks',
     ...['idea', 'create-arch', 'flow', 'off', 'project', 'orchestrator'].map((k) => `convs.place.${k}`),
     ...['inbox', 'tidy', 'orchestrator', 'opening'].map((k) => `run.auto.${k}`),
     ...['bad-text', 'bad-tidy'].map((c) => `err.${c}`),

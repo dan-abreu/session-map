@@ -2,10 +2,12 @@
 // help menu. Each step lights one place of the page and says in one or two sentences what it is for.
 export const TOUR_STEPS = [
   { id: 'home', target: '#tab-home' },
-  { id: 'now', target: '#now' },
-  { id: 'convs', target: '#tab-convs', phoneTarget: '#convsBtn' },
+  { id: 'now', target: '#waitingBtn' },
+  // On a computer the inbox is the column on the left (the tab opens Board and History); on a phone the tab opens it.
+  { id: 'convs', target: '#convs', phoneTarget: '#tab-convs', phoneText: 'tour.convs.textPhone' },
   { id: 'map', target: '#tab-map', phoneTarget: '#outline' },
-  { id: 'help', target: '#helpBtn' },
+  // Help and the settings live in the ⋯ of the bar, at its end on a computer and at the end of the bottom bar on a phone.
+  { id: 'help', target: '#tab-more', phoneText: 'tour.help.textPhone' },
 ];
 
 export const tourWanted = (seen) => seen == null;
@@ -39,11 +41,13 @@ export function createTour(ctx) {
     if (ctx.phone()) { card.style.cssText = ''; return; }
     const w = card.offsetWidth;
     const hgt = card.offsetHeight;
-    // A big place (the map) keeps the card inside its top corner; a small one gets it just below, or above.
+    // A big place (the map) keeps the card inside its top corner, a tall narrow one (the inbox) has it beside it; a small
+    // one gets it just below, or above.
     const big = seen && r.height > vh * 0.5;
+    const beside = big && r.width < vw * 0.4 && r.right + PAD + GAP + w <= vw - 16;
     let top = !seen ? (vh - hgt) / 2 : big ? r.top + 24 : r.bottom + PAD + GAP;
     if (seen && !big && top + hgt > vh - 16) top = Math.max(16, r.top - PAD - GAP - hgt);
-    const left = !seen ? (vw - w) / 2 : Math.min(Math.max(16, r.left + (big ? 24 : 0)), vw - w - 16);
+    const left = !seen ? (vw - w) / 2 : beside ? r.right + PAD + GAP : Math.min(Math.max(16, r.left + (big ? 24 : 0)), vw - w - 16);
     card.style.cssText = `top:${Math.round(top)}px;left:${Math.round(left)}px`;
   }
 
@@ -60,7 +64,7 @@ export function createTour(ctx) {
         h('p', { class: 'tour-step' }, t('tour.step', { n: index + 1, total: TOUR_STEPS.length })),
         h('span', { class: 'tour-dots', 'aria-hidden': 'true' }, TOUR_STEPS.map((_, i) => h('span', { class: i === index ? 'is-on' : '' })))),
       h('h2', { id: 'tourTitle' }, t(`tour.${step.id}.title`)),
-      h('p', { class: 'tour-text' }, t(`tour.${step.id}.text`)),
+      h('p', { class: 'tour-text' }, t(ctx.phone() && step.phoneText ? step.phoneText : `tour.${step.id}.text`)),
       h('div', { class: 'tour-actions' },
         last ? null : h('button', { type: 'button', class: 'meta-link tour-skip', 'data-tour': 'skip', onclick: () => end('skipped') }, t('tour.skip')),
         back, next));

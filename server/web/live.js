@@ -169,10 +169,16 @@ export function createLivePanel(ctx) {
     if (!s || !p) return;
     const tt = ctx.t();
     const out = liveWork(s, { projectId: p.id });
-    label.textContent = tt('live.button');
-    count.textContent = String(out.total);
-    button.classList.toggle('is-zero', out.total === 0);
-    button.setAttribute('aria-label', tt.count('live.buttonAria', out.total));
+    // The button sits in the open project's line ("acme-shop · 9 de 35 feitos · 2 trabalhando", mm48): its number is that
+    // project's, the same as the inbox's Working group; work in other projects is in its words, and in the list it opens.
+    const here = out.groups.find((g) => g.project.id === p.id)?.entries.length ?? 0;
+    const elsewhere = out.total - here;
+    const others = elsewhere ? tt.count('live.elsewhere', elsewhere) : '';
+    label.textContent = tt('live.working');
+    count.textContent = String(here);
+    button.classList.toggle('is-zero', here === 0);
+    button.setAttribute('aria-label', [tt.count('live.buttonAria', here), others].filter(Boolean).join('; '));
+    button.title = others;
     if (root.hidden) return;
     sub.textContent = out.total ? tt('live.sub') : '';
     // A poll redraws the list every few seconds: keep the scroll and the button the person is on.

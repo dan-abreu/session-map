@@ -1,16 +1,16 @@
-// Help that sits where the question comes up (mm11): a "?" next to the title of every area with one sentence, and the
-// help menu in the top bar with the welcome tour, the "Technical details" switch and a glossary of plain and technical words.
-export const HELP_AREAS = ['now', 'convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', 'home', 'route', 'health', 'ideas', 'library'];
+// Help that sits where the question comes up (mm11): a "?" next to the title of every area with one sentence, and a help
+// panel, opened from the ⋯ of the bar, with the look-only link and a glossary of plain and technical words. The tour, the
+// Full switch and Configurações are entries of that ⋯ menu itself (app.js).
+export const HELP_AREAS = ['convs', 'map', 'waiting', 'live', 'relations', 'chat', 'panel', 'flow', 'board', 'history', 'costs', 'changes', 'discover', 'alerts', 'cut', 'home', 'route', 'health', 'ideas', 'library'];
 
 // Plain words whose technical original sits in TECH: the glossary shows them side by side.
 export const GLOSSARY = ['gloss.branch', 'gloss.commit', 'gloss.merge', 'gloss.push', 'gloss.helpers', 'gloss.team', 'gloss.readme', 'gloss.mermaid', 'gloss.cost', 'gloss.git', 'gloss.mcp', 'gloss.hook', 'gloss.uptodate', 'gloss.health'];
 
-// ctx: h, t() (translator of the moment), plain() and tech() (translators in each mode), tech flag get/set, onTour().
+// ctx: h, t() (translator of the moment), plain() and tech() (translators in each mode), anchor() (the button the panel
+// opens under: the ⋯ of the bar).
 export function createHelp(ctx) {
   const tip = document.getElementById('helpTip');
   const menu = document.getElementById('helpMenu');
-  const btn = document.getElementById('helpBtn');
-  const toggle = document.getElementById('techToggle');
   let tipFor = null;
   let closed = { dot: null, at: 0 }; // a click on the same "?" that just light-dismissed its tip closes it for good
 
@@ -44,13 +44,6 @@ export function createHelp(ctx) {
   function relabel() {
     const t = ctx.t();
     for (const dot of document.querySelectorAll('.help-dot')) { dot.setAttribute('aria-label', t('help.button')); dot.title = t('help.button'); }
-    toggle.checked = ctx.getTech();
-    // The switch is the "Full mode" of the new organisation (mode.* texts); until those texts exist the old words stay.
-    const label = toggle.closest('label');
-    for (const [sel, key] of [['strong', 'mode.full'], ['small', 'mode.hint']]) {
-      const el = label?.querySelector(sel);
-      if (el && t(key) !== key) el.textContent = t(key);
-    }
     const plain = ctx.plain();
     const tech = ctx.tech();
     document.getElementById('helpGlossary').replaceChildren(...GLOSSARY.map((key) => ctx.h('li', {},
@@ -63,18 +56,16 @@ export function createHelp(ctx) {
     closed = { dot: tipFor, at: performance.now() };
   });
   menu.addEventListener('toggle', (e) => {
-    btn.setAttribute('aria-expanded', String(e.newState === 'open'));
     if (e.newState !== 'open') return;
     relabel();
-    const r = btn.getBoundingClientRect();
+    const r = ctx.anchor?.()?.getBoundingClientRect();
+    if (!r) return;
     const vw = document.documentElement.clientWidth;
     menu.style.top = `${Math.round(r.bottom + 8)}px`;
-    menu.style.left = `${Math.round(Math.min(Math.max(16, r.right - menu.offsetWidth), vw - menu.offsetWidth - 16))}px`;
+    menu.style.left = `${Math.round(Math.min(Math.max(16, r.left), vw - menu.offsetWidth - 16))}px`;
   });
-  toggle.addEventListener('change', () => { ctx.setTech(toggle.checked); relabel(); });
-  document.getElementById('tourReplay').addEventListener('click', () => { menu.hidePopover(); ctx.onTour(); });
   new MutationObserver(() => decorate()).observe(document.body, { childList: true, subtree: true });
   decorate();
 
-  return { decorate, relabel };
+  return { decorate, relabel, open: () => { if (!menu.matches(':popover-open')) menu.showPopover(); } };
 }

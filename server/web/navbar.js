@@ -1,7 +1,9 @@
-// The navigation bar (fd10). It draws whatever nav.js says: the global group, the project group, a "More" menu with
-// the areas the mode hides, and on a phone a bottom bar of five. It keeps no list of areas of its own.
-// ctx: h, icon(name, cls)?, root (the element it fills), t (getter of the translator), onPick(area), tech() and
-// phone() getters, current (area id at the start), doc (the document; defaults to the page's).
+// The navigation bar (fd10, mm47). It draws whatever nav.js says: Home, Map and Conversations, a "More" menu with the
+// other areas that have a page, and on a phone a bottom bar of four. It keeps no list of areas of its own.
+// ctx: h, icon(name, cls)?, root (the element it fills), t (getter of the translator), onPick(area), phone()
+// getter, tech() getter (the Full switch), extras() (what the ⋯ holds under the areas, after a rule: help,
+// Configurações. Each {id, label, icon, desc?, kind: 'item' | 'switch', checked?, onActivate()}), current (area id at
+// the start), doc (the document; defaults to the page's).
 // The page calls render() when the language or the width changes; setCurrent / setMode / setReady redraw by themselves.
 import { AREAS, tabsFor } from './nav.js';
 
@@ -10,7 +12,6 @@ const ICONS = Object.fromEntries(AREAS.map((a) => [a.id, a.icon]));
 export function createNavbar(ctx) {
   const { h, root } = ctx;
   const doc = ctx.doc ?? globalThis.document;
-  let tech = Boolean(ctx.tech?.());
   let current = ctx.current ?? 'map';
   let ready = {};
   let open = false;
@@ -29,7 +30,7 @@ export function createNavbar(ctx) {
     const isCurrent = extra.current ?? id === current;
     const el = h('button', {
       type: 'button', id: `tab-${id}`, class: `nav-tab${isCurrent ? ' is-current' : ''}${soon ? ' is-soon' : ''}`,
-      'aria-current': isCurrent ? 'page' : null, title: soon ? tt('nav.soon') : null, tabindex: extra.tabindex ?? -1,
+      'aria-current': isCurrent ? 'page' : null, title: soon ? tt('nav.soon') : id === 'more' ? tt('nav.more') : ctx.tech?.() && !extra.role ? label : null, tabindex: extra.tabindex ?? -1,
       role: extra.role ?? null, 'aria-haspopup': extra.popup ? 'menu' : null, 'aria-expanded': extra.popup ? String(open) : null,
       onclick: extra.onclick, onkeydown: extra.onkeydown,
     }, icon(iconName), h('span', { class: 'nav-label' }, label),
@@ -64,7 +65,29 @@ export function createNavbar(ctx) {
     };
   }
 
-  function menuOf(moreIds) {
+  // One entry of the part under the rule: a plain item (closes the menu, then does its job) or a switch (flips, and the
+  // menu stays open with the focus on it).
+  function extraButton(x, items, i) {
+    const sw = x.kind === 'switch';
+    const el = h('button', {
+      type: 'button', class: `nav-tab nav-extra${x.desc ? ' is-two' : ''}`, 'data-more': x.id, role: sw ? 'menuitemcheckbox' : 'menuitem', tabindex: -1,
+      'aria-checked': sw ? String(Boolean(x.checked)) : null, 'aria-haspopup': x.popup ? 'dialog' : null,
+      onclick: () => {
+        if (!sw) { closeMenu(false); x.onActivate?.(); return; }
+        x.onActivate?.();
+        render();
+        byId.get(`more-${x.id}`)?.focus();
+      },
+      onkeydown: (e) => itemKey(items, i)(e),
+    }, x.icon ? icon(x.icon) : null,
+    h('span', { class: 'nav-label' }, x.label, x.desc ? h('small', { class: 'nav-desc' }, x.desc) : null),
+    sw ? h('span', { class: 'nav-check', 'aria-hidden': 'true' }) : null);
+    ids.set(el, `more-${x.id}`);
+    byId.set(`more-${x.id}`, el);
+    return el;
+  }
+
+  function menuOf(moreIds, extras) {
     const tt = ctx.t();
     const items = [];
     const list = h('div', { class: 'nav-menu', role: 'menu', 'aria-label': tt('nav.more') });
@@ -77,6 +100,12 @@ export function createNavbar(ctx) {
       items.push(item);
       list.append(item);
     });
+    if (moreIds.length && extras.length) list.append(h('hr', { class: 'nav-sep', role: 'separator' }));
+    extras.forEach((x, k) => {
+      const item = extraButton(x, items, moreIds.length + k);
+      items.push(item);
+      list.append(item);
+    });
     return { list, items };
   }
 
@@ -86,9 +115,10 @@ export function createNavbar(ctx) {
     const focusId = doc?.activeElement && root.contains(doc.activeElement) ? ids.get(doc.activeElement) : null;
     byId.clear();
     barButtons = [];
-    const t = tabsFor({ tech, phone });
+    const t = tabsFor({ tech: Boolean(ctx.tech?.()), phone, ready });
     const onBar = phone ? t.bottom.filter((id) => id !== 'more') : [...t.global, ...t.project];
-    const hasMore = phone || t.more.length > 0;
+    const extras = ctx.extras?.() ?? [];
+    const hasMore = t.bottom.includes('more') || t.more.length > 0 || extras.length > 0;
     const moreCurrent = t.more.includes(current);
     const tabStop = onBar.includes(current) ? current : moreCurrent && hasMore ? 'more' : onBar[0];
 
@@ -105,7 +135,7 @@ export function createNavbar(ctx) {
       const m = tabButton('more', tt('nav.more'), 'more', {
         tabindex: tabStop === 'more' ? 0 : -1, current: moreCurrent, popup: true, onclick: () => (open ? closeMenu(true) : openMenu()),
       });
-      menu = open ? menuOf(t.more) : null;
+      menu = open ? menuOf(t.more, extras) : null;
       moreWrap = h('div', { class: 'nav-more' }, m, menu?.list);
       more = { m, wrap: moreWrap };
     }
@@ -150,7 +180,8 @@ export function createNavbar(ctx) {
   return {
     render,
     setCurrent(area) { current = area; render(); },
-    setMode(next) { tech = Boolean(next); closeMenu(false); render(); },
+    // The technical switch changes the words of the tabs, not which tabs there are (mm47).
+    setMode() { closeMenu(false); render(); },
     setReady(map) { ready = map ?? {}; render(); },
   };
 }

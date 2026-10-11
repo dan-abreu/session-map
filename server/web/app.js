@@ -8,6 +8,7 @@ import { createOutline } from './outline.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
 import { createChat } from './chat.js';
+import { createRunSettings } from './runsettings.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
 import { createRepoSide } from './reposide.js';
@@ -16,7 +17,8 @@ import { createRequestsView } from './requestsview.js';
 import { createResizer, createSplit } from './resize.js';
 import { createFlowView } from './flowview.js';
 import { conversationsOf, createConvList, conversationCounts, listConversations, offMapNote, projectChats, projectHue, visitorsOf } from './convlist.js';
-import { createNowStrip, jobBadges, nextUnseen, nowJobs, pendingCount } from './now.js';
+import { jobBadges, needsYou, nextUnseen, nowJobs, pendingCount } from './now.js';
+import { createMenu } from './menu.js';
 import { orchChip, orchSection, orchState } from './orchview.js';
 import { createProjectPicker } from './picker.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
@@ -24,7 +26,7 @@ import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
 import { createAiHelpers } from './aihelpers.js';
 import { createCutPanel } from './cutoff.js';
-import { visibleProject, chatButtons, waitingEntries, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
+import { visibleProject, chatButtons, waitingEntries, waitingSections, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
 import { emptyState } from './empty.js';
@@ -78,6 +80,7 @@ function setRange(sel) {
   rangeSel = sel;
   store.set(rangeKey(project.id), serializeSel(sel));
   renderMap();
+  renderChanged();
   rerender();
   refreshView(true);
 }
@@ -91,7 +94,7 @@ const saveIgnored = () => store.set(ignoredKey(project.id), serializeIgnored(ign
 let ignoredClash = new Set();
 const clashIgnoredKey = (projectId) => `sm.clashIgnored.${projectId}`;
 const saveClashIgnored = () => store.set(clashIgnoredKey(project.id), serializeIgnored(ignoredClash));
-let waitingScope = store.get('sm.waiting.scope') === 'all' ? 'all' : 'project'; // the counter follows the open project unless asked
+let waitingScope = store.get('sm.waiting.scope') === 'all' ? 'all' : 'project'; // the decisions on the map follow the open project unless asked
 let query = '';
 let marks = { live: new Set(), branches: new Map(), clashes: new Map() };
 let convCounts = new Map();
@@ -105,7 +108,7 @@ const UNSEEN_MAX = 200;
 let unseen = new Set();
 try { unseen = new Set((JSON.parse(store.get(UNSEEN_KEY) ?? '[]') ?? []).filter((id) => typeof id === 'string')); } catch { unseen = new Set(); }
 let lastStatuses = null;
-let jobs = null; // now.js nowJobs: every job on the PC, for the Now strip, the picker's marks and the tab title
+let jobs = null; // now.js nowJobs: every job on the PC, for the picker's marks and the tab title
 // While the person types in a panel, polling must not redraw it under their fingers.
 let editing = false;
 
@@ -178,13 +181,14 @@ function applyStaticText() {
   for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
   help?.relabel();
   tour?.redraw();
-  for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+  for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-checked', String(b.dataset.lang === lang));
   renderChanged();
   discover?.relabel();
   chat?.relabel();
   flow?.relabel();
   alerts?.relabel();
   aiHelpers?.relabel();
+  runSettings?.relabel();
   picker?.relabel();
   navbar?.render();
 }
@@ -483,8 +487,9 @@ const activeMap = () => (PHONE.matches ? outline : mindmap);
 function renderMap(opts) {
   if (!project) return;
   activeMap().render(tree, mapView(), opts);
-  $('#relations').setAttribute('aria-pressed', String(relationsOn));
+  $('#relations').setAttribute('aria-checked', String(relationsOn));
   $('#relations').hidden = !relationLinks(shown).length;
+  renderViewOn();
   if (!$('#relList').hidden) renderRelList();
 }
 
@@ -513,54 +518,70 @@ function revealNode(id, opts) {
   requestAnimationFrame(() => activeMap().reveal(id, opts));
 }
 
+// "What changed" inside Vista (mm48): the three periods asked for most, one press each, and the period picker for the
+// rest (its button names the period when it is none of the three).
+const QUICK_RANGES = ['all', 'today', 'd7'];
 function renderChanged() {
   if (!rangePicker) return;
   const slot = $('#changed');
-  const btn = rangePicker.button();
-  btn.title = t('changed.hint');
-  slot.replaceChildren(h('span', { class: 'mm-changed-label' }, t('changed.label')), btn);
+  const focused = slot.contains(document.activeElement) ? document.activeElement.dataset.preset ?? 'more' : null;
+  const quick = QUICK_RANGES.map((preset) => h('button', {
+    type: 'button', role: 'menuitemradio', 'aria-checked': String(rangeSel.preset === preset), title: t('changed.hint'), 'data-preset': preset,
+    onclick: () => { if (rangeSel.preset !== preset) setRange({ preset }); },
+  }, t(`range.${preset}`)));
+  const more = rangePicker.button('vm-range', { quick: QUICK_RANGES });
+  more.setAttribute('role', 'menuitem');
+  more.title = t('changed.hint');
+  slot.replaceChildren(h('div', { class: 'vm-seg' }, quick), more);
+  // A press on a period redraws the row: the focus stays on the same choice, so the arrows go on from there.
+  if (focused) (focused === 'more' ? more : quick[QUICK_RANGES.indexOf(focused)])?.focus();
+  renderViewOn();
+}
+
+// The Vista button says when the map is not showing everything plainly: a period or the relations are on (mm48).
+function renderViewOn() {
+  const on = rangeSel.preset !== 'all' || relationsOn;
+  $('#viewOn').hidden = !on;
+  $('#viewBtn').classList.toggle('is-on', on);
 }
 
 // ---- summary and the waiting list ------------------------------------------------------
 
+// The quiet line over the map (mm48): the project, how much is done, and only when it applies "paused" or "organizing";
+// who works now is the live button right after it. The parts are on the map and the cost of 30 days rides on the
+// project's tooltip (Home and Costs show it in full).
 function renderSummary() {
-  const parts = [h('button', { type: 'button', class: 'summary-project', title: t('project.open'), onclick: () => select({ type: 'project' }) }, project.name)];
-  if (hasMap()) {
-    parts.push(h('span', {}, t.count('summary.parts', project.arch.parts.length)));
-    parts.push(h('span', { class: 'num' }, listsDone(tree) ? t('summary.done', { done: tree.counts.done, total: tree.counts.total }) : t.count('summary.open', tree.counts.total)));
-  }
-  const busy = shown.chats.filter((c) => c.status === 'busy').length;
-  if (busy) parts.push(h('span', { class: 'tone-active' }, t('summary.working', { n: busy })));
-  parts.push(h('span', { class: 'num' }, t('summary.cost', { v: money(project.cost.d30) })));
-  parts.push(...backgroundBits(project));
+  const parts = [h('button', { type: 'button', class: 'summary-project', title: `${t('project.open')} · ${t('summary.cost', { v: money(project.cost.d30) })}`, onclick: () => select({ type: 'project' }) }, project.name)];
+  if (hasMap()) parts.push(h('span', { class: 'num' }, listsDone(tree) ? t('summary.done', { done: tree.counts.done, total: tree.counts.total }) : t.count('summary.open', tree.counts.total)));
+  if (project.background && !project.background.on) parts.push(h('span', { class: 'bg-paused', title: t('background.paused.hint') }, t('background.paused')));
   if (state.refreshing) parts.push(h('span', { class: 'organizing', role: 'status' }, t('state.refreshing')));
   $('#summary').replaceChildren(...joinDots(parts));
+  renderKeep(project);
 }
 
 // The map's own work (the AI placing conversations, the count of the files) runs only where someone works now, or on a
-// project the person keeps always up to date: "paused" says why nothing moves, the switch lets them choose.
-function backgroundBits(p) {
+// project the person keeps always up to date: "paused" in the summary says why nothing moves, the switch in Vista lets
+// them choose and says that it costs (mm48).
+function renderKeep(p) {
   const bg = p.background;
-  if (!bg) return [];
-  const out = [];
-  if (!bg.on) out.push(h('span', { class: 'bg-paused', title: t('background.paused.hint') }, t('background.paused')));
-  out.push(h('button', {
-    type: 'button', class: 'bg-switch', 'aria-pressed': String(bg.always),
-    title: t(bg.always ? 'background.always.hint' : 'background.keep.hint'),
-    onclick: (e) => setBackground(p, !bg.always, e.currentTarget),
-  }, t(bg.always ? 'background.always' : 'background.keep')));
-  return out;
+  $('#bgKeep').hidden = !bg;
+  if (!bg) return;
+  const btn = $('#bgSwitch');
+  btn.setAttribute('aria-checked', String(bg.always));
+  btn.title = t(bg.always ? 'background.always.hint' : 'background.keep.hint');
 }
 
+// While it saves the switch says it is busy but keeps the focus (a disabled button would drop it to the page).
 async function setBackground(p, always, btn) {
-  btn.disabled = true;
+  btn.setAttribute('aria-disabled', 'true');
   const res = await api.setProjectBackground(p.id, always);
-  if (!res.ok) { btn.disabled = false; return toast(errorText(res.error)); }
+  if (!res.ok) { btn.removeAttribute('aria-disabled'); return toast(errorText(res.error)); }
   toast(t(always ? 'background.saved.always' : 'background.saved.auto'));
   await poll();
+  btn.removeAttribute('aria-disabled');
 }
 
-// ---- Now: every job on the PC, the picker's marks, the tab title ---------------------------------
+// ---- every job on the PC: the picker's marks and the tab title (the Now strip left the page, mm47) --------
 
 const saveUnseen = () => store.set(UNSEEN_KEY, JSON.stringify([...unseen].slice(-UNSEEN_MAX)));
 
@@ -585,7 +606,6 @@ function markSeen(sessionId) {
 function renderNow() {
   if (!state) return;
   jobs = nowJobs(state, { unseen });
-  now.render(jobs);
   if (project) picker.update(state.projects.map((p) => ({ id: p.id, name: p.name, hue: projectHue(p) })), project.id, jobBadges(jobs));
   alerts.refreshTitle();
   cutPanel?.render(state);
@@ -612,31 +632,49 @@ function openRequestItem(projectId, code) {
   if (found) requestAnimationFrame(() => openPoint(found));
 }
 
+// Whether a conversation waits for the person by the pill's rule, for the chat's dot; null when the state does not list it.
+function chatWaits(sessionId) {
+  if (!state?.projects.some((p) => p.chats.some((c) => c.sessionId === sessionId))) return null;
+  return needsYou(state).some((n) => n.chat.sessionId === sessionId);
+}
+
+// The amber pill and the list it opens (mm47): the pill counts needsYou, the one count of the page, and the list starts
+// with exactly those conversations, from every project; under them, the decisions on the map, of the open project unless
+// the person asks for all.
 function renderWaiting() {
-  const everyone = waitingEntries(state, null, ignoredClash);
+  const needs = needsYou(state);
+  const n = needs.length;
+  $('#waitingLabel').textContent = n ? t.count('needs.pill', n) : t('needs.none');
+  $('#waitingBtn').classList.toggle('is-zero', n === 0);
+  // The chat's dot follows the same rule as the pill.
+  chat?.refreshDot();
   const several = state.projects.length > 1;
   const scoped = waitingScope === 'project' && several && !!project;
-  const entries = scoped ? waitingEntries(state, project.id, ignoredClash) : everyone;
-  $('#waitingLabel').textContent = t(scoped ? 'waiting.buttonHere' : 'waiting.button', { n: entries.length });
-  $('#waitingBtn').classList.toggle('is-zero', entries.length === 0);
-  $('#waitingBtn').title = scoped && everyone.length > entries.length ? t('waiting.elsewhere', { n: everyone.length - entries.length }) : '';
-  $('#waitingScope').hidden = !several;
-  for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
+  const decisionsOf = (projectId) => waitingSections(state, needs, { projectId, ignored: ignoredClash }).decisions;
+  const { chats, decisions } = waitingSections(state, needs, { projectId: scoped ? project.id : null, ignored: ignoredClash });
+  const scopeEl = $('#waitingScope');
+  scopeEl.hidden = !several;
+  for (const b of scopeEl.querySelectorAll('[data-scope]')) {
     const all = b.dataset.scope === 'all';
     b.setAttribute('aria-pressed', String(all !== scoped));
-    b.textContent = t(all ? 'waiting.scope.all' : 'waiting.scope.project', { n: all ? everyone.length : project ? waitingEntries(state, project.id, ignoredClash).length : 0 });
+    b.textContent = t(all ? 'waiting.scope.all' : 'waiting.scope.project', { n: (all ? decisionsOf(null) : project ? decisionsOf(project.id) : []).length });
   }
-  const listEl = $('#waitingItems');
-  $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, n))));
-  if (!entries.length) {
-    listEl.replaceChildren(h('li', { class: 'empty' }, emptyState({ h, icon }, { art: 'check', title: t('waiting.noneTitle'), text: scoped ? t('waiting.noneHere', { n: everyone.length }) : t('waiting.none') })));
-    return;
-  }
-  const where = (p, partId) => {
+  const entries = [...chats, ...decisions];
+  $('#waitingCounts').replaceChildren(...waitingCounts(entries).map(({ kind, n: count }) => h('li', { class: `wc-${kind}` }, t.count(`waiting.count.${kind}`, count))));
+  const where = (withProject) => (p, partId) => {
     const part = partId && p.arch.parts.find((x) => x.id === partId);
-    return [several && !scoped ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
+    return [withProject ? p.name : null, part ? part.name : null].filter(Boolean).join(' · ');
   };
-  listEl.replaceChildren(...entries.map((entry) => waitingRow(entry, { where, scoped })));
+  const group = (key, count, extra) => h('li', { class: 'wl-group' }, h('h3', {}, t(key), h('span', { class: 'wl-group-n num' }, String(count))), extra);
+  const rows = [];
+  if (chats.length) rows.push(group('waiting.group.chats', chats.length), ...chats.map((entry) => waitingRow(entry, { where: where(several) })));
+  if (decisions.length || several) rows.push(group('waiting.group.decisions', decisions.length, several ? scopeEl : null));
+  rows.push(...decisions.map((entry) => waitingRow(entry, { where: where(several && !scoped) })));
+  if (!entries.length) {
+    const elsewhere = scoped ? decisionsOf(null).length : 0;
+    rows.push(h('li', { class: 'empty' }, emptyState({ h, icon }, { art: 'check', title: t('waiting.noneTitle'), text: elsewhere ? t('waiting.noneHere', { n: elsewhere }) : t('waiting.none') })));
+  }
+  $('#waitingItems').replaceChildren(...rows);
 }
 
 // One row of "Waiting for you": the sign in three lines (what it is, why, what to do) and the button that does it.
@@ -677,6 +715,8 @@ function waitingRow(entry, { where }) {
 }
 
 function openWaiting() {
+  convs.closeDrawer();
+  if (view !== 'map') showView('map');
   closePanel(false);
   chat.close();
   live.close();
@@ -696,6 +736,7 @@ function closeLists() {
 // ---- live: what is being worked on now -----------------------------------------------------
 
 function openLive() {
+  convs.closeDrawer();
   closePanel(false);
   chat.close();
   hideRelList();
@@ -986,6 +1027,8 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   chat.open({
     projectId: home?.id ?? project.id, mapProjectId: project.id, title: row.title || t('chat.untitled'), subtitle, intro: t(row.origin === 'map' ? 'chat.introResume' : 'convs.introRead'), start: { sessionId: row.sessionId },
     where: row.origin === 'map' ? null : () => whereOf(row), placeholder: pointWords(node).placeholder,
+    // "New conversation" in the ⋯ starts one on the same box (pc18).
+    newChat: () => (node.kind === 'project' ? openProjectChat() : openPoint(node, { tab: CHAT_TAB, fresh: true })),
     ...(row.node?.kind === 'project' ? projectChatOf() : {}),
   });
   // The conversation opens under its box's information, folded to one line so the conversation reads first.
@@ -995,8 +1038,9 @@ function openConversation({ row, project: p, nodeId, place, home }) {
   convs.render();
 }
 
-// The ⋯ of the chat sheet's header, like the menu of a chat in Claude: rename or move it, archive it, and open it where it
-// lives (VS Code for one born there, a terminal otherwise, unless it is open in one already).
+// The ⋯ of the chat sheet's header, like the menu of a chat in Claude: rename or move it, archive it, open it where it
+// lives (VS Code for one born there, a terminal otherwise, unless it is open in one already) and delete it. chat.js puts
+// "About this part" and "Find" before them and "New conversation" after (pc18).
 function chatMore(sessionId) {
   for (const p of state?.projects ?? []) {
     const row = conversationsOf(p).find((r) => r.sessionId === sessionId);
@@ -1004,13 +1048,13 @@ function chatMore(sessionId) {
     const vscode = row.origin === 'vscode';
     const archive = row.archived ? 'unarchive' : 'archive';
     return [
-      { label: t('chat.moreRename'), icon: 'rename', run: () => openPlace({ row, project: p }) },
-      { label: t(`action.${archive}`), icon: 'archive', run: () => runAction({ action: archive, sessionId }, t(`action.${archive}d`)) },
-      { label: t('action.delete'), icon: 'trash', run: () => deleteConversation(row) },
+      { id: 'rename', label: t('chat.moreRename'), icon: 'rename', run: () => openPlace({ row, project: p }) },
+      { id: 'archive', label: t(`action.${archive}`), icon: 'archive', run: () => runAction({ action: archive, sessionId }, t(`action.${archive}d`)) },
       vscode || !row.live ? {
-        label: vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: vscode ? 'code' : 'terminal',
+        id: 'open', label: vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: vscode ? 'code' : 'terminal',
         run: () => runAction({ action: 'open', sessionId }, t(vscode ? 'action.openedVscode' : 'action.openedTerminal')),
       } : null,
+      { id: 'delete', label: t('action.delete'), icon: 'trash', run: () => deleteConversation(row) },
     ].filter(Boolean);
   }
   return [];
@@ -1811,6 +1855,7 @@ function renderBanner() {
   $('#newIdea').disabled = !hasMap();
   document.body.classList.toggle('no-map', !hasMap());
   $('#newIdea').title = hasMap() ? t('idea.hint') : t('idea.noMap');
+  $('#newIdeaHint').textContent = hasMap() ? t('new.ideaHint') : t('idea.noMap');
   if (none) $('#archBannerList').replaceChildren(...['arch.bannerFolder', 'arch.bannerReadme', 'arch.bannerParts'].map((k) => h('li', {}, t(k))));
 }
 
@@ -1916,6 +1961,18 @@ function poll() {
 }
 
 // Any name, old or new (board, history, a saved sm.view, ?view=), lands on an area of the table (nav.js).
+// The bar's areas (navbar.js). On a phone, Conversations is the inbox over the map (mm49), as on a computer it is the column
+// beside it; Board and History wait one tap further, at its foot.
+function pickArea(area) {
+  if (area === 'convs' && PHONE.matches) {
+    if (view !== 'map') showView('map');
+    convs.openDrawer();
+    return;
+  }
+  convs.closeDrawer();
+  showView(area);
+}
+
 function showView(name, sub = null) {
   const to = normalizeView(name);
   view = to.area;
@@ -1987,8 +2044,9 @@ let convs = null;
 let live = null;
 let alerts = null;
 let aiHelpers = null;
+let runSettings = null; // Configurações: the monthly limit, permissions and advanced ways (pc19)
 let cutPanel = null;
-let now = null;
+let menus = []; // menu.js: "Novo" and "Vista" (mm47, mm48)
 let picker = null;
 let navbar = null;
 let areas = null;
@@ -2027,35 +2085,64 @@ function openFromAlert(group) {
   return hit ? openConversation(hit) : toast(t('alert.notFound'));
 }
 
+// The menus around the map (mm47, mm48): "Novo" at the head of the conversations, "Vista" over the map. One
+// behaviour for both (menu.js); the period picker opened from Vista counts as Vista's own, so a press in it
+// leaves Vista open. The ⋯ of the bar is the navbar's own menu (help and Configurações).
+function wireMenus() {
+  menus = [
+    createMenu({ button: $('#newBtn'), pop: $('#newMenu') }),
+    createMenu({ button: $('#viewBtn'), pop: $('#viewMenu'), inside: (el) => Boolean(el.closest?.('.rp, .rp-scrim')), onOpen: renderChanged }),
+  ];
+  $('#bgSwitch').addEventListener('click', (e) => { if (project?.background && e.currentTarget.getAttribute('aria-disabled') !== 'true') setBackground(project, !project.background.always, e.currentTarget); });
+  // "/" goes to the map's search, as the hint in the field says, unless the person is typing somewhere.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || view !== 'map') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"], dialog[open]')) return;
+    e.preventDefault();
+    $('#search').focus();
+  });
+}
+
+// The language of the page, chosen in Configurações.
+function setLanguage(code) {
+  if (!LANGS[code] || code === lang) return;
+  lang = code;
+  t = translator(lang, { tech });
+  store.set('sm.lang', lang);
+  renderAll();
+  refreshView(true);
+}
+
+// The Full switch of the ⋯ menu: every area on the bar, and the words programmers use.
+function setTech(on) {
+  tech = on;
+  document.body.classList.toggle('is-tech', tech);
+  store.set('sm.tech', on ? '1' : '0');
+  t = translator(lang, { tech });
+  renderAll();
+  refreshView(true);
+}
+
+// What the ⋯ of the bar holds under the areas (navbar.js): help and Configurações, in the order a person looks for them.
+function moreEntries() {
+  const entries = [{ id: 'tour', label: t('tour.replay'), icon: 'compass', onActivate: () => tour.start() }];
+  entries.push({ id: 'ai', label: t('aih.open'), icon: 'connect', popup: true, onActivate: () => aiHelpers.open() });
+  entries.push({ id: 'full', label: t('more.full'), desc: t('more.fullHint'), kind: 'switch', checked: tech, onActivate: () => setTech(!tech) });
+  entries.push({ id: 'help', label: t('more.help'), icon: 'help', popup: true, onActivate: () => help.open() });
+  // Configurações for the conversation on screen (the map's or the workshop's), or for none.
+  entries.push({ id: 'settings', label: t('settings.title'), icon: 'sliders', popup: true, onActivate: () => runSettings.open(chat.isOpen() ? chat.settings() : flow.chatSettings(), $('#tab-more')) });
+  return entries;
+}
+
 function wire() {
-  for (const b of document.querySelectorAll('.lang button')) {
-    b.addEventListener('click', () => {
-      if (!LANGS[b.dataset.lang] || b.dataset.lang === lang) return;
-      lang = b.dataset.lang;
-      t = translator(lang, { tech });
-      store.set('sm.lang', lang);
-      renderAll();
-      refreshView(true);
-    });
-  }
   document.body.classList.toggle('is-tech', tech);
   // The bar draws the table of areas (nav.js): Simple shows the five main areas and a "More" menu, Full shows them all.
   navbar = createNavbar({
-    h, icon, root: $('#navbar'), t: () => t, tech: () => tech, phone: () => PHONE.matches, current: view, onPick: (area) => showView(area),
+    h, icon, root: $('#navbar'), t: () => t, tech: () => tech, phone: () => PHONE.matches, current: view, onPick: pickArea, extras: moreEntries,
   });
   tour = createTour({ h, t: () => t, phone: () => PHONE.matches, onEnd: (how) => store.set('sm.tour', how) });
   help = createHelp({
-    h, t: () => t, plain: () => translator(lang), tech: () => translator(lang, { tech: true }), getTech: () => tech,
-    setTech: (on) => {
-      tech = on;
-      document.body.classList.toggle('is-tech', tech);
-      navbar.setMode(tech);
-      store.set('sm.tech', on ? '1' : '0');
-      t = translator(lang, { tech });
-      renderAll();
-      refreshView(true);
-    },
-    onTour: () => tour.start(),
+    h, t: () => t, plain: () => translator(lang), tech: () => translator(lang, { tech: true }), anchor: () => $('#tab-more'),
   });
   rangePicker = createRangePicker({ h, icon, t: () => t, lang: () => lang, phone: PHONE, now: () => (state ? rangeNow() : Date.now()), get: () => rangeSel, set: setRange });
   const mapCtx = {
@@ -2075,12 +2162,22 @@ function wire() {
     root: $('#view-discover'), h, t: () => t, lang: () => lang, toast, icon,
     project: () => (project ? { id: project.id, name: project.name } : null),
   });
+  // Configurações (pc19): one sheet for the run menu of both chats and for the person's menu.
+  runSettings = createRunSettings({
+    dialog: $('#settingsDialog'), h, t: () => t, icon, money, toast, errorText, onPcMode: pcMode,
+    lang: () => lang, setLang: setLanguage, openAlerts: () => alerts.openSettings(),
+    limit: { read: () => api.reinforcedLimit(), save: (usd) => api.setReinforcedLimit(usd) },
+  });
   chat = createChat({
     root: $('#chat'), h, t: () => t, toast, errorText, relative, money, lang: () => lang, icon, commands: chatCommands,
     onSession: () => { convs.render(); setTimeout(poll, 1200); },
     beforeSend: foldForTalk,
-    onPcMode: pcMode,
     more: chatMore,
+    // The box's information, folded away while the person talks, comes back from the ⋯ (pc18).
+    about: () => (pointNode && infoFolded ? () => { setFolded(false, { byHand: true }); $('#pointFold').focus({ preventScroll: true }); } : null),
+    openSettings: (binding, opener) => runSettings.open(binding, opener),
+    onRunChange: () => runSettings?.refresh(),
+    waitingOf: chatWaits,
     onClose: () => {
       pointNode = null;
       if (selection?.type === 'node') selection = null;
@@ -2089,13 +2186,16 @@ function wire() {
     },
   });
   convs = createConvList({
-    root: $('#convs'), h, t: () => t, icon, relative, money, list: listText, phone: PHONE, store,
-    state: () => state, project: () => project, showArchived: () => showArchived, current: () => chat.current(), unseen: () => unseen,
+    root: $('#convs'), h, t: () => t, lang: () => lang, icon, relative, money, list: listText, phone: PHONE, store,
+    state: () => state, project: () => project, current: () => chat.current(), unseen: () => unseen,
     nodeLabel: (id) => (tree ? nodeById(tree, id)?.label ?? null : null),
     onOpen: openConversation,
     // A visitor (mm24) is moved and renamed from the project it was born in.
     onMove: (e) => openPlace({ ...e, project: e.home ?? e.project }),
     onFilter: () => renderMap(),
+    // Continue on a cut-off row is the Cut off panel's own (one pending list, one message); the phone's bar marks the inbox.
+    onContinue: (e) => cutPanel.continue(e),
+    onDrawer: (on) => navbar.setCurrent(on ? 'convs' : view),
   });
   cutPanel = createCutPanel({
     root: $('#cutPanel'), h, t: (key, vars) => t(key, vars), icon, relative, phone: PHONE, toast, errorText,
@@ -2108,12 +2208,8 @@ function wire() {
       if (hit) openConversation(hit);
     },
   });
-  now = createNowStrip({
-    root: $('#now'), line: $('#nowLine'), counts: $('#nowCounts'), cards: $('#nowCards'), h, t: () => t, icon, relative, list: listText, phone: PHONE, store,
-    onOpen: openFromLive,
-  });
   picker = createProjectPicker({
-    root: $('#projectPicker'), button: $('#project'), list: $('#projectList'), name: $('#projectName'), marks: $('#projectMarks'), h, t: () => t, icon,
+    root: $('#projectPicker'), button: $('#project'), list: $('#projectList'), name: $('#projectName'), h, t: () => t, icon,
     onPick: (id) => setProject(id),
   });
   live = createLivePanel({
@@ -2123,7 +2219,7 @@ function wire() {
     onTeam: (entry) => { live.close(); goTo(entry.project.id, { type: 'chat', id: entry.chat.sessionId }); },
   });
   alerts = createAlerts({
-    stack: $('#alertStack'), bell: $('#alertsBtn'), dialog: $('#alertsDialog'), h, t: () => t, lang: () => lang, icon, api, store, toast, errorText,
+    stack: $('#alertStack'), dialog: $('#alertsDialog'), h, t: () => t, lang: () => lang, icon, api, store, toast, errorText,
     projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name })),
     onOpen: openFromAlert,
     onAlerts: (fresh) => {
@@ -2138,7 +2234,8 @@ function wire() {
   createSplit({ handle: $('#pointSplit'), info: $('#pointInfo'), pane: $('#chatPane'), target: $('#chat'), cssVar: '--info-h', storageKey: 'sm.infoHeight', active: () => !infoFolded });
   $('#pointFold').addEventListener('click', () => setFolded(!infoFolded, { byHand: true }));
   flow = createFlowView({
-    h, t: () => t, toast, errorText, relative, money, phone: PHONE, onPcMode: pcMode, lang: () => lang, icon, commands: chatCommands,
+    h, t: () => t, toast, errorText, relative, money, phone: PHONE, lang: () => lang, icon, commands: chatCommands,
+    openSettings: (binding, opener) => runSettings.open(binding, opener), onRunChange: () => runSettings.refresh(), waitingOf: chatWaits,
     project: () => project, tree: () => tree, live: () => marks.live,
     onOpenPart: (partId) => openPartPoint(partId),
     onApplied: () => setTimeout(poll, 600),
@@ -2155,7 +2252,7 @@ function wire() {
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
   requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
-  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name, root: p.root })), openers: [$('#aiHelpersBar'), $('#aiHelpersOpen')] });
+  aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name, root: p.root })), openers: [] });
   tabs = createTabs({
     h, t: () => t, lang: () => lang, fmt: { money, shortDate, relative }, icon, openAiHelpers: () => aiHelpers.open(),
     state: () => state, project: () => project, go: goTo, toast, errorText, confirm: confirmAction,
@@ -2205,7 +2302,8 @@ function wire() {
   $('#newIdea').addEventListener('click', openIdea);
   $('#newChat').addEventListener('click', openProjectChat);
   $('#openOrch').addEventListener('click', openOrchestrator);
-  $('#convsNewChat').addEventListener('click', openProjectChat);
+  $('#convsBoardLink').addEventListener('click', () => { convs.closeDrawer(); showView('convs'); });
+  wireMenus();
   $('#createArch').addEventListener('click', createArch);
   for (const b of $('#waitingScope').querySelectorAll('[data-scope]')) {
     b.addEventListener('click', () => {
@@ -2243,13 +2341,17 @@ function wire() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || $('#confirmDialog').open || $('#installDialog').open || $('#fileDialog').open || $('#flowDialog').open || $('#alertsDialog').open || $('#aiHelpersDialog').open || $('#placeDialog').open) return;
     if (picker.isOpen()) picker.close();
-    else if (now.isOpen()) now.close();
+    else if (menus.some((m) => m.isOpen())) menus.forEach((m) => m.close(false));
     else if (convs.isDrawerOpen()) convs.closeDrawer();
     else if (!$('#waitingList').hidden || live.isOpen() || !$('#relList').hidden) closeLists();
     else if (chat.isOpen()) chat.close();
     else closePanel();
   });
-  PHONE.addEventListener('change', () => { navbar.render(); if (project) { renderMap(); activeMap().fit(false); } });
+  PHONE.addEventListener('change', () => {
+    if (!PHONE.matches) convs.closeDrawer();
+    navbar.render();
+    if (project) { renderMap(); activeMap().fit(false); }
+  });
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -2299,7 +2401,8 @@ function applyDeepLink() {
   if (params.get('drawer') === '1') setTimeout(() => convs.openDrawer(), 60);
   if (params.get('live') === '1') setTimeout(openLive, 60);
   if (params.get('alerts') === '1') setTimeout(() => alerts.openSettings(), 200);
-  // &place=<sessionId> opens "Move or rename"; &picker=1 opens the project list; &nowopen=1 opens the Now list on a phone.
+  // &place=<sessionId> opens "Move or rename"; &picker=1 opens the project list; &waiting=1 (and the old &nowopen=1)
+  // open the list behind the amber pill; &menu=new|view|more opens one of the menus, for screenshots.
   const placeId = params.get('place');
   if (placeId) {
     const out = listConversations(state, { projectId: project.id, scope: 'all', showArchived: true });
@@ -2307,7 +2410,9 @@ function applyDeepLink() {
     if (hit) setTimeout(() => openPlace(hit), 120);
   }
   if (params.get('picker') === '1') setTimeout(() => $('#project').click(), 120);
-  if (params.get('nowopen') === '1') setTimeout(() => $('#nowLine').click(), 120);
+  if (params.get('nowopen') === '1' || params.get('waiting') === '1') setTimeout(openWaiting, 120);
+  const menuBtn = { new: '#newBtn', view: '#viewBtn', more: '#tab-more' }[params.get('menu')];
+  if (menuBtn) setTimeout(() => $(menuBtn).click(), 160);
   if (params.get('pcmode')) setTimeout(() => pcMode(params.get('pcmode')), 300);
   const tab = params.get('view');
   if (tab) showView(tab);

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createHomeView } from '../server/web/homeview.js';
 import { homeRows } from '../server/web/home.js';
 import { waitingEntries } from '../server/web/views.js';
+import { needsYou } from '../server/web/now.js';
 import { LANGS, translator } from '../server/web/i18n.js';
 
 const NOW = new Date(2026, 9, 9, 12, 0, 0).getTime();
@@ -153,6 +154,28 @@ test('the header carries the totals', () => {
   assert.match(text, /\b3\b/, 'projects');
   const month = homeRows(box.state, { nowMs: NOW }).reduce((s, r) => s + r.monthCost.usd, 0);
   assert.ok(text.includes(`$${month.toFixed(2)}`), 'month cost');
+});
+
+test('"needs you" has the inbox\'s name and the amber pill\'s number; the decisions on the map are a quiet line of their own', () => {
+  const { view, root, box } = make();
+  view.render(root);
+  const pill = needsYou(box.state);
+  const t = translator('en');
+  // The total on top is the pill's number, under the inbox group's name.
+  const total = withClass(root, 'hm-totals')[0].children.find((c) => textOf(c).includes(t('convs.group.needs')));
+  assert.ok(total, 'a total named like the inbox\'s group');
+  assert.equal(textOf(withClass(total, 'hm-total-value')[0]), String(pill.length));
+  assert.equal(textOf(root).includes('Waiting for you'), false, 'not the old name of a bigger count');
+  assert.equal(t('home.col.waiting'), t('convs.group.needs'));
+  // A row: as many conversations as the pill counts there, then its decisions on the map apart and quiet.
+  const acme = box.state.projects.find((p) => (p.decisions ?? []).length && pill.some((e) => e.project.id === p.id));
+  assert.ok(acme, 'the demo has a project with both');
+  const needs = pill.filter((e) => e.project.id === acme.id).length;
+  const decisions = waitingEntries(box.state, acme.id).filter((e) => e.decision).length;
+  const cell = withClass(rowFor(root, acme.id), 'hm-waiting')[0];
+  assert.equal(textOf(withClass(cell, 'hm-val')[0]).trim(), t.count('home.needsChats', needs));
+  const sub = withClass(cell, 'hm-sub')[0];
+  assert.ok(sub && textOf(sub).includes(t.count('home.mapDecisions', decisions)), 'the decisions on their own quiet line');
 });
 
 test('the words the screen asks for exist in both languages with the same blanks', () => {

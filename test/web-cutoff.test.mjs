@@ -193,14 +193,13 @@ test('Later folds the panel to one line for this page load, and a conversation n
   assert.equal(byAct(root, 'continue').length, 3, 'a new one opens it');
 });
 
-test('the page has the places the panel and the state filters draw into, and the cut-off colours come from the tokens', async () => {
+test('the page has the place the panel draws into, the inbox a Cut off group, and the cut-off colours come from the tokens', async () => {
   const { readFileSync } = await import('node:fs');
   const html = readFileSync(new URL('../server/web/index.html', import.meta.url), 'utf8');
   assert.match(html, /<section class="cut" id="cutPanel" aria-labelledby="cutTitle" hidden><\/section>/);
-  assert.match(html, /<div class="cv-states" id="convsStates" role="group" data-i18n-aria="convs\.states"><\/div>/);
+  assert.match(html, /id="convsStates"/, 'the state chips are back under the switch (mm49): the inbox groups and the chips live together');
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
-  assert.match(css, /\.cv-state\.s-cutoff \{[^}]*var\(--clash\)[^}]*var\(--clash-ink\)[^}]*var\(--clash-fill\)/);
-  assert.match(css, /\.g-cutoff \{[^}]*var\(--clash-ink\)[^}]*var\(--clash-fill\)/);
+  assert.match(css, /\.g-cutoff \{ --g: var\(--clash\); --g-ink: var\(--clash-ink\); \}/);
   assert.match(css, /\.cut\[hidden\] \{ display: none; \}/, 'the hidden panel stays hidden though it is a grid');
 });
 

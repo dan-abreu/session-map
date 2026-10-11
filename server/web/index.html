@@ -69,51 +69,39 @@
     <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.5 9.4c-.5-.9-1.5-1.4-2.6-1.4-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 2.1 2.8.9 2.8 2.2-1.2 2.1-2.8 2.1c-1.2 0-2.3-.6-2.8-1.6M12 6.5V8M12 16.4v1.1"/></symbol>
     <symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 5.5h5A2.5 2.5 0 0 1 12 8v11.5a2 2 0 0 0-2-2H4.5z"/><path d="M19.5 5.5h-5A2.5 2.5 0 0 0 12 8v11.5a2 2 0 0 1 2-2h5.5z"/></symbol>
     <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M5 8.5h3.5a2 2 0 1 1 4 0H16V12a2 2 0 1 1 0 4v3.5H5z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.7a2.4 2.4 0 0 1 4.6 1c0 1.7-2.3 2-2.3 3.4"/><path d="M12 17h.01" stroke-width="2.6"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.5"/><path d="M5.5 19.5c.9-3.2 3.4-5 6.5-5s5.6 1.8 6.5 5"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4.5 7.5h9M17.5 7.5h2M4.5 16.5h3M11.5 16.5h8"/><circle cx="15.5" cy="7.5" r="2"/><circle cx="9.5" cy="16.5" r="2"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
   </svg>
 
   <header class="bar">
     <div class="bar-start">
       <span class="mark" aria-hidden="true"><svg><use href="#i-map"/></svg></span>
-      <span class="brand" data-i18n="app.name"></span>
+      <span class="brand visually-hidden" data-i18n="app.name"></span>
       <div class="project" id="projectPicker">
         <button type="button" class="pp-btn" id="project" aria-haspopup="listbox" aria-expanded="false" aria-controls="projectList">
-          <span class="pp-swatch" aria-hidden="true"></span><span class="pp-name" id="projectName"></span><span class="pp-marks" id="projectMarks"></span>
+          <span class="pp-swatch" aria-hidden="true"></span><span class="pp-name" id="projectName"></span>
           <svg class="select-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
         </button>
         <ul class="pp-list" id="projectList" role="listbox" tabindex="-1" data-i18n-aria="project.label" hidden></ul>
       </div>
-      <button type="button" class="convs-btn" id="convsBtn" aria-controls="convs" aria-expanded="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-chat"/></svg><span data-i18n="convs.title"></span><span class="convs-btn-n num" id="convsBtnCount"></span></button>
     </div>
     <div class="nav-root" id="navbar"></div>
     <div class="bar-end">
-      <button type="button" class="convs-btn" id="aiHelpersBar" aria-haspopup="dialog" aria-controls="aiHelpersDialog"><svg class="btn-icon" aria-hidden="true"><use href="#i-connect"/></svg><span data-i18n="aih.open"></span></button>
-      <button type="button" class="icon-btn bar-icon help-btn" id="helpBtn" popovertarget="helpMenu" aria-haspopup="true" aria-expanded="false" aria-controls="helpMenu" data-i18n-aria="help.title" data-i18n-title="help.title"><span aria-hidden="true">?</span></button>
-      <div class="help-menu" id="helpMenu" popover="auto" role="dialog" aria-labelledby="helpMenuTitle">
-        <h2 id="helpMenuTitle" data-i18n="help.title"></h2>
-        <button type="button" class="help-row" id="tourReplay"><svg class="btn-icon" aria-hidden="true"><use href="#i-compass"/></svg><span data-i18n="tour.replay"></span></button>
-        <button type="button" class="help-row" id="aiHelpersOpen" aria-haspopup="dialog" aria-controls="aiHelpersDialog"><svg class="btn-icon" aria-hidden="true"><use href="#i-connect"/></svg><span data-i18n="aih.open"></span></button>
-        <label class="help-row help-switch"><input type="checkbox" id="techToggle" role="switch"><span><strong data-i18n="help.techLabel"></strong><small data-i18n="help.techHint"></small></span></label>
-        <h3 data-i18n="help.glossary"></h3>
-        <ul class="help-glossary" id="helpGlossary"></ul>
-      </div>
-      <div class="help-tip" id="helpTip" popover="auto" role="note"></div>
-      <button type="button" class="icon-btn bar-icon" id="alertsBtn" aria-haspopup="dialog" aria-controls="alertsDialog" data-i18n-aria="notify.button" data-i18n-title="notify.button"><svg><use href="#i-bell"/></svg></button>
-      <div class="lang" role="group" data-i18n-aria="lang.label">
-        <button type="button" data-lang="en" lang="en">EN</button>
-        <button type="button" data-lang="pt-BR" lang="pt-BR">PT</button>
-      </div>
+      <!-- The one count of what needs the person (mm47): the bell inside, the waiting list behind it. -->
+      <button type="button" class="needs-pill is-zero" id="waitingBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="waitingList" data-i18n-title="needs.title">
+        <svg class="needs-bell" aria-hidden="true"><use href="#i-bell"/></svg><span class="needs-text" id="waitingLabel"></span>
+      </button>
     </div>
   </header>
-
-  <section class="now" id="now" data-i18n-aria="now.label">
-    <button type="button" class="now-line" id="nowLine" data-help="now" aria-expanded="true" aria-controls="nowCards">
-      <span class="now-title" data-i18n="now.title"></span>
-      <span class="now-counts" id="nowCounts"></span>
-      <svg class="now-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </button>
-    <ul class="now-cards" id="nowCards"></ul>
-  </section>
+  <!-- Help and every setting live in the ⋯ of the bar (navbar.js): the tour, other AIs, Full mode, this panel and Configurações. -->
+  <div class="help-menu" id="helpMenu" popover="auto" role="dialog" aria-labelledby="helpMenuTitle">
+    <h2 id="helpMenuTitle" data-i18n="more.help"></h2>
+    <h3 data-i18n="help.glossary"></h3>
+    <ul class="help-glossary" id="helpGlossary"></ul>
+  </div>
+  <div class="help-tip" id="helpTip" popover="auto" role="note"></div>
 
   <aside class="convs" id="convs" aria-labelledby="convsTitle">
     <div class="cv-rail">
@@ -123,8 +111,17 @@
     </div>
     <div class="cv-body" id="convsBody">
       <div class="cv-head">
-        <h2 id="convsTitle" data-help="convs"><span data-i18n="convs.title"></span> <span class="cv-total num" id="convsTotal"></span></h2>
-        <button type="button" class="btn small-btn cv-new" id="convsNewChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
+        <h2 id="convsTitle" data-help="convs"><span data-i18n="convs.title"></span></h2>
+        <!-- Every way to start something new, in one menu where the conversations begin (mm48). -->
+        <div class="new-wrap">
+          <button type="button" class="btn primary small-btn cv-new" id="newBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="newMenu"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="new.button"></span><svg class="btn-icon menu-chev" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          <div class="pop-menu new-menu" id="newMenu" role="menu" data-i18n-aria="new.menu" hidden>
+            <button type="button" class="pm-row is-two" role="menuitem" id="newChat" data-i18n-title="projchat.newHint" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-chat"/></svg><span class="pm-label" data-i18n="new.chat"></span><span class="pm-desc" data-i18n="new.chatHint"></span></button>
+            <button type="button" class="pm-row is-two" role="menuitem" id="newIdea" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-idea"/></svg><span class="pm-label" data-i18n="new.idea"></span><span class="pm-desc" id="newIdeaHint" data-i18n="new.ideaHint"></span></button>
+            <hr class="pm-sep">
+            <button type="button" class="pm-row is-two" role="menuitem" id="openOrch" data-i18n-title="orch.chipTitle" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-auto"/></svg><span class="pm-label" data-i18n="new.orch"></span><span class="pm-desc" data-i18n="new.orchHint"></span></button>
+          </div>
+        </div>
         <button type="button" class="icon-btn cv-collapse" id="convsCollapse" aria-controls="convsBody" aria-expanded="true" data-i18n-aria="convs.collapse" data-i18n-title="convs.collapse"><svg><use href="#i-sidebar"/></svg></button>
       </div>
       <div class="cv-tools">
@@ -133,40 +130,55 @@
           <label class="visually-hidden" for="convsSearch" data-i18n="convs.searchLabel"></label>
           <input type="search" id="convsSearch" autocomplete="off" data-i18n-placeholder="convs.search">
         </div>
-        <div class="seg cv-scope" id="convsScope" role="group" data-i18n-aria="convs.scope">
-          <button type="button" data-scope="project" aria-pressed="true" data-i18n="convs.scope.project"></button>
-          <button type="button" data-scope="all" aria-pressed="false" data-i18n="convs.scope.all"></button>
-        </div>
-        <div class="cv-states" id="convsStates" role="group" data-i18n-aria="convs.states"></div>
+        <!-- Which conversations, always in sight (mm49): This project | All projects; under it, the five states with their counts. -->
+        <div class="cv-seg" id="convsScopeSeg" role="tablist"></div>
+        <div class="cv-states" id="convsStates" role="group"></div>
       </div>
       <div class="cv-filter" id="convsFilter" hidden></div>
       <div class="cv-list" id="convsList" data-i18n-aria="convs.label" role="region"><div class="skeleton" aria-hidden="true"><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span><span class="sk-bar is-short"></span><span class="sk-bar is-wide"></span><span class="sk-bar is-mid"></span></div></div>
+      <!-- The foot (mm49): the archived ones, folded; on a phone, the way to Board and History. -->
+      <div class="cv-foot">
+        <button type="button" class="cv-archived" id="convsArchived" aria-controls="convsList" aria-expanded="false" hidden></button>
+        <button type="button" class="cv-board" id="convsBoardLink"><span data-i18n="convs.boardLink"></span><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+      </div>
     </div>
   </aside>
   <div class="cv-scrim" id="convsScrim" hidden></div>
 
   <main class="stage" id="stage">
+    <!-- One quiet row over the map (mm48): what it is and who works on it, then search and the one "Vista" menu. -->
     <div class="mm-tools" id="tools">
-      <div class="summary-row"><p class="summary" id="summary" data-help="map"></p></div>
+      <div class="summary-row">
+        <p class="summary" id="summary"></p>
+        <button type="button" id="liveBtn" class="mh-live is-zero" aria-expanded="false" aria-controls="liveList">
+          <span class="live-dot" aria-hidden="true"></span><span class="live-n num" data-live="count"></span><span data-live="label"></span>
+        </button>
+        <!-- The map's "?" sits at the end of the line it explains. -->
+        <span class="mh-help" data-help="map"></span>
+      </div>
       <div class="mm-actions">
         <div class="mm-search" id="searchBox">
           <svg class="mm-search-icon" aria-hidden="true"><use href="#i-search"/></svg>
           <label class="visually-hidden" for="search" data-i18n="search.label"></label>
-          <input type="search" id="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list" data-i18n-placeholder="search.placeholder">
+          <input type="search" id="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list" aria-keyshortcuts="/" data-i18n-placeholder="search.placeholder">
+          <kbd class="mm-search-key" aria-hidden="true">/</kbd>
           <ul id="searchResults" class="mm-results" role="listbox" data-i18n-aria="search.results" hidden></ul>
         </div>
-        <div class="mm-changed" id="changed" role="group" data-i18n-aria="changed.label"></div>
-        <button type="button" class="btn mm-files-btn" id="filesSide" aria-pressed="true" data-i18n-title="map.filesSideHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-file"/></svg><span data-i18n="map.filesSide"></span></button>
-        <button type="button" class="btn mm-rel-btn" id="relations" aria-pressed="false"><svg class="btn-icon" aria-hidden="true"><use href="#i-links"/></svg><span data-i18n="relations.show"></span></button>
-        <button type="button" class="btn primary" id="newChat" data-i18n-title="projchat.newHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
-        <button type="button" class="btn" id="openOrch" data-i18n-title="orch.chipTitle"><svg class="btn-icon" aria-hidden="true"><use href="#i-auto"/></svg><span data-i18n="orch.name"></span></button>
-        <button type="button" class="btn" id="newIdea"><svg class="btn-icon" aria-hidden="true"><use href="#i-idea"/></svg><span data-i18n="idea.button"></span></button>
-        <button type="button" id="liveBtn" class="live-btn is-zero" aria-expanded="false" aria-controls="liveList">
-          <span class="live-dot" aria-hidden="true"></span><span data-live="label"></span><span class="live-n num" data-live="count"></span>
-        </button>
-        <button type="button" id="waitingBtn" class="waiting-btn" aria-expanded="false" aria-controls="waitingList">
-          <span class="waiting-dot" aria-hidden="true"></span><span id="waitingLabel"></span>
-        </button>
+        <div class="view-wrap-menu">
+          <button type="button" class="btn view-btn" id="viewBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="viewMenu" data-i18n-title="view.menuHint"><svg class="btn-icon" aria-hidden="true"><use href="#i-sliders"/></svg><span data-i18n="view.menu"></span><span class="view-on" id="viewOn" hidden></span><svg class="btn-icon menu-chev" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          <div class="pop-menu view-menu" id="viewMenu" role="menu" data-i18n-aria="view.menu" hidden>
+            <p class="pm-head" id="changedTitle" data-i18n="changed.label"></p>
+            <div class="mm-changed" id="changed" role="group" aria-labelledby="changedTitle"></div>
+            <hr class="pm-sep">
+            <button type="button" class="pm-row mm-files-btn" role="menuitemcheckbox" id="filesSide" aria-checked="true" data-i18n-title="map.filesSideHint"><svg class="pm-icon" aria-hidden="true"><use href="#i-file"/></svg><span class="pm-label" data-i18n="view.files"></span><span class="pm-switch" aria-hidden="true"></span></button>
+            <button type="button" class="pm-row mm-rel-btn" role="menuitemcheckbox" id="relations" aria-checked="false" data-close><svg class="pm-icon" aria-hidden="true"><use href="#i-links"/></svg><span class="pm-label" data-i18n="view.relations"></span><span class="pm-switch" aria-hidden="true"></span></button>
+            <hr class="pm-sep vm-sep-toggles">
+            <div class="pm-keep" id="bgKeep" hidden>
+              <hr class="pm-sep">
+              <button type="button" class="pm-row is-two bg-switch" role="menuitemcheckbox" id="bgSwitch" aria-checked="false"><svg class="pm-icon" aria-hidden="true"><use href="#i-auto"/></svg><span class="pm-label" data-i18n="view.keep"></span><span class="pm-switch" aria-hidden="true"></span><span class="pm-desc"><span data-i18n="view.keepHint"></span> <strong data-i18n="view.keepCost"></strong></span></button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -239,20 +251,23 @@
     <!-- The chat sheet sits on the stage itself: on a computer it takes the whole height, beside the map tools (mm33). -->
     <aside id="chat" class="sheet chat" aria-labelledby="chatTitle" hidden>
       <div class="sheet-resize" id="chatResize" data-i18n-aria="resize.chat" data-i18n-title="resize.chat"></div>
+      <!-- One line (pc18): the state, the title, the part, then ⋯ (about this part, find, rename or move, archive, open in a
+           terminal, delete, new conversation) and close. -->
       <div class="sheet-head chat-head">
-        <p class="chat-crumbs" id="chatContext" data-chat="context"></p>
+        <span class="chat-dot" data-chat="dot" role="img" hidden></span>
         <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
+        <span class="chat-part" id="chatContext" data-chat="context" hidden></span>
         <div class="sheet-head-tools">
-          <button type="button" class="btn small-btn chat-new" id="chatNew" data-chat="new" data-i18n-title="projchat.newHint" data-i18n-aria="projchat.new" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="projchat.new"></span></button>
           <div class="chat-more">
             <button type="button" class="icon-btn" id="chatMore" data-chat="more" aria-haspopup="menu" aria-expanded="false" aria-controls="chatMoreMenu" data-i18n-aria="chat.more" data-i18n-title="chat.more" hidden><svg><use href="#i-more"/></svg></button>
-            <div class="chat-more-menu" id="chatMoreMenu" data-chat="moremenu" role="menu" data-i18n-aria="chat.more" hidden></div>
+            <div class="pop-menu chat-more-menu" id="chatMoreMenu" data-chat="moremenu" role="menu" data-i18n-aria="chat.more" hidden></div>
           </div>
           <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
       </div>
-      <!-- A box's information on top, in tabs by kind, folding to one line while the person talks; the chat about the box
-           under it, always at hand (mm07). app.js draws them; a chat about no box shows only the chat. -->
+      <!-- A box's information on top, in tabs by kind, folding away while the person talks and coming back from the ⋯
+           ("About this part", pc18); the chat about the box under it, always at hand (mm07). app.js draws them; a chat
+           about no box shows only the chat. -->
       <section class="point-info" id="pointInfo" aria-labelledby="pointFold" hidden>
         <button type="button" class="point-fold" id="pointFold" aria-expanded="true" aria-controls="pointBody">
           <svg class="pf-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
@@ -276,34 +291,32 @@
         <ol id="chatLog" data-chat="log" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
         <div class="chat-tasks" data-chat="tasks" hidden></div>
         <form id="chatForm" data-chat="form" class="chat-form">
-          <p class="chat-status" id="chatStatus" data-chat="status" role="status"></p>
+          <!-- While a turn runs: "Working · <step> [Stop]" (pc18). -->
+          <div class="chat-live" data-chat="live" hidden>
+            <span class="chat-live-dot" aria-hidden="true"></span>
+            <p class="chat-status" id="chatStatus" data-chat="status" role="status"></p>
+            <button type="button" class="chat-stop" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+          </div>
           <div class="chat-pending" data-chat="pending" hidden></div>
           <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
-          <div class="chat-input-wrap">
-            <textarea id="chatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="chatSuggest"></textarea>
-            <ul class="chat-suggest" id="chatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
-          </div>
-          <div class="chat-bar">
-            <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
-            <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-            <div class="chat-run" id="chatRun" data-chat="run"></div>
-            <div class="chat-menu" id="chatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
-              <div class="run-panel" id="chatRunPanel" data-chat="runpanel"></div>
-              <details class="run-advanced" data-chat="advanced">
-                <summary data-i18n="run.advanced"></summary>
-                <div class="run-manual" data-chat="manualways"></div>
-                <div class="chat-mode">
-                  <label for="chatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
-                  <select id="chatMode" data-chat="mode"></select>
-                  <button type="button" class="btn small-btn" id="chatPcMode" data-chat="pcmode" data-i18n="pcmode.button"></button>
-                  <p class="chat-safety" data-i18n="chat.safety"></p>
-                </div>
-              </details>
+          <span class="visually-hidden" id="chatKeys" data-i18n="chat.keys"></span>
+          <div class="chat-box">
+            <div class="chat-input-wrap">
+              <textarea id="chatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="chatSuggest" aria-describedby="chatKeys"></textarea>
+              <ul class="chat-suggest" id="chatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
             </div>
-            <button type="button" class="btn" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
-            <button type="submit" class="btn primary" id="chatSend" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
+            <div class="chat-bar">
+              <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
+              <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+              <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
+              <div class="chat-run" id="chatRun" data-chat="run"></div>
+              <!-- The three ways, the quiet line and the link to Configurações (pc19). -->
+              <div class="chat-menu" id="chatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
+                <div class="run-panel" id="chatRunPanel" data-chat="runpanel"></div>
+              </div>
+              <button type="submit" class="btn primary chat-send" id="chatSend" data-chat="send"><span data-i18n="chat.send"></span><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg></button>
+            </div>
           </div>
-          <p class="chat-keys" data-i18n="chat.keys"></p>
         </form>
       </div>
     </aside>
@@ -404,9 +417,14 @@
       <aside id="flowChat" class="sheet chat fl-chat" aria-labelledby="flowChatTitle" hidden>
         <div class="sheet-resize" id="flowChatResize" data-i18n-aria="resize.chat" data-i18n-title="resize.chat"></div>
         <div class="sheet-head chat-head">
-          <p class="chat-crumbs" data-chat="context"></p>
+          <span class="chat-dot" data-chat="dot" role="img" hidden></span>
           <h2 id="flowChatTitle" data-chat="title"></h2>
+          <span class="chat-part" data-chat="context" hidden></span>
           <div class="sheet-head-tools">
+            <div class="chat-more">
+              <button type="button" class="icon-btn" id="flowChatMore" data-chat="more" aria-haspopup="menu" aria-expanded="false" aria-controls="flowChatMoreMenu" data-i18n-aria="chat.more" data-i18n-title="chat.more" hidden><svg><use href="#i-more"/></svg></button>
+              <div class="pop-menu chat-more-menu" id="flowChatMoreMenu" data-chat="moremenu" role="menu" data-i18n-aria="chat.more" hidden></div>
+            </div>
             <button type="button" class="icon-btn" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
           </div>
         </div>
@@ -417,34 +435,30 @@
           <ol data-chat="log" class="chat-log" role="log" aria-live="polite" data-i18n-aria="chat.logLabel"></ol>
           <div class="chat-tasks" data-chat="tasks" hidden></div>
           <form data-chat="form" class="chat-form">
-            <p class="chat-status" data-chat="status" role="status"></p>
+            <div class="chat-live" data-chat="live" hidden>
+              <span class="chat-live-dot" aria-hidden="true"></span>
+              <p class="chat-status" data-chat="status" role="status"></p>
+              <button type="button" class="chat-stop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+            </div>
             <div class="chat-pending" data-chat="pending" hidden></div>
             <label class="visually-hidden" for="flowChatInput" data-i18n="chat.inputLabel"></label>
-            <div class="chat-input-wrap">
-              <textarea id="flowChatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="flowChatSuggest"></textarea>
-              <ul class="chat-suggest" id="flowChatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
-            </div>
-            <div class="chat-bar">
-              <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
-              <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-              <div class="chat-run" data-chat="run"></div>
-              <div class="chat-menu" id="flowChatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
-                <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel"></div>
-                <details class="run-advanced" data-chat="advanced">
-                  <summary data-i18n="run.advanced"></summary>
-                  <div class="run-manual" data-chat="manualways"></div>
-                  <div class="chat-mode">
-                    <label for="flowChatMode" class="chat-mode-label" data-i18n="chat.modeLabel"></label>
-                    <select id="flowChatMode" data-chat="mode"></select>
-                    <button type="button" class="btn small-btn" data-chat="pcmode" data-i18n="pcmode.button"></button>
-                    <p class="chat-safety" data-i18n="flow.chatSafety"></p>
-                  </div>
-                </details>
+            <span class="visually-hidden" id="flowChatKeys" data-i18n="chat.keys"></span>
+            <div class="chat-box">
+              <div class="chat-input-wrap">
+                <textarea id="flowChatInput" data-chat="input" rows="1" maxlength="20000" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="flowChatSuggest" aria-describedby="flowChatKeys"></textarea>
+                <ul class="chat-suggest" id="flowChatSuggest" data-chat="suggest" role="listbox" data-i18n-aria="chat.suggest" hidden></ul>
               </div>
-              <button type="button" class="btn" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
-              <button type="submit" class="btn primary" data-chat="send"><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg><span data-i18n="chat.send"></span></button>
+              <div class="chat-bar">
+                <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
+                <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+                <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
+                <div class="chat-run" data-chat="run"></div>
+                <div class="chat-menu" id="flowChatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
+                  <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel"></div>
+                </div>
+                <button type="submit" class="btn primary chat-send" data-chat="send"><span data-i18n="chat.send"></span><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg></button>
+              </div>
             </div>
-            <p class="chat-keys" data-i18n="chat.keys"></p>
           </form>
         </div>
       </aside>
@@ -482,6 +496,7 @@
   <section class="cut" id="cutPanel" aria-labelledby="cutTitle" hidden></section>
   <ol id="alertStack" class="al-stack" aria-live="polite" data-i18n-aria="notify.stack"></ol>
   <dialog id="alertsDialog" class="dv-dialog al-dialog" aria-labelledby="alertsTitle"></dialog>
+  <dialog id="settingsDialog" class="dv-dialog al-dialog st-dialog" aria-labelledby="settingsTitle"></dialog>
   <dialog id="aiHelpersDialog" class="dv-dialog al-dialog ah-dialog" aria-labelledby="aiHelpersTitle"></dialog>
   <dialog id="fileDialog" class="file-dialog" aria-labelledby="fileTitle"></dialog>
   <dialog id="confirmDialog" class="dv-dialog" data-i18n-aria="confirm.label"></dialog>

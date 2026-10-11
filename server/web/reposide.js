@@ -217,7 +217,7 @@ export function createRepoSide({ h, t, lang, store, project, files, toast, butto
   let leaveTimer = 0;
   let pickedKey = null; // `${projectId}|${box id}`: the part picked whose folders were opened already
 
-  const paintButton = () => button?.setAttribute('aria-pressed', String(on));
+  const paintButton = () => button?.setAttribute('aria-checked', String(on));
   paintButton();
   button?.addEventListener('click', () => {
     on = !on;

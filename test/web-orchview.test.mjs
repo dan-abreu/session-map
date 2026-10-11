@@ -61,7 +61,7 @@ test('orchSection: says what the orchestrator is, offers to open or start it, an
   assert.equal(walk(on).find((e) => e.attrs['data-orch'] === 'tidy').attrs.checked, true);
 });
 
-test('the page wires it: a button in the toolbar, the chip in the root box, the block in the project panel, the switch to the settings route', async () => {
+test('the page wires it: an item of the Novo menu (mm48), the chip in the root box, the block in the project panel, the switch to the settings route', async () => {
   const { readFileSync } = await import('node:fs');
   const web = (f) => readFileSync(new URL(`../server/web/${f}`, import.meta.url), 'utf8');
   assert.match(web('index.html'), /id="openOrch"[^>]*data-i18n-title="orch\.chipTitle"/);

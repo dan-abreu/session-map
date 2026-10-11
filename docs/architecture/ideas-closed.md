@@ -10,6 +10,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - Following the work live: id29, id31, id32, id34, id35, id36, id37, id38, id39
 - Files, terminal and the first use of a repository: id40
 - The Flow: id43, id44
+- Clarity and polish: id91
 - This registry: id68, id69
 
 ## How it works
@@ -264,6 +265,15 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: ask the workshop chat for a new box: the drawing changes at once; add an arrow by hand and undo it; the README is unchanged until Apply.
   - Where it went: `fl03`.
   - Status: done (released in v0.2.1).
+
+### Clarity and polish
+
+- [x] A cleaner, more professional and more intuitive look, now that it grew complex `id91`
+  - Asked: 2026-10-11 — "ficou complexo, bora da uma repaginada melhor? deixar mais profissional e mais intuitivo"; 2026-10-11 — "bora começa só pelo mapa e pelo chat, vamos fazer uma coisa minimalista, moderna, intutiva, organizada, autodidata, tenha uma ideia boa, mas boa mesmo, bem polida"; 2026-10-11 — "não quero que mude o mapa, eu quero que mude ao redor, tem muita informação na tela e as opções de trabalhar estão muito espalhadas, não é o mapa aqui no centro ele ta bem, podemos da uma polida nele de melhorar alguma coisa, mas do jeito que está ta muito bem, falo ao redor, o chat, as opções do chat as opções do maps daquele tela ali em cima"
+  - What it means: a redesign that makes session-map simpler to read and use: fewer things on screen at once, a clear path for the everyday tasks, and a consistent, professional look.
+  - How to confirm it is done: the owner opens the redesigned screens and finds the everyday tasks without hunting; the screens look like one product.
+  - Where it went: `mm47`, `mm48`, `mm49`, `pc18`, `pc19` (the map itself stays as it is).
+  - Status: done (on main: `mm47`, `mm48`, `mm49`, `pc18` and `pc19` built in a separate copy, approved by the owner on 2026-10-11 — "já dá pra usar a nova cara do programa" — and joined to main the same day with the whole suite passing; reaches the page with the next version).
 
 ### This registry
 

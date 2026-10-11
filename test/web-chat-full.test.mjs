@@ -147,12 +147,12 @@ test('a conversation still running in VS Code is mirrored: new steps appear, and
   openOld(chat);
   await settle();
   assert.equal(timers.length, 1, 'asks again in a moment');
-  assert.match(text(part('find')), /chat.mirrorShort/, 'says it is live');
+  assert.match(text(part('status')), /chat.mirrorShort/, 'the working line says it is live');
   answer = { ok: true, same: true, version: 'v1' };
   await timers[0].fn();
   assert.ok(calls.at(-1).path.endsWith('?since=v1'), 'only what changed');
   assert.equal(timers.length, 2);
-  const stepBefore = part('log').children.find((li) => li.classes.has('msg-tool'));
+  const stepBefore = part('log').children.find((li) => li.classes.has('msg-steps'));
   answer = { ...HISTORY, readOnly: true, live: false, version: 'v2', costUSD: 0.75, items: [...ITEMS, { type: 'assistant', text: 'One more thing.', ts: '2026-10-09T09:06:00.000Z' }] };
   await timers[1].fn();
   assert.match(text(part('log')), /One more thing/);
@@ -160,7 +160,7 @@ test('a conversation still running in VS Code is mirrored: new steps appear, and
   assert.equal(timers.length, 2, 'it ended: no more asking');
   walk(part('run')).find((e) => e.attrs['data-run'] === 'toggle').attrs.onclick();
   assert.match(text(part('runpanel')), /US\$ 0\.75/, 'the total in the menu follows');
-  assert.doesNotMatch(text(part('find')), /chat.mirrorShort/);
+  assert.doesNotMatch(text(part('status')), /chat.mirrorShort/);
   chat.close();
 });
 
@@ -226,7 +226,7 @@ test('Esc stops a running reply; the arrow up brings back the last message; plan
   const { chat, part } = makeChat();
   chat.open({ projectId: 'shop', title: 'New', start: { node: { kind: 'part', partId: 'cart' } } });
   await settle();
-  assert.ok(walk(part('mode')).some((e) => e.tag === 'option' && e.attrs.value === 'plan'), 'plan mode in the picker');
+  assert.ok(chat.settings().modes.includes('plan'), 'plan mode among the permissions Configurações offers');
   part('input').value = 'Do it';
   part('form').fire('submit');
   await settle();

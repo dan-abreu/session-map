@@ -48,6 +48,17 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - They answer with the newest finished state at once while the next one is collected.
   - How to confirm it is done: with the page open for a while, open a chat: its messages show in under a second.
 
+### The chat, redesigned (2026-10-11)
+
+- [x] A one-line header with the rest in its ⋯; the AI's steps folded into one line; quick-reply buttons when it asks; a working line with Stop `pc18`
+  - From `id91`. The header is the state dot, the title, the part as a chip, ⋯ and close; the ⋯ holds "About this part" (the box's information, which folds away while the person talks and opens in place from here), find (also Ctrl F, with "Go to"), rename or move, archive, open in a terminal, delete and New conversation.
+  - A turn's tool and thinking rows fold into "Did 12 steps · read 6 files, changed 3" (`views.js` `stepRuns`, `stepCounts`).
+  - Quick replies come only from options really written at the end of the last reply: a numbered or lettered list (1, 2, 3 or a, b, c in order) next to a question, or a last question "X or Y?" with two short sides (`chatfold.js` `quickReplies`); a click sends the option's words.
+  - While a turn runs, one line "Working · <step> [Stop]" above the box; the key hints sit inside it, on its bar.
+- [x] The menu by Send shows only the three ways; the monthly limit and permissions move to Configurações `pc19`
+  - From `id91`. Autonomous, Automatic and Manual (Manual shows the model and level right under it), a quiet "model · level · cost in this conversation" line and the link "Monthly limit and permissions…".
+  - Configurações (`runsettings.js`) is one sheet, also in the person's menu: the monthly limit (the same value as Home's card), "may reinforce on its own", the permission mode with "use this mode in every Claude on this PC", and the advanced ways (Maestro, Ultracode, Same as my Claude).
+
 ### How it runs
 
 - [x] **Claude:** Automatic and Manual ways a page chat runs, with the model and effort shown `pc07`

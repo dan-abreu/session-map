@@ -4,6 +4,7 @@
 // numbers stay null so the page says "not read yet" and never shows a zero.
 import { costInRange, resolveRange } from './range.js';
 import { budgetTone, waitingEntries } from './views.js';
+import { needsYou } from './now.js';
 
 export const HEALTH_LOW = 60;
 const HEALTH_GOOD = 80;
@@ -49,10 +50,15 @@ function lastActivityOf(project) {
 }
 
 // nowMs: the moment that decides which month is "this month". ignored: clashes the person chose to stop seeing.
+// needs: the conversations of the project the amber pill counts (now.js needsYou, one fact, one number, mm47);
+// decisions: what waits for the person on its map; waiting: both, what the waiting list holds for the project.
 export function homeRows(state, { nowMs = Date.now(), ignored = new Set() } = {}) {
   const month = resolveRange({ preset: 'month' }, nowMs);
+  const needs = new Map();
+  for (const { project } of needsYou(state)) needs.set(project.id, (needs.get(project.id) ?? 0) + 1);
   const rows = state.projects.map((p) => {
     const f = p.foundation ?? null;
+    const waiting = waitingEntries(state, p.id, ignored);
     return {
       id: p.id,
       name: p.name,
@@ -61,7 +67,9 @@ export function homeRows(state, { nowMs = Date.now(), ignored = new Set() } = {}
       health: Number.isFinite(f?.health?.score) ? { score: f.health.score, tone: healthTone(f.health.score) } : null,
       uptodate: f?.uptodate ? { confirmed: f.uptodate.confirmed, warning: f.uptodate.warning, unverified: f.uptodate.unverified } : null,
       working: (p.chats ?? []).filter((c) => c.status === 'busy' && !c.archived).length,
-      waiting: waitingEntries(state, p.id, ignored).length,
+      needs: needs.get(p.id) ?? 0,
+      decisions: waiting.filter((e) => e.decision).length,
+      waiting: waiting.length,
       monthCost: { usd: costInRange(p.costByDay, month) },
       lastActivity: lastActivityOf(p),
     };
@@ -82,6 +90,7 @@ export function homeTotals(rows) {
   return {
     projects: rows.length,
     working: rows.reduce((s, r) => s + r.working, 0),
+    needs: rows.reduce((s, r) => s + r.needs, 0),
     waiting: rows.reduce((s, r) => s + r.waiting, 0),
     monthUsd: rows.reduce((s, r) => s + r.monthCost.usd, 0),
     unread: rows.filter((r) => !r.read).length,

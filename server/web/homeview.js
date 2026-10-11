@@ -89,6 +89,17 @@ export function createHomeView(ctx) {
 
   const countCell = (column, n, key, tone) => cell(column, n > 0 ? `is-${tone}` : 'is-zero', label(`home.col.${column}`),
     h('span', { class: 'hm-val num' }, icon(COLUMN_ICON[column]), n > 0 ? t(key, { n }) : t('home.nothing')));
+  const count = (key, n) => t(`${key}.${n === 1 ? 'one' : 'other'}`, { n });
+
+  // What needs the person, under the column of the inbox's own name: the conversations, as many as the amber pill counts for
+  // the project (one fact, one number, mm47), then the decisions waiting on its map, quiet, on their own line.
+  function needsCell(row) {
+    const sub = row.decisions > 0 ? h('span', { class: 'hm-sub num' }, count('home.mapDecisions', row.decisions)) : null;
+    if (row.needs > 0) return cell('waiting', 'is-waiting', label('home.col.waiting'), h('span', { class: 'hm-val num' }, icon(COLUMN_ICON.waiting), count('home.needsChats', row.needs)), sub);
+    return cell('waiting', 'is-zero', label('home.col.waiting'), sub
+      ? h('span', { class: 'hm-val num' }, icon(COLUMN_ICON.waiting), count('home.mapDecisions', row.decisions))
+      : h('span', { class: 'hm-val' }, icon(COLUMN_ICON.waiting), t('home.nothing')));
+  }
 
   function costCell(row) {
     const money = ctx.fmt.money(row.monthCost.usd);
@@ -112,13 +123,13 @@ export function createHomeView(ctx) {
 
   function rowEl(row) {
     const unread = !row.read;
-    const cls = `hm-item${unread ? ' is-unread' : ''}${row.waiting > 0 ? ' has-waiting' : ''}`;
+    const cls = `hm-item${unread ? ' is-unread' : ''}${row.needs > 0 ? ' has-waiting' : ''}`;
     return h('li', { class: cls, 'data-id': row.id },
       h('div', { class: 'hm-row' },
         projectCell(row),
         unread ? unreadCell(row) : [healthCell(row), uptodateCell(row)],
         countCell('working', row.working, 'home.working.n', 'working'),
-        countCell('waiting', row.waiting, 'home.waiting.n', 'waiting'),
+        needsCell(row),
         costCell(row),
         lastCell(row)),
       attentionEl(row));
@@ -134,7 +145,7 @@ export function createHomeView(ctx) {
     return [
       one('home.total.projects', String(totals.projects), 'box'),
       one('home.total.working', String(totals.working), 'auto', totals.working > 0 ? 'is-working' : ''),
-      one('home.total.waiting', String(totals.waiting), 'bell', totals.waiting > 0 ? 'is-waiting' : ''),
+      one('home.total.waiting', String(totals.needs), 'bell', totals.needs > 0 ? 'is-waiting' : ''),
       one('home.total.month', ctx.fmt.money(totals.monthUsd), 'coin'),
       totals.unread > 0 ? one('home.total.unread', String(totals.unread), 'clock') : null,
     ];

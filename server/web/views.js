@@ -3,22 +3,33 @@ import { summaryOf } from './alerts.js';
 import { modelName } from './live.js';
 import { inRange } from './range.js';
 import { clashKey } from './signals.js';
+import { needsYou } from './now.js';
 
 
 // Everything that waits for the person, in the order the list shows it: strong questions first. With a project id, only
 // that project's; without, every project's. ignored: the clashes the person chose to stop seeing (wa07), by clashKey.
+// The conversations are needsYou's, the pill's one rule (fresh, not archived, a busy one only on a real question); this
+// adds the decisions of the map.
 export function waitingEntries(state, projectId = null, ignored = new Set()) {
   const out = [];
   for (const p of state.projects) {
     if (projectId && p.id !== projectId) continue;
     for (const d of p.decisions || []) if (d.kind !== 'clash' || !ignored.has(clashKey(d))) out.push({ project: p, decision: d, rank: 1, ts: state.generatedAt });
-    for (const c of p.chats) {
-      if (!c.archived && (c.waiting.strong || c.waiting.weak || c.waiting.items.length)) {
-        out.push({ project: p, chat: c, rank: c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3, ts: c.updatedAt });
-      }
-    }
+  }
+  for (const { project, chat: c } of needsYou(state)) {
+    if (projectId && project.id !== projectId) continue;
+    out.push({ project, chat: c, rank: c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3, ts: c.updatedAt ?? '' });
   }
   return out.sort((a, b) => a.rank - b.rank || b.ts.localeCompare(a.ts));
+}
+
+// The waiting list the amber pill opens (mm47): first the conversations of the pill, exactly those (needs: now.js
+// needsYou, every project), then the decisions on the map of the open project, or of every project without a project id.
+export function waitingSections(state, needs, { projectId = null, ignored = new Set() } = {}) {
+  const rank = (c) => (c.waiting.strong ? 0 : c.waiting.items.length ? 1 : 3);
+  const chats = needs.map(({ project, chat }) => ({ project, chat, rank: rank(chat), ts: chat.updatedAt ?? '' }))
+    .sort((a, b) => a.rank - b.rank || b.ts.localeCompare(a.ts));
+  return { chats, decisions: waitingEntries(state, projectId, ignored).filter((e) => e.decision) };
 }
 
 const WAITING_ORDER = ['question', 'item', 'decision', 'clash', 'ends'];
@@ -240,4 +251,28 @@ export function pcModeOffer(choice, current) {
 export function composerSize({ scrollHeight, paneHeight, minHeight }) {
   const max = Math.max(minHeight, Math.round(paneHeight * 0.4));
   return { height: Math.max(minHeight, Math.min(scrollHeight, max)), scroll: scrollHeight > max };
+}
+
+// A turn's steps (pc18): each stretch of tool and thinking rows with at least one tool folds into one line. A reply, a
+// permission, a question or a day line between them starts a new stretch. → [{start, end}] (end not included).
+const STEP_ROWS = new Set(['tool', 'thinking']);
+export function stepRuns(items) {
+  const runs = [];
+  let start = -1;
+  const close = (end) => {
+    if (start >= 0 && items.slice(start, end).some((i) => i.type === 'tool')) runs.push({ start, end });
+    start = -1;
+  };
+  items.forEach((item, n) => {
+    if (STEP_ROWS.has(item?.type)) { if (start < 0) start = n; } else close(n);
+  });
+  close(items.length);
+  return runs;
+}
+
+// What a stretch did, for its one line: the steps, and how many files it read and changed (each file once).
+export function stepCounts(items) {
+  const tools = items.filter((i) => i.type === 'tool');
+  const files = (kind) => new Set(tools.filter((i) => i.step?.kind === kind).map((i) => i.step.target || i.diff?.path).filter(Boolean)).size;
+  return { steps: tools.length, read: files('read'), changed: files('edit') };
 }

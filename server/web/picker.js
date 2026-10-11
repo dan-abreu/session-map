@@ -2,20 +2,22 @@
 // marks: a pulsing green dot when something works there, an amber number waiting for the person, a check for finished and
 // not seen yet. A native <select> cannot hold those marks, so this is a small listbox with the same keys.
 
-// ctx: root, button, list, name (the name span), marks (the marks span), h, t (translator getter), icon(name, cls), onPick(id).
+// The button names the open project only (mm47): its amber count is the pill's and its work the map header's, so the marks
+// wait in the list, one look away; its label still says them.
+// ctx: root, button, list, name (the name span), h, t (translator getter), icon(name, cls), onPick(id).
 export function createProjectPicker(ctx) {
   const { root, button, list, h } = ctx;
   let projects = [];
   let current = null;
   let badges = new Map();
 
-  function marksView(b, { quiet = false } = {}) {
+  function marksView(b) {
     const tt = ctx.t();
     if (!b) return [];
     const out = [];
-    if (b.working) out.push(h('span', { class: 'pp-mark is-working', title: quiet ? null : tt('project.markWorking') }, h('span', { class: 'visually-hidden' }, tt('project.markWorking'))));
-    if (b.waiting) out.push(h('span', { class: 'pp-mark is-waiting num', title: quiet ? null : tt.count('project.markWaiting', b.waiting) }, String(b.waiting), h('span', { class: 'visually-hidden' }, ` ${tt.count('project.markWaiting', b.waiting)}`)));
-    if (b.finished) out.push(h('span', { class: 'pp-mark is-finished', title: quiet ? null : tt.count('project.markFinished', b.finished) }, ctx.icon('check', 'pp-check'), h('span', { class: 'visually-hidden' }, tt.count('project.markFinished', b.finished))));
+    if (b.working) out.push(h('span', { class: 'pp-mark is-working', title: tt('project.markWorking') }, h('span', { class: 'visually-hidden' }, tt('project.markWorking'))));
+    if (b.waiting) out.push(h('span', { class: 'pp-mark is-waiting num', title: tt.count('project.markWaiting', b.waiting) }, String(b.waiting), h('span', { class: 'visually-hidden' }, ` ${tt.count('project.markWaiting', b.waiting)}`)));
+    if (b.finished) out.push(h('span', { class: 'pp-mark is-finished', title: tt.count('project.markFinished', b.finished) }, ctx.icon('check', 'pp-check'), h('span', { class: 'visually-hidden' }, tt.count('project.markFinished', b.finished))));
     return out;
   }
 
@@ -53,8 +55,6 @@ export function createProjectPicker(ctx) {
     if (!p) return;
     root.style.setProperty('--p-h', String(p.hue));
     ctx.name.textContent = p.name;
-    // The button shows the open project's own marks; the others' are one look away in the list.
-    ctx.marks.replaceChildren(...marksView(badges.get(p.id), { quiet: true }));
     const b = badges.get(p.id);
     const words = b ? [b.working ? tt('project.markWorking') : null, b.waiting ? tt.count('project.markWaiting', b.waiting) : null, b.finished ? tt.count('project.markFinished', b.finished) : null] : [];
     button.setAttribute('aria-label', [tt('project.pick', { name: p.name }), ...words.filter(Boolean)].join(' · '));

@@ -32,16 +32,27 @@ export function createRangePicker(ctx) {
     return sel.preset === 'custom' ? { name: dates || tt('range.custom'), dates: '' } : { name: tt(`range.${sel.preset}`), dates: sel.preset === 'all' || sel.preset === 'today' ? '' : dates };
   }
 
+  // quick: the periods a button sits beside as their own choices (Vista, mm48); while one of them is picked, the button
+  // offers the others instead of repeating it.
+  const quickOf = new WeakMap();
+
   function paintButton(btn) {
     const sel = ctx.get();
+    if (quickOf.get(btn)?.includes(sel.preset)) {
+      btn.replaceChildren(ctx.icon('calendar', 'btn-icon'), h('span', { class: 'rp-name' }, t()('view.rangeMore')));
+      btn.setAttribute('aria-label', t()('view.rangeMore'));
+      btn.classList.remove('is-on');
+      return;
+    }
     const { name, dates } = words(sel);
     btn.replaceChildren(ctx.icon('calendar', 'btn-icon'), h('span', { class: 'rp-name' }, name), ...(dates ? [h('span', { class: 'rp-dates' }, dates)] : []));
     btn.setAttribute('aria-label', `${t()('range.label')}: ${[name, dates].filter(Boolean).join(', ')}`);
     btn.classList.toggle('is-on', sel.preset !== 'all');
   }
 
-  function button(extraClass = '') {
+  function button(extraClass = '', { quick = null } = {}) {
     const btn = h('button', { type: 'button', class: `btn rp-btn ${extraClass}`.trim(), 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
+    if (quick) quickOf.set(btn, quick);
     btn.addEventListener('click', () => (pop && !pop.hidden && opener === btn ? close() : open(btn)));
     paintButton(btn);
     buttons.add(btn);

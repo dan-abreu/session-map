@@ -56,7 +56,7 @@ test('the page loads the foundation styles after its own', () => {
 });
 
 test('the tour points at tabs the bar draws and at elements the page has', () => {
-  const ids = new Set(AREAS.map((a) => `#tab-${a.id}`));
+  const ids = new Set([...AREAS.map((a) => `#tab-${a.id}`), '#tab-more']);
   for (const s of TOUR_STEPS) {
     for (const target of [s.target, s.phoneTarget].filter(Boolean)) {
       if (target.startsWith('#tab-')) assert.ok(ids.has(target), target);
@@ -112,7 +112,7 @@ test('app.js reads the table: views by normalizeView, the bar by createNavbar, t
   assert.match(app, /from '\.\/areas\.js'/);
   assert.match(app, /function showView\([^)]*\) \{\s*const to = normalizeView\(/, 'showView passes every name through normalizeView');
   assert.match(app, /normalizeView\(store\.get\('sm\.view'\)\)/, 'the saved view too');
-  assert.match(app, /navbar\.setMode\(/, 'the mode switch reaches the bar');
+  assert.match(app, /tech: \(\) => tech,[^}]*extras: moreEntries/, 'the mode switch and the ⋯ entries reach the bar');
   assert.match(app, /navbar\.setReady\(areas\.ready\(\)\)/);
   assert.match(app, /areas\.draw\(/, 'refreshView goes through the registry');
   assert.match(app, /requestsView\.render\(/);
@@ -133,7 +133,7 @@ test('style.css makes room for the bar: the middle column grows, the phone keeps
 test('on the phone the page and everything fixed at the bottom stay above the bottom bar', () => {
   const phone = [...css.matchAll(/@media \(max-width: 719px\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n');
   assert.match(phone, /\bbody \{[^}]*padding-bottom: var\(--navbar-space\)/, 'the page reserves the bar height');
-  for (const sel of ['.waiting-btn', '.hist-read', '.al-stack', '.tour-card', '.toast']) {
+  for (const sel of ['.hist-read', '.al-stack', '.tour-card', '.toast']) {
     const rule = phone.match(new RegExp(`^\\s*${sel.replace('.', '\\.')} \\{([^}]*)\\}`, 'm'));
     assert.ok(rule, `${sel} has a phone rule`);
     assert.match(rule[1], /var\(--navbar-space/, `${sel} sits above the bar, not under it`);

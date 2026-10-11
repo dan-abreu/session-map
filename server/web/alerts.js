@@ -70,7 +70,7 @@ const TONE = { finished: 'active', waiting: 'waiting', error: 'clash', clash: 'c
 const DEFAULTS = { browser: true, desktop: true, sound: false, ntfy: { enabled: false, topic: null }, perProject: {} };
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 
-// ctx: stack (the cards' list), bell (toolbar button), dialog, h, t (translator getter), lang(), icon(name, cls), api,
+// ctx: stack (the cards' list), bell (a button that opens the settings, if the page has one), dialog, h, t (translator getter), lang(), icon(name, cls), api,
 // store, toast, errorText, projects() → [{id, name}], onOpen(group), onAlerts(alerts) (something changed: refresh the state),
 // pending() (what still needs the person: waiting for them plus finished and not seen, mm10).
 export function createAlerts(ctx) {
@@ -310,7 +310,7 @@ export function createAlerts(ctx) {
   });
   // A browser plays sound only after the person touched the page once.
   document.addEventListener('pointerdown', () => { audio?.resume?.(); }, { passive: true });
-  ctx.bell.addEventListener('click', openSettings);
+  ctx.bell?.addEventListener('click', openSettings);
 
   return {
     start() {

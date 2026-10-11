@@ -1,6 +1,6 @@
 // Most of the chat panel is dialogue (mm08): the input starts at one line and grows to about 40% of the panel, the
-// permissions wait folded in the menu of the button by Send, the key hints show only while typing, and on a phone the input stays
-// above the keyboard.
+// menu of the button by Send holds only how the chat runs (pc19), the key hints sit quietly inside the box (pc18), and on
+// a phone the input stays above the keyboard.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,19 +17,24 @@ test('the input is one line high empty, grows with the text and scrolls past 40%
   assert.deepEqual(composerSize({ scrollHeight: 500, paneHeight: 0, minHeight: 38 }), { height: 38, scroll: true }, 'a hidden panel never collapses the input below one line');
 });
 
-test('both chat sheets start the input at one line and keep the permissions folded in the menu by Send', () => {
+test('both chat sheets start the input at one line and keep only how the chat runs in the menu by Send', () => {
   const inputs = [...html.matchAll(/<textarea id="(chatInput|flowChatInput)"[^>]*>/g)];
   assert.equal(inputs.length, 2);
   for (const [tag] of inputs) assert.match(tag, /rows="1"/);
-  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/details>\s*<\/div>/g)];
+  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/div>\s*<\/div>/g)];
   assert.equal(menus.length, 2, 'a closed menu in each sheet');
-  for (const [, menu] of menus) assert.match(menu, /<details class="run-advanced"[^>]*>[\s\S]*data-chat="mode"/, 'the permissions wait inside it, folded under Advanced');
+  for (const [, menu] of menus) {
+    assert.match(menu, /data-chat="runpanel"/);
+    assert.doesNotMatch(menu, /run-advanced|data-chat="mode"/, 'the permissions moved to Configurações');
+  }
 });
 
-test('the key hints show only while typing, and a phone keeps the input above the keyboard', () => {
-  // Hidden but keeping their line: a press on Send from outside the form moved focus in, the hints appeared, Send jumped
-  // up under the pointer and the release missed it, so the message never went.
-  assert.match(css, /\.chat-form:not\(:focus-within\) \.chat-keys\s*\{\s*visibility:\s*hidden;/);
-  assert.doesNotMatch(css, /focus-within\)[^{]*\.chat-keys\s*\{[^}]*display:\s*none/, 'focus never adds or removes the line of the hints');
+test('the key hints sit inside the box and never come and go; a phone keeps the input above the keyboard', () => {
+  // A line that came and went with focus moved Send under the pointer mid-click, so the message never went: the hints
+  // follow the text in the box, not the focus, and share the input's own row.
+  assert.match(html, /class="chat-box"[\s\S]*?class="chat-bar"[\s\S]*?data-chat="hints"[\s\S]*?data-chat="send"/, 'in the box, on its bar');
+  assert.doesNotMatch(css, /(focus-within|placeholder-shown)\)[^{]*\.chat-hints/, 'neither focus nor typing adds or removes the hints');
+  assert.doesNotMatch(css, /\.chat-keys/, 'no separate line of hints under the box');
+  assert.doesNotMatch(html, /class="chat-keys"/);
   assert.match(html, /<meta name="viewport" content="[^"]*interactive-widget=resizes-content/);
 });

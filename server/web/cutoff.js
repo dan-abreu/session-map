@@ -152,6 +152,8 @@ export function createCutPanel(ctx) {
   }
 
   return {
+    // One row's Continue, from the panel or from the inbox's Cut off group (mm49): the same pending list and message.
+    continue: (entry) => continueOne(entry),
     render(state) {
       last = state;
       settle();

@@ -3,6 +3,8 @@
 import { archTree, ownerHue } from './tree.js';
 import { emptyState } from './empty.js';
 import { modelName } from './live.js';
+import { needsYou } from './now.js';
+import { waitingSignal } from './signals.js';
 
 const RECENT_PAGE = 50;
 const SPECIAL = new Set(['idea', 'create-arch', 'flow', 'project', 'orchestrator']);
@@ -15,14 +17,17 @@ function originOfChat(c) {
   return String(c.entrypoint ?? '').startsWith('sdk') ? 'sdk' : 'terminal';
 }
 
+// A map chat as a row of the list.
+const rowOfChat = (c) => ({
+  sessionId: c.sessionId, title: c.title, origin: originOfChat(c), partId: c.partId, itemCode: c.itemCode ?? null, node: null,
+  status: c.status, waiting: Boolean(c.waiting.strong || c.waiting.weak || c.waiting.items.length), lastStep: c.liveSteps?.at(-1) ?? null,
+  costUSD: c.costUSD, startedAt: c.startedAt, updatedAt: c.updatedAt, archived: c.archived, live: c.live, chattable: c.chattable, onMap: true,
+});
+
 // A server older than the list sends only the map's chats: they make the rows, without the older conversations.
 export function conversationsOf(project) {
   if (Array.isArray(project.conversations)) return project.conversations;
-  return project.chats.map((c) => ({
-    sessionId: c.sessionId, title: c.title, origin: originOfChat(c), partId: c.partId, itemCode: c.itemCode ?? null, node: null,
-    status: c.status, waiting: Boolean(c.waiting.strong || c.waiting.weak || c.waiting.items.length), lastStep: c.liveSteps?.at(-1) ?? null,
-    costUSD: c.costUSD, startedAt: c.startedAt, updatedAt: c.updatedAt, archived: c.archived, live: c.live, chattable: c.chattable, onMap: true,
-  }));
+  return project.chats.map(rowOfChat);
 }
 
 // The conversations born in another project that work in this one (mm24); a server older than them sends none.
@@ -86,13 +91,22 @@ const visible = (row, showArchived) => showArchived || !row.archived;
 
 const DAY_MS = 86_400_000;
 export const DATE_GROUPS = ['today', 'yesterday', 'week', 'older'];
-// The groups of a project's section, top to bottom (mm04).
-export const SECTION_GROUPS = ['pinned', 'working', 'cutoff', 'waiting', 'visiting', ...DATE_GROUPS];
+// The groups of a project in the inbox (mm49), top to bottom, under "Needs you" (which spans every project, needsEntries)
+// and over "Archived" (folded at the bottom): at work now, cut off by a restart, born elsewhere and working here, the rest.
+export const SECTION_GROUPS = ['working', 'cutoff', 'visiting', 'recent'];
 
-// The state filters on top of the list (mm43), in the order of the chips. A conversation is in one of them only:
-// archived beats working, working beats cut off (it was picked up again), cut off beats waiting for the person.
+// The states a conversation can be in (mm43), counted over the rows the scope, the search and the box leave. One state
+// each: archived beats everything; what "Needs you" holds is waiting (need: the ids it holds, by the shared needsYou rule,
+// so a question left days ago is just finished); then working beats cut off (it was picked up again), and cut off beats
+// waiting. Without need, the row's own waiting flag says waiting.
 export const STATE_FILTERS = ['working', 'waiting', 'cutoff', 'finished', 'archived'];
-export const bucketOf = (row) => (row.archived ? 'archived' : row.status === 'busy' ? 'working' : row.cutOff ? 'cutoff' : row.waiting ? 'waiting' : 'finished');
+export function bucketOf(row, need = null) {
+  if (row.archived) return 'archived';
+  if (need?.has(row.sessionId)) return 'waiting';
+  if (row.status === 'busy') return 'working';
+  if (row.cutOff) return 'cutoff';
+  return !need && row.waiting ? 'waiting' : 'finished';
+}
 const isCut = (row) => bucketOf(row) === 'cutoff';
 
 // By calendar day on this device, like Claude and ChatGPT: late last night is yesterday though less than a day ago.
@@ -107,13 +121,29 @@ export function dateGroup(iso, nowMs) {
   return days < 7 ? 'week' : 'older';
 }
 
+// The time on a row, short like a mail inbox: "now", "12 min", "3 h", then the clock today, "yesterday", the weekday this
+// week and the date before. lang: the page's language.
+export function shortWhen(iso, nowMs, lang = 'en') {
+  const at = Date.parse(iso ?? '');
+  if (!Number.isFinite(at)) return '';
+  const mins = Math.max(0, Math.round((nowMs - at) / 60_000));
+  const rtf = () => new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
+  if (mins < 1) return rtf().format(0, 'second');
+  if (mins < 60) return new Intl.NumberFormat(lang, { style: 'unit', unit: 'minute', unitDisplay: 'short' }).format(mins);
+  if (mins < 6 * 60) return `${Math.round(mins / 60)} h`;
+  const group = dateGroup(iso, nowMs);
+  if (group === 'today') return new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(at);
+  if (group === 'yesterday') return rtf().format(-1, 'day');
+  if (group === 'week') return new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(at);
+  return new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short' }).format(at);
+}
+
 // Each project's own color, the same everywhere a project shows (list, picker, Now strip).
 export const projectHue = (project) => ownerHue(project.id);
 
 // The chats about the whole project sit on top of its card, like the chats of a project in Claude, and so does the
 // project's orchestrator (or01), first of them.
 export const isOrchestrator = (row) => row.node?.kind === 'orchestrator';
-const isPinned = (row) => row.node?.kind === 'project' || isOrchestrator(row);
 const byUpdated = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
 
 // Those chats, not archived, newest first: what the root bubble counts. The orchestrator has its own chip.
@@ -124,47 +154,50 @@ export const projectChats = (project) => conversationsOf(project).filter((r) => 
 export const orchestratorOf = (project) => conversationsOf(project).filter((r) => isOrchestrator(r) && !r.archived).sort(byUpdated)[0] ?? null;
 export const activityOf = (project, orch) => (orch ? conversationsOf(project).filter((r) => r.parentId === orch.sessionId && !r.archived) : []);
 
-function sectionOf(project, entries, nowMs) {
-  const sec = { project, hue: projectHue(project), pinned: [], working: [], cutoff: [], waiting: [], visiting: [], today: [], yesterday: [], week: [], older: [], kids: new Map() };
+function sectionOf(project, entries) {
+  const sec = { project, hue: projectHue(project), working: [], cutoff: [], visiting: [], recent: [], archived: [], kids: new Map() };
   const own = entries.filter((e) => !e.home);
-  // The activity chats of an orchestrator in the list hang under it; if it is not here (a filter), they stand alone.
+  // The activity chats of an orchestrator in the list hang under it; if it is not here (a search), they stand alone. An
+  // orchestrator is at work while one of its chats is.
   const mothers = new Set(own.filter((e) => isOrchestrator(e.row)).map((e) => e.row.sessionId));
+  const busyMothers = new Set(own.filter((e) => e.row.status === 'busy' && mothers.has(e.row.parentId)).map((e) => e.row.parentId));
   for (const e of [...entries].sort(newest)) {
-    if (e.home) sec.visiting.push(e);
+    if (e.row.archived) sec.archived.push(e);
+    else if (e.home) sec.visiting.push(e);
     else if (mothers.has(e.row.parentId)) sec.kids.set(e.row.parentId, [...(sec.kids.get(e.row.parentId) ?? []), e]);
-    else if (isPinned(e.row)) sec.pinned.push(e);
-    else if (e.row.status === 'busy') sec.working.push(e);
+    else if (e.row.status === 'busy' || busyMothers.has(e.row.sessionId)) sec.working.push(e);
     else if (isCut(e.row)) sec.cutoff.push(e);
-    else if (e.row.waiting) sec.waiting.push(e);
-    else sec[dateGroup(e.row.updatedAt, nowMs)].push(e);
+    else sec.recent.push(e);
   }
-  sec.pinned.sort((a, b) => isOrchestrator(b.row) - isOrchestrator(a.row));
+  // The project's orchestrator leads whatever group it is in (sort keeps the rest newest first).
+  for (const g of SECTION_GROUPS) sec[g].sort((a, b) => isOrchestrator(b.row) - isOrchestrator(a.row));
   for (const list of sec.kids.values()) list.sort((a, b) => (b.row.status === 'busy') - (a.row.status === 'busy'));
   sec.counts = {
     working: own.filter((e) => e.row.status === 'busy').length,
     cutoff: own.filter((e) => isCut(e.row)).length,
-    waiting: own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && e.row.waiting).length,
     total: entries.length,
   };
   sec.newest = entries.reduce((m, e) => (String(e.row.updatedAt ?? '') > m ? String(e.row.updatedAt) : m), '');
   return sec;
 }
 
-// Projects with something working, then waiting for the person, then the most recently active.
-const bySection = (a, b) => (b.counts.working > 0) - (a.counts.working > 0) || (b.counts.waiting > 0) - (a.counts.waiting > 0) || b.newest.localeCompare(a.newest);
+// Projects with something working, then the most recently active.
+const bySection = (a, b) => (b.counts.working > 0) - (a.counts.working > 0) || b.newest.localeCompare(a.newest);
 
-// opts: projectId, scope ('project' | 'all'), query, nodeId (only that box and below, in the open project), showArchived.
-// Each entry: {row, project, nodeId, place, home (a visitor's own project, mm24)}. Working now, then waiting for the person,
-// then the rest, newest first in each; visitors apart; sections: the same entries per project, in SECTION_GROUPS (mm04).
-// state (mm43): one of STATE_FILTERS keeps that state's rows (archived ones only under 'archived'; visitors out, so a chip's
-// count is what shows). counts has every state over the rows the scope, the search and the box leave, archived included.
-export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false, state: only = null } = {}) {
+// opts: projectId, scope ('project' | 'all'), query, nodeId (only that box and below, in the open project), showArchived,
+// skip (the ids "Needs you" shows: kept out of the sections, so no row shows twice, and the rows of the waiting state),
+// bucket (one of STATE_FILTERS, the chip picked: only that state's rows, visitors out; archived ones go in sec.archived).
+// Each entry: {row, project, nodeId, place, home (a visitor's own project, mm24)}. The flat lists (working now, cut off,
+// waiting for the person, the rest, newest first in each; visitors apart) hold every visible row, archived ones with
+// showArchived, for the page to look rows up. sections: one per project, in SECTION_GROUPS (mm49), never an archived row;
+// archived: the visible archived rows, for the folded group at the bottom. counts has every state over the rows the scope,
+// the search and the box leave, archived included (its waiting is the open scope's own: the page counts Needs you whole).
+export function listConversations(state, { projectId, scope = 'project', query = '', nodeId = null, showArchived = false, skip = null, bucket = null } = {}) {
   const q = plain(query);
   const projects = scope === 'all' ? state.projects : state.projects.filter((p) => p.id === projectId);
   const entries = [];
   const sections = [];
   const counts = Object.fromEntries(STATE_FILTERS.map((b) => [b, 0]));
-  const nowMs = Date.parse(state.generatedAt) || Date.now();
   for (const project of projects) {
     const mine = [];
     const index = indexOf(archTree(project));
@@ -175,12 +208,14 @@ export function listConversations(state, { projectId, scope = 'project', query =
       if (nodeId && project.id === projectId && at !== nodeId && !index.get(at).path.includes(nodeId)) continue;
       const place = placeIn(index, row, at);
       if (q && !plain([row.title, ...place.path, scope === 'all' ? project.name : ''].join(' ')).includes(q)) continue;
-      if (!home) counts[bucketOf(row)] += 1;
-      if (only ? home || bucketOf(row) !== only : !visible(row, showArchived)) continue;
+      if (!home) counts[bucketOf(row, skip)] += 1;
+      if (!visible(row, showArchived)) continue;
+      if (bucket && (home || bucketOf(row, skip) !== bucket)) continue;
       mine.push(home ? { row, project, nodeId: at, place, home } : { row, project, nodeId: at, place });
     }
     entries.push(...mine);
-    if (mine.length) sections.push(sectionOf(project, mine, nowMs));
+    const grouped = mine.filter((e) => (bucket === 'archived' ? e.row.archived : !e.row.archived && !skip?.has(e.row.sessionId)));
+    if (grouped.length) sections.push(sectionOf(project, grouped));
   }
   const own = entries.filter((e) => !e.home);
   const working = own.filter((e) => e.row.status === 'busy').sort(newest);
@@ -188,7 +223,38 @@ export function listConversations(state, { projectId, scope = 'project', query =
   const waiting = own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && e.row.waiting).sort(newest);
   const recent = own.filter((e) => e.row.status !== 'busy' && !isCut(e.row) && !e.row.waiting).sort(newest);
   const visiting = entries.filter((e) => e.home).sort(newest);
-  return { working, cutoff, waiting, recent, visiting, total: entries.length, counts, sections: sections.sort(bySection) };
+  const archived = own.filter((e) => e.row.archived).sort(newest);
+  return { working, cutoff, waiting, recent, visiting, archived, total: entries.length, counts, sections: sections.sort(bySection) };
+}
+
+// What a conversation waiting for the person needs from them, in one line (mm49): the item it waits on when it names one,
+// else the kind of its waiting signal (a question, or a reply that ends asking).
+export function needOf(chat) {
+  const item = chat.waiting?.items?.[0];
+  if (item) return { text: item };
+  return { key: waitingSignal({ chat })?.reason === 'question' ? 'convs.need.question' : 'convs.need.asks' };
+}
+
+// "Needs you" (mm49): needs is now.js needsYou(state), the one count of the page that the amber pill reads too, made into
+// rows of the list for every project whatever the scope: a question first, then newest. The search and the box filter
+// narrow it like the rest of the list; with neither, it holds exactly needs. Each entry: {row, project, nodeId, place,
+// chat, need}.
+export function needsEntries(state, needs, { projectId = null, query = '', nodeId = null } = {}) {
+  const q = plain(query);
+  const indexes = new Map();
+  const out = [];
+  for (const { project, chat } of needs) {
+    if (!indexes.has(project.id)) indexes.set(project.id, indexOf(archTree(project)));
+    const index = indexes.get(project.id);
+    const row = conversationsOf(project).find((r) => r.sessionId === chat.sessionId) ?? rowOfChat(chat);
+    const at = nodeIn(index, row);
+    if (nodeId && (project.id !== projectId || (at !== nodeId && !index.get(at).path.includes(nodeId)))) continue;
+    const place = placeIn(index, row, at);
+    if (q && !plain([row.title, ...place.path, project.name].join(' ')).includes(q)) continue;
+    out.push({ row, project, nodeId: at, place, chat, need: needOf(chat) });
+  }
+  const rank = (e) => (e.chat.waiting.strong ? 0 : e.chat.waiting.items.length ? 1 : 3);
+  return out.sort((a, b) => rank(a) - rank(b) || newest(a, b));
 }
 
 // How many conversations each box holds, itself and below: the number on the box, which filters the list to it.
@@ -207,139 +273,178 @@ export function conversationCounts(project, tree, { showArchived = false } = {})
 
 // Every origin has its own drawn icon and word, so a row never leaves "where does this run?" open.
 const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto' };
-const PLACE_ICON = { idea: 'idea', project: 'compass', orchestrator: 'compass' };
 export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
 const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
-const DATED = new Set(DATE_GROUPS);
+// The groups that show how many they hold (Recent is the quiet rest), and the one that pages its rows.
+const COUNTED = new Set(['needs', 'working', 'cutoff', 'visiting', 'archived']);
+const PAGED = new Set(['recent', 'archived']);
 
 const toneOf = (row) => (row.status === 'busy' ? 'busy' : isCut(row) ? 'cutoff' : row.waiting ? 'waiting' : row.status === 'idle' ? 'idle' : 'closed');
 // The word on every row (mm33): its state, and "finished, not seen yet" until the person opens it.
 export const stateOf = (row, unseen) => (row.status !== 'busy' && !isCut(row) && !row.waiting && unseen?.has(row.sessionId) ? 'unseen' : toneOf(row));
-// Each group's own icon; its colour comes from the g-<name> class.
-const GROUP_ICON = { pinned: 'compass', working: 'auto', cutoff: 'stop', waiting: 'bell', visiting: 'connect', today: 'clock', yesterday: 'clock', week: 'clock', older: 'calendar' };
+// The small mark of an orchestrator's chat (one line, no place): done, at work, cut off.
+const KID_ICON = { cutoff: 'stop', waiting: 'bell' };
 
-// ctx: root (the column), h, t (translator getter), icon(name, cls), relative(iso), money(usd), list(names) (joined in the
-// page's language), phone (media query), state(),
-// project(), showArchived(), current() (the conversation the chat sheet shows), unseen() (the ids finished and not seen yet),
-// nodeLabel(id), onOpen(entry), onMove(entry)
-// (move or rename it), onFilter() (the box filter changed: the map redraws its pressed numbers), store {get, set}.
+// ctx: root (the column), h, t (translator getter), lang() (the page's language), icon(name, cls), relative(iso),
+// money(usd), list(names) (joined in the page's language), phone (media query), state(), project(), current() (the
+// conversation the chat sheet shows), unseen() (the ids finished and not seen yet), nodeLabel(id), onOpen(entry),
+// onMove(entry) (move or rename it), onContinue(entry) (a cut-off one, as the Cut off panel does), onFilter() (the box
+// filter changed: the map redraws its pressed numbers), onDrawer(open) (the phone's drawer opened or closed), store {get, set}.
 export function createConvList(ctx) {
   const { root, h, icon, store } = ctx;
   const byId = (id) => document.getElementById(id);
   const list = byId('convsList');
   const search = byId('convsSearch');
   const filterEl = byId('convsFilter');
-  const barBtn = byId('convsBtn');
   const scrim = byId('convsScrim');
+  const archivedBtn = byId('convsArchived');
+  const scopeEl = byId('convsScopeSeg');
+  const statesEl = byId('convsStates');
   let scope = store.get('sm.convs.scope') === 'all' ? 'all' : 'project';
   let collapsed = store.get('sm.convs.collapsed') === '1';
   let query = '';
   let filter = null;
-  // The state chip picked on top of the list (mm43): not saved, and a change of project or scope keeps it.
+  // The state chip picked under the switch (mm43): not saved; a change of project or of scope keeps it.
   let picked = null;
-  // "<projectId>:<group>" of the date groups showing every row, past the first page.
+  // "Archived · N" at the bottom: folded until the person opens it, and folded again on the next visit.
+  let archivedOpen = false;
+  // "<projectId>:<group>" of the groups showing every row, past the first page.
   let showAll = new Set();
   // projectId → true (open) | false (closed), as the person left each project folder in "All projects".
   let folders = {};
   try { folders = JSON.parse(store.get('sm.convs.folders') ?? '{}') ?? {}; } catch { folders = {}; }
+  // What had the focus when the phone's drawer opened: it gets it back when the drawer closes.
+  let opener = null;
 
   const placeWords = (e, full) => {
     const tt = ctx.t();
     if (e.place.special) return tt(`convs.place.${e.place.special}`);
-    return (full ? e.place.path : e.place.path.slice(-2)).join(' › ');
+    // On the row, the part it works on (the item would repeat the title); the whole way down in its tooltip.
+    return full ? e.place.path.join(' › ') : e.place.path.slice(0, 2).at(-1);
   };
   const stepText = (step) => (STEP_KINDS.has(step.kind) ? ctx.t()(`live.step.${step.kind}`, { target: step.target }) : '');
   const workText = (work) => (work ? ctx.t()('convs.work', { born: work.born, where: ctx.list(work.working) }) : '');
+  const nowMs = () => Date.parse(ctx.state()?.generatedAt ?? '') || Date.now();
+  const when = (iso) => shortWhen(iso, nowMs(), ctx.lang?.() ?? 'en');
 
-  function originBadge(origin) {
+  // The project of a row that is not the open one ("Needs you" spans them all; "All projects" names them in that group).
+  const projectTag = (project) => h('span', { class: 'cv-proj', style: `--p-h:${projectHue(project)}` },
+    h('span', { class: 'cv-proj-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-proj-name' }, project.name));
+
+  // Where it runs, as a quiet icon; the word is its tooltip and is read out.
+  function originMark(row) {
     const tt = ctx.t();
-    const word = tt(`convs.origin.${origin}`);
-    return h('span', { class: `cv-origin-badge o-${origin}`, title: tt('convs.origin.title', { origin: word }) }, icon(originIcon(origin), 'cv-origin'), word);
+    if (isOrchestrator(row)) return h('span', { class: 'cv-origin-mark is-orch', title: tt('convs.orchestratorTitle') }, icon('auto', 'cv-title-icon'), h('span', { class: 'visually-hidden' }, `${tt('convs.orchestrator')}: `));
+    const word = tt(`convs.origin.${row.origin}`);
+    return h('span', { class: `cv-origin-mark o-${row.origin}`, title: tt('convs.origin.title', { origin: word }) }, icon(originIcon(row.origin), 'cv-origin'), h('span', { class: 'visually-hidden' }, word));
   }
 
-  // The orchestrator says what it is where the others say where they run; an activity chat of it (kid) says its item and model.
-  function kindBadges(row, kid) {
+  // Cost and ⋯ (move or rename): shown on hover and on focus, where the time was.
+  function hoverBox(e, title) {
     const tt = ctx.t();
-    if (isOrchestrator(row)) return [h('span', { class: 'cv-origin-badge cv-orch-badge o-orchestrator', title: tt('convs.orchestratorTitle') }, icon('auto', 'cv-origin'), tt('convs.orchestrator'))];
-    if (!kid) return [originBadge(row.origin)];
-    return [row.itemCode ? h('span', { class: 'cv-code num', title: tt('convs.codeTitle') }, row.itemCode) : null,
-      row.runModel ? h('span', { class: 'cv-model', title: tt('now.modelTitle') }, modelName(row.runModel)) : null];
-  }
-
-  // Title and time on top, then the state in a word and where it runs (cost on the right), then its place on the map on a
-  // line of its own. The project is the card the row sits in, so the row does not repeat it. An orchestrator carries its
-  // activity chats (kids) indented under it, each one line shorter: no place, no origin.
-  function rowView(e, kids = [], kid = false) {
-    const tt = ctx.t();
-    const { row } = e;
-    const tone = toneOf(row);
-    const state = stateOf(row, ctx.unseen?.());
-    const current = ctx.current() === row.sessionId;
-    const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
-    const title = row.title || tt('chat.untitled');
-    const where = kid ? '' : placeWords(e);
-    const work = kid ? '' : workText(workWords(row, e.project));
-    const main = [
-      h('button', {
-        type: 'button', class: `cv-row tone-${tone}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`, 'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
-        title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
-      },
-      h('span', { class: 'cv-title' }, title),
-      h('span', { class: 'cv-side' },
-        h('span', { class: 'cv-when num' }, row.updatedAt ? ctx.relative(row.updatedAt) : ''),
-        row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(row.costUSD)) : null),
-      h('span', { class: 'cv-badges' },
-        h('span', { class: `cv-state s-${state}` }, h('span', { class: 'cv-state-dot', 'aria-hidden': 'true' }), tt(`convs.state.${state}`)),
-        ...kindBadges(row, kid)),
-      step ? h('span', { class: 'cv-step' }, step) : null,
-      where ? h('span', { class: `cv-place${e.place.special ? ` is-${e.place.special}` : ''}` }, icon(PLACE_ICON[e.place.special] ?? 'map', 'cv-place-icon'), h('span', { class: 'cv-path' }, where)) : null,
-      work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null),
+    return h('div', { class: 'cv-hov' },
+      e.row.costUSD != null ? h('span', { class: 'num cv-cost' }, ctx.money(e.row.costUSD)) : null,
       h('button', {
         type: 'button', class: 'cv-move', 'aria-label': tt('convs.moveAria', { title }), title: tt('convs.move'), 'aria-haspopup': 'dialog',
         onclick: () => ctx.onMove(e),
-      }, icon('more', 'cv-move-icon'))];
-    const cls = `cv-item${e.home ? ' is-visitor' : ''}${kid ? ' cv-kid' : ''}`;
-    if (!kids.length) return h('li', { class: cls }, ...main);
-    return h('li', { class: `${cls} has-kids` }, h('div', { class: 'cv-item-main' }, ...main),
-      h('ul', { class: 'cv-kids', 'aria-label': tt('convs.kidsAria', { n: kids.length }) }, kids.map((k) => rowView(k, [], true))));
+      }, icon('more', 'cv-move-icon')));
   }
 
-  function groupView(sec, name, heading) {
-    const entries = sec[name];
+  // An activity chat of the orchestrator: one line under it, its mark, title and time; item and model in its tooltip.
+  function kidView(e) {
+    const tt = ctx.t();
+    const { row } = e;
+    const title = row.title || tt('chat.untitled');
+    const state = stateOf(row, ctx.unseen?.());
+    const current = ctx.current() === row.sessionId;
+    const job = [row.itemCode, row.runModel ? modelName(row.runModel) : null].filter(Boolean).join(' · ');
+    const tone = toneOf(row);
+    const mark = tone === 'busy' ? null : KID_ICON[tone] ?? 'check';
+    return h('li', { class: 'cv-item cv-kid' },
+      h('div', { class: 'cv-line' },
+        h('button', {
+          type: 'button', class: `cv-row tone-${tone}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`, 'data-session': row.sessionId,
+          'aria-current': current ? 'true' : null, title: [title, job].filter(Boolean).join('\n'), onclick: () => ctx.onOpen(e),
+        },
+        mark ? icon(mark, 'cv-kid-icon') : h('span', { class: 'cv-kid-dot', 'aria-hidden': 'true' }),
+        h('span', { class: 'cv-title' }, title),
+        h('span', { class: 'cv-when num' }, when(row.updatedAt)),
+        h('span', { class: `cv-state s-${state}` }, tt(`convs.state.${state}`)),
+        job ? h('span', { class: 'visually-hidden' }, ` · ${job}`) : null),
+        hoverBox(e, title)));
+  }
+
+  // Title and time; where it runs and its place on the map; then one line by group: what is needed, the step it is on, or
+  // where else it works. The state word is read out (the group says it on screen). An orchestrator carries its activity
+  // chats indented under it.
+  function rowView(e, { kids = [], group }) {
+    const tt = ctx.t();
+    const { row } = e;
+    const state = group === 'needs' ? 'waiting' : stateOf(row, ctx.unseen?.());
+    const current = ctx.current() === row.sessionId;
+    const title = row.title || tt('chat.untitled');
+    const step = row.status === 'busy' && row.lastStep ? stepText(row.lastStep) : '';
+    const work = workText(workWords(row, e.project));
+    const other = e.home ?? (group === 'needs' && (scope === 'all' || e.project.id !== ctx.project()?.id) ? e.project : null);
+    const need = e.need ? (e.need.text ?? tt(e.need.key)) : '';
+    const orch = isOrchestrator(row);
+    const line = h('div', { class: 'cv-line' },
+      h('button', {
+        type: 'button', class: `cv-row tone-${group === 'needs' ? 'waiting' : toneOf(row)}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`,
+        'data-session': row.sessionId, 'aria-current': current ? 'true' : null,
+        title: `${title}\n${e.project.name} › ${placeWords(e, true)}`, onclick: () => ctx.onOpen(e),
+      },
+      h('span', { class: 'cv-title' }, state === 'unseen' ? h('span', { class: 'cv-unseen-dot', 'aria-hidden': 'true' }) : null, orch ? originMark(row) : null, title),
+      h('span', { class: 'cv-when num' }, when(row.updatedAt)),
+      // The orchestrator's place is always the whole project: its icon says what it is, its step line what it does.
+      orch && !other ? null : h('span', { class: 'cv-meta' }, orch ? null : originMark(row), other ? projectTag(other) : null, orch ? null : h('span', { class: `cv-path${e.place.special ? ` is-${e.place.special}` : ''}` }, placeWords(e))),
+      need ? h('span', { class: 'cv-need' }, icon('next', 'cv-need-icon'), h('span', { class: 'cv-need-text' }, need)) : null,
+      step ? h('span', { class: 'cv-step' }, h('span', { class: 'cv-step-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-step-text' }, step)) : null,
+      work ? h('span', { class: 'cv-work', title: tt('convs.workTitle') }, icon('connect', 'cv-work-icon'), h('span', { class: 'cv-work-text' }, work)) : null,
+      h('span', { class: `cv-state s-${state}` }, tt(`convs.state.${state}`))),
+      hoverBox(e, title));
+    const go = group === 'cutoff' ? h('button', {
+      type: 'button', class: 'btn small-btn cv-continue', 'aria-label': tt('convs.continueAria', { title }), onclick: () => ctx.onContinue?.(e),
+    }, icon('send', 'btn-icon'), tt('cut.continue')) : null;
+    const cls = `cv-item${e.home ? ' is-visitor' : ''}`;
+    if (!kids.length) return h('li', { class: cls }, line, go);
+    return h('li', { class: `${cls} has-kids` }, line, go,
+      h('ul', { class: 'cv-kids', 'aria-label': tt('convs.kidsAria', { n: kids.length }) }, kids.map(kidView)));
+  }
+
+  // A group: its dot, name and "· N", then its rows; Recent and Archived page theirs.
+  function groupView(name, entries, { key, heading = 'h3', kids = new Map() }) {
     if (!entries.length) return null;
     const tt = ctx.t();
-    const key = `${sec.project.id}:${name}`;
-    const shown = DATED.has(name) && !showAll.has(key) ? entries.slice(0, RECENT_PAGE) : entries;
+    const shown = PAGED.has(name) && !showAll.has(key) ? entries.slice(0, RECENT_PAGE) : entries;
     const rest = entries.length - shown.length;
-    const id = `cv-g-${sec.project.id}-${name}`;
+    const id = `cv-g-${key.replace(/[^\w-]/g, '-')}`;
+    const n = name === 'working' ? entries.filter((e) => e.row.status === 'busy').length + entries.reduce((m, e) => m + (kids.get(e.row.sessionId) ?? []).filter((k) => k.row.status === 'busy').length, 0) : entries.length;
     return h('section', { class: `cv-group g-${name}`, 'aria-labelledby': id },
       h(heading, { id, class: 'cv-group-head' },
-        h('span', { class: 'cv-group-mark', 'aria-hidden': 'true' }, icon(GROUP_ICON[name], 'cv-group-icon')),
-        h('span', { class: 'cv-group-name' }, tt(`convs.group.${name}`)), h('span', { class: 'cv-group-n num' }, String(entries.length))),
-      h('ul', { class: 'cv-rows' }, shown.map((e) => rowView(e, sec.kids.get(e.row.sessionId)))),
+        h('span', { class: 'cv-group-dot', 'aria-hidden': 'true' }),
+        h('span', { class: 'cv-group-name' }, tt(`convs.group.${name}`)),
+        COUNTED.has(name) ? h('span', { class: 'cv-group-n num' }, String(n)) : null),
+      h('ul', { class: 'cv-rows' }, shown.map((e) => rowView(e, { kids: kids.get(e.row.sessionId) ?? [], group: name }))),
       rest > 0 ? h('button', { type: 'button', class: 'btn small-btn cv-more', onclick: () => { showAll.add(key); render(); } }, tt('convs.more', { n: rest })) : null);
   }
 
-  const groupsOf = (sec, heading) => SECTION_GROUPS.map((g) => groupView(sec, g, heading)).filter(Boolean);
+  const groupsOf = (sec, heading) => (picked === 'archived' ? ['archived'] : SECTION_GROUPS).map((g) => groupView(g, sec[g], { key: `${sec.project.id}:${g}`, heading, kids: sec.kids })).filter(Boolean);
 
-  // Open unless the person closed it; a project with work going on, the open one and a search show open by default.
-  const isFolderOpen = (sec, openId) => (query.trim() ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.cutoff > 0 || sec.counts.waiting > 0));
+  // Open unless the person closed it; a project with work going on, the open one, a search and a state chip show open by default.
+  const isFolderOpen = (sec, openId) => (query.trim() || picked ? true : folders[sec.project.id] ?? (sec.project.id === openId || sec.counts.working > 0 || sec.counts.cutoff > 0));
 
-  function folderView(sec, openId, { collapsible = true } = {}) {
+  // "All projects": one card per project, its colour band and name, how many work and wait in it, and its groups.
+  function folderView(sec, openId, waiting) {
     const tt = ctx.t();
-    const opened = !collapsible || isFolderOpen(sec, openId);
+    const opened = isFolderOpen(sec, openId);
     const bodyId = `cv-p-${sec.project.id}`;
     const counters = [
       sec.counts.working ? h('span', { class: 'cv-pc is-working num', title: tt('convs.projectWorking', { n: sec.counts.working }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.working), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWorking', { n: sec.counts.working })}`)) : null,
-      sec.counts.waiting ? h('span', { class: 'cv-pc is-waiting num', title: tt('convs.projectWaiting', { n: sec.counts.waiting }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(sec.counts.waiting), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWaiting', { n: sec.counts.waiting })}`)) : null,
+      waiting ? h('span', { class: 'cv-pc is-waiting num', title: tt('convs.projectWaiting', { n: waiting }) }, h('span', { class: 'cv-pc-dot', 'aria-hidden': 'true' }), String(waiting), h('span', { class: 'visually-hidden' }, ` ${tt('convs.projectWaiting', { n: waiting })}`)) : null,
     ];
     const inside = [h('span', { class: 'cv-proj-dot cv-folder-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-folder-name' }, sec.project.name),
       h('span', { class: 'cv-folder-counts' }, counters, h('span', { class: 'cv-folder-n num' }, String(sec.counts.total)))];
-    if (!collapsible) {
-      return h('section', { class: 'cv-folder is-open is-fixed', style: `--p-h:${sec.hue}`, 'data-project': sec.project.id, 'aria-labelledby': `${bodyId}-name` },
-        h('h3', { class: 'cv-folder-head', id: `${bodyId}-name` }, h('span', { class: 'cv-folder-btn' }, inside)),
-        h('div', { class: 'cv-folder-body', id: bodyId }, groupsOf(sec, 'h4')));
-    }
     return h('section', { class: `cv-folder${opened ? ' is-open' : ''}`, style: `--p-h:${sec.hue}`, 'data-project': sec.project.id },
       h('h3', { class: 'cv-folder-head' }, h('button', {
         type: 'button', class: 'cv-folder-btn', 'aria-expanded': String(opened), 'aria-controls': bodyId, title: tt('convs.projectToggle', { name: sec.project.name }),
@@ -363,41 +468,113 @@ export function createConvList(ctx) {
       h('button', { type: 'button', class: 'cv-filter-clear', 'aria-label': tt('convs.filterClear'), title: tt('convs.filterClear'), onclick: () => filterTo(null) }, icon('close', 'cv-filter-icon')));
   }
 
-  // Five chips, each with its word and how many conversations it holds; one stays pressed, a second click lets it go.
+  // The switch under the search, "This project | All projects": a tablist of two, the open one selected and the only stop
+  // of the Tab key; the arrows, Home and End move inside it and choose as they go.
+  const SCOPES = ['project', 'all'];
+  const scopeTabs = SCOPES.map((value) => h('button', {
+    type: 'button', role: 'tab', class: 'cv-seg-btn', 'data-scope': value, 'aria-controls': 'convsList',
+    onclick: () => setScope(value),
+    onkeydown: (e) => {
+      const at = SCOPES.indexOf(scope);
+      const to = e.key === 'ArrowLeft' ? SCOPES[(at + SCOPES.length - 1) % SCOPES.length] : e.key === 'ArrowRight' ? SCOPES[(at + 1) % SCOPES.length]
+        : e.key === 'Home' ? SCOPES[0] : e.key === 'End' ? SCOPES.at(-1) : null;
+      if (!to) return;
+      e.preventDefault();
+      setScope(to);
+      scopeTabs[SCOPES.indexOf(to)].focus({ preventScroll: true });
+    },
+  }));
+  scopeEl.replaceChildren(...scopeTabs);
+  function renderScope() {
+    const tt = ctx.t();
+    scopeEl.setAttribute('aria-label', tt('convs.scope'));
+    scopeTabs.forEach((b, i) => {
+      const on = SCOPES[i] === scope;
+      b.textContent = tt(`convs.scope.${SCOPES[i]}`);
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('tabindex', on ? '0' : '-1');
+    });
+  }
+  function setScope(next) {
+    if (next === scope) return;
+    scope = next;
+    store.set('sm.convs.scope', scope);
+    if (scope === 'all' && filter) { filter = null; ctx.onFilter(); }
+    showAll = new Set();
+    render();
+  }
+
+  // The five state chips under the switch, each with its dot, word and how many: built once, so the focus stays on one
+  // while the list is drawn again. One stays pressed; a second click lets it go.
+  const stateChips = STATE_FILTERS.map((b) => {
+    const word = h('span', { class: 'cv-sc-word' });
+    const n = h('span', { class: 'cv-sc-n num' });
+    const btn = h('button', {
+      type: 'button', class: `cv-sc c-${b}`, 'data-state': b, 'aria-pressed': 'false',
+      onclick: () => { picked = picked === b ? null : b; showAll = new Set(); render(); },
+    }, h('span', { class: 'cv-sc-dot', 'aria-hidden': 'true' }), word, n);
+    return { b, btn, word, n };
+  });
+  statesEl.replaceChildren(...stateChips.map((c) => c.btn));
   function renderStates(counts) {
     const tt = ctx.t();
-    const bar = byId('convsStates');
-    const keep = bar.contains(document.activeElement) ? document.activeElement.dataset?.state : null;
-    bar.replaceChildren(...STATE_FILTERS.map((b) => h('button', {
-      type: 'button', class: `cv-sc c-${b}${counts[b] ? '' : ' is-zero'}`, 'data-state': b, 'aria-pressed': String(picked === b),
-      onclick: () => { picked = picked === b ? null : b; showAll = new Set(); render(); },
-    }, h('span', { class: 'cv-sc-dot', 'aria-hidden': 'true' }), h('span', { class: 'cv-sc-word' }, tt(`convs.states.${b}`)), h('span', { class: 'cv-sc-n num' }, String(counts[b])))));
-    if (keep) bar.querySelector(`[data-state="${keep}"]`)?.focus({ preventScroll: true });
+    statesEl.setAttribute('aria-label', tt('convs.states'));
+    for (const { b, btn, word, n } of stateChips) {
+      word.textContent = tt(`convs.states.${b}`);
+      n.textContent = String(counts[b] ?? 0);
+      btn.setAttribute('aria-pressed', String(picked === b));
+      btn.setAttribute('class', `cv-sc c-${b}${counts[b] ? '' : ' is-zero'}`);
+    }
+  }
+
+  // "Archived · N" at the foot of the column, folded or open.
+  function renderArchived(n) {
+    const tt = ctx.t();
+    archivedBtn.hidden = n === 0;
+    archivedBtn.setAttribute('aria-expanded', String(archivedOpen && n > 0));
+    archivedBtn.replaceChildren(icon('next', 'cv-archived-chevron'), h('span', { class: 'cv-archived-name' }, tt('convs.group.archived')), h('span', { class: 'cv-archived-n num' }, String(n)));
   }
 
   function render() {
+    renderScope();
     const s = ctx.state();
     const p = ctx.project();
     if (!s || !p) return;
     const tt = ctx.t();
     renderFilter();
-    for (const b of root.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === scope));
-    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: ctx.showArchived(), state: picked });
-    renderStates(out.counts);
-    const mine = conversationsOf(p).filter((r) => ctx.showArchived() || !r.archived);
-    byId('convsTotal').textContent = String(out.total);
+    // One count of what needs the person (mm47, mm49): the amber pill's own needsYou, rows from every project.
+    const all = needsYou(s);
+    const needs = needsEntries(s, all, { projectId: p.id, query, nodeId: filter });
+    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(all.map((n) => n.chat.sessionId)), bucket: picked });
+    // The chips count the rows the search and the box leave, "Waiting for you" being Needs you whole, as the pill counts it.
+    const counts = picked ? listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(all.map((n) => n.chat.sessionId)) }).counts : out.counts;
+    renderStates({ ...counts, waiting: needs.length });
+    const mine = conversationsOf(p).filter((r) => !r.archived);
     byId('convsRailCount').textContent = String(mine.length);
-    byId('convsBtnCount').textContent = String(mine.length);
     byId('convsRailLive').hidden = !mine.some((r) => r.status === 'busy');
     root.classList.toggle('is-all', scope === 'all');
+    renderArchived(counts.archived);
     const focused = list.contains(document.activeElement) ? document.activeElement : null;
-    const keep = focused ? { session: focused.closest('[data-session]')?.dataset.session ?? focused.closest('.cv-item')?.querySelector('[data-session]')?.dataset.session, move: focused.classList.contains('cv-move'), project: focused.closest('.cv-folder-btn') ? focused.closest('[data-project]')?.dataset.project : null } : null;
+    // The row's item, not only its line: Continue sits beside the line, and keeps the focus at each poll too.
+    const keep = focused ? {
+      session: focused.closest('.cv-item')?.querySelector('[data-session]')?.dataset.session,
+      move: focused.classList.contains('cv-move'),
+      go: Boolean(focused.closest('.cv-continue')),
+      project: focused.closest('.cv-folder-btn') ? focused.closest('[data-project]')?.dataset.project : null,
+    } : null;
     const top = list.scrollTop;
-    let body = out.sections.map((sec) => folderView(sec, p.id, { collapsible: scope === 'all' }));
+    const waitingIn = (id) => needs.filter((e) => e.project.id === id).length;
+    // A chip narrows the inbox to its state: Waiting for you is the Needs you group alone, the others keep the project cards.
+    const sections = picked === 'waiting' ? [] : scope === 'all' ? out.sections.map((sec) => folderView(sec, p.id, waitingIn(sec.project.id))) : out.sections.flatMap((sec) => groupsOf(sec, 'h3'));
+    let body = [
+      !picked || picked === 'waiting' ? groupView('needs', needs, { key: 'needs' }) : null,
+      ...sections,
+      archivedOpen && !picked ? groupView('archived', out.archived, { key: 'archived' }) : null,
+    ].filter(Boolean);
     if (!body.length) {
       let empty = { art: 'chat', title: tt('convs.emptyTitle'), text: scope === 'all' ? tt('convs.emptyAll') : tt('convs.empty') };
-      if (filter) empty = { art: 'map', title: tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) }), text: tt('convs.filterEmptyText') };
       if (picked) empty = { art: 'chat', title: tt('convs.stateEmpty', { name: tt(`convs.states.${picked}`) }), text: tt('convs.stateEmptyText') };
+      if (filter) empty = { art: 'map', title: tt('convs.filterEmpty', { name: ctx.nodeLabel(filter) }), text: tt('convs.filterEmptyText') };
       if (query.trim()) empty = { art: 'search', title: tt('convs.noMatch', { q: query.trim() }), text: tt('convs.noMatchText') };
       body = [emptyState({ h, icon: ctx.icon }, { ...empty, compact: true })];
     }
@@ -406,7 +583,8 @@ export function createConvList(ctx) {
     if (keep?.project) list.querySelector(`[data-project="${CSS.escape(keep.project)}"] .cv-folder-btn`)?.focus({ preventScroll: true });
     else if (keep?.session) {
       const row = list.querySelector(`[data-session="${CSS.escape(keep.session)}"]`);
-      (keep.move ? row?.closest('.cv-item')?.querySelector('.cv-move') : row)?.focus({ preventScroll: true });
+      const to = keep.go ? row?.closest('.cv-item')?.querySelector('.cv-continue') : keep.move ? row?.closest('.cv-line')?.querySelector('.cv-move') : row;
+      to?.focus({ preventScroll: true });
     }
   }
 
@@ -422,14 +600,16 @@ export function createConvList(ctx) {
     requestAnimationFrame(() => (on ? byId('convsExpand') : search).focus({ preventScroll: true }));
   }
 
-  // On a phone the column is a drawer from the left, over the page.
+  // On a phone the column is the bottom bar's Conversations: it covers the map between the two bars.
   const isDrawerOpen = () => root.classList.contains('is-open');
   function setDrawer(on) {
+    if (on === isDrawerOpen()) return;
+    if (on) opener = document.activeElement;
     root.classList.toggle('is-open', on);
     scrim.hidden = !on;
-    barBtn.setAttribute('aria-expanded', String(on));
+    ctx.onDrawer?.(on);
     if (on) requestAnimationFrame(() => (list.querySelector('.cv-row') ?? search).focus({ preventScroll: true }));
-    else if (root.contains(document.activeElement)) barBtn.focus({ preventScroll: true });
+    else if (root.contains(document.activeElement)) opener?.focus?.({ preventScroll: true });
   }
 
   function filterTo(nodeId) {
@@ -452,20 +632,17 @@ export function createConvList(ctx) {
     query = '';
     render();
   });
-  for (const b of root.querySelectorAll('[data-scope]')) {
-    b.addEventListener('click', () => {
-      scope = b.dataset.scope === 'all' ? 'all' : 'project';
-      store.set('sm.convs.scope', scope);
-      if (scope === 'all' && filter) { filter = null; ctx.onFilter(); }
-      showAll = new Set();
-      render();
-    });
-  }
+  archivedBtn.addEventListener('click', () => {
+    archivedOpen = !archivedOpen;
+    render();
+    if (archivedOpen) list.querySelector?.('.g-archived')?.scrollIntoView?.({ block: 'nearest' });
+  });
   byId('convsCollapse').addEventListener('click', () => (ctx.phone.matches ? setDrawer(false) : setCollapsed(true)));
   byId('convsExpand').addEventListener('click', () => setCollapsed(false));
-  barBtn.addEventListener('click', () => setDrawer(!isDrawerOpen()));
   scrim.addEventListener('click', () => setDrawer(false));
   syncCollapsed();
+  renderScope();
+  renderStates({});
 
   return {
     render,
@@ -473,7 +650,7 @@ export function createConvList(ctx) {
     filterNode: () => filter,
     isDrawerOpen,
     openDrawer: () => setDrawer(true),
-    closeDrawer: () => { if (isDrawerOpen()) setDrawer(false); },
+    closeDrawer: () => setDrawer(false),
     // Box ids repeat across projects ("pt:orders"): a filter never follows the page to another project.
     projectChanged() { filter = null; showAll = new Set(); },
   };

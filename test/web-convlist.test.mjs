@@ -19,6 +19,8 @@ function shop(conversations) {
   state.generatedAt = NOW;
   state.projects[0].conversations = conversations;
   state.projects[1].conversations = [row('n1', { title: 'Sync notes offline', updatedAt: ago(5) })];
+  // The map's chats are what "Needs you" reads (web-convlist-inbox.test.mjs): none here, so these tests see the groups below it.
+  for (const p of state.projects) p.chats = [];
   return state;
 }
 
@@ -138,8 +140,7 @@ test('dateGroup splits by calendar day like Claude and ChatGPT: today, yesterday
   assert.equal(dateGroup(null, now), 'older');
 });
 
-test('listConversations gives one section per project: the project chats pinned on top, working, waiting, then by date', () => {
-  const now = Date.parse(NOW);
+test('listConversations gives one section per project: working, then the rest newest first; a project chat sits by its state', () => {
   const state = shop([
     row('proj', { node: { kind: 'project' }, status: 'busy', updatedAt: ago(1) }),
     row('proj2', { node: { kind: 'project' }, updatedAt: ago(60 * 24 * 20) }),
@@ -152,13 +153,9 @@ test('listConversations gives one section per project: the project chats pinned 
   assert.equal(sec.project.name, 'acme-shop');
   assert.equal(sec.hue, projectHue(state.projects[0]));
   const ids = (k) => sec[k].map((e) => e.row.sessionId);
-  assert.deepEqual(ids('pinned'), ['proj', 'proj2'], 'the project chats sit on top whatever they are doing, newest first');
-  assert.equal(SECTION_GROUPS[0], 'pinned', 'their group is the first of the card');
-  assert.deepEqual(ids('working'), ['busy']);
-  assert.deepEqual(ids('waiting'), ['asks']);
-  assert.deepEqual(ids(dateGroup(ago(4), now)), ['today']);
-  assert.deepEqual(ids('older'), ['old']);
-  assert.deepEqual(sec.counts, { working: 2, waiting: 1, cutoff: 0, total: 6 });
+  assert.deepEqual(ids('working'), ['proj', 'busy']);
+  assert.deepEqual(ids('recent'), ['asks', 'today', 'proj2', 'old'], 'a question nobody waits on any more (not in Needs you) is recent');
+  assert.deepEqual(sec.counts, { working: 2, cutoff: 0, total: 6 });
 });
 
 test('projectChats: the chats about the whole project that are not archived, newest first, for the root bubble', () => {
@@ -173,10 +170,10 @@ test('projectChats: the chats about the whole project that are not archived, new
 
 test('in "All projects" every row carries its project, and the projects with work going on come first', () => {
   const state = shop([row('a', { updatedAt: ago(500) }), row('b', { updatedAt: ago(600) })]);
-  state.projects[1].conversations = [row('n1', { title: 'Sync notes offline', updatedAt: ago(900), waiting: true })];
+  state.projects[1].conversations = [row('n1', { title: 'Sync notes offline', updatedAt: ago(900), status: 'busy' })];
   const out = listConversations(state, { projectId: state.projects[0].id, scope: 'all' });
-  assert.deepEqual(out.sections.map((s) => s.project.name), ['notes-app', 'acme-shop'], 'waiting for you pulls a project up');
-  const rows = out.sections.flatMap((s) => ['pinned', 'working', 'waiting', 'today', 'yesterday', 'week', 'older'].flatMap((k) => s[k]));
+  assert.deepEqual(out.sections.map((s) => s.project.name), ['notes-app', 'acme-shop'], 'work going on pulls a project up');
+  const rows = out.sections.flatMap((s) => SECTION_GROUPS.flatMap((k) => s[k]));
   assert.equal(rows.length, out.total);
   for (const e of rows) assert.ok(e.project.name, `${e.row.sessionId} has no project name`);
   assert.notEqual(projectHue(state.projects[0]), projectHue(state.projects[1]), 'each project has its own color');
@@ -253,7 +250,7 @@ async function drawList(state, { scope = 'project', unseen = new Set() } = {}) {
   }
 }
 
-test('every row says its state in a word: working, waiting for you, finished, closed, and finished not seen yet stands out', async () => {
+test('every row says its state in a word to a screen reader, and finished not seen yet stands out', async () => {
   const state = shop([
     row('busy', { status: 'busy', live: true }),
     row('asks', { waiting: true, live: true, status: 'idle' }),
@@ -265,60 +262,58 @@ test('every row says its state in a word: working, waiting for you, finished, cl
   const rows = withClass(list, 'cv-row');
   assert.equal(rows.length, 5);
   const word = (r) => withClass(r, 'cv-state')[0]?.text.trim();
-  for (const r of rows) assert.ok(word(r), `${r.attrs['data-session']} has no state word`);
   const bySession = Object.fromEntries(rows.map((r) => [r.attrs['data-session'], r]));
   assert.deepEqual(Object.fromEntries(rows.map((r) => [r.attrs['data-session'], word(r)])), {
     busy: 'convs.state.busy', asks: 'convs.state.waiting', idle: 'convs.state.idle', gone: 'convs.state.closed', fresh: 'convs.state.unseen',
   });
   assert.match(bySession.fresh.attrs.class, /\bis-unseen\b/, 'finished and not opened yet is highlighted');
+  assert.ok(withClass(bySession.fresh, 'cv-unseen-dot').length, 'with its dot');
   assert.doesNotMatch(bySession.idle.attrs.class, /\bis-unseen\b/);
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.cv-row \.cv-state \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\)/, 'the group says it on screen');
 });
 
-test('a row puts its place on the map on a line of its own, the origin in icon and word, and time and cost on the right', async () => {
+test('a row puts where it runs and its box on the line under the title, the time on the right', async () => {
   const state = shop([row('a', { partId: 'orders', origin: 'vscode', costUSD: 2 })]);
   const list = await drawList(state);
   const [r] = withClass(list, 'cv-row');
-  const place = withClass(r, 'cv-place')[0];
-  assert.match(place.text, /What makes it work › Orders and cart/);
-  assert.equal(withClass(place, 'cv-origin-badge').length, 0, 'nothing else shares the place line');
-  const origin = withClass(r, 'cv-origin-badge')[0];
-  assert.match(origin.text, /convs\.origin\.vscode/);
-  assert.ok(walkAll(origin).some((el) => el.attrs?.['data-icon']), 'the origin has its icon');
-  const side = withClass(r, 'cv-side')[0];
-  assert.ok(side, 'a right column');
-  assert.equal(withClass(side, 'cv-when').length + withClass(side, 'cv-cost').length, 2, 'time and cost stand on the right');
+  const [meta] = withClass(r, 'cv-meta');
+  assert.match(meta.text, /Orders and cart/);
+  assert.equal(withClass(r, 'cv-path')[0].text, 'Orders and cart', 'the box it hangs on; the way down the map is in its tooltip');
+  assert.match(r.attrs.title, /What makes it work › Orders and cart/);
+  const [origin] = withClass(meta, 'cv-origin-mark');
+  assert.match(origin.text, /convs\.origin\.vscode/, 'where it runs is read out');
+  assert.match(origin.attrs.title, /convs\.origin\.title:convs\.origin\.vscode/);
+  assert.ok(walkAll(origin).some((el) => el.attrs?.['data-icon'] === 'code'), 'the origin has its icon');
+  assert.equal(withClass(r, 'cv-when').length, 1, 'the time stands on the right');
 });
 
-test('each project is a card with its colour band and name, in "This project" too, and its rows do not repeat it', async () => {
-  for (const scope of ['project', 'all']) {
-    const state = shop([row('a'), row('b', { status: 'busy', live: true })]);
-    const list = await drawList(state, { scope });
-    const cards = withClass(list, 'cv-folder');
-    assert.ok(cards.length >= 1, `${scope}: one card per project`);
-    const card = cards.find((c) => c.attrs['data-project'] === state.projects[0].id);
-    assert.match(card.attrs.style, /--p-h:\d+/, `${scope}: the card carries the project colour`);
-    assert.equal(withClass(card, 'cv-folder-name')[0].text, state.projects[0].name);
-    assert.equal(withClass(card, 'cv-proj').length, 0, `${scope}: no row repeats the project inside its own card`);
-  }
+test('in "All projects" each project is a card with its colour band and name; "This project" needs none', async () => {
+  const state = shop([row('a'), row('b', { status: 'busy', live: true })]);
+  const list = await drawList(state, { scope: 'all' });
+  const cards = withClass(list, 'cv-folder');
+  const card = cards.find((c) => c.attrs['data-project'] === state.projects[0].id);
+  assert.match(card.attrs.style, /--p-h:\d+/, 'the card carries the project colour');
+  assert.equal(withClass(card, 'cv-folder-name')[0].text, state.projects[0].name);
+  assert.equal(withClass(card, 'cv-proj').length, 0, 'no row repeats the project inside its own card');
+  assert.equal(withClass(await drawList(state), 'cv-folder').length, 0);
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
   const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1] ?? '';
   assert.match(rule('.cv-folder-name'), /text-overflow: ellipsis/, 'a very long name ends in "…" instead of pushing the counts out');
-  assert.match(rule('.cv-proj'), /flex: none/, 'the badge of the Now cards keeps its size');
+  assert.match(css, /\.cv-proj \{[^}]*flex: none/, 'the project tag keeps its size');
 });
 
-test('the groups are titled sections with an icon, a colour, a count and a title that stays on top while its rows scroll', async () => {
-  const state = shop([row('w', { status: 'busy', live: true }), row('q', { waiting: true }), row('t', { updatedAt: ago(10) })]);
+test('the groups are titled sections with a dot, a colour, a count and a title that stays on top while its rows scroll', async () => {
+  const state = shop([row('w', { status: 'busy', live: true }), row('c', { cutOff: true }), row('t', { updatedAt: ago(10) })]);
   const list = await drawList(state);
   const heads = withClass(list, 'cv-group-head');
-  assert.equal(heads.length, 3);
-  for (const head of heads) {
-    assert.ok(walkAll(head).some((el) => el.attrs?.['data-icon']), `${head.text}: has an icon`);
-    assert.equal(withClass(head, 'cv-group-n')[0]?.text, '1', `${head.text}: has its count`);
-  }
-  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]), ['working', 'waiting', 'today']);
+  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]), ['working', 'cutoff', 'recent']);
+  for (const head of heads) assert.ok(withClass(head, 'cv-group-dot').length, `${head.text}: has its dot`);
+  assert.deepEqual(heads.map((hd) => withClass(hd, 'cv-group-n')[0]?.text ?? null), ['1', '1', null], 'Recent is the quiet rest: no count');
   const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
-  const rule = (sel) => css.match(new RegExp(`\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1] ?? '';
-  assert.match(rule('.cv-group-head'), /position: sticky/, 'the group title stays on top');
+  assert.match(css, /\n\.cv-group-head \{[^}]*position: sticky/, 'the group title stays on top');
+  assert.match(css, /\.g-working \{ --g: var\(--active\); --g-ink: var\(--active-ink\); \}/);
+  assert.match(css, /\.g-needs \{ --g: var\(--waiting\); --g-ink: var\(--waiting-ink\); \}/);
 });
 
 test('on a computer the conversation sheet takes the whole height of the stage, beside the map tools', () => {
@@ -362,20 +357,14 @@ test('listConversations counts each state, archived included, and the counts add
   assert.deepEqual(searched.counts, { working: 0, waiting: 0, cutoff: 0, finished: 0, archived: 1 }, 'the search narrows the counts too');
 });
 
-test('listConversations with a state shows only that state; archived shows only archived rows, whatever showArchived says', () => {
+test('the sections never hold an archived row; the flat lists and "archived" do, with showArchived', () => {
   const state = mixed();
-  const ids = (opts) => listConversations(state, { projectId: state.projects[0].id, ...opts }).sections
-    .flatMap((s) => SECTION_GROUPS.flatMap((g) => s[g])).map((e) => e.row.sessionId).sort();
-  assert.deepEqual(ids({ state: 'working' }), ['w']);
-  assert.deepEqual(ids({ state: 'waiting' }), ['q']);
-  assert.deepEqual(ids({ state: 'cutoff' }), ['c1', 'c2']);
-  assert.deepEqual(ids({ state: 'finished' }), ['f']);
-  assert.deepEqual(ids({ state: 'archived' }), ['z'], 'archived rows show with showArchived off');
-  assert.deepEqual(ids({ state: 'archived', showArchived: true }), ['z']);
-  assert.deepEqual(ids({ state: 'cutoff', showArchived: true }), ['c1', 'c2'], 'any other state never shows an archived row');
-  assert.deepEqual(ids({}), ['c1', 'c2', 'f', 'q', 'w'], 'no state keeps today: archived hidden');
-  assert.deepEqual(ids({ showArchived: true }), ['c1', 'c2', 'f', 'q', 'w', 'z']);
-  assert.equal(listConversations(state, { projectId: state.projects[0].id, state: 'cutoff' }).counts.working, 1, 'the counts do not change with the pick');
+  const out = listConversations(state, { projectId: state.projects[0].id, showArchived: true });
+  const inSections = out.sections.flatMap((sec) => SECTION_GROUPS.flatMap((g) => sec[g])).map((e) => e.row.sessionId).sort();
+  assert.deepEqual(inSections, ['c1', 'c2', 'f', 'q', 'w']);
+  assert.deepEqual(out.archived.map((e) => e.row.sessionId), ['z']);
+  assert.ok([...out.working, ...out.cutoff, ...out.waiting, ...out.recent].some((e) => e.row.sessionId === 'z'), 'the page still finds an archived row by its id');
+  assert.deepEqual(listConversations(state, { projectId: state.projects[0].id }).archived, [], 'hidden unless asked');
 });
 
 test('a cut-off row sits in its own group after working, and says "Cut off" in its state word', () => {
@@ -383,57 +372,39 @@ test('a cut-off row sits in its own group after working, and says "Cut off" in i
   const [sec] = listConversations(state, { projectId: state.projects[0].id }).sections;
   assert.equal(SECTION_GROUPS.indexOf('cutoff'), SECTION_GROUPS.indexOf('working') + 1);
   assert.deepEqual(sec.cutoff.map((e) => e.row.sessionId), ['c1', 'c2']);
-  assert.deepEqual(sec.waiting.map((e) => e.row.sessionId), ['q'], 'a cut-off row that also waits is not counted twice');
-  assert.deepEqual(sec.counts, { working: 1, waiting: 1, cutoff: 2, total: 5 });
+  assert.deepEqual(sec.counts, { working: 1, cutoff: 2, total: 5 });
   assert.equal(stateOf(row('c', { cutOff: true })), 'cutoff');
   assert.equal(stateOf(row('w', { cutOff: true, status: 'busy' })), 'busy', 'a conversation working again is not cut off');
 });
 
 test('the column draws the cut-off group and the state word on its rows', async () => {
   const list = await drawList(mixed());
-  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]).slice(0, 3), ['working', 'cutoff', 'waiting']);
+  assert.deepEqual(withClass(list, 'cv-group').map((g) => g.attrs.class.match(/g-(\w+)/)[1]), ['working', 'cutoff', 'recent']);
   const cut = withClass(list, 'cv-row').find((r) => r.attrs['data-session'] === 'c1');
   assert.equal(withClass(cut, 'cv-state')[0].text.trim(), 'convs.state.cutoff');
 });
 
-test('the filter bar has five buttons with their count; a click picks one, a second click goes back to all', async () => {
+test('the groups replace the five state chips: each state still has its place and count, archived folded at the foot', async () => {
   const state = mixed();
   const { createConvList } = await import('../server/web/convlist.js');
   const els = new Map();
   const realDocument = globalThis.document;
   globalThis.document = { activeElement: null, getElementById: (id) => els.get(id) ?? els.set(id, new El('div', id)).get(id) };
-  const wired = (tag, attrs = {}, ...children) => {
-    const el = fakeH(tag, attrs, ...children);
-    if (attrs?.onclick) el.addEventListener('click', attrs.onclick);
-    return el;
-  };
   try {
     const t = Object.assign((key, vars) => (vars ? `${key}:${Object.values(vars).join('|')}` : key), { count: (key, n) => `${key}:${n}` });
     createConvList({
-      root: new El('aside'), h: wired, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
+      root: new El('aside'), h: fakeH, icon: (name) => fakeH('svg', { 'data-icon': name }), store: { get: () => null, set() {} },
       t: () => t, relative: () => '1h', money: (v) => `$${v}`, list: (xs) => xs.join(', '), phone: { matches: false },
-      state: () => state, project: () => state.projects[0], showArchived: () => false, current: () => null, nodeLabel: () => null, unseen: () => new Set(),
+      state: () => state, project: () => state.projects[0], current: () => null, nodeLabel: () => null, unseen: () => new Set(),
       onOpen() {}, onMove() {}, onFilter() {},
     }).render();
-    const bar = els.get('convsStates');
-    const buttons = () => walkAll(bar).filter((el) => el.attrs?.['data-state']);
-    assert.deepEqual(buttons().map((b) => b.attrs['data-state']), STATE_FILTERS);
-    assert.deepEqual(buttons().map((b) => withClass(b, 'num')[0].text), ['1', '1', '2', '1', '1']);
-    assert.ok(buttons().every((b) => b.attrs['aria-pressed'] === 'false'));
-    assert.match(buttons()[2].text, /convs\.states\.cutoff/);
     const list = els.get('convsList');
-    buttons()[2].fire('click');
-    assert.equal(buttons()[2].attrs['aria-pressed'], 'true');
-    assert.deepEqual(withClass(list, 'cv-row').map((r) => r.attrs['data-session']).sort(), ['c1', 'c2']);
-    buttons()[2].fire('click');
-    assert.ok(buttons().every((b) => b.attrs['aria-pressed'] === 'false'), 'a second click goes back to all');
-    assert.equal(withClass(list, 'cv-row').length, 5);
-    buttons()[4].fire('click');
-    assert.deepEqual(withClass(list, 'cv-row').map((r) => r.attrs['data-session']), ['z']);
-    buttons()[4].fire('click');
-    state.projects[0].conversations = [row('only')];
-    buttons()[0].fire('click');
-    assert.match(list.text, /convs\.stateEmpty/, 'a pick with no rows says so, with its name');
+    const group = (name) => withClass(list, `g-${name}`)[0];
+    assert.deepEqual(withClass(group('working'), 'cv-row').map((r) => r.attrs['data-session']), ['w']);
+    assert.deepEqual(withClass(group('cutoff'), 'cv-row').map((r) => r.attrs['data-session']), ['c1', 'c2']);
+    assert.deepEqual(withClass(group('recent'), 'cv-row').map((r) => r.attrs['data-session']), ['q', 'f']);
+    assert.equal(withClass(els.get('convsArchived'), 'num')[0].text, '1');
+    assert.equal(STATE_FILTERS.length, 5, 'every state still has its name');
   } finally {
     globalThis.document = realDocument;
   }
@@ -451,24 +422,20 @@ const orchShop = (extra = []) => shop([
   ...extra,
 ]);
 
-test('the orchestrator is pinned first in its project, and its activity chats nest under it, working first, out of the date groups', () => {
+test('the orchestrator leads its group, and its activity chats nest under it, working first, never a second time', () => {
   const [sec] = listConversations(orchShop(), { projectId: DEMO.projects[0].id }).sections;
   const ids = (k) => sec[k].map((e) => e.row.sessionId);
-  assert.deepEqual(ids('pinned'), [ORCH, 'proj'], 'the orchestrator before the project chats, whatever the dates');
+  assert.deepEqual(ids('working'), [ORCH], 'one of its chats works: so does it');
   assert.deepEqual(sec.kids.get(ORCH).map((e) => e.row.sessionId), ['k-busy', 'k-old']);
-  assert.deepEqual(ids('working'), [], 'a nested chat is not drawn a second time');
-  assert.ok(![...ids('today'), ...ids('week'), ...ids('older')].some((id) => id.startsWith('k-')));
-  assert.ok(ids('today').includes('lone'), 'a chat whose mother is not here stays in its group: nothing is guessed');
-  assert.deepEqual(sec.counts, { working: 1, waiting: 0, cutoff: 0, total: 5 }, 'they still count');
+  assert.ok(!ids('recent').some((id) => id.startsWith('k-')));
+  assert.ok(ids('recent').includes('lone'), 'a chat whose mother is not here stays in its group: nothing is guessed');
+  assert.deepEqual(sec.counts, { working: 1, cutoff: 0, total: 5 }, 'they still count');
 });
 
-test('a nested chat shows flat when its orchestrator is filtered out (a state chip, a search)', () => {
-  const state = orchShop();
-  const [byState] = listConversations(state, { projectId: DEMO.projects[0].id, state: 'working' }).sections;
-  assert.deepEqual(byState.working.map((e) => e.row.sessionId), ['k-busy'], 'the orchestrator is not working: its child stands alone');
-  assert.equal(byState.kids.size, 0);
-  const [bySearch] = listConversations(state, { projectId: DEMO.projects[0].id, query: 'k-busy' }).sections;
+test('a nested chat shows flat when its orchestrator is filtered out (a search)', () => {
+  const [bySearch] = listConversations(orchShop(), { projectId: DEMO.projects[0].id, query: 'k-busy' }).sections;
   assert.deepEqual(bySearch.working.map((e) => e.row.sessionId), ['k-busy']);
+  assert.equal(bySearch.kids.size, 0);
 });
 
 test('the orchestrator row has its own place, is not a project chat, and the helpers find it and its working chats', () => {
@@ -485,21 +452,22 @@ test('the orchestrator row has its own place, is not a project chat, and the hel
   assert.equal(orchestratorOf(archived), null, 'an archived one is not the project\'s orchestrator');
 });
 
-test('the column draws the orchestrator first, its activity chats indented under it with item code, model, state and cost', async () => {
+test('the column draws the orchestrator first, its activity chats indented under it, one line each with item and model in reach', async () => {
   const list = await drawList(orchShop());
   const rows = withClass(list, 'cv-row').map((r) => r.attrs['data-session']);
   assert.equal(rows[0], ORCH, 'first of the project');
   const orch = withClass(list, 'cv-item').find((li) => withClass(li, 'cv-row')[0]?.attrs['data-session'] === ORCH);
-  assert.ok(withClass(withClass(orch, 'cv-row')[0], 'cv-orch-badge').length, 'named as the orchestrator, not as an origin');
+  assert.match(withClass(withClass(orch, 'cv-row')[0], 'cv-origin-mark')[0].text, /convs\.orchestrator/, 'named as the orchestrator, not as an origin');
   const [kids] = withClass(orch, 'cv-kids');
   assert.ok(kids, 'a nested list inside its own item');
   const kidRows = withClass(kids, 'cv-row');
   assert.deepEqual(kidRows.map((r) => r.attrs['data-session']), ['k-busy', 'k-old']);
-  const busy = kidRows[0];
-  assert.match(withClass(busy, 'cv-code')[0].text, /or03/);
-  assert.match(withClass(busy, 'cv-model')[0].text, /Sonnet/);
+  const [busy] = kidRows;
+  assert.match(busy.attrs.title, /or03 · Sonnet/, 'item and model in its tooltip');
+  assert.match(busy.text, /or03 · Sonnet/, 'and read out');
   assert.match(withClass(busy, 'cv-state')[0].text, /convs\.state\.busy/);
-  assert.match(withClass(busy, 'cv-cost')[0].text, /1\.25/);
+  const busyItem = withClass(kids, 'cv-item')[0];
+  assert.match(withClass(busyItem, 'cv-cost')[0].text, /1\.25/, 'its cost on hover');
   assert.equal(withClass(withClass(list, 'cv-kids')[0], 'cv-item').length, 2);
-  assert.equal(withClass(kids, 'cv-origin-badge').length, 0, 'an activity chat says its job, not where it runs');
+  assert.equal(withClass(kids, 'cv-origin-mark').length, 0, 'an activity chat says its job, not where it runs');
 });

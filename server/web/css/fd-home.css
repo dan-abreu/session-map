@@ -68,6 +68,8 @@
 .is-warn .hm-val, .is-warn .hm-icon { color: var(--waiting-ink); }
 .is-working .hm-val, .is-working .hm-icon { color: var(--active-ink); }
 .is-waiting .hm-val, .is-waiting .hm-icon { color: var(--waiting-ink); font-weight: 650; }
+/* Under "needs you": the decisions waiting on the map, quiet, on a line of their own (the amber is the pill's count). */
+.hm-sub { display: block; margin-top: 2px; padding-left: calc(var(--sp-1) + 16px); font-size: var(--fs-xs); color: var(--ink-2); }
 
 /* A project not read yet: one cell over the health and "up to date?" columns. */
 .hm-unread { grid-column: span 2; display: grid; justify-items: start; gap: var(--sp-1); }

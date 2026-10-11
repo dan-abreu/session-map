@@ -56,26 +56,37 @@ const idsOf = (root) => buttons(root).map((b) => b.attrs.id);
 const byId = (root, id) => root.querySelector(`#tab-${id}`);
 const focused = () => globalThis.document.activeElement;
 
-test('Simple mode: Home, then Route, Map, Conversations and Ideas, then a More button; ids are tab-<area>', () => {
+test('one row (mm47): Home, Map, Conversations, then a More button; ids are tab-<area>', () => {
   const s = setup();
-  assert.deepEqual(idsOf(s.root), ['tab-home', 'tab-route', 'tab-map', 'tab-convs', 'tab-ideas', 'tab-more']);
+  assert.deepEqual(idsOf(s.root), ['tab-home', 'tab-map', 'tab-convs', 'tab-more']);
   const t = tabsFor({ tech: false });
   assert.deepEqual(idsOf(s.root).slice(0, -1), [...t.global, ...t.project].map((id) => `tab-${id}`));
   assert.equal(s.root.querySelector('nav').attrs['aria-label'], s.tr('nav.label'));
   assert.equal(byId(s.root, 'more').text, s.tr('nav.more'));
 });
 
-test('Full mode: every area on the bar in the order of tabsFor, and no More button', () => {
+test('Full mode draws every area on the bar, and no More while it has nothing to hold', () => {
   const s = setup({ tech: true });
-  const t = tabsFor({ tech: true });
-  assert.deepEqual(idsOf(s.root), [...t.global, ...t.project].map((id) => `tab-${id}`));
-  assert.equal(buttons(s.root).length, 12);
+  assert.deepEqual(idsOf(s.root), [...tabsFor({ tech: true }).global, ...tabsFor({ tech: true }).project].map((id) => `tab-${id}`));
   assert.equal(byId(s.root, 'more'), null);
+});
+
+test('Route and Ideas are nowhere until they have a page, then wait under More', () => {
+  const s = setup();
+  s.bar.setReady({ route: false, ideas: false });
+  byId(s.root, 'more').handlers.click({});
+  assert.equal(byId(s.root, 'route'), null);
+  assert.equal(byId(s.root, 'ideas'), null);
+  s.bar.setReady({ route: true, ideas: true });
+  assert.ok(byId(s.root, 'route'), 'Route in More (the menu stays open across the redraw)');
+  assert.ok(byId(s.root, 'ideas'), 'Ideas in More');
 });
 
 test('each tab carries the icon of the table and its text in both languages', () => {
   for (const lang of ['en', 'pt-BR']) {
-    const s = setup({ tech: true, lang });
+    const s = setup({ lang });
+    s.bar.setReady(Object.fromEntries(AREAS.map((a) => [a.id, true])));
+    byId(s.root, 'more').handlers.click({});
     for (const a of AREAS) {
       const b = byId(s.root, a.id);
       assert.equal(b.text, s.tr('tab.' + a.id), `${lang} ${a.id}`);
@@ -85,11 +96,11 @@ test('each tab carries the icon of the table and its text in both languages', ()
 });
 
 test('the current area has aria-current="page" and no other tab has it; setCurrent moves it', () => {
-  const s = setup({ current: 'route' });
+  const s = setup({ current: 'map' });
   const marked = () => buttons(s.root).filter((b) => b.attrs['aria-current'] === 'page').map((b) => b.attrs.id);
-  assert.deepEqual(marked(), ['tab-route']);
-  s.bar.setCurrent('ideas');
-  assert.deepEqual(marked(), ['tab-ideas']);
+  assert.deepEqual(marked(), ['tab-map']);
+  s.bar.setCurrent('convs');
+  assert.deepEqual(marked(), ['tab-convs']);
 });
 
 test('a click on a tab calls onPick(area)', () => {
@@ -116,15 +127,16 @@ test('arrow keys, Home and End move the focus along the bar, and only one tab is
 
 test('an area without a view says so in words for a screen reader and in the tooltip', () => {
   const s = setup();
-  s.bar.setReady({ route: false, map: true });
-  const route = byId(s.root, 'route');
-  assert.ok(route.text.includes(s.tr('nav.soon')), 'the words are inside the button');
-  assert.ok(route.querySelector('.nav-soon'), 'and there is the dot');
-  assert.equal(route.attrs.title, s.tr('nav.soon'));
+  s.bar.setReady({ health: false, map: true });
+  byId(s.root, 'more').handlers.click({});
+  const health = byId(s.root, 'health');
+  assert.ok(health.text.includes(s.tr('nav.soon')), 'the words are inside the button');
+  assert.ok(health.querySelector('.nav-soon'), 'and there is the dot');
+  assert.equal(health.attrs.title, s.tr('nav.soon'));
   assert.ok(!byId(s.root, 'map').text.includes(s.tr('nav.soon')));
   assert.equal(byId(s.root, 'home').querySelector('.nav-soon'), null, 'an area nobody mentioned counts as ready');
   s.bar.setReady({});
-  assert.equal(byId(s.root, 'route').querySelector('.nav-soon'), null);
+  assert.equal(byId(s.root, 'health').querySelector('.nav-soon'), null);
 });
 
 test('More opens a menu with the seven hidden areas, in table order; picking one calls onPick and closes it', () => {
@@ -171,21 +183,21 @@ test('More shows as current when the current area sits inside it', () => {
   assert.equal(byId(s.root, 'more').attrs['aria-current'], undefined);
 });
 
-test('setMode swaps Simple for Full without a reload, and keeps the focus where it was', () => {
+test('setMode redraws without a reload, and keeps the focus where it was', () => {
   const s = setup();
   byId(s.root, 'map').focus();
   s.bar.setMode(true);
-  assert.equal(buttons(s.root).length, 12);
+  assert.equal(buttons(s.root).length, 4);
   assert.equal(focused().attrs.id, 'tab-map', 'the new button got the focus back');
   s.bar.setMode(false);
   assert.ok(byId(s.root, 'more'));
 });
 
-test('on a phone the bottom bar has five buttons: Home, Route, Map, Conversations and More, whatever the mode', () => {
+test('on a phone the bottom bar has four buttons: Home, Map, Conversations and More, whatever the mode', () => {
   for (const tech of [false, true]) {
     const s = setup({ phone: true, tech });
     assert.ok(s.root.querySelector('.is-bottom'), 'a bottom bar');
-    assert.deepEqual(idsOf(s.root), ['tab-home', 'tab-route', 'tab-map', 'tab-convs', 'tab-more']);
+    assert.deepEqual(idsOf(s.root), ['tab-home', 'tab-map', 'tab-convs', 'tab-more']);
     byId(s.root, 'more').handlers.click({});
     const items = s.root.querySelector('.nav-menu').querySelectorAll('button').map((b) => b.attrs.id.slice(4));
     assert.deepEqual(items, tabsFor({ phone: true }).more, 'More holds every other area');
@@ -197,7 +209,7 @@ test('going from phone to desktop rebuilds the bar', () => {
   const s = setup({ phone: true });
   s.setPhone(false);
   assert.equal(s.root.querySelector('.is-bottom'), null);
-  assert.equal(buttons(s.root).length, 6);
+  assert.equal(buttons(s.root).length, 4);
 });
 
 test('the stylesheet keeps touch targets at 44 px on the phone bar, has the reader-only text class and respects reduced motion', () => {

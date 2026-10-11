@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { homeRows, attentionOf, homeTotals, healthTone } from '../server/web/home.js';
 import { waitingEntries } from '../server/web/views.js';
+import { needsYou } from '../server/web/now.js';
 import { clashKey } from '../server/web/signals.js';
 import { LANGS } from '../server/web/i18n.js';
 
@@ -80,9 +81,24 @@ test('waiting is what the waiting list holds for that project; working counts li
   const state = threeProjects();
   const rows = homeRows(state, { nowMs: NOW });
   for (const p of state.projects) assert.equal(rowOf(rows, p.id).waiting, waitingEntries(state, p.id).length, p.id);
-  assert.equal(rowOf(rows, 'garden-planner-aa11bb').waiting, 2);
+  // "c" asks; "d" ended on a question two days ago in a closed conversation: history, as for the amber pill.
+  assert.equal(rowOf(rows, 'garden-planner-aa11bb').waiting, 1);
   assert.equal(rowOf(rows, 'garden-planner-aa11bb').working, 1);
   assert.equal(rowOf(rows, state.projects[0].id).working, state.projects[0].chats.filter((c) => c.status === 'busy' && !c.archived).length);
+});
+
+test('needs is the amber pill\'s own count for the project; the decisions on the map are counted apart (one fact, one number)', () => {
+  const state = threeProjects();
+  const rows = homeRows(state, { nowMs: NOW });
+  const pill = needsYou(state);
+  for (const p of state.projects) {
+    const r = rowOf(rows, p.id);
+    assert.equal(r.needs, pill.filter((e) => e.project.id === p.id).length, p.id);
+    assert.equal(r.decisions, waitingEntries(state, p.id).filter((e) => e.decision).length, p.id);
+    assert.equal(r.needs + r.decisions, r.waiting, p.id);
+  }
+  assert.ok(rows.some((r) => r.decisions > 0), 'the demo has decisions on the map');
+  assert.equal(homeTotals(rows).needs, pill.length, 'the total on Home is the number on the pill');
 });
 
 test('a clash the person chose to stop seeing leaves the count, like it leaves the list', () => {
@@ -113,7 +129,7 @@ test('rows come waiting first, then working, then the most recent; ties keep a s
   const calm = (id, ts, status = 'closed') => ({ ...handmade(), id, name: id, chats: [quietChat(id, status, ts)], activity: [] });
   state.projects = [
     calm('older', '2026-10-01T00:00:00.000Z'), calm('newer', '2026-10-08T00:00:00.000Z'), calm('working', '2026-09-01T00:00:00.000Z', 'busy'),
-    { ...calm('asks', '2026-08-01T00:00:00.000Z'), chats: [quietChat('q', 'idle', '2026-08-01T00:00:00.000Z', { strong: true })] },
+    { ...calm('asks', '2026-08-01T00:00:00.000Z'), chats: [{ ...quietChat('q', 'idle', '2026-08-01T00:00:00.000Z', { strong: true }), live: true }] },
     calm('also-older', '2026-10-01T00:00:00.000Z'),
   ];
   const order = homeRows(state, { nowMs: NOW }).map((r) => r.id);
@@ -177,9 +193,10 @@ test('the totals add up the rows', () => {
   assert.equal(totals.projects, 3);
   assert.equal(totals.working, rows.reduce((s, r) => s + r.working, 0));
   assert.equal(totals.waiting, rows.reduce((s, r) => s + r.waiting, 0));
+  assert.equal(totals.needs, rows.reduce((s, r) => s + r.needs, 0));
   assert.ok(Math.abs(totals.monthUsd - rows.reduce((s, r) => s + r.monthCost.usd, 0)) < 1e-9);
   assert.equal(totals.unread, 1);
-  assert.deepEqual(homeTotals([]), { projects: 0, working: 0, waiting: 0, monthUsd: 0, unread: 0 });
+  assert.deepEqual(homeTotals([]), { projects: 0, working: 0, needs: 0, waiting: 0, monthUsd: 0, unread: 0 });
 });
 
 test('every heads-up and tone has a text in both languages, with the same blanks', () => {

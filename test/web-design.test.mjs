@@ -76,6 +76,16 @@ test('colors and shadows outside the tokens are only token references', () => {
   assert.deepEqual(bad.map((d) => `${d.where} { ${d.prop}: ${d.value} }`), []);
 });
 
+test('every shadow token is a real shadow in light and dark, never a token that names itself', () => {
+  for (const [name, map] of [['light', light], ['dark', dark]]) {
+    for (const step of ['xs', 'sm', 'md', 'lg']) {
+      const v = map[`--shadow-${step}`];
+      assert.doesNotMatch(v, /var\(--shadow/, `${name} --shadow-${step} refers to a token instead of being one`);
+      assert.match(v, /^0 \d+px -?\d+px/, `${name} --shadow-${step} is an offset, a blur and a colour`);
+    }
+  }
+});
+
 test('motion uses the duration tokens, and reduced motion turns every animation and transition off', () => {
   for (const name of ['--dur-fast', '--dur-base', '--dur-slow']) assert.ok(light[name], `${name} missing`);
   const timed = plain.filter((d) => /^(transition|animation)(-duration|-delay)?$/.test(d.prop) && !/prefers-reduced-motion/.test(d.where));
@@ -116,6 +126,10 @@ const PAIRS = [
   ['--bg-2', '--ink', null, 4.5],
   ['--focus', '--bg', null, 3],
   ['--focus', '--bg-2', null, 3],
+  // The chat (pc18, pc19): the step in the working line, the words of a quick reply, the link to Configurações.
+  ['--ink-2', '--bg-2', '--active-fill', 4.5],
+  ['--ink', '--bg-2', '--waiting-fill', 4.5],
+  ['--focus', '--bg-2', null, 4.5],
   // The colors of code in the file viewer (mm26), on the viewer's surface.
   ...['com', 'str', 'kw', 'num', 'tag', 'attr', 'key'].map((k) => [`--syn-${k}`, '--bg-2', null, 4.5]),
 ];
@@ -171,10 +185,12 @@ test('the chat header is one thin line: the title cut with an ellipsis, never wr
   assert.equal(rule('.chat-head h2', 'font-size'), 'var(--fs-md)');
 });
 
-test('on a phone the map tools give "New chat" and "New idea" one row of two halves, the filters the row below', () => {
+test('on a phone the map header keeps the summary on its own line and gives search the room beside Vista (mm48)', () => {
   const phone = (sel, prop) => rule(`@media (max-width: 719px) > ${sel}`, prop);
-  assert.equal(phone('#newChat, #newIdea', 'flex'), '1 1 calc(50% - 4px)', 'each takes half the row');
-  assert.equal(phone('#newChat, #newIdea', 'order'), '1');
-  assert.equal(phone('.mm-changed', 'order'), '2');
-  assert.equal(phone('.live-btn', 'order'), '2');
+  assert.equal(phone('.mm-tools', 'flex-wrap'), 'wrap');
+  assert.equal(phone('.summary-row', 'flex'), '1 1 100%');
+  assert.equal(phone('.mm-actions', 'flex'), '1 1 100%');
+  assert.equal(phone('.mm-search', 'flex'), '1 1 auto');
+  assert.equal(phone('.view-btn', 'height'), '40px', 'a finger-sized Vista');
+  assert.equal(phone('.pm-row', 'min-height'), '44px', 'finger-sized rows in the menus');
 });

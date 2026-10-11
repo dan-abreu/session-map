@@ -211,7 +211,8 @@ function safeSet(key, value) {
 }
 
 // ctx: h, t (translator getter), toast, errorText, relative, project(), tree(), live() (the lit node ids), phone
-// (matchMedia), confirm, onOpenPart(partId), onApplied() (files were written), onPcMode.
+// (matchMedia), confirm, onOpenPart(partId), onApplied() (files were written), openSettings(binding, opener) and
+// onRunChange() (Configurações, pc19), waitingOf(sessionId) (the pill's rule, for the chat's dot).
 export function createFlowView(ctx) {
   const { h, toast, errorText } = ctx;
   const t = () => ctx.t();
@@ -260,7 +261,8 @@ export function createFlowView(ctx) {
   const archKey = (p) => JSON.stringify([p.id, p.arch.source, p.arch.mermaid, p.arch.layers, p.arch.parts.map((x) => [x.id, x.name]), p.arch.links?.map((l) => [l.a, l.b])]);
 
   const chat = createChat({
-    root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, money: ctx.money, savedKey: null, onPcMode: ctx.onPcMode,
+    root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, money: ctx.money, savedKey: null,
+    openSettings: ctx.openSettings, onRunChange: ctx.onRunChange, safety: 'flow.chatSafety', waitingOf: ctx.waitingOf,
     lang: ctx.lang, icon: ctx.icon, commands: ctx.commands,
     onDraft: (text) => {
       if (!hist || text === hist.now) return;
@@ -1107,6 +1109,8 @@ export function createFlowView(ctx) {
       return undefined;
     },
     relabel() { if (visible) rerender(); },
+    // Configurações from the person's menu: the workshop's conversation, when it is the one on screen.
+    chatSettings: () => (visible && chat.isOpen() ? chat.settings() : null),
     putRelation,
     isWorkshop: () => mode === 'workshop',
     setMode,
