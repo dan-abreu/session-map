@@ -154,7 +154,9 @@ test('the texts: same keys in both languages, same blanks, own namespace, every 
     assert.ok(v.trim() && pt[k].trim(), `${k} is empty`);
     assert.deepEqual(vars(pt[k]), vars(v), `${k} blanks differ`);
     assert.ok(k.startsWith('versions.'), `${k} stays in the versions namespace`);
-    assert.ok(!(k in LANGS.en), `${k} is already in the page dictionary`);
+    // Merged through i18n-fd/health.js: the dictionary holds this very text, so no other key of the same name overrides it.
+    assert.equal(LANGS.en[k], v, `${k} is not the versions text in the page dictionary`);
+    assert.equal(LANGS['pt-BR'][k], pt[k], `${k} is not the versions text in the page dictionary`);
   }
   for (const r of PIECE_REASONS) assert.ok(en[`versions.reason.${r}`] && pt[`versions.reason.${r}`], r);
   for (const k of ['vulnerable', 'eol', 'behind']) assert.ok(en[`versions.warn.${k}`] && pt[`versions.warn.${k}`], k);

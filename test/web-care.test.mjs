@@ -43,7 +43,9 @@ test('the care texts are the same in en and pt-BR, with the same blanks, and rep
   for (const [k, v] of Object.entries(texts.en)) {
     assert.ok(v.trim() && texts['pt-BR'][k].trim(), k);
     assert.deepEqual(vars(texts['pt-BR'][k]), vars(v), `${k} blanks`);
-    assert.ok(!(k in LANGS.en), `${k} is already in the dictionary`);
+    // Merged through i18n-fd/care.js: the dictionary holds this very text, so no other key of the same name overrides it.
+    assert.equal(LANGS.en[k], v, `${k} is not the care text in the dictionary`);
+    assert.equal(LANGS['pt-BR'][k], texts['pt-BR'][k], `${k} is not the care text in the dictionary`);
   }
 });
 

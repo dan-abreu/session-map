@@ -68,7 +68,7 @@ export default {
     'findings.docType.memory': 'memory file',
     'findings.docType.skill': 'skill',
     'findings.docType.arch-part': 'architecture page',
-    'findings.docType.readme': 'README',
+    'findings.docType.readme': 'project front page',
     'findings.docType.plan': 'plan',
     'findings.docType.registry': 'registry',
     'findings.docType.changelog': 'changelog',
@@ -165,7 +165,7 @@ export default {
     'findings.docType.memory': 'arquivo de memória',
     'findings.docType.skill': 'skill',
     'findings.docType.arch-part': 'página de arquitetura',
-    'findings.docType.readme': 'README',
+    'findings.docType.readme': 'página de apresentação do projeto',
     'findings.docType.plan': 'plano',
     'findings.docType.registry': 'registro',
     'findings.docType.changelog': 'histórico de versões',
@@ -195,5 +195,14 @@ export default {
     'watch.owner-missing.what': '{count} arquivos em {folder} não pertencem a nenhuma parte do mapa.',
     'watch.owner-missing.why': 'Arquivos sem parte ficam invisíveis no mapa e nas contagens dele.',
     'watch.owner-missing.todo': 'Diga qual parte é dona da pasta {folder}.',
+  },
+  // Technical originals of the texts above that were put in plain words (shown with "Technical details").
+  tech: {
+    en: {
+      'findings.docType.readme': 'README',
+    },
+    'pt-BR': {
+      'findings.docType.readme': 'README',
+    },
   },
 };
