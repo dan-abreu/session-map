@@ -317,6 +317,8 @@ test('limits: the orchestrators never take the last 2 places of CHATS_MAX, and o
     for (const text of ['SLOW one', 'SLOW two']) assert.equal((await hub.start({ projectId: PROJECT, partId: 'auth', text, run: { kind: 'auto' } }, state)).status, 200);
     parsed(await hub.orchestra.call(orch, 'start_chat', { code: 'au01', instructions: 'SLOW login' }));
     assert.deepEqual(await hub.orchestra.call(orch, 'start_chat', { code: 'au02', instructions: 'Reset' }), LIMIT, '4 open: 2 are the person\'s');
+    // restartList names a chat once its claude has told its session id, which a slow machine may not have done yet.
+    await waitFor(() => hub.restartList().length >= 4, 5_000);
     assert.equal(hub.restartList().length, 4);
 
     writeFileSync(join(smDir, 'orchestra.json'), JSON.stringify({ day: { [orchId]: { date: '2026-10-11', count: 30 } } }));
