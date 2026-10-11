@@ -104,6 +104,51 @@ export function whenText(iso, lang = 'en', now = Date.now()) {
   return new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(at);
 }
 
+// ---- the panel: the AIs measured by real use (pure) ------------------------------------------------------------
+
+export const pctText = (x, lang = 'en') => new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 }).format(Number.isFinite(x) ? x : 0);
+
+export function secondsText(ms, lang = 'en') {
+  const s = (Number(ms) || 0) / 1000;
+  return `${new Intl.NumberFormat(lang, { minimumFractionDigits: 0, maximumFractionDigits: s < 10 ? 1 : 0 }).format(s)} s`;
+}
+
+// usage: the body of GET /api/ai/usage. keyProviders: the providers that have a key. -> what the panel shows, or null
+// when no key exists (nothing to measure). One card per AI that worked, plus one per provider with a key that did not.
+export function panelModel(usage, keyProviders = []) {
+  if (!keyProviders.length) return null;
+  const ok = usage?.ok === true;
+  const cards = (ok && Array.isArray(usage.byAi) ? usage.byAi : []).filter((a) => a && typeof a.provider === 'string' && a.provider !== 'claude').map((a) => ({
+    provider: a.provider,
+    model: String(a.model ?? ''),
+    calls: Number(a.calls) || 0,
+    failed: Number(a.failed) || 0,
+    waiting: Number(a.waiting) || 0,
+    acceptRate: Number.isFinite(a.acceptRate) ? a.acceptRate : null,
+    costPerAcceptedUSD: Number.isFinite(a.costPerAcceptedUSD) ? a.costPerAcceptedUSD : null,
+    avgMs: Number(a.avgMs) || 0,
+    bench: (Array.isArray(a.bench) ? a.bench : []).filter((b) => Number.isFinite(b?.accuracy)),
+    mapReview: a.mapReview && a.mapReview.reviewed > 0 ? { reviewed: a.mapReview.reviewed, agreed: a.mapReview.agreed } : null,
+  }));
+  const seen = new Set(cards.map((c) => c.provider));
+  for (const p of keyProviders) {
+    if (!seen.has(p)) cards.push({ provider: p, model: '', calls: 0, failed: 0, waiting: 0, acceptRate: null, costPerAcceptedUSD: null, avgMs: 0, bench: [], mapReview: null });
+  }
+  const days = ok && Array.isArray(usage.days) ? usage.days : [];
+  const series = [...new Set(days.flatMap((d) => Object.keys(d.byProvider ?? {})))].filter((p) => days.some((d) => d.byProvider[p] > 0));
+  const bars = days.map((d) => ({ day: d.day, parts: series.map((p, i) => ({ provider: p, slot: i % 5, usd: Number(d.byProvider?.[p]) || 0 })).filter((x) => x.usd > 0), total: series.reduce((n, p) => n + (Number(d.byProvider?.[p]) || 0), 0) }));
+  return {
+    ok,
+    capUSD: Number(usage?.cap?.dailyUSD) || 0,
+    spentUSD: Number(usage?.cap?.spentTodayUSD) || 0,
+    cards,
+    series,
+    bars,
+    maxDayUSD: Math.max(0, ...bars.map((b) => b.total)),
+    totalUSD: bars.reduce((n, b) => n + b.total, 0),
+  };
+}
+
 // ---- the page --------------------------------------------------------------------------------------------------
 
 // ctx: dialog, h, t() (translator getter), lang(), api, toast, errorText, opener (optional buttons that open it).
@@ -114,6 +159,7 @@ export function createAiHelpers(ctx) {
   let draft = { dailyUSD: '' };
   let notes = {};
   let activity = { ok: true, items: [] };
+  let usage = null;
 
   const tt = () => ctx.t();
   const why = (res) => {
@@ -128,6 +174,10 @@ export function createAiHelpers(ctx) {
   async function loadActivity() {
     const res = await api.aiActivity(50);
     activity = res.ok ? { ok: true, items: activityRows(res.items) } : { ok: false, items: [] };
+  }
+
+  async function loadUsage() {
+    try { usage = typeof api.aiUsage === 'function' ? await api.aiUsage() : null; } catch { usage = null; }
   }
 
   // A project's class is saved the moment it is chosen. What the page shows afterwards is what the server kept.
@@ -306,7 +356,59 @@ export function createAiHelpers(ctx) {
       !activity.ok ? h('p', { class: 'dv-warning', role: 'status' }, t('aih.act.loadFail'))
         : activity.items.length ? h('ol', { class: 'ah-act-list' }, activity.items.map(activityItem))
           : h('p', { class: 'al-opt-hint', 'data-ah-actempty': '1' }, t('aih.act.empty')),
-      h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-refresh': '1', onclick: async () => { await loadActivity(); render('[data-ah-refresh]'); } }, t('aih.act.refresh'))));
+      h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-refresh': '1', onclick: async () => { await Promise.all([loadActivity(), loadUsage()]); render('[data-ah-refresh]'); } }, t('aih.act.refresh'))));
+  }
+
+  function panelCard(c) {
+    const t = tt();
+    const lang = ctx.lang();
+    const used = c.calls > 0;
+    const benchList = c.bench.map((b) => t('aih.panel.benchItem', { kind: t(`aih.act.kind.${ACTIVITY_KINDS.has(b.kind) ? b.kind : 'other'}`), pct: pctText(b.accuracy, lang) })).join('; ');
+    return h('li', { class: 'ah-card', 'data-ah-card': c.provider },
+      h('div', { class: 'ah-act-head' }, h('strong', {}, providerName(c.provider)), c.model ? h('span', { class: 'ah-act-model' }, c.model) : null),
+      used ? h('p', {}, t('aih.panel.calls', { n: c.calls, failed: c.failed })) : h('p', { class: 'al-opt-hint', 'data-ah-unused': c.provider }, t('aih.panel.unused')),
+      used ? h('p', { 'data-ah-used': c.provider }, c.acceptRate === null ? t('aih.panel.usedNone') : t('aih.panel.used', { pct: pctText(c.acceptRate, lang) }),
+        c.waiting ? ` (${t('aih.panel.waiting', { n: c.waiting })})` : '') : null,
+      used ? h('p', {}, c.costPerAcceptedUSD === null ? t('aih.panel.costNone') : t('aih.panel.costPer', { cost: usdText(c.costPerAcceptedUSD, lang) })) : null,
+      used && c.avgMs ? h('p', {}, t('aih.panel.time', { time: secondsText(c.avgMs, lang) })) : null,
+      h('p', { 'data-ah-bench': c.provider }, benchList ? t('aih.panel.bench', { list: benchList }) : t('aih.panel.benchNone')),
+      c.mapReview ? h('p', {}, t('aih.panel.review', { n: c.mapReview.reviewed, m: c.mapReview.agreed })) : null);
+  }
+
+  // Spending per day: one column per day, stacked by AI (each part has a text label too, and a list for reading aloud).
+  function panelChart(m) {
+    const t = tt();
+    const lang = ctx.lang();
+    if (!m.series.length) return h('p', { class: 'al-opt-hint', 'data-ah-chartempty': '1' }, t('aih.panel.chartNone'));
+    return h('div', { class: 'ah-chart-wrap' },
+      h('div', { class: 'ah-chart', role: 'img', 'data-ah-chart': '1', 'aria-label': t('aih.panel.chartLabel', { n: m.bars.length, total: usdText(m.totalUSD, lang) }) },
+        m.bars.map((b) => h('div', { class: 'ah-col', title: t('aih.panel.dayTip', { day: b.day, total: usdText(b.total, lang) }) },
+          h('div', { class: 'ah-stack', style: `height:${Math.max(b.total > 0 ? 2 : 0, Math.round((b.total / m.maxDayUSD) * 100))}%` },
+            b.parts.map((p) => h('span', { class: `ah-part ah-s${p.slot}`, style: `flex-grow:${p.usd}` }))),
+          h('span', { class: 'ah-day' }, b.day.slice(8))))),
+      h('ul', { class: 'ah-legend' }, m.series.map((p, i) => h('li', {}, h('span', { class: `ah-swatch ah-s${i % 5}`, 'aria-hidden': 'true' }), providerName(p)))),
+      h('ul', { class: 'ah-sr', 'data-ah-days': '1' }, m.bars.filter((b) => b.total > 0).map((b) => h('li', {}, t('aih.panel.dayTip', { day: b.day, total: usdText(b.total, lang) })))));
+  }
+
+  function panelSection() {
+    const m = panelModel(usage, (data.keys ?? []).map((k) => k.provider));
+    if (!m) return null;
+    const t = tt();
+    const lang = ctx.lang();
+    const ratio = m.capUSD > 0 ? Math.min(1, m.spentUSD / m.capUSD) : (m.spentUSD > 0 ? 1 : 0);
+    return h('section', { class: 'al-section ah-panel', 'data-ah-panel': '1', 'aria-labelledby': 'ahPanelTitle' },
+      h('h3', { id: 'ahPanelTitle' }, t('aih.panel.title')),
+      h('p', { class: 'al-opt-hint' }, t('aih.panel.lede')),
+      !m.ok ? h('p', { class: 'dv-warning', role: 'status' }, t('aih.panel.loadFail')) : [
+        h('div', { class: 'ah-meter-wrap' },
+          h('p', { class: 'ah-meter-text', id: 'ahMeterText' }, t('aih.panel.meter', { spent: usdText(m.spentUSD, lang), cap: usdText(m.capUSD, lang) })),
+          h('div', { class: `ah-meter${ratio >= 1 ? ' is-full' : ''}`, role: 'meter', 'aria-labelledby': 'ahMeterText', 'aria-valuemin': '0', 'aria-valuemax': String(m.capUSD), 'aria-valuenow': String(m.spentUSD), 'data-ah-meter': '1' },
+            h('span', { class: 'ah-meter-fill', style: `width:${Math.round(ratio * 100)}%` })),
+          ratio >= 1 && m.capUSD > 0 ? h('p', { class: 'al-opt-hint' }, t('aih.panel.meterFull')) : null),
+        h('ul', { class: 'ah-cards' }, m.cards.map(panelCard)),
+        h('h4', { class: 'ah-chart-title' }, t('aih.panel.chartTitle', { n: m.bars.length })),
+        panelChart(m),
+      ]);
   }
 
   function render(focusSelector) {
@@ -320,6 +422,7 @@ export function createAiHelpers(ctx) {
       h('p', { class: 'al-opt-hint ah-redact' }, t('aih.redact')),
       h('p', { class: 'al-opt-hint ah-redact' }, t('aih.sent')),
       canEdit ? null : h('p', { class: 'dv-warning' }, t('notify.needKey')),
+      panelSection(),
       ...data.providers.map(providerSection),
       capSection(),
       classesSection(),
@@ -331,7 +434,7 @@ export function createAiHelpers(ctx) {
 
   async function open() {
     notes = {};
-    await Promise.all([load(), loadActivity()]);
+    await Promise.all([load(), loadActivity(), loadUsage()]);
     render();
     if (!dialog.open) dialog.showModal();
   }

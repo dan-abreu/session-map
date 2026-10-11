@@ -12,6 +12,7 @@ import { othersSettings } from './others.mjs';
 import { HELPER_KINDS } from './review.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { SENSITIVITIES, bulkModelOf } from './router.mjs';
+import { usageSummary } from './usage.mjs';
 
 // The other AIs as Claude's arsenal (or14), over HTTP: POST /api/ai/ask and GET /api/ai/others. The stdio tool
 // (arsenal-mcp.mjs) has no cookie, so these two routes also take the token in the x-session-map-token header; a
@@ -21,7 +22,8 @@ import { SENSITIVITIES, bulkModelOf } from './router.mjs';
 // the token or a prompt, that this really is session-map (another program could hold the port while it is down).
 
 // GET or POST /api/ai/recommend: the conductor's recommendation (conductor.mjs), same token and loopback rules.
-export const ASK_PATHS = Object.freeze(['/api/ai/ask', '/api/ai/others', '/api/ai/hello', '/api/ai/recommend', '/api/ai/activity']);
+export const ASK_PATHS = Object.freeze(['/api/ai/ask', '/api/ai/others', '/api/ai/hello', '/api/ai/recommend', '/api/ai/activity', '/api/ai/usage']);
+// GET /api/ai/usage -> the other AIs measured by real use (usage.mjs): the panel of the "Other AIs" dialog.
 // GET /api/ai/activity?limit= lists what the other AIs did (activity.mjs); POST /api/ai/activity/<id> {accepted, why} is Claude
 // saying whether it accepted that work. Same token and loopback rules.
 const ACTIVITY_ONE = /^\/api\/ai\/activity\/([^/]+)$/;
@@ -218,6 +220,7 @@ export function createAskRoutes({ smDir, demo = false, token, ai = {}, backend, 
     if (url.pathname === '/api/ai/ask' && req.method === 'POST') return askRoute(req);
     if (url.pathname === '/api/ai/recommend' && (req.method === 'GET' || req.method === 'POST')) return recommendRoute(req, url);
     if (url.pathname === '/api/ai/activity' && req.method === 'GET') return activityList(url);
+    if (url.pathname === '/api/ai/usage' && req.method === 'GET') return { status: 200, body: { ok: true, ...usageSummary({ smDir, now: now() }) } };
     const one = ACTIVITY_ONE.exec(url.pathname);
     if (one && req.method === 'POST') return activityResult(req, one[1]);
     return fail(404, 'not-found');

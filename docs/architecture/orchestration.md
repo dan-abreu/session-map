@@ -67,6 +67,8 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 - [ ] **in progress:** Every AI with a key at once, picked by the conductor, never by the owner `or14`
   - The owner only pastes keys and sets one daily cap; a dispatcher picks the AI per task (kind, data sensitivity, cost, measured accuracy), spreads bulk work over all of them at once, sends reviews to another family, never sends client data to DeepSeek, and pauses an AI that errs too often. Asked on 2026-10-10 (`id22`).
+- [ ] **in progress · important:** A panel of the AIs measured by real use `or16`
+  - Per AI and per kind of work, from what really happened (activity log and Claude's accept/refuse): calls, share accepted, cost per accepted piece, time, today's spend against the one daily cap (US$ 5, set by the owner on 2026-10-10), next to the bench's score. Real-use results with at least 20 decided pieces feed the routing like the bench does. Asked on 2026-10-10: "voce só fez testes, não está usando elas, pode colocar algum painel para acessar os dados delas, para fazer as medições de acordo como vamos usando".
 - [ ] **important:** Watch the outside AIs' versions `or15`
   - Once a day, ask each provider for its model list and warn when a model in use disappears, is scheduled to retire or changes the version behind its name (e.g. `deepseek-flash`); re-run the bench on just that model under a small cap so the routing follows; re-check prices on a schedule (Gemini 3.8 Flash doubles on 2027-01-01). Asked on 2026-10-10 ("as API tem versao?") after OpenAI's gpt-6 models started refusing `max_tokens`.
 - [ ] **in progress · detail:** Arsenal: the conductor calls the right AI for each task `or11`

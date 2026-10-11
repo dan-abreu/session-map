@@ -421,3 +421,24 @@ test('in-page chats tell the arsenal which conversation it works for', () => {
   assert.deepEqual(servers.arsenal.env, { SM_DIR: 'C:/sm', SM_URL: 'http://127.0.0.1:4002', SM_SESSION_ID: 'abc123' });
   assert.equal('SM_SESSION_ID' in chatMcpServers({ permissionUrl: 'u', secret: 's', smDir: 'C:/sm' }).arsenal.env, false);
 });
+
+test('GET /api/ai/usage (or16): the token and this computer are needed, never in the demo; the summary holds no prompt', async () => {
+  await withServer({ seed: (s) => seedKeys(s), textRun: okRun }, async ({ call, smDir }) => {
+    assert.equal((await call('GET', '/api/ai/usage')).status, 401);
+    assert.equal((await call('GET', '/api/ai/usage', { auth: { header: 'f'.repeat(64) } })).status, 401);
+    recordActivity(smDir, entry({ ms: 5, costUSD: 0.01 }));
+    const res = await call('GET', '/api/ai/usage', { auth: 'cookie' });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.ok, true);
+    assert.equal(res.json.byAi.length, 1);
+    assert.equal(res.json.days.length, 14);
+    assert.ok(res.json.cap.dailyUSD >= 0);
+    assert.equal((await call('GET', '/api/ai/usage', { auth: 'header' })).status, 200);
+  });
+  await withServer({ demo: true }, async ({ call }) => {
+    assert.equal((await call('GET', '/api/ai/usage', { auth: 'header' })).status, 403);
+  });
+  await withServer({ address: '192.168.0.20' }, async ({ call }) => {
+    assert.equal((await call('GET', '/api/ai/usage', { auth: 'header' })).status, 403);
+  });
+});

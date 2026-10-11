@@ -83,6 +83,8 @@ export const api = {
   aiHelpers: () => call('GET', '/api/settings/ai-helpers'),
   // What the other AIs did, newest first (server/ai/activity.mjs).
   aiActivity: (limit = 50) => call('GET', `/api/ai/activity?limit=${Number(limit) || 50}`),
+  // The other AIs measured by real use: spend, share accepted by Claude, bench score (server/ai/usage.mjs).
+  aiUsage: () => call('GET', '/api/ai/usage'),
   setAiKey: (provider, key) => call('POST', '/api/settings/ai-helpers', { provider, key }),
   setAiHelper: (body) => call('POST', '/api/settings/ai-helpers', body),
   removeAiKey: (provider) => call('DELETE', `/api/settings/ai-helpers?provider=${seg(provider)}`),

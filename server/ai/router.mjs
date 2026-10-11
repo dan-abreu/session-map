@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { providerOf } from './providers.mjs';
+import { liveStats } from './usage.mjs';
 
 // Which AI takes which kind of work (or14, id22): the owner only pastes keys and sets one daily cap; this picks.
 // route() orders the candidates for one job, spread() splits a batch over all of them at once. Claude is a candidate
@@ -210,24 +211,31 @@ export const routingFile = (smDir) => join(smDir, 'bench', 'routing.json');
 
 const statsMemo = new Map();
 
-// The bench's measured results, or [] without them. Re-read only when the file changes (time or size).
+const mark = (path) => { try { const st = statSync(path); return `${st.mtimeMs}:${st.size}`; } catch { return '-'; } };
+
+// The measured results: the bench's, with real use (usage.mjs liveStats) on top. A live entry for the same kind and
+// contestant wins once it holds MIN_MEASURED decided pieces: real use beats the bench; below that the bench stays.
+// Re-read only when one of the three files changes (time or size).
 export function loadStats(smDir) {
   const path = routingFile(smDir);
-  let mtime;
-  try { const st = statSync(path); mtime = `${st.mtimeMs}:${st.size}`; } catch { statsMemo.delete(path); return []; }
+  const stamp = [path, join(smDir, 'ai-activity.jsonl'), join(smDir, 'ai-cache.json')].map(mark).join('|');
   const memo = statsMemo.get(path);
-  if (memo?.mtime === mtime) return memo.entries;
-  let entries = [];
+  if (memo?.stamp === stamp) return memo.entries;
+  const valid = (e) => routeKindOf(e?.kind) && parseContestant(e.contestant)
+    && Number.isFinite(e.accuracy) && e.accuracy >= 0 && e.accuracy <= 1
+    && Number.isFinite(e.costPerCorrectUSD) && e.costPerCorrectUSD >= 0
+    && Number.isInteger(e.n) && e.n >= MIN_MEASURED;
+  const clean = (e) => ({ kind: routeKindOf(e.kind), contestant: e.contestant, accuracy: e.accuracy, costPerCorrectUSD: e.costPerCorrectUSD, n: e.n });
+  let bench = [];
   try {
     const data = JSON.parse(readFileSync(path, 'utf8'));
-    entries = (Array.isArray(data?.entries) ? data.entries : [])
-      .filter((e) => routeKindOf(e?.kind) && parseContestant(e.contestant)
-        && Number.isFinite(e.accuracy) && e.accuracy >= 0 && e.accuracy <= 1
-        && Number.isFinite(e.costPerCorrectUSD) && e.costPerCorrectUSD >= 0
-        && Number.isInteger(e.n) && e.n >= MIN_MEASURED)
-      .map((e) => ({ kind: routeKindOf(e.kind), contestant: e.contestant, accuracy: e.accuracy, costPerCorrectUSD: e.costPerCorrectUSD, n: e.n }));
-  } catch { entries = []; }
-  statsMemo.set(path, { mtime, entries });
+    bench = (Array.isArray(data?.entries) ? data.entries : []).filter(valid).map(clean);
+  } catch { bench = []; }
+  let live = [];
+  try { live = liveStats(smDir).filter(valid).map(clean); } catch { live = []; }
+  const same = (a, b) => a.kind === b.kind && a.contestant === b.contestant;
+  const entries = [...bench.filter((b) => !live.some((l) => same(l, b))), ...live];
+  statsMemo.set(path, { stamp, entries });
   return entries;
 }
 
