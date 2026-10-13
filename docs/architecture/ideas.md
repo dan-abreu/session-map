@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105
+- What it costs: id98, id105, id106
 - This registry: id65, id66, id67
 
 ## How it works
@@ -276,6 +276,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a week later, the share of Opus agents, the agents per workflow and the skills opened per agent are clearly lower, with the tests still passing and the reviews still holding.
   - Where it went: `or23`, `or24`.
   - Status: built on main on 2026-10-13 (`or23`); waiting for the next week's measure (`or24`).
+
+- [ ] Economy by the engine, not by asking: an OK at the end of each task, a book index for skills, plugins and long conversations, planning by itself `id106`
+  - Asked: 2026-10-13 — "quero como sistema, na engrenagem, da OK, na finalização das tarefas, Fazer o conceito de um livro que vem o indice, com capitulos e subcapitulos, para as skills e plugins"; "quando eu falo planejar voce ja sabe ... ou quando estamos conversando poderia ser automaticamente um planejamento"; "em conversas longas o proprio sistema criar um sistema igual de livro, assim não precisa ler a conversa toda ... ler apenas o que for necessario"
+  - What it means: the savings rules live in session-map's engine (settings and hooks it hands each chat), not in text the AI may ignore; skills, plugins and long conversations are read through an index and only the needed chapter; planning talk opens in plan mode by itself.
+  - How to confirm it is done: a chat with an Opus agent for ordinary code is stopped by the engine; a long chat goes on from its index; a new chat lists only skill names plus the few that fit; a planning message opens in plan mode; each finished request shows OK or what is missing.
+  - Where it went: `or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`.
+  - Status: accepted, planning; the owner will bring more ideas from his research before building.
 
 ### This registry
 

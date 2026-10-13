@@ -101,3 +101,16 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Built on 2026-10-11 (`server/chat/run.mjs`, `hub.mjs`, `safety.mjs`, `guard.mjs`): Autonomous is the default of every new chat, runs in Claude Code's own `auto` permission mode, a permission that reaches session-map is left for the owner ("Ficou para você"), AskUserQuestion is answered "decide yourself", a force push is refused in every way (relay and a PreToolUse hook), and a git snapshot under `refs/session-map/safety` is taken at each turn and before a destructive command. Reaches the page with the next version.
 - [x] The button by Send speaks plainly: three ways, one sentence each, the rest under "Advanced" `pc17`
   - From `id90`. Autonomous (does everything on its own), Automatic (asks before big work), Manual (you pick the model); the permissions and "every Claude on this PC" go under Advanced, folded.
+
+### Spending little, by the engine (`id106`)
+
+- [ ] First, prove the knobs on one cheap test chat: plugins and skills per chat through `--settings`, a hook that denies an Agent call, a hook passed through `--settings` `pc26`
+  - The official docs (2026-10-13) confirm `--settings` as the per-session level, `skillOverrides` (on, name-only, user-invocable-only, off), `skillListingBudgetFraction`, PreToolUse deny and `updatedInput`, SubagentStart context and `autoCompactWindow`; whether `enabledPlugins` works per session is not written, so it is tested first.
+- [ ] Planning by itself: a request that is planning talk opens the chat in plan mode (reads, thinks, writes no code), without the owner having to say "planejar" `pc27`
+  - The request's measure (`or14`) gains a "plan" kind (ideas, "e se", "como poderíamos", "vamos pensar", questions about the design); when unsure it plans first. Building starts when the owner approves the plan.
+- [ ] The conversation as a book: past a size, the engine writes its index (one chapter per request: what was asked, done, decided, which files) and goes on with the index and the current chapter only `pc28`
+  - The chapters come from the transcript without AI (the person's messages, item codes, files touched, commits); a session-map tool reads one past chapter only when needed. The same pattern as recent research on long conversations: summaries as a map over the raw turns, then a few turns read.
+  - Fallback inside Claude Code: an earlier `autoCompactWindow` and a PreCompact hook that keeps the chapter index.
+- [ ] Skills and plugins as a book index: each chat lists only the names of the skills (the index) and the full description of the two or three that fit the request (the chapters); plugins the project never uses stay off for that chat `pc29`
+  - Through `skillOverrides` "name-only" and per-chat plugins in `--settings`, picked by `or22`; the page shows each skill's size and use.
+  - Honest weight: on 2026-10-13 the skills were about 3% of the spend; the big ones are Opus by default (`or25`) and long conversations (`pc28`).

@@ -70,6 +70,12 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] Measure the week after the routing change with the same counts (share of Opus agents, agents per workflow, skills opened per agent, cost per chat) and show them on the Costs tab as waste signals `or24`
   - The counts of `or23` came from a one-off script over the transcripts; the statement already reads every reply, so it can keep them and warn when a workflow grows past 10 agents or Opus passes a third of the agents.
   - From `id105`.
+- [ ] **important:** The engine guards every agent, not the prompt: no model or effort, Opus or Fable outside a sensitive request, or a workflow past 10 agents are stopped before they start `or25`
+  - A PreToolUse hook on the Agent and Workflow tools, passed to each chat by session-map (it runs inside subagents too): it denies the call with the reason, so the conductor picks again; the request's measure (`or14`) says what is sensitive. The prompt rules of `or23` stay as advice; this makes them hold.
+  - From `id106`.
+- [ ] An OK at the end of each request, checked by the engine without AI: tests ran and passed, the item ticked, the work saved, what the request cost `or26`
+  - Read from the transcript and the plan file at turn end; the card shows OK, or what is missing. It never forces more work (a blocking stop hook can loop and spend).
+  - From `id106`.
 
 ### Board of roles
 
