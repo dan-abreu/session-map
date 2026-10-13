@@ -1008,6 +1008,8 @@ ${prompt}`;
     orchestra: {
       open: orchestra.open, info: orchestra.info, call: (key, name, args) => orchestra.call(chatOf(key), { name, arguments: args }),
       tick: orchestra.tick, start: orchestra.start,
+      // The person's priority for one item of the line (or08).
+      prioritize: orchestra.prioritize,
     },
     // The agreed restart (sv13, restart.mjs): hold new turns, how many chats are mid-turn, and what to resume after.
     hold: (on) => { holding = Boolean(on); },

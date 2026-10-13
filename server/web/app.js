@@ -998,6 +998,16 @@ async function continueBudget(p, button) {
   return poll();
 }
 
+// The person's priority for a piece waiting in the orchestrator's line (or08), or 'drop' to take it out.
+async function setPriority(p, code, value, select) {
+  select.disabled = true;
+  const res = await api.orchestratorPriority(p.id, code, value);
+  select.disabled = false;
+  if (!res.ok) return toast(errorText(res.error));
+  toast(t(value === 'drop' ? 'orch.prio.dropped' : 'orch.prio.saved'));
+  return poll();
+}
+
 async function setTidy(p, on, input) {
   input.disabled = true;
   const res = await api.setProjectTidy(p.id, on);
@@ -1451,7 +1461,7 @@ function projectDetails(node) {
     const unowned = sizes?.unowned?.files ?? 0;
     return [
       h('p', { class: 'meta' }, h('span', { class: 'num' }, countText(node.counts)), ...chipsOf(node.counts)),
-      orchSection({ h, icon, t }, orchState(p), { onOpen: openOrchestrator, onTidy: (on, input) => setTidy(p, on, input) }),
+      orchSection({ h, icon, t }, orchState(p), { onOpen: openOrchestrator, onTidy: (on, input) => setTidy(p, on, input), onPriority: (code, value, select) => setPriority(p, code, value, select) }),
       budgetSection({ h, t, money, currency: budgetCurrency() }, p.budget, { onSave: (usd, field, button) => setBudget(p, usd, field, button), onContinue: (button) => continueBudget(p, button) }),
       sizes?.total ? h('p', { class: 'meta num' }, joinDots([h('span', {}, plural('size.files', sizes.total.files)), h('span', {}, plural('size.lines', sizes.total.lines))]),
         unowned ? linkTo(plural('size.unowned', unowned), () => setPointTab('files'), 'meta-link is-unowned') : null) : null,

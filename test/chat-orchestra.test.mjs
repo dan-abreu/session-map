@@ -12,6 +12,7 @@ import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
 import { OPENING_TEXT, ORCH_PROMPT, TIDY_TEXT, createOrchestra, noteOf, outcomeOf, readTidy, setTidy, tidyDue } from '../server/chat/orchestra.mjs';
 import { ORCH_TOOL_NAMES } from '../server/chat/orch-tools.mjs';
+import { readQueue } from '../server/chat/priority.mjs';
 import { budgetLine, runArgs } from '../server/chat/run.mjs';
 import { RESUME_FILE, resumeAfterRestart } from '../server/restart.mjs';
 import { conductorTail } from '../server/ai/conductor.mjs';
@@ -276,17 +277,22 @@ const parsed = (answer) => {
 const LIMIT = { ok: false, error: 'limit: wait for one to finish (your inbox tells you)' };
 
 test('limits: at most 3 activity chats working at once per orchestrator, however many places are free', async () => {
-  await withHub({ chatsMax: 20 }, async ({ hub, state }) => {
+  await withHub({ chatsMax: 20 }, async ({ hub, state, smDir }) => {
     const { key: orch, r } = await openOrchestrator(hub, state);
     await r.until((e) => e.type === 'turn-end');
     const start = (code) => hub.orchestra.call(orch, 'start_chat', { code, instructions: `SLOW work on ${code}` });
     const first = parsed(await start('au01'));
     for (const code of ['au02', 'au03']) parsed(await start(code));
-    assert.deepEqual(await start('au04'), LIMIT, 'three are working');
+    // Three are working: the fourth waits in the priority line (or08) instead of being refused.
+    const waits = parsed(await start('au04'));
+    assert.deepEqual([waits.state, waits.key, waits.code, waits.priority, waits.ahead], ['waiting', null, 'au04', 'normal', 0], 'three are working');
+    assert.match(waits.why, /^waiting: no free place now/);
     const child = follow(hub, first.key);
     hub.stop(child.key);
     await child.r.until((e) => e.type === 'turn-end');
-    assert.equal(parsed(await start('au04')).code, 'au04', 'one finished: a place');
+    // One finished: a place, and the line starts the waiting one on its own.
+    await waitFor(() => hub.restartList().length === 5);
+    assert.deepEqual(readQueue(smDir, PROJECT).waiting, [], 'it left the line');
     assert.equal(hub.restartList().length, 5, 'the idle one stays open while there is room');
   });
 });
@@ -316,7 +322,7 @@ test('limits: the orchestrators never take the last 2 places of CHATS_MAX, and o
     await r.until((e) => e.type === 'turn-end');
     for (const text of ['SLOW one', 'SLOW two']) assert.equal((await hub.start({ projectId: PROJECT, partId: 'auth', text, run: { kind: 'auto' } }, state)).status, 200);
     parsed(await hub.orchestra.call(orch, 'start_chat', { code: 'au01', instructions: 'SLOW login' }));
-    assert.deepEqual(await hub.orchestra.call(orch, 'start_chat', { code: 'au02', instructions: 'Reset' }), LIMIT, '4 open: 2 are the person\'s');
+    assert.equal(parsed(await hub.orchestra.call(orch, 'start_chat', { code: 'au02', instructions: 'Reset' })).state, 'waiting', '4 open: 2 are the person\'s: it waits in the line');
     // restartList names a chat once its claude has told its session id, which a slow machine may not have done yet.
     await waitFor(() => hub.restartList().length >= 4, 5_000);
     assert.equal(hub.restartList().length, 4);

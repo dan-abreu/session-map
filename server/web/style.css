@@ -1469,6 +1469,17 @@ body.is-resizing .sheet { animation: none; }
 .orch-lede { margin: 0; max-width: 62ch; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-2); }
 .orch-switch { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; align-items: start; cursor: pointer; }
 .orch-switch input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--active); }
+/* "A seguir" (or08): the pieces waiting in the orchestrator's line, highest first, each with its priority and a choice. */
+.orch-next { display: grid; gap: 6px; }
+.orch-next-title { margin: 0; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.orch-next-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.orch-next-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.orch-next-text { display: grid; gap: 2px; min-width: 0; }
+.orch-next-name { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.orch-prio { padding: 1px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); font-size: var(--fs-xs); white-space: nowrap; color: var(--ink-2); }
+.orch-prio.is-urgent { color: var(--clash-ink); border-color: currentColor; font-weight: 650; }
+.orch-prio.is-important { color: var(--active-ink); border-color: currentColor; }
+.orch-next-pick { font: inherit; font-size: var(--fs-xs); max-width: 11em; }
 /* The project's monthly budget (or07): under the orchestrator's block, the bar of the costs screen. */
 .budget-block { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .budget-status { display: grid; gap: 6px; }

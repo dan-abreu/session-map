@@ -4,6 +4,7 @@
 // orchestrator is answered. Results come back by themselves through an inbox kept on disk; limits keep it from running
 // away; the tidy scheduler sends it a pass when a project is quiet. The hub lends what it needs (hub below); the clock and
 // the timer are injected, so tests never wait for them.
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { logAction, runAction } from '../actions.mjs';
 import { setTidy, tidyOn } from '../background.mjs';
@@ -17,6 +18,7 @@ import { readJsonFile, writeAtomic } from '../store.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { foldReply } from '../web/chatfold.js';
 import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
+import { addPiece, editQueue, heldOf, isPriority, nearOf, ordered, priorityOf, readQueue, setOwnerPriority } from './priority.mjs';
 import { parseRun, readRunBlock } from './run.mjs';
 
 export const ORCH_KIND = 'orchestrator';
@@ -50,7 +52,7 @@ export const ORCH_PROMPT = [
   'You are also this project\'s orchestrator: you open the right chats, give them clear instructions and follow them, so the work goes on cheaply and in plain sight. The work itself is done in the activity chats.',
   '- start_chat: one chat per item code, with only that item\'s context, on the cheapest model and effort that do it well (pick_worker helps).',
   '- Results arrive by themselves as "[session-map: activity ...]" notes: while chats work, end your turn, never poll. read_chat, send_to_chat and list_chats follow them.',
-  '- Limits: 3 working at once, 30 a day. An answer starting with "limit": end your turn and wait for your inbox.',
+  '- Limits: 3 working at once, 30 a day. On "limit" or "waiting" end your turn: your inbox tells you. Priority "urgent" only if the person said so.',
   '- Older conversations (list_conversations): tie each to its item, continue_conversation those with work left, archive_conversation the finished (say why), rename_conversation unclear titles; leave the person what only they can do. End with a table: conversation, item, what you did.',
   '- The chats tick their own items and move the requests along.',
 ].join('\n');
@@ -65,6 +67,18 @@ const LIMIT = 'limit: wait for one to finish (your inbox tells you)';
 const DAY_LIMIT = 'limit: 30 activity chats opened or continued today; go on tomorrow';
 const LIVE = 'live in another window: leave it to the person';
 const QUEUE_FULL = `limit: it already has ${QUEUED_MAX} instructions waiting; send more once it took them`;
+// The priority line (or08): what start_chat says of a piece that waits, by why it waits.
+const BAD_PRIORITY = 'priority is urgent, important, normal or polish';
+const LINE_FULL = 'limit: 50 pieces already wait in the line; end your turn and wait for your inbox';
+const WAIT_WORDS = {
+  place: 'waiting: no free place now; session-map starts it on its turn, the most urgent first, and your inbox tells you. End your turn.',
+  day: 'waiting: 30 activity chats were started today; it starts tomorrow, the most urgent first. End your turn.',
+  'near-budget': 'waiting: the monthly budget of the project is past 80%, so only urgent and important work starts now. Tell the person; it starts once they raise the budget or the month turns.',
+  'near-weekly': 'waiting: the weekly allowance of the plan is almost used up, so only urgent and important work starts now; it starts after the weekly renewal.',
+  polish: 'waiting: a finishing touch starts only when the project is quiet and nothing else waits. End your turn.',
+  paused: 'waiting: the monthly budget of the project is used up. Ask the person.',
+};
+const newPieceId = () => randomUUID();
 const START_ERRORS = {
   'too-many-chats': LIMIT, 'server-restarting': 'session-map is restarting: end your turn, your inbox goes on after it',
   'live-chat': LIVE, busy: 'busy: it is starting or working now', 'claude-not-found': 'claude is not installed on this computer',
@@ -255,7 +269,7 @@ export function createOrchestra({
     if (typeof code !== 'string' || !code.trim()) return null;
     const want = code.trim().toLowerCase();
     for (const part of project.arch?.parts ?? []) {
-      for (const item of (part.groups ?? []).flatMap((g) => g.items)) if (item.code && item.code.toLowerCase() === want) return { part, code: item.code };
+      for (const item of (part.groups ?? []).flatMap((g) => g.items)) if (item.code && item.code.toLowerCase() === want) return { part, code: item.code, item };
     }
     return null;
   }
@@ -288,19 +302,223 @@ export function createOrchestra({
     if (!found) return fail(`unknown code: ${oneLine(args.code, 40)} is not an item of this project's map`);
     const run = runOf(args);
     if (!run) return fail(BAD_RUN);
+    if (args.priority !== undefined && !isPriority(args.priority)) return fail(BAD_PRIORITY);
     if (paused(project)) return fail(paused(project));
-    const opened = await serially(async () => {
-      const refused = await refusal(orchId, true);
-      if (refused) return fail(refused);
-      const node = { kind: 'item', partId: found.part.id, code: found.code };
-      const res = await starting({ projectId: project.id, node, text: args.instructions, run }, state, { parentId: orchId, auto: 'orchestrator' });
-      if (res.status !== 200) return fail(startError(res));
-      countDay(orchId);
-      return { key: res.body.chatKey };
+    // Into the line (or08), then the line moves: this piece starts now when it is the most urgent one that may.
+    const piece = addPiece(smDir, project.id, {
+      code: found.code, partId: found.part.id, title: found.item.title, weight: found.item.weight, instructions: args.instructions, run, asked: args.priority, at: iso(),
+    }, newPieceId);
+    if (!piece) return fail(LINE_FULL);
+    // Any pass of the line may start it (a turn end's may come first): the answer waits for whichever does.
+    // Two calls on the same waiting item share its piece: each gets the answer (n counts who waits).
+    const slot = awaited.get(piece.id) ?? { result: null, n: 0 };
+    slot.n += 1;
+    awaited.set(piece.id, slot);
+    let opened;
+    try {
+      await drain(project.id, state);
+      opened = slot.result;
+    } finally {
+      slot.n -= 1;
+      if (!slot.n && awaited.get(piece.id) === slot) awaited.delete(piece.id);
+    }
+    if (opened?.error) return fail(opened.error);
+    if (opened?.key) {
+      const sessionId = await named(opened.key);
+      // The run it started with: a second call on the same waiting item may have asked another one too late.
+      const used = opened.run ?? run;
+      return ok({ key: sessionId ?? opened.key, code: found.code, model: used.model ?? 'opus', effort: used.effort ?? 'high', state: 'working', priority: opened.priority });
+    }
+    return ok(waitingAnswer(project.id, piece.id));
+  }
+
+  // ---- the priority line (or08) ----
+
+  // The pieces whose start_chat waits for the answer → {result: how their start went (null until a pass of the line took
+  // them), n: the calls waiting}.
+  const awaited = new Map();
+
+  // A piece that waits: where it is and why, in the orchestrator's words. ahead: the pieces before it in the line.
+  function waitingAnswer(projectId, pieceId) {
+    const { waiting, owner } = readQueue(smDir, projectId);
+    const line = ordered(waiting, owner);
+    const at = line.findIndex((p) => p.id === pieceId);
+    const piece = line[at];
+    if (!piece) return { key: null, state: 'waiting' };
+    const priority = priorityOf(piece, owner);
+    const urgent = priority === 'urgent' && piece.why === 'place'
+      ? ' It is urgent: if it cannot wait, ask the person whether to stop one of the chats working now.' : '';
+    return { key: null, code: piece.code, state: 'waiting', priority, ahead: at, why: `${WAIT_WORDS[piece.why] ?? WAIT_WORDS.place}${urgent}` };
+  }
+
+  // The project quiet: no chat of it works, its orchestrator aside.
+  const quietOf = (project, orchId) => !hub.live().some((c) => c.projectId === project.id && c.running && !isOrchestrator(c))
+    && !(project.conversations ?? []).some((r) => r.status === 'busy' && r.node?.kind !== ORCH_KIND && r.sessionId !== orchId);
+  // A piece whose start went through before session-map stopped, found by its item among its orchestrator's chats.
+  const startedBefore = (piece, orchId) => Boolean(piece.startingAt) && Object.values(hub.pageChats())
+    .some((c) => c?.parentId === orchId && c.node?.code === piece.code && String(c.startedAt ?? '') >= piece.startingAt);
+  const setPiece = (projectId, id, patch) => editQueue(smDir, projectId, (entry) => {
+    const piece = entry.waiting.find((p) => p.id === id);
+    if (piece) Object.assign(piece, patch);
+  });
+  // Newer instructions for a chat that just started: they wait on disk for its first turn end, as send_to_chat's do.
+  const followUp = (orchId, key, code, text) => named(key).then((sessionId) => {
+    if (sessionId) queue(sessionId, text);
+    else addNote(orchId, `[session-map: newer instructions for ${code} came while it started and were not delivered; send them with send_to_chat]`);
+  }).catch((err) => log('warn', 'orchestra-follow-up-failed', { error: err.message }));
+  // A piece as the line has it now, with its priority and whether something not polish waits beside it.
+  const lookAt = (projectId, id) => {
+    const { waiting, owner } = readQueue(smDir, projectId);
+    const piece = waiting.find((p) => p.id === id);
+    if (!piece) return null;
+    return { piece, priority: priorityOf(piece, owner), othersWait: waiting.some((p) => p.id !== id && priorityOf(p, owner) !== 'polish') };
+  };
+  const dropPiece = (projectId, id) => editQueue(smDir, projectId, (entry) => { entry.waiting = entry.waiting.filter((p) => p.id !== id); });
+
+  // Urgent work never waits in silence (or08): held by today's limit or the used-up budget, the person is told, once.
+  function askFor(projectId, orchId, piece, why, state) {
+    if (piece.told === why) return;
+    setPiece(projectId, piece.id, { told: why });
+    const chat = hub.driven(orchId);
+    const page = hub.pageChats()[orchId] ?? {};
+    const who = chat ?? { projectId, projectName: state?.projects?.find((p) => p.id === projectId)?.name ?? '', sessionId: orchId, title: page.title ?? '' };
+    hub.alert(who, 'waiting', `urgent-${why}`, { code: piece.code, because: piece.title || piece.code });
+  }
+
+  // The line moves, one project at a time and one start at a time: the most urgent piece that may start takes the next
+  // free place, held ones are passed over (a held normal never blocks an important behind it). A piece whose start_chat
+  // waits gets its answer there (awaited); the others reach the orchestrator as an inbox note. → how many started.
+  function drain(projectId, given = null) {
+    return serially(async () => {
+      let out = 0;
+      const state = given ?? (readState ? await readState() : null);
+      const project = state?.projects?.find((p) => p.id === projectId);
+      const orchId = project ? orchestratorOf(projectId)?.sessionId ?? null : null;
+      if (!orchId || stopped) return out;
+      if (!readQueue(smDir, projectId).waiting.length) return out;
+      const near = nearOf({ budget: project.budget, limits: state.limits, weekUse: state.weekUse, now: now() });
+      let quiet = quietOf(project, orchId);
+      let blocked = paused(project) ? 'paused' : null;
+      const started = [];
+      let dirty = false;
+      let noted = false;
+      // The line is read again before each piece: a start takes time, and meanwhile the person may raise one, or a new
+      // piece may come. done: the pieces this pass already looked at.
+      const done = new Set();
+      const nextOf = (also = null) => {
+        const { waiting, owner } = readQueue(smDir, projectId);
+        return ordered(waiting, owner).find((p) => !done.has(p.id) || p.id === also) ?? null;
+      };
+      for (let seen = nextOf(); seen; seen = nextOf()) {
+        done.add(seen.id);
+        // Since the line was read the person may have taken a piece out or changed its priority, and the orchestrator may
+        // have brought its instructions up to date. The piece as it is now.
+        let look = lookAt(projectId, seen.id);
+        if (!look) continue;
+        let { piece, priority, othersWait } = look;
+        const found = itemOf(project, piece.code);
+        const before = startedBefore(piece, orchId);
+        if (!found || found.item.status === 'done' || before) {
+          // Started before a stop that came ahead of its count: it still counts in today's 30 (count and drop go together).
+          if (before) countDay(orchId);
+          dropPiece(projectId, piece.id);
+          dirty = true;
+          continue;
+        }
+        let held = blocked ?? heldOf(priority, { near, quiet, othersWait });
+        if (!held) {
+          const refused = await refusal(orchId, true);
+          if (refused) blocked = refused === DAY_LIMIT ? 'day' : 'place';
+          else {
+            // Making room may take a moment (an idle chat closes): the piece may have changed or left meanwhile, and one
+            // the person raised meanwhile above it takes the room first (this one is looked at again after it).
+            const first = nextOf(seen.id);
+            if (first && first.id !== seen.id) {
+              done.delete(seen.id);
+              continue;
+            }
+            look = lookAt(projectId, seen.id);
+            if (!look) continue;
+            ({ piece, priority, othersWait } = look);
+            held = heldOf(priority, { near, quiet, othersWait });
+          }
+        }
+        const why = held ?? blocked;
+        if (why) {
+          if (piece.why !== why) {
+            setPiece(projectId, piece.id, { why });
+            dirty = true;
+          }
+          if (priority === 'urgent' && (why === 'day' || why === 'paused')) askFor(projectId, orchId, piece, why, state);
+          continue;
+        }
+        setPiece(projectId, piece.id, { startingAt: iso() });
+        const node = { kind: 'item', partId: found.part.id, code: found.code };
+        const res = await starting({ projectId, node, text: piece.instructions, run: piece.run }, state, { parentId: orchId, auto: 'orchestrator' });
+        if (res.status !== 200) {
+          dirty = true;
+          // No place after all, or a restart: it keeps its place in the line. Anything else cannot start: out of the line.
+          if (res.body?.error === 'too-many-chats' || res.body?.error === 'server-restarting') {
+            setPiece(projectId, piece.id, { startingAt: null, why: 'place' });
+            blocked = 'place';
+          } else {
+            dropPiece(projectId, piece.id);
+            if (awaited.has(piece.id)) awaited.get(piece.id).result = { error: startError(res) };
+            else {
+              addNote(orchId, `[session-map: waiting activity ${found.code} could not start: ${startError(res)}]`);
+              noted = true;
+            }
+          }
+          continue;
+        }
+        countDay(orchId);
+        // Instructions brought up to date while it was starting go to the new chat as its next step, not lost.
+        const later = lookAt(projectId, piece.id)?.piece.instructions;
+        if (later && later !== piece.instructions) followUp(orchId, res.body.chatKey, found.code, later);
+        dropPiece(projectId, piece.id);
+        dirty = true;
+        out += 1;
+        if (awaited.has(piece.id)) awaited.get(piece.id).result = { key: res.body.chatKey, priority, run: piece.run };
+        else started.push({ key: res.body.chatKey, code: found.code, priority });
+        quiet = false;
+      }
+      if (dirty) changed();
+      // The ones started on their turn: the orchestrator learns their key in its inbox, once claude named them.
+      if (noted && !started.length) deliver(orchId).catch((err) => log('warn', 'orchestra-deliver-failed', { error: err.message }));
+      if (started.length) {
+        Promise.all(started.map(async (s) => ({ ...s, key: (await named(s.key)) ?? s.key })))
+          .then((list) => {
+            for (const s of list) addNote(orchId, `[session-map: waiting activity ${s.code} (${s.priority}) started on its turn, key ${s.key}]`);
+            return deliver(orchId);
+          })
+          .catch((err) => log('warn', 'orchestra-deliver-failed', { error: err.message }));
+      }
+      return out;
     });
-    if (!opened.key) return opened;
-    const sessionId = await named(opened.key);
-    return ok({ key: sessionId ?? opened.key, code: found.code, model: run.model ?? 'opus', effort: run.effort ?? 'high', state: 'working' });
+  }
+  // The line of one project moves in the background (a turn end, a closed chat, the person's choice).
+  const nudge = (projectId) => {
+    if (projectId) drain(projectId).catch((err) => log('warn', 'orchestra-drain-failed', { error: err.message }));
+  };
+
+  // The person's choice on the page (or08): a priority for one item of the project's map, null to give it back to the
+  // marks, or 'drop' to take its waiting piece out of the line. The line moves at once.
+  function prioritize(body, state) {
+    const project = state?.projects?.find((p) => p.id === body?.projectId);
+    if (!project) return reply(404, { error: 'unknown-project' });
+    const found = itemOf(project, body.code);
+    if (!found) return reply(400, { error: 'unknown-code' });
+    const priority = body.priority ?? null;
+    if (priority !== null && priority !== 'drop' && !isPriority(priority)) return reply(400, { error: 'bad-priority' });
+    const gone = setOwnerPriority(smDir, project.id, found.code, priority);
+    const orchId = orchestratorOf(project.id)?.sessionId;
+    if (gone && orchId) {
+      addNote(orchId, `[session-map: the person took the waiting activity ${found.code} out of the line]`);
+      deliver(orchId, state).catch((err) => log('warn', 'orchestra-deliver-failed', { error: err.message }));
+    }
+    changed();
+    nudge(project.id);
+    return reply(200, { code: found.code, priority });
   }
 
   // Instructions for a chat mid-turn (or while a restart waits) wait on disk for its turn end; past QUEUED_MAX the
@@ -598,7 +816,10 @@ export function createOrchestra({
     const orchId = chat.sessionId ? motherOf(chat) : null;
     if (!orchId || end.auto) return undefined;
     noteFor(chat, orchId, outcomeOf(end), { stopped: end.stopped, summary: summaryOf(end.reply) });
-    return sendQueued(chat);
+    const sent = sendQueued(chat);
+    // A place may be free: the line moves (or08), after the chat's own next step took its turn.
+    nudge(chat.projectId);
+    return sent;
   }
 
   // On disk with the chain, so a closed orchestrator keeps them: a stop by the person holds the inbox until the person
@@ -619,7 +840,10 @@ export function createOrchestra({
   function exited(chat, wasRunning) {
     if (!wasRunning || chat.closing || !chat.sessionId || isOrchestrator(chat)) return;
     const orchId = motherOf(chat);
-    if (orchId) noteFor(chat, orchId, 'error', { closed: true });
+    if (orchId) {
+      noteFor(chat, orchId, 'error', { closed: true });
+      nudge(chat.projectId);
+    }
   }
 
   // ---- opening it, and the tidy scheduler ----
@@ -727,6 +951,8 @@ export function createOrchestra({
     try {
       const state = await readState();
       await flush(state);
+      // Every project's line moves (or08): a new day, a raised budget, a renewed week or a quiet project lets more start.
+      for (const project of state?.projects ?? []) await drain(project.id, state);
       for (const project of state?.projects ?? []) if (await tidy(project, state)) break;
     } catch (err) {
       log('warn', 'orchestra-tick-failed', { error: err.message });
@@ -734,7 +960,7 @@ export function createOrchestra({
   }
 
   return {
-    call, sent, turnEnded, exited, open, info, tick, prompt: (chat) => (isOrchestrator(chat) ? ORCH_PROMPT : ''),
+    call, sent, turnEnded, exited, open, info, tick, prioritize, prompt: (chat) => (isOrchestrator(chat) ? ORCH_PROMPT : ''),
     // An activity chat (it answers to an orchestrator), whose "finished" the orchestrator tells instead of an alert.
     isActivity: (chat) => motherOf(chat) !== null,
     // The scheduler runs only in the real server (main.mjs start); tests call tick() themselves.

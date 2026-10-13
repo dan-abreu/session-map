@@ -319,7 +319,13 @@ export function createApp({
       return send(res, 200, { ok: true, ...chat.orchestra.info(projectId, s) });
     }
     if (req.method !== 'POST') throw new HttpError(404, 'not-found');
-    const result = await chat.orchestra.open(await readBody(req, CHAT_BODY_MAX), await state());
+    const body = await readBody(req, CHAT_BODY_MAX);
+    // The person's priority for one item of the orchestrator's line (or08): {projectId, code, priority}.
+    if (body && typeof body === 'object' && 'priority' in body) {
+      const set = chat.orchestra.prioritize(body, await state());
+      return send(res, set.status, set.body);
+    }
+    const result = await chat.orchestra.open(body, await state());
     return send(res, result.status, result.body);
   }
 

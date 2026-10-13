@@ -39,6 +39,7 @@ import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills } from './sources/skills.mjs';
 import { readJsonFile } from './store.mjs';
 import { expectedRun, parseRun } from './chat/run.mjs';
+import { queueView, readWeekUse } from './chat/priority.mjs';
 
 const DAY = 86_400_000;
 const RECENT_MS = DAY;
@@ -586,6 +587,8 @@ async function buildProject(ctx, { root, items }) {
       background,
       // Organize on its own (or18): the orchestrator's tidy pass, on unless the person turned it off.
       tidy: tidyOn(userConfig, root),
+      // The orchestrator's priority line (or08): what waits to start, highest first.
+      orchQueue: queueView(smDir, projectId),
       activity, chats, conversations, visitors: [], roadmap: milestones,
       decisions: [
         ...(roadmap?.decisions ?? []).map((d) => ({ ...d, projectId })),
@@ -703,6 +706,9 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     budget: Number.isFinite(monthlyUSD) && monthlyUSD > 0 ? { monthlyUSD, used: round6(costOf(monthRows, ctx.prices).usd) } : null,
     // The plan's weekly and 5-hour limits, from the limit messages in the histories (wa09): the account's, not a project's.
     limits: planLimits(items.flatMap((i) => [i.summary.limitHit?.weekly, i.summary.limitHit?.session]).filter(Boolean), now.getTime()),
+    // How much of the plan's week is used, as Claude Code last saw it (~/.claude.json, next to the .claude folder): near
+    // the end only urgent and important work starts in the orchestration (or08, wa09). Null when unknown or stale.
+    weekUse: readWeekUse(join(dirname(dir), '.claude.json'), now.getTime()),
     projects,
   };
   Object.defineProperty(state, INTERNALS, { value: { chats: ctx.internals, changes }, enumerable: false });

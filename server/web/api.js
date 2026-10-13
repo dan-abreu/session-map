@@ -97,6 +97,8 @@ export const api = {
   // The project's orchestrator (or01): open it, resuming its one conversation (text starts it with a first message), and the
   // switch "Organizar sozinho" (or18).
   orchestratorOpen: (body) => call('POST', '/api/chat/orchestrator', body),
+  // The person's priority for one item of the orchestrator's line (or08): urgent, important, normal, polish, or 'drop'.
+  orchestratorPriority: (projectId, code, priority) => call('POST', '/api/chat/orchestrator', { projectId, code, priority }),
   setProjectTidy: (projectId, tidy) => call('POST', '/api/settings/project-tidy', { projectId, tidy }),
   // The project's monthly budget (or07): usd null removes it; continue lifts the pause until the month ends.
   setProjectBudget: (projectId, usd) => call('POST', '/api/settings/project-budget', { projectId, usd }),
