@@ -30,6 +30,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 
 ### Chat states
 
+- [ ] **important:** A chat with nothing running goes to "Esperando você" and says why it stopped `pc25`
+  - From `id99`. When neither a turn nor a team of helpers is running, the chat leaves "working" at once, shows in "Esperando você" and carries one plain line on why: finished, waiting for your answer, cut by a restart of session-map (and whether it resumes by itself), out of credit or limit, an error. Never a chat that looks busy while nothing works.
 - [x] **Claude:** Clear state on every page chat `pc05`
   - Working, finished (with the final summary), interrupted, waiting for permission. A chat that ended must never look stuck.
   - An on-screen notice when a chat finishes.

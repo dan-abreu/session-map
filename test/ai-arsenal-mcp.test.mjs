@@ -375,6 +375,26 @@ test('restart_session_map asks session-map with the header token and the page ch
   });
 });
 
+test('restart_session_map says it waits for the teams working in the background, and until when (sv16)', async () => {
+  const teamsUntil = '2026-10-11T13:00:00.000Z';
+  const deadline = '2026-10-11T13:10:00.000Z';
+  const replies = { ask: () => [500, {}], others: () => [500, {}], restart: () => [200, { ok: true, scheduled: true, waitingFor: 0, teams: 2, teamsUntil, deadline }] };
+  await withMcp({ replies }, async ({ mcp, call }) => {
+    const { tools } = (await mcp.rpc('tools/list', {})).result;
+    assert.match(tools.find((t) => t.name === 'restart_session_map').description, /background/i);
+    const text = textOf(await call('restart_session_map', { reason: 'x' }));
+    assert.match(text, /2 teams? (are )?working in the background/);
+    assert.match(text, new RegExp(teamsUntil));
+    assert.match(text, new RegExp(deadline));
+  });
+  const joined = { ...replies, restart: () => [200, { ok: true, scheduled: true, already: true, teams: 1, teamsUntil }] };
+  await withMcp({ replies: joined }, async ({ call }) => {
+    const text = textOf(await call('restart_session_map', { reason: 'x' }));
+    assert.match(text, /already waiting/i);
+    assert.match(text, /1 team working in the background/);
+  });
+});
+
 test('restart_session_map from outside the page sends no key; a restart already waiting is joined', async () => {
   const replies = { ask: () => [500, {}], others: () => [500, {}], restart: () => [200, { ok: true, scheduled: true, already: true }] };
   await withMcp({ replies }, async ({ call, seen }) => {

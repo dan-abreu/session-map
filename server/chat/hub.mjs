@@ -27,6 +27,7 @@ import {
 } from './run.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 import { guardSettings } from './guard.mjs';
+import { cutTeams, hasCutTeams, teamsNote } from './teams.mjs';
 import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
 import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
@@ -73,6 +74,8 @@ const HELPER_WALK_MAX = 5000;
 const HELPER_DEPTH_MAX = 8;
 // A walk that hit the cap has not seen every file, so it is no proof of quiet: the close is postponed this many more times.
 const HELPER_CUT_RECHECKS = 2;
+// A team cut in the background (sv16) is told when its conversation is next resumed, if it was launched within this.
+const TEAMS_NEWS_MS = 24 * 3600_000;
 // An ended chat keeps its events a while, so a page that reconnects still sees how it ended.
 const LINGER_MS = 5 * 60_000;
 // A conversation opens on its newest items and gives older ones a page at a time (pc15): a long one opens at once.
@@ -534,6 +537,23 @@ export function createChatHub({
     return newestHelperWrite(sessionId);
   }
 
+  // A live chat's team at work (sv16, the agreed restart waits for it): its helpers wrote within quietMs, or a launch of
+  // this process has not ended (an agent running a long command writes nothing meanwhile).
+  function teamAtWork(chat, at, quietMs) {
+    if (at - helpersLook(chat.sessionId).at < quietMs) return true;
+    const file = transcriptOf(chat.sessionId);
+    return Boolean(file) && hasCutTeams(cutTeams(file, { since: Date.parse(chat.startedAt) || 0 }));
+  }
+
+  // The teams a conversation whose process is gone started and that never finished (sv16), not yet told to it.
+  function cutTeamsOf(sessionId) {
+    const file = transcriptOf(sessionId);
+    if (!file) return null;
+    const told = Date.parse(readPageChats()[sessionId]?.teamsToldAt ?? '');
+    const teams = cutTeams(file, { since: Math.max(Date.now() - TEAMS_NEWS_MS, Number.isFinite(told) ? told : 0) });
+    return hasCutTeams(teams) ? teams : null;
+  }
+
   // claude keeps what a conversation's background work writes under projects/<folder>/<sessionId>/subagents/.
   function newestHelperWrite(sessionId) {
     const file = transcriptOf(sessionId);
@@ -622,6 +642,7 @@ ${prompt}`;
     let cwd;
     let prompt = body.text;
     let resume = null;
+    let cutTold = null;
     let saved = null;
     let place = { partId: null, workCellId: null, title: String(body.text ?? '').trim().slice(0, TITLE_MAX) };
     let flow = null;
@@ -653,6 +674,10 @@ ${prompt}`;
       cwd = state[INTERNALS]?.chats.get(body.sessionId)?.cwd ?? saved?.cwd;
       if (!cwd) return reply(409, { error: 'no-folder' });
       resume = body.sessionId;
+      // Its process is gone: a team it ran in the background died with it. Claude reads which and how to resume it, after
+      // the message; the page shows the message alone.
+      cutTold = idle ? null : internal.teams ?? cutTeamsOf(resume);
+      if (cutTold) prompt = `${prompt}\n\n${teamsNote(cutTold)}`;
       if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
       // The point it was opened on comes back with it: a resumed orchestrator is still the project's orchestrator.
       place = { ...place, title: chat?.title ?? saved?.title ?? place.title, ...(saved?.node ? { node: saved.node } : {}) };
@@ -723,6 +748,8 @@ ${prompt}`;
     // Waiting: closed as any quiet chat is, once idleMs passes with no message.
     if (idle) armIdle(chat, idleMs);
     else sendTo(chat, body.text, prompt, internal.auto, images, fromOf(internal));
+    // Told once: the next resume names only the teams launched after this.
+    if (cutTold) savePageChat(resume, { teamsToldAt: now() });
     return reply(200, { chatKey: key, mode, downgraded: choice === 'settings' && fromSettings.downgraded });
   }
 
@@ -1014,6 +1041,9 @@ ${prompt}`;
     // The agreed restart (sv13, restart.mjs): hold new turns, how many chats are mid-turn, and what to resume after.
     hold: (on) => { holding = Boolean(on); },
     turning: () => [...chats.values()].filter((c) => !c.ended && c.running).length,
+    // sv16: the chats whose team works in the background, and the teams a resumed conversation's old process left cut.
+    teams: ({ now: at = Date.now(), quietMs }) => [...chats.values()].filter((c) => !c.ended && c.sessionId && teamAtWork(c, at, quietMs)).map((c) => c.sessionId),
+    cutTeams: cutTeamsOf,
     restartList: () => [...chats.values()].filter((c) => !c.ended && c.sessionId).map((c) => ({
       sessionId: c.sessionId, key: c.key, projectId: c.projectId, run: c.run, running: c.running, held: Boolean(c.held),
     })),

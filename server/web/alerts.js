@@ -52,7 +52,7 @@ const dollars = (t, usd) => (Number.isFinite(usd) ? new Intl.NumberFormat(t.lang
 export function alertText(t, group, { content = true } = {}) {
   const [first] = group.alerts;
   const many = group.alerts.length > 1;
-  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? 0, reason: first.because ?? '', model: first.model ?? '', provider: first.provider ? providerName(first.provider) : '', date: first.date ?? '', pct: first.pct ?? '', used: dollars(t, first.usedUSD), limit: dollars(t, first.limitUSD) };
+  const vars = { tool: first.tool ?? '', a: first.branches?.[0] ?? '', b: first.branches?.[1] ?? '', files: (first.files ?? []).join(', '), when: first.kind === 'limit' ? whenOf(t, first) : '', n: first.resumed ?? first.teams ?? 0, reason: first.because ?? '', model: first.model ?? '', provider: first.provider ? providerName(first.provider) : '', date: first.date ?? '', pct: first.pct ?? '', used: dollars(t, first.usedUSD), limit: dollars(t, first.limitUSD) };
   const what = many ? t(`alert.many.${group.kind}`, { n: group.alerts.length }) : t(`alert.what.${first.reason}`);
   const why = many ? t('alert.why.many') : t(`alert.why.${first.reason}`, vars);
   const todo = many ? t('alert.do.many') : t(`alert.do.${first.reason}`);

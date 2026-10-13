@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id23, id24, id25, id26, id28, id73, id93
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50
@@ -64,6 +64,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: `or04`, `or07`, `or08`, `or15` and `or19` are ticked in Orchestration; the owner's open decisions (`op08`, `op09`) are answered; the panel shows the other AIs doing real work with Claude's accept/refuse.
   - Where it went: `or04`, `or07`, `or08`, `or15`, `or19`; the owner's part in `op08`, `op09`.
   - Status: in progress (recorded on 2026-10-11).
+- [ ] Never think the chat is working when it stopped: "Esperando você" with the reason `id99`
+  - Asked: 2026-10-11 — "está parado novamente pedindo minha ação, preciso que quando não tiver nada em atividade, o chat vá para o esperando você e me dê um norte porque parou, pensei que estivesse trabalhando"
+  - What it means: a chat with nothing running moves to "Esperando você" at once with one plain line on why it stopped; and a restart of session-map asked by another chat no longer kills a team working in the background (it waits, or the team resumes by itself).
+  - How to confirm it is done: start a long team in a chat and ask a restart from another: the team keeps going (or resumes alone) and the first chat never looks idle while working; when it really stops, it shows in "Esperando você" with the reason.
+  - Where it went: `pc25`, `sv16`.
+  - Status: in progress (sv16 done by Gemini on 2026-10-13, pc25 next).
 - [ ] A detailed, categorized list of AIs `id23`
   - Asked: 2026-10-09 11:45 — "faz uma lista minunciosa de IAs e categoriza"; 2026-10-09 11:55 — "é bom"; 2026-10-10 — "voce pode da uma pesquisada a qualidade de cada IA e colocar elas no lugar certo mesmo, assim voce faz com mais certeza"
   - What it means: every relevant AI by category (text and code, image, video, voice, transcription, web search, document reading, vector search, browser automation, workflows, gateways), with what it is good for, price, API, open weights and privacy notes, from official price pages where possible.

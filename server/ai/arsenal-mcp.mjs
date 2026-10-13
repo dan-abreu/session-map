@@ -102,6 +102,7 @@ const restartTool = {
   description: [
     'Asks session-map to restart itself, for example after you changed its own code. Never kill or start the session-map process yourself: that cuts off every conversation it runs from its page.',
     'session-map restarts when none of its page conversations is in the middle of a turn, at the latest 10 minutes after the first request, and starts no new turn meanwhile; several requests join the one waiting. After the restart it resumes its page conversations with a note.',
+    'If a page conversation has a team working in the background (a workflow or a background helper), it first waits for that team, up to an hour, and the conversations keep working meanwhile; a team cut anyway is named to its conversation when it is resumed, with how to resume it.',
     'If you are one of session-map\'s page conversations, end your turn after calling this: you are resumed with a note and go on from there.',
   ].join(' '),
   inputSchema: {
@@ -334,10 +335,15 @@ async function restart(args) {
   if (r.status === 401) return result(`session-map refused the key in ${TOKEN_FILE} (it did not match). ${NOT_RESTARTED}`, true);
   if (r.status !== 200 || !j?.ok || !j.scheduled) return result(`session-map answered ${r.status}${typeof j?.error === 'string' ? ` (${j.error})` : ''}. ${NOT_RESTARTED}`, true);
   const next = 'Until then it starts no new turn; afterwards it resumes its page conversations with a note. If you are one of them, end your turn now: you go on after the restart.';
-  if (j.already) return result(`A restart of session-map was already waiting: your request joined it. ${next}`);
+  // sv16: the teams working in the background are waited for first.
+  const teams = Number(j.teams) || 0;
+  const first = teams > 0
+    ? ` It first waits for ${teams === 1 ? '1 team' : `${teams} teams`} working in the background of its page conversations to finish, at the latest until ${String(j.teamsUntil)}; the conversations keep working meanwhile.`
+    : '';
+  if (j.already) return result(`A restart of session-map was already waiting: your request joined it.${first} ${next}`);
   const n = Number(j.waitingFor) || 0;
   const now = n === 1 ? '1 page conversation is in the middle of a turn' : `${n} page conversations are in the middle of a turn`;
-  return result(`Restart scheduled. session-map restarts as soon as none of its page conversations is in the middle of a turn (now ${now}), at the latest at ${String(j.deadline)}. ${next}`);
+  return result(`Restart scheduled.${first} session-map restarts as soon as none of its page conversations is in the middle of a turn (now ${now}), at the latest at ${String(j.deadline)}. ${next}`);
 }
 
 const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart };

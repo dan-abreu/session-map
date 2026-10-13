@@ -51,6 +51,10 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
   - From `id89`. The restart waits until no chat is in the middle of a step (or each one saved where it was), and the chats it cut off continue without a click.
   - Built on 2026-10-11 (`server/restart.mjs`, `POST /api/restart`, the `restart_session_map` tool of the arsenal): one pending restart, fired when no page chat is mid-turn or after 10 minutes; the chats are resumed with a note by the new process. Not yet tried against the real server: the first real restart is its end-to-end test.
 
+- [x] **Gemini (Antigravity):** A restart waits for the teams working in the background, and a chat whose team was cut resumes that team `sv16`
+  - From `id99`. On 2026-10-11 restarts asked by other chats (19:10 and 19:41) killed the workflow a quiet chat was running: `sv13` waits only for chats mid-turn. The restart also waits while a chat's helpers still write (the same look as `pc12`), up to a limit; past it, the cut chat is told which team was cut and resumes it from where it stopped (the workflow's resume), on its own.
+  - Implemented on 2026-10-13 by Gemini (Antigravity) while Claude Code credits were paused: `server/chat/teams.mjs` identifies cut workflows and background helpers, `server/restart.mjs` waits for background teams (up to 1 hour) before holding turns and includes cut team details in resume notes, with full unit test coverage in `test/restart-teams.test.mjs` and MCP tool support in `server/ai/arsenal-mcp.mjs`. Ready for Claude's review when credits return.
+
 ### New projects
 
 - [x] Create a new project's folder and show it as a project before any conversation runs there `sv14`

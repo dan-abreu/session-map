@@ -793,18 +793,18 @@ export function createApp({
       const ms = (name) => { const n = Number(url.searchParams.get(name)); return url.searchParams.get(name) && Number.isFinite(n) ? n : undefined; };
       return send(res, 200, { results: searchIndex(entries, url.searchParams.get('q') ?? '', { project: url.searchParams.get('project') ?? undefined, limit: 20, from: ms('from'), to: ms('to') }) });
     }
-    if (req.method === 'POST' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'place' && parts.length === 5) return placeRoute(req, res, parts[3]);
-    if (parts[1] === 'api' && parts[2] === 'cards') {
-      if (look) throw new HttpError(403, 'look-only');
-      return cardsRoute(req, res, parts);
-    }
-    if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
     // Every reply with what it read and did is as private as the chats: the page's token only, never the look-only key.
     if (isStatementPath(path)) {
       const allowed = !statements ? { ok: false, status: 403, error: 'demo' } : look ? { ok: false, status: 403, error: 'look-only' }
         : sameToken(cookieToken(req), token) ? { ok: true } : { ok: false, status: 401, error: 'token-required' };
       return statementRoute({ store: statements, send, HttpError }, req, res, url, allowed);
     }
+    if (req.method === 'POST' && parts[1] === 'api' && parts[2] === 'conversation' && parts[4] === 'place' && parts.length === 5) return placeRoute(req, res, parts[3]);
+    if (parts[1] === 'api' && parts[2] === 'cards') {
+      if (look) throw new HttpError(403, 'look-only');
+      return cardsRoute(req, res, parts);
+    }
+    if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
       if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');
       return send(res, 200, { ok: true });
@@ -935,7 +935,7 @@ export function createApp({
     server.close(() => resolve());
     server.closeAllConnections();
   });
-  const restarter = demo || !chat || !smDir ? null : createRestarter({ hub: chat, smDir, closeServer: closeHttp, ...restart });
+  const restarter = demo || !chat || !smDir ? null : createRestarter({ hub: chat, smDir, closeServer: closeHttp, onAlert: (a) => watcher?.push([a]), ...restart });
   // after: the new server listens. Called once by start(), never in the demo.
   server.resumeAfterRestart = (after) => (restarter
     ? resumeAfterRestart({ smDir, hub: chat, readState: state, onAlert: (a) => watcher?.push([a]), resuming: resumed, after })

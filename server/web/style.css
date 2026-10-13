@@ -3338,7 +3338,7 @@ body:has(.pop-menu:not([hidden]), .pp-list:not([hidden])) .cut { display: none; 
   .cut-chip { min-height: 44px; }
 }
 
-/* The statement in the Costs tab as guided bookkeeping (sb09, sb10). */
+/* The statement in the Costs tab, laid out as bookkeeping (sb09 to sb12): figures, bars, cost centers, entries. */
 .stmt-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; }
 .stmt-head h3 { margin: 0; }
 .stmt-period { display: flex; flex-wrap: wrap; align-items: end; gap: 6px 10px; }
