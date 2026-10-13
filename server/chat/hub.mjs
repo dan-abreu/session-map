@@ -51,9 +51,10 @@ export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessi
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEXT_MAX = 20_000;
-// Pasted images (mm22): what Claude Code itself accepts, a few per message.
+// Pasted images (mm22): ten per message (the owner's call on 2026-10-13; the API takes more). Each one costs about a
+// thousand tokens on every later turn of the chat, so ten is a ceiling, not a target.
 const IMAGE_MEDIA = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const IMAGES_MAX = 4;
+const IMAGES_MAX = 10;
 const IMAGE_DATA_MAX = 5_000_000;
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 const TITLE_MAX = 200;

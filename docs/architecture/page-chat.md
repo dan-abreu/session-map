@@ -114,3 +114,6 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [ ] Skills and plugins as a book index: each chat lists only the names of the skills (the index) and the full description of the two or three that fit the request (the chapters); plugins the project never uses stay off for that chat `pc29`
   - Through `skillOverrides` "name-only" and per-chat plugins in `--settings`, picked by `or22`; the page shows each skill's size and use.
   - Honest weight: on 2026-10-13 the skills were about 3% of the spend; the big ones are Opus by default (`or25`) and long conversations (`pc28`).
+- [x] Up to ten images per message, instead of four `pc30`
+  - Built on 2026-10-13 (`server/chat/hub.mjs`, `server/web/chat.js`, the body limit in `server/main.mjs`): the four was a guess, not a limit of Claude. Each image costs about a thousand tokens on every later turn of the chat.
+  - From `id108`.

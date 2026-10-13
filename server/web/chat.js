@@ -31,7 +31,7 @@ const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
 const SAVED = 'sm.chat';
 // What the composer accepts like Claude Code does (the server checks the same): a few images per message.
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const IMAGES_MAX = 4;
+const IMAGES_MAX = 10;
 const IMAGE_BYTES_MAX = 3_700_000;
 // A conversation still running in VS Code or a terminal is asked again this often while it is open here.
 const MIRROR_MS = 3000;

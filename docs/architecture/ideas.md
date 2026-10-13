@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107
+- What it costs: id98, id105, id106, id107, id108
 - This registry: id65, id66, id67
 
 ## How it works
@@ -290,6 +290,14 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: start a chat in any way and bring an idea the numbers contradict: the answer says it disagrees, with the numbers; ask an outside AI for a review: the request it receives starts with the same rule.
   - Where it went: `or27`.
   - Status: built on main on 2026-10-13 (`or27`); new chats get it, chats already open keep their old text.
+
+- [ ] Cheap layers first: exact skeletons of the code, a local model for heavy reading, the paid model only for decisions `id108`
+  - Asked: 2026-10-13 — four images from the owner's research with his brother: Ollama making "Interface Skeletons" (imports, types, signatures, no bodies), semantic changelogs in JSON, extraction of variables and dependencies; "AST determinístico + Ollama cirúrgico"; model cascading (cheap or local models read and sort, the frontier model only decides and writes the hard code). And: "tem mais uma imagem, mas voce colocou limitador de imagens nao sei por qual motivo, quero colocar mais uma imagem".
+  - What it means: structure comes from exact readers (free, no mistakes), summaries of long text from the cheapest model that is good enough, and the paid model gets the skeleton plus the exact lines, never the whole repository.
+  - Verdicts with data: skeletons yes, but from the Foundation, not from a model (measured 88 to 94% smaller); changelogs yes, but from the facts before and after, without AI; variables and dependencies already read (names and versions), the code's own `process.env` is new; a local model only as an optional, measured provider; ten images per message.
+  - How to confirm it is done: an agent answers about a file by reading its skeleton and a few lines; the turn's OK lists what changed; a message takes ten images.
+  - Where it went: `fd17`, `or26`, `or28`, `pc30`.
+  - Status: accepted with the verdicts above; `pc30` built on 2026-10-13.
 
 ### This registry
 

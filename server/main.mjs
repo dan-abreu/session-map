@@ -64,8 +64,8 @@ const VERSIONS_EVERY_MS = 60 * 60_000;
 // How often the watcher looks at every session on the PC, page open or not.
 const WATCH_MS = 10_000;
 const BODY_MAX = 64 * 1024;
-// A chat message may carry pasted images (four of about 3.7 MB each).
-const CHAT_BODY_MAX = 24 * 1024 * 1024;
+// A chat message may carry pasted images (ten of about 3.7 MB each, 5 MB once in base64).
+const CHAT_BODY_MAX = 56 * 1024 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
 const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };

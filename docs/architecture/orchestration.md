@@ -76,10 +76,15 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] An OK at the end of each request, checked by the engine without AI: tests ran and passed, the item ticked, the work saved, what the request cost `or26`
   - Read from the transcript and the plan file at turn end; the card shows OK, or what is missing. It never forces more work (a blocking stop hook can loop and spend).
   - From `id106`.
+  - Also what changed, without AI: the functions added, changed or removed (the Foundation's facts before and after the turn), for the orchestrator's state; from `id108`.
 - [x] **important:** Every AI agrees or disagrees on evidence, never to please: the same rule in every way a chat runs and in what goes to an outside AI that judges `or27`
   - One sentence in `server/ai/stance.mjs`: say which, the facts behind it (numbers, file:line) and what would change your mind; without facts, say so and measure. A yes-man and a contrarian are both wrong.
   - Built on 2026-10-13: the conductor prompts carry it (Autonomous, Automatic, Maestro), the Manual ways get it alone (a fixed model, Ultracode), and `ask_other_ai` puts it before a review or a reasoning prompt; drafts, summaries and labels go as written. "Same as my Claude" stays the person's own setup (on this PC its CLAUDE.md has the rule).
   - From `id107`.
+- [ ] A local model (Ollama) as one more outside AI: off by default, measured by the bench before it is trusted, used only for long logs, READMEs and docs `or28`
+  - Facts on 2026-10-13: this PC has an RTX 5070 Ti Laptop GPU (12 GB) that runs a 7 to 14B model, but 15.5 GB of RAM with 1.7 GB free, and timing tests already flake on the busy PC. Haiku and Gemini Flash already read at about US$ 0.002 per right answer.
+  - Its real plus is privacy: nothing leaves the PC, so it may read client data that DeepSeek may not. Never for the structure of code: the Foundation does that exactly (`fd17`).
+  - From `id108`.
 
 ### Board of roles
 

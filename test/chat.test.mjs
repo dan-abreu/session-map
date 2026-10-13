@@ -1332,7 +1332,8 @@ test('a message can carry pasted images, which reach claude as image blocks (mm2
   await withHub({}, async ({ hub, state }) => {
     const png = { media: 'image/png', data: 'iVBORw0KGgo=' };
     assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: [{ media: 'text/html', data: 'PGI+' }] }, state)).body.error, 'bad-images');
-    assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: Array(5).fill(png) }, state)).body.error, 'bad-images', 'four at most');
+    assert.equal((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: Array(11).fill(png) }, state)).body.error, 'bad-images', 'ten at most');
+    assert.notEqual((await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: Array(10).fill(png) }, state)).body.error, 'bad-images', 'ten pass');
     const { body } = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Look', images: [png] }, state);
     const r = recorder();
     hub.subscribe(body.chatKey, r.sink);

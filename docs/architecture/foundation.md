@@ -49,6 +49,10 @@ Being built (`fd01` to `fd16`): the blocks so far, the knowledge they read, thei
   - First step, done on 2026-10-10: a test file with no owner takes the part of the file it tests, by name (`test/arch-parse.test.mjs` → `server/arch/parse.mjs`), or else of the folder its name points to.
   - Next: a new file takes the part of its folder or of the files it imports; what stays without an owner is listed in red (`fd01`); the 5-minute round rewrites "Where in the code" and the Flow from the code (`fd12`), with a record and Undo under the project's care mode (`fd14`).
   - How to confirm it is done: on session-map the map shows the share of files with an owner next to the old number; adding a file to a part's folder, or a test for a part's file, puts it in that part with no edit to the markdown; after a round, "Where in the code" and the Flow match the code.
+- [ ] **important:** The skeleton of a file as a tool: its imports, exports and signatures with their lines, no bodies; an agent reads the skeleton, then only the lines it needs `fd17`
+  - Measured on 2026-10-13 with the functions reader: `server/chat/hub.mjs` 63.6 KB to 3.5 KB (94% less), `run.mjs` 89%, `ask.mjs` 88%. `server/web/chat.js` gave a false 99%: functions nested inside another are not read yet, so they come first, or the skeleton misleads.
+  - Exact and free, no AI: the census and the extractors already know functions, classes, imports, exports, calls, routes and tables. Also the environment variables the code reads (`process.env`, `os.getenv`), not only the names in `.env.example`.
+  - From `id108`.
 
 ### Trust
 
