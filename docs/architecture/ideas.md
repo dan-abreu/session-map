@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108
+- What it costs: id98, id105, id106, id107, id108, id109
 - This registry: id65, id66, id67
 
 ## How it works
@@ -298,6 +298,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: an agent answers about a file by reading its skeleton and a few lines; the turn's OK lists what changed; a message takes ten images.
   - Where it went: `fd17`, `or26`, `or28`, `pc30`.
   - Status: accepted with the verdicts above; `pc30` built on 2026-10-13.
+
+- [ ] The entry is not Opus at high: plan first with the cheapest that is good enough, then build with the right model per task, by law in the engine `id109`
+  - Asked: 2026-10-13 — "tem um problema a entrada, que nivel é? Qual modelo de IA, que nivel da IA ... a OPUS e Fable com certeza iria pensar melhor que o sonnet, mas as vezes nao por apenas está conversando, e o que deve exitir de lei na engrenagem antes de começar sair fazendo qualquer coisa é traçar um plano com a mais barata organizar a ideia e depois construir usando as IA e modelos de acordo com a tarefa ... estava jogando tudo no nivel HIGH e usando opus, e voce ainda me dizia que estava usando o modelo mais fraco, mas por traz os agentes eram sempre os mais caros"
+  - What it means: the engine, not the AI, picks the model and effort of each phase: talk cheap, plan with a mid model and a short strong review when it matters, build per task; and it shows the person which model and level each phase really used.
+  - How to confirm it is done: a new chat that only talks runs on Sonnet at low and says so; a large request gets a written plan before any code, with each task's model; the statement shows the real model of the chat and of every agent.
+  - Where it went: `or29`, `or30` (with `pc27`, `pc28`, `or25`).
+  - Status: accepted, planning.
 
 ### This registry
 

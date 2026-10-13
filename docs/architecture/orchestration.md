@@ -85,6 +85,14 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Facts on 2026-10-13: this PC has an RTX 5070 Ti Laptop GPU (12 GB) that runs a 7 to 14B model, but 15.5 GB of RAM with 1.7 GB free, and timing tests already flake on the busy PC. Haiku and Gemini Flash already read at about US$ 0.002 per right answer.
   - Its real plus is privacy: nothing leaves the PC, so it may read client data that DeepSeek may not. Never for the structure of code: the Foundation does that exactly (`fd17`).
   - From `id108`.
+- [ ] **important:** The law of the engine: plan first, on a cheap model, then build with the model each task needs; the entry chat is never Opus at high by default `or29`
+  - Today every Autonomous, Automatic and Maestro chat starts on Opus at high, even to talk; on the week to 2026-10-13 the main chats were 33% (session-map) and 45% (cverino) of the spend. Prices per million tokens in: Haiku 0.10, Sonnet 2, Opus 4, Fable 10; high effort adds thinking tokens at the output price.
+  - Talk and organizing the idea: Sonnet at low (Haiku for a question or one command, by the request's measure `or14`). The plan: Sonnet at high writes it, each task with its model and effort; a large or sensitive plan gets one short review by Opus (Fable when critical) on the plan text only, never the whole chat. Build: after the plan is approved, a fresh chat carries the plan only (`pc28`), its workers held to it by `or25`.
+  - A model change resets the prompt cache (the whole context is written again at the new price): the engine switches only at the edges of a phase, not mid-talk.
+  - From `id109`.
+- [ ] Measure planning on the bench: Haiku, Sonnet and Opus on real planning requests of the owner, so the entry model is set by data, not by guess `or30`
+  - The bench measures code, Portuguese and review today, not planning; the starting choice in `or29` (Sonnet plans, Opus reviews large plans) is a guess until this runs.
+  - From `id109`.
 
 ### Board of roles
 
