@@ -111,6 +111,7 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [ ] The conversation as a book: past a size, the engine writes its index (one chapter per request: what was asked, done, decided, which files) and goes on with the index and the current chapter only `pc28`
   - The chapters come from the transcript without AI (the person's messages, item codes, files touched, commits); a session-map tool reads one past chapter only when needed. The same pattern as recent research on long conversations: summaries as a map over the raw turns, then a few turns read.
   - Fallback inside Claude Code: an earlier `autoCompactWindow` and a PreCompact hook that keeps the chapter index.
+  - Inside the same conversation too, not only by moving to a new chat: past a size, Claude Code's own summary runs earlier (`autoCompactWindow`) and a hook hands it the chapter index, so the conversation goes on shorter; a past chapter is read back only when needed. From `id111`.
 - [ ] Skills and plugins as a book index: each chat lists only the names of the skills (the index) and the full description of the two or three that fit the request (the chapters); plugins the project never uses stay off for that chat `pc29`
   - Through `skillOverrides` "name-only" and per-chat plugins in `--settings`, picked by `or22`; the page shows each skill's size and use.
   - Honest weight: on 2026-10-13 the skills were about 3% of the spend; the big ones are Opus by default (`or25`) and long conversations (`pc28`).

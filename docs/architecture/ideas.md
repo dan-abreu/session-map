@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109, id110
+- What it costs: id98, id105, id106, id107, id108, id109, id110, id111
 - This registry: id65, id66, id67
 
 ## How it works
@@ -311,6 +311,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a router before every turn: free rules, then a cheap model when unsure, a couple of questions only for big unclear work, then the right model; it also steps down when the talk gets small.
   - How to confirm it is done: "oi, tudo bem?" runs on the cheapest and says so; "quero um sistema de pagamentos" asks one or two questions, then plans on a stronger model; the page shows the model of each turn and why.
   - Where it went: `or31` (with `or29`, `or30`).
+  - Status: accepted, planning.
+
+- [ ] The book system for skills, plugins, agents and long conversations: see what is installed and used, read a thing once for all agents, and a conversation that keeps its own short chapters `id111`
+  - Asked: 2026-10-13 — "eu gostaria de saber quais skills e plugins instalados por repositorios, quais estão sendo usadas no momento que pode ser nos balões, um metodo de que uma skill ja foi lida, nem todos os agente precisam ler novamente ... aqui ta acontecendo que os 150 agentes vao ler novamente as mesma atividade isso gera um snowball sem tamanho e também o indice nas conversas, a conversa vai passando dos limites, vai se criando indices, com capitulos mais curtos dentro da propria conversa diminuindo o custo da conversa, teria como isso tudo acontecer?"
+  - What it means: the balloons show the skills and plugins of each project and what each chat and agent opened; the conductor reads once and hands chapters, agents never re-read by default; a long conversation shrinks itself into chapters.
+  - How to confirm it is done: a balloon lists its skills with their weight; a workflow of ten agents shows the skill opened once, by the conductor; a long chat shows its chapters and its cost per turn going down after a chapter closes.
+  - Where it went: `mm52`, `or32`, `pc28`.
   - Status: accepted, planning.
 
 ### This registry

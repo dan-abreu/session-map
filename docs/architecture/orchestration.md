@@ -99,6 +99,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - The page says which model and level runs and why, in one line, so what is said and what runs are the same. Each choice and its outcome (tests, review, the owner's correction) feed the bench (`or30`).
   - Research: RouteLLM (Berkeley, 2024) cut over 85% of the cost on general chat keeping about 95% of the strong model's quality; coding agents will save less, so it is measured here before it is trusted.
   - From `id110`.
+- [ ] **important:** Read once, hand the chapter: the conductor reads the activity and opens a skill once, then each agent gets only the chapter it needs; agents do not open skills or re-read the activity unless their brief names it `or32`
+  - Agents do not share memory: what one read is not in another's head, so 150 agents told to open a skill read it 150 times (on the week to 2026-10-13, the test-driven-development skill, 9.6 KB, was opened 275 times). The fix is not to make them read: the brief carries the few lines of the skill and of the activity that the task needs.
+  - Held by the engine: a PreToolUse hook denies a Skill call inside an agent unless its brief names that skill (`or25`, `pc26` proves the hook sees agents). The shared part of the briefs goes first and byte-identical, so the agents after the first pay the cache price (5% of a full read), if Claude Code's cache marks allow it; `pc26` measures that.
+  - From `id111`.
 
 ### Board of roles
 
