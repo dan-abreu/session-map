@@ -4,7 +4,9 @@ import { RUN_NOTE_END, RUN_NOTE_HEAD } from './run.mjs';
 const list = (items) => items.map((i) => `- ${i}`).join('\n');
 
 export const CONTEXT_HEAD = 'Context from session-map (this is all you need from earlier work):';
-const BOARD_HINT = 'When you finish a step, run /session-map:board.';
+// Once, at the end: each run opens the board skill (or23). The old per-step hint is still read off older prompts.
+const BOARD_HINT = 'When the request is done, run /session-map:board.';
+const OLD_BOARD_HINT = 'When you finish a step, run /session-map:board.';
 // Without the plugin there is no /session-map:board: the chat is told the card format itself.
 const CARD_HINT = [
   'When you finish a step, end your reply with a short block like this, so session-map can show where the work stands:',
@@ -45,7 +47,7 @@ ${RUN_NOTE_END}
     if (at >= 0) return personsWords(prompt.slice(at + RUN_NOTE_END.length + 3));
   }
   if (!prompt.startsWith(CONTEXT_HEAD)) return prompt;
-  for (const hint of [BOARD_HINT, CARD_HINT]) {
+  for (const hint of [BOARD_HINT, OLD_BOARD_HINT, CARD_HINT]) {
     const at = prompt.indexOf(`\n\n${hint}\n\n`);
     if (at >= 0) return prompt.slice(at + hint.length + 4);
   }

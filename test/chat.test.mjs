@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../server/actions.mjs';
 import { buildArgs, translate } from '../server/chat/driver.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
-import { firstPrompt } from '../server/chat/prompt.mjs';
+import { firstPrompt, personsWords } from '../server/chat/prompt.mjs';
+import { ownWords } from '../server/statement.mjs';
 import { readConversation } from '../server/sources/claude-conversation.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
@@ -146,6 +147,16 @@ test('firstPrompt: the part, the mother card, the board hint, then what the pers
   }
   assert.ok(text.indexOf('/session-map:board') < text.indexOf('Add the error message'));
   assert.equal(firstPrompt({ text: 'Just this' }).endsWith('Just this'), true);
+});
+
+// or23: the board is updated once, when the request is done, not after every step (each run opens a skill).
+test('firstPrompt asks for the board once at the end, and the person\'s words still come out of old prompts', () => {
+  const text = firstPrompt({ sections: ['Point'], text: 'Add the error message', board: true });
+  assert.match(text, /When the request is done, run \/session-map:board\./);
+  assert.doesNotMatch(text, /finish a step/);
+  assert.equal(personsWords(text), 'Add the error message');
+  assert.equal(personsWords('Context from session-map (this is all you need from earlier work):\n\nPoint\n\nWhen you finish a step, run /session-map:board.\n\nOld words'), 'Old words');
+  assert.equal(ownWords(text), 'Add the error message');
 });
 
 test('firstPrompt without the plugin explains the session-map block inline instead of naming /session-map:board', () => {

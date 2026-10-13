@@ -415,6 +415,22 @@ test('the prompt says large applies to every Fable case, its last word comes aft
   }
 });
 
+// or23/id105: a week of transcripts showed 54% of the agents on Opus high, Haiku in 4%, a skill opened by 59% of the
+// agents and one workflow of 194 agents. The prompt now routes down by default and hands each agent a narrow brief.
+test('the prompt routes down by default, briefs each agent narrowly, reviews once per delivery and caps a workflow', () => {
+  for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
+    const p = runPrompt(run);
+    assert.match(p, /opus, high: only security, money, personal data/i);
+    assert.match(p, /sonnet[^\n]*commits/i, 'docs and commits are Sonnet work, not Opus');
+    assert.match(p, /always pass model and effort/i);
+    assert.match(p, /brief[^\n]*exact files and lines[^\n]*when to stop/i);
+    assert.match(p, /no skill unless you name one/i);
+    assert.match(p, /one review per delivery, not per task/i);
+    assert.match(p, /theirs to Sonnet \(Opus if sensitive\)/, 'ordinary work of an outside AI is not an Opus job');
+    assert.match(p, /at most 10 agents per workflow/i);
+  }
+});
+
 // ---- model versions in the tail (or15) ----
 
 test('the tail carries one short line of version warnings only when something is wrong, and stays under its size', () => {

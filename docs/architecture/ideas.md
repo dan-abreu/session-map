@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98
+- What it costs: id98, id105
 - This registry: id65, id66, id67
 
 ## How it works
@@ -269,6 +269,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked again: 2026-10-11 20:15 — "eu te peço uma contabilidade tu me da uma redação, rapaz pesquisa antes, como faz contabilidade de IA"
   - Where it went: `sb08`, `sb09`, `sb10`, `sb11`, `sb12`.
   - Status: built on main on 2026-10-11, the last layout (`sb12`) as AI cost tools keep their books; its server part waits for the next restart of session-map (another chat asked for none until its teams finish); waiting for the owner to try it.
+
+- [ ] Agents re-read everything, every skill gets opened and everything runs on Claude high: refine it to spend little with high quality `id105`
+  - Asked: 2026-10-13 — "os agentes estão lendo tudo de uma vez, cada agente ele reler tudo de novo para cumprir a tarefa, também acontece que tem um snow ball no programa, voce ta acionando todas as skills os agentes fazem a mesma coisa, reler tudo antes de começar a trabalhar, precisamos refinar"; and "voce não esta classificando corretamente as IA, todas estão trabalhando com o claude nivel HIGH ... nao falou pra mim que as skill instaladas estão fazendo um gasto gigante ... Eu quero que voce tenha o poder de dizer e tomar decisoes de forma critica pensando no melhor para o projeto e não apenas concordando com as minhas ideias"
+  - What it means: measure where the tokens really go, remove what makes the snowball (rules that open every skill, Opus by default, too many agents per workflow, every agent starting from zero) and speak up with numbers instead of agreeing.
+  - How to confirm it is done: a week later, the share of Opus agents, the agents per workflow and the skills opened per agent are clearly lower, with the tests still passing and the reviews still holding.
+  - Where it went: `or23`, `or24`.
+  - Status: built on main on 2026-10-13 (`or23`); waiting for the next week's measure (`or24`).
 
 ### This registry
 
