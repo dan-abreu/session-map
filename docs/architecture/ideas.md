@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109
+- What it costs: id98, id105, id106, id107, id108, id109, id110
 - This registry: id65, id66, id67
 
 ## How it works
@@ -304,6 +304,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the engine, not the AI, picks the model and effort of each phase: talk cheap, plan with a mid model and a short strong review when it matters, build per task; and it shows the person which model and level each phase really used.
   - How to confirm it is done: a new chat that only talks runs on Sonnet at low and says so; a large request gets a written plan before any code, with each task's model; the statement shows the real model of the chat and of every agent.
   - Where it went: `or29`, `or30` (with `pc27`, `pc28`, `or25`).
+  - Status: accepted, planning.
+
+- [ ] A thinking brain at the entry and the exit: the cheapest model weighs each message, asks a little when needed, and hands it to a stronger model only when the work is big `id110`
+  - Asked: 2026-10-13 — "poxa a gente nao consegue colocar a entrada e saida como um cerebro pensante? tipo, recebi essa mensagem, é uma mensagem barata, nossa recebi essa mensagem é um projeto grande preciso dar mais atenção, podemos fazer começnado com o mais barato, ele faz umas perguntas para ter ideia do nivel da conversa e dali mudar para a IA mais e modelo mais desenvolvido?"
+  - What it means: a router before every turn: free rules, then a cheap model when unsure, a couple of questions only for big unclear work, then the right model; it also steps down when the talk gets small.
+  - How to confirm it is done: "oi, tudo bem?" runs on the cheapest and says so; "quero um sistema de pagamentos" asks one or two questions, then plans on a stronger model; the page shows the model of each turn and why.
+  - Where it went: `or31` (with `or29`, `or30`).
   - Status: accepted, planning.
 
 ### This registry

@@ -93,6 +93,12 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] Measure planning on the bench: Haiku, Sonnet and Opus on real planning requests of the owner, so the entry model is set by data, not by guess `or30`
   - The bench measures code, Portuguese and review today, not planning; the starting choice in `or29` (Sonnet plans, Opus reviews large plans) is a guess until this runs.
   - From `id109`.
+- [ ] **important:** The entry brain: every message is weighed before it runs, and the chat starts or moves to the model that weight asks for, then back down when the talk gets small `or31`
+  - Rules first, free (the request's measure `or14`); when they are unsure, one Haiku call (about US$ 0.0003 a message) returns the size, sensitivity, talk, plan or build, and how sure it is. Only a large and unclear request gets at most two short questions, never every message.
+  - The first turn already runs on the chosen model (no cache lost); a later message that changes level moves the chat at that edge (`or29`). In doubt it goes one level up, and always up for sensitive work: under-routing costs quality, over-routing only money. Work that fails its tests or review climbs a level.
+  - The page says which model and level runs and why, in one line, so what is said and what runs are the same. Each choice and its outcome (tests, review, the owner's correction) feed the bench (`or30`).
+  - Research: RouteLLM (Berkeley, 2024) cut over 85% of the cost on general chat keeping about 95% of the strong model's quality; coding agents will save less, so it is measured here before it is trusted.
+  - From `id110`.
 
 ### Board of roles
 
