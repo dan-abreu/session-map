@@ -12,6 +12,7 @@ import { buildArgs, translate } from '../server/chat/driver.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
 import { firstPrompt, personsWords } from '../server/chat/prompt.mjs';
 import { ownWords } from '../server/statement.mjs';
+import { STANCE } from '../server/ai/stance.mjs';
 import { readConversation } from '../server/sources/claude-conversation.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
@@ -953,7 +954,7 @@ test('Manual: a fixed model and effort, Ultracode through --effort ultracode, Sa
       return { argv: argvOf(log), run: r.events.find((e) => e.type === 'run').data };
     };
     const fixed = await run({ kind: 'fixed', model: 'haiku', effort: 'low' });
-    assert.deepEqual([flagOf(fixed.argv, '--model'), flagOf(fixed.argv, '--effort'), flagOf(fixed.argv, '--append-system-prompt')], ['haiku', 'low', undefined]);
+    assert.deepEqual([flagOf(fixed.argv, '--model'), flagOf(fixed.argv, '--effort'), flagOf(fixed.argv, '--append-system-prompt')], ['haiku', 'low', STANCE], 'only the stance rule (or27), never the conductor');
     assert.equal(fixed.run.model, 'claude-haiku-5-5');
     const ultra = await run({ kind: 'ultracode' });
     assert.equal(flagOf(ultra.argv, '--effort'), 'ultracode');

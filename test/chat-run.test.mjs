@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { STANCE } from '../server/ai/stance.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,8 +38,9 @@ test('runArgs: Automatic and Maestro run Opus at high with their prompt, Ultraco
   assert.equal(flag(maestro, '--model'), 'opus');
   assert.equal(flag(maestro, '--effort'), 'high');
   assert.doesNotMatch(flag(maestro, '--append-system-prompt'), /ask-reinforce/);
-  assert.deepEqual(runArgs({ kind: 'ultracode' }), ['--model', 'opus', '--effort', 'ultracode']);
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'haiku', effort: 'max' }), ['--model', 'haiku', '--effort', 'max']);
+  assert.deepEqual(runArgs({ kind: 'ultracode' }), ['--model', 'opus', '--effort', 'ultracode', '--append-system-prompt', STANCE]);
+  assert.deepEqual(runArgs({ kind: 'fixed', model: 'haiku', effort: 'max' }), ['--model', 'haiku', '--effort', 'max', '--append-system-prompt', STANCE]);
+  for (const kind of ['autonomous', 'auto', 'maestro']) assert.ok(runPrompt({ kind }).includes(STANCE), `${kind}: agrees or disagrees on evidence (or27)`);
   assert.deepEqual(runArgs({ kind: 'settings' }), []);
   assert.equal(runPrompt({ kind: 'settings' }), null);
   assert.equal(runPrompt({ kind: 'fixed', model: 'opus', effort: 'low' }), null);

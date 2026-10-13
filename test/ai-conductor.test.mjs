@@ -7,6 +7,7 @@ import {
   CONDUCTOR_KINDS, SIZES, ConductorBlocked, assertWorker, conductorTail, outsideState, recommend, recordDecision,
 } from '../server/ai/conductor.mjs';
 import { DEFAULT_RUN, MODELS, expectedRun, parseRun, runArgs, runPrompt } from '../server/chat/run.mjs';
+import { STANCE } from '../server/ai/stance.mjs';
 
 // The conductor (or04/or11/or14): Claude picks the level and the worker; this recommends from measured data, with the
 // reason, and BLOCKS what must never happen (client data to DeepSeek, anything outside past the cap or with the others off).
@@ -258,7 +259,7 @@ test('the tail reads plainly when nothing is measured, the others are off, or th
 test('Fable is a model of the fixed mode, by its alias', () => {
   assert.ok(MODELS.includes('fable'));
   assert.deepEqual(parseRun({ kind: 'fixed', model: 'fable', effort: 'max' }), { kind: 'fixed', model: 'fable', effort: 'max' });
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'fable', effort: 'high' }), ['--model', 'fable', '--effort', 'high']);
+  assert.deepEqual(runArgs({ kind: 'fixed', model: 'fable', effort: 'high' }), ['--model', 'fable', '--effort', 'high', '--append-system-prompt', STANCE]);
   assert.deepEqual(expectedRun({ kind: 'fixed', model: 'fable', effort: 'high' }, null), { model: 'fable', effort: 'high', ultracode: false });
 });
 
@@ -288,7 +289,7 @@ test('runArgs adds the day\'s tail after the conductor prompt, and only to the c
   const p = runArgs(DEFAULT_RUN, tail)[runArgs(DEFAULT_RUN, tail).indexOf('--append-system-prompt') + 1];
   assert.ok(p.startsWith(runPrompt(DEFAULT_RUN)));
   assert.ok(p.endsWith(tail));
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'opus', effort: 'low' }, tail), ['--model', 'opus', '--effort', 'low']);
+  assert.deepEqual(runArgs({ kind: 'fixed', model: 'opus', effort: 'low' }, tail), ['--model', 'opus', '--effort', 'low', '--append-system-prompt', STANCE], 'the stance, never the conductor tail');
   assert.deepEqual(runArgs(DEFAULT_RUN), runArgs(DEFAULT_RUN, ''), 'no tail, the plain prompt');
 });
 

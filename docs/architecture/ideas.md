@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106
+- What it costs: id98, id105, id106, id107
 - This registry: id65, id66, id67
 
 ## How it works
@@ -283,6 +283,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a chat with an Opus agent for ordinary code is stopped by the engine; a long chat goes on from its index; a new chat lists only skill names plus the few that fit; a planning message opens in plan mode; each finished request shows OK or what is missing.
   - Where it went: `or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`.
   - Status: accepted, planning; the owner will bring more ideas from his research before building.
+
+- [x] An AI that agrees or disagrees on data, in the engine, whichever AI it is `id107`
+  - Asked: 2026-10-13 — "voce pode concorda comigo ou discorda, veja ai por favor, quero que na engrenagem, eu não quero uma IA que concorda, não importa qual, quero uma IA consciente que concorde e discorde baseada em dados"
+  - What it means: every AI session-map talks to (Claude in any way a chat runs, and the outside AIs when they judge) takes a stance from the facts and shows them, instead of agreeing to please.
+  - How to confirm it is done: start a chat in any way and bring an idea the numbers contradict: the answer says it disagrees, with the numbers; ask an outside AI for a review: the request it receives starts with the same rule.
+  - Where it went: `or27`.
+  - Status: built on main on 2026-10-13 (`or27`); new chats get it, chats already open keep their old text.
 
 ### This registry
 

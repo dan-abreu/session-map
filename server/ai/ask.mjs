@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { withStance } from './stance.mjs';
 import { log } from '../log.mjs';
 import { readJsonFile } from '../store.mjs';
 import { getKey, listKeys } from './keys.mjs';
@@ -42,6 +43,8 @@ export async function askOthers({
   if (schemaHint != null && (typeof schemaHint !== 'string' || schemaHint.length > SCHEMA_MAX)) return refuse('bad-schema');
   if (exclude != null && !(Array.isArray(exclude) && exclude.length <= EXCLUDE_MAX && exclude.every((x) => typeof x === 'string' && EXCLUDE_RE.test(x)))) return refuse('bad-exclude');
   const left = new Set(exclude ?? []);
+  // What leaves: the prompt, with the stance rule before it when the AI is asked to judge (or27).
+  const sent = withStance(kind, prompt);
 
   const s = settings ?? othersSettings(readConfig(smDir).ai, listKeys(smDir).map((k) => k.provider));
   if (!s.enabled) return refuse('others-off');
@@ -80,7 +83,7 @@ export async function askOthers({
     let res;
     try {
       const opts = { provider: c.provider, model: c.model, key, maxTokens: ASK_MAX_OUT_TOKENS };
-      res = schemaHint ? await apiRun(prompt, { ...opts, schemaHint }) : await textRun(prompt, opts);
+      res = schemaHint ? await apiRun(sent, { ...opts, schemaHint }) : await textRun(sent, opts);
     } catch {
       res = { ok: false, error: 'threw', costUSD: estimateUSD }; // never the message: it could quote the request or the key
     }
@@ -103,7 +106,7 @@ export async function askOthers({
       if (asked.has(c.provider)) continue;
       const key = await Promise.resolve(keyFor(c.provider)).catch(() => null);
       if (!key) { skip(c.provider, 'no-key'); continue; }
-      const estimateUSD = estimateCostUSD(c.provider, c.model, prompt, ASK_MAX_OUT_TOKENS, schemaHint ?? '');
+      const estimateUSD = estimateCostUSD(c.provider, c.model, sent, ASK_MAX_OUT_TOKENS, schemaHint ?? '');
       const ticket = q.reserveOutside(c.provider, estimateUSD, s.dailyUSD);
       if (!ticket) { skip(c.provider, 'cap'); continue; }
       asked.add(c.provider);

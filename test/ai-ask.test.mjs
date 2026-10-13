@@ -7,6 +7,7 @@ import { ASK_KINDS, ASK_MAX_OUT_TOKENS, FANOUT_MAX, PROMPT_MAX_BYTES, askOthers 
 import { AiQueue } from '../server/ai/runner.mjs';
 import { emptyHelperState, recordReview } from '../server/ai/review.mjs';
 import { forgetLife } from '../server/ai/life.mjs';
+import { STANCE } from '../server/ai/stance.mjs';
 
 const NOON = new Date(2026, 9, 9, 12, 0, 0).getTime();
 const tmp = () => mkdtempSync(join(tmpdir(), 'sm-ask-'));
@@ -76,7 +77,7 @@ test('a review of Claude\'s work goes as plain text to another family, and the a
     const [a] = got.answers;
     assert.deepEqual({ ...a, ms: 0 }, { provider: 'openai', model: 'gpt-6.1-sol', text: 'openai says fine', costUSD: 0.002, ms: 0 });
     assert.ok(Number.isFinite(a.ms) && a.ms >= 0);
-    assert.equal(s.f.calls[0].prompt, 'Review this diff');
+    assert.equal(s.f.calls[0].prompt, `${STANCE}\n\nReview this diff`, 'a review takes a stance on the facts (or27)');
     assert.equal(s.f.calls[0].key, 'sk-openai-SECRET0123456789');
     assert.equal(s.f.calls[0].maxTokens, ASK_MAX_OUT_TOKENS);
     assert.equal(s.queue.outsideSpentToday(), 0.002, 'booked in the same day\'s spend as the map\'s own work');
@@ -240,5 +241,19 @@ test('exclude leaves out the AIs that already failed this work, so the next in l
       assert.equal((await s.ask({ kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: bad })).error, 'bad-exclude', JSON.stringify(bad));
     }
     assert.equal(s.f.calls.length, 1);
+  } finally { s.done(); }
+});
+
+// or27/id107: an outside AI that judges is told to take a stance on the facts, never to please; a draft goes as written.
+test('a review or a reasoning ask carries the stance rule before the prompt; a code draft goes as written', async () => {
+  const s = setup();
+  try {
+    await s.ask({ kind: 'review', sensitivity: 'public', prompt: 'Check this diff' });
+    assert.ok(s.f.calls[0].prompt.startsWith(STANCE));
+    assert.ok(s.f.calls[0].prompt.endsWith('\n\nCheck this diff'));
+    await s.ask({ kind: 'reasoning', sensitivity: 'public', prompt: 'Is it sound?' });
+    assert.ok(s.f.calls.at(-1).prompt.startsWith(STANCE));
+    await s.ask({ kind: 'code', sensitivity: 'public', prompt: 'Write a sum' });
+    assert.equal(s.f.calls.at(-1).prompt, 'Write a sum');
   } finally { s.done(); }
 });

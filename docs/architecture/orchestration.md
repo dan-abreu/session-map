@@ -76,6 +76,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] An OK at the end of each request, checked by the engine without AI: tests ran and passed, the item ticked, the work saved, what the request cost `or26`
   - Read from the transcript and the plan file at turn end; the card shows OK, or what is missing. It never forces more work (a blocking stop hook can loop and spend).
   - From `id106`.
+- [x] **important:** Every AI agrees or disagrees on evidence, never to please: the same rule in every way a chat runs and in what goes to an outside AI that judges `or27`
+  - One sentence in `server/ai/stance.mjs`: say which, the facts behind it (numbers, file:line) and what would change your mind; without facts, say so and measure. A yes-man and a contrarian are both wrong.
+  - Built on 2026-10-13: the conductor prompts carry it (Autonomous, Automatic, Maestro), the Manual ways get it alone (a fixed model, Ultracode), and `ask_other_ai` puts it before a review or a reasoning prompt; drafts, summaries and labels go as written. "Same as my Claude" stays the person's own setup (on this PC its CLAUDE.md has the rule).
+  - From `id107`.
 
 ### Board of roles
 
