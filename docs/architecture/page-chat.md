@@ -125,3 +125,7 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [x] Up to ten images per message, instead of four `pc30`
   - Built on 2026-10-13 (`server/chat/hub.mjs`, `server/web/chat.js`, the body limit in `server/main.mjs`): the four was a guess, not a limit of Claude. Each image costs about a thousand tokens on every later turn of the chat.
   - From `id108`.
+- [x] The early summary (100k window) runs only in the page chats, not on the whole PC `pc31`
+  - Measured 2026-10-14 in three chats of this PC: after each summary the chat restarts at 52k to 70k tokens (rules, memory, skill list, map context, chapter index), and Claude Code summarizes again at about 67k to 73k when the window is 100k; so one chat summarized every 30 to 60 seconds (nine times in fifteen minutes) and Claude Code showed "Autocompact is thrashing". The two `autoCompactWindow: 100000` lines were removed from `~/.claude/settings.json` (copy kept as `settings.json.bak-2026-10-14-autocompact`); the page chats keep theirs through the lock (`BOOK_WINDOW` in `server/chat/guard.mjs`).
+  - Still open: a page chat whose fixed start is above about 45k tokens will hit the same loop; measure the start size of a page chat before trusting the 100k there.
+  - From `id117`.

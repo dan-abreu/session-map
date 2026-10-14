@@ -404,3 +404,9 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: the map shows few or no open items, each one left is either "with the owner" or marked as later by his choice.
   - Where it went: `op06`.
   - Status: done (released in v0.3.0; every activity it became is done and tested).
+- [x] The "Autocompact is thrashing" warning keeps falling in another chat `id117`
+  - Asked: 2026-10-14 — "ta caindo isso direto no outro chat alguma coisa ta quebrada" (with Claude Code's warning: "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row").
+  - What it means: find out why a chat summarizes itself over and over and stop it.
+  - How to confirm it is done: the warning stops appearing in the open chats; a chat on this PC only summarizes near the model's whole window again.
+  - Where it went: `pc31`.
+  - Status: done (the cause was the 100k summary window applied to the whole PC; removed from the global settings on 2026-10-14).
