@@ -47,6 +47,7 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 - [ ] **important:** The shared context (rules, CLAUDE.md, architecture) stays small and byte-identical, so prompt caching hits and every agent pays a cache read instead of a full read `sv17`
   - Read in full once, then paid as a cheap cache read by every other agent of the same project. The prefix must be stable and shared, not rebuilt per chat or per agent.
+  - Measured on 2026-10-13 (waste signals, `or24`, last 7 days): of the tokens an agent took in on its first turn, only 18% were paid as cache read and 82% as cache write (6.1M read against 28.1M written over 877 agents), so identical prefixes do not yet clearly hit the cache; not ticked.
   - From `id102`.
 ### Restart
 

@@ -133,3 +133,22 @@ test('a file read keeps how many lines came back', async () => {
   const st = await buildStatement({ projectsDir: root, since: 0, prices });
   assert.deepEqual(st.rows[0].acts, [{ k: 'read', t: 'a.txt', lines: 3 }]);
 });
+
+test('each reply knows its agent, its workflow run, its project and the skills it opened (or24)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'stmt-waste-'));
+  const proj = join(root, 'C--dev-demo');
+  const wf = join(proj, 's7', 'subagents', 'workflows', 'wf_abc-12');
+  mkdirSync(wf, { recursive: true });
+  const at = '2026-10-11T12:00:00.000Z';
+  const usage = { input_tokens: 1, output_tokens: 1 };
+  const skill = { type: 'tool_use', id: 't1', name: 'Skill', input: { skill: 'superpowers:test-driven-development' } };
+  writeFileSync(join(proj, 's7.jsonl'), line({ type: 'assistant', cwd: 'C:\\dev\\demo', sessionId: 's7', timestamp: at, message: { id: 'm1', model: 'claude-a', content: [], usage } }));
+  writeFileSync(join(wf, 'agent-a1.jsonl'), line({ type: 'assistant', sessionId: 's7', timestamp: at, message: { id: 'm2', model: 'claude-a', content: [skill], usage } }));
+  writeFileSync(join(wf, 'agent-a1.meta.json'), JSON.stringify({ description: 'Um passo', model: 'sonnet', effort: 'medium' }));
+  const st = await buildStatement({ projectsDir: root, since: 0, prices });
+  const main = st.rows.find((r) => r.key === 'm1');
+  const helper = st.rows.find((r) => r.key === 'm2');
+  assert.deepEqual([main.agentId, main.runId, main.project], [null, null, 'demo']);
+  assert.deepEqual([helper.agentId, helper.runId, helper.project, helper.skills], ['a1', 'wf_abc-12', 'demo', ['superpowers:test-driven-development']]);
+  assert.equal(helper.effort, 'medium', 'the effort comes from the agent meta when the line has none');
+});

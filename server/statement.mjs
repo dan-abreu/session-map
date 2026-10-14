@@ -93,7 +93,7 @@ function resultText(content) {
 export function placeOf(projectsDir, file) {
   const parts = relative(projectsDir, file).split(sep);
   const folder = parts[0];
-  if (parts.length === 2) return { folder, sessionId: basename(file, '.jsonl'), agent: null };
+  if (parts.length === 2) return { folder, sessionId: basename(file, '.jsonl'), agent: null, agentId: null, runId: null };
   const sessionId = parts[1];
   let meta = {};
   try { meta = JSON.parse(readFileSync(file.replace(/\.jsonl$/, '.meta.json'), 'utf8')); } catch { /* no meta */ }
@@ -101,7 +101,8 @@ export function placeOf(projectsDir, file) {
   // In plain words: a helper the chat called, or a helper of a team (a workflow) with the team's step.
   const kind = wf ? `ajudante da equipe${meta.workflowPhase ? ` (${meta.workflowPhase})` : ''}` : 'ajudante';
   const what = meta.description ? oneLine(meta.description, 70) : basename(file, '.jsonl');
-  return { folder, sessionId, agent: `${kind}: ${what}`, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null };
+  // agentId and runId (the wf_ folder) let the waste signals (or24) count agents and workflow runs.
+  return { folder, sessionId, agent: `${kind}: ${what}`, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null, agentId: basename(file, '.jsonl').replace(/^agent-/, ''), runId: wf ?? null };
 }
 
 const LIMIT_NOTICE = /hit your (weekly|monthly|session|daily)[^"]{0,40}limit|out of (extra usage|credits)|spend limit/i;
@@ -171,7 +172,7 @@ export async function readTranscript(file, { since = 0 } = {}) {
       r = {
         key, ts, model: msg.model ?? 'unknown', speed: msg.usage.speed ?? null, geo: msg.usage.inference_geo ?? null,
         effort: o.effort ?? null, sessionId: o.sessionId ?? null, ...usageOf(msg.usage),
-        did: [], acts: [], wroteWords: 0, readWords: pendingRead.words, readWhat: pendingRead.items, ask: pendingAsk, keep: ts >= since,
+        did: [], acts: [], skills: [], wroteWords: 0, readWords: pendingRead.words, readWhat: pendingRead.items, ask: pendingAsk, keep: ts >= since,
       };
       byKey.set(key, r);
       replies.push(r);
@@ -186,6 +187,8 @@ export async function readTranscript(file, { since = 0 } = {}) {
       if (r.model === 'unknown' && msg.model) r.model = msg.model;
     }
     r.did.push(...tools.map(toolLabel));
+    // The skills a reply opened, for the waste signals (or24).
+    for (const t of tools) if (t.name === 'Skill' && typeof t.input?.skill === 'string') (r.skills ??= []).push(t.input.skill);
     for (const t of tools) {
       const act = actOf(t);
       actById.set(t.id, act);
@@ -307,6 +310,9 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
       seen.set(r.key, r);
       r.sessionId = place.sessionId;
       r.who = place.agent ?? 'conversa principal';
+      r.agentId = place.agentId;
+      r.runId = place.runId;
+      r.effort = r.effort ?? place.agentEffort ?? null;
       r.cost = priceReply(r, prices);
       rows.push(r);
     }
@@ -315,6 +321,7 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
     s.project = projectName(s.folder, s.cwd);
     s.title = s.title ?? '(sem título)';
   }
+  for (const r of rows) r.project = sessions.get(r.sessionId)?.project ?? '';
   rows.sort((a, b) => a.ts - b.ts);
 
   const total = bucket();

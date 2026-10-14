@@ -310,9 +310,46 @@ export function createStatement({ h, t, lang, errorText }) {
       journal.rows.length < journal.total ? h('button', { type: 'button', class: 'btn small-btn', onclick: async () => { await loadJournal(true); draw(); } }, tt('stmt.j.more')) : null);
   }
 
+  // The waste signals (or24): what the transcripts say about helpers, workflow runs, long chats and skills, with a
+  // one-line warning for each thing past its limit. Counted by the server, no AI.
+  function wasteView(tt) {
+    const w = period.waste;
+    if (!w) return null;
+    const T = w.total;
+    const name = (x) => x.title || x.chat?.slice(0, 8) || '?';
+    const text = (x) => tt(`stmt.waste.warn.${x.kind}`, {
+      chat: name(x), run: x.run ? x.run.slice(0, 11) : '', project: x.project || '?', agents: num(x.agents), heavy: num(x.heavy), share: pct(x.share),
+      tokens: num(x.tokens), skill: x.name ?? '', usd: usd(x.usd),
+    });
+    const tile = (label, value, sub, tone = '') => h('div', { class: `stmt-kpi ${tone}` },
+      h('span', { class: 'stmt-kpi-label' }, label), h('strong', { class: 'num' }, value), sub ? h('span', { class: 'stmt-kpi-sub num' }, sub) : null);
+    const topModel = T.agents.byModel[0];
+    const longest = T.chats.longest[0];
+    const tiles = h('div', { class: 'stmt-kpis' },
+      tile(tt('stmt.waste.agents'), num(T.agents.count), tt('stmt.waste.agentsSub', { usd: usd(T.agents.usd), share: pct(T.agents.share) })),
+      tile(tt('stmt.waste.heavy'), pct(T.agents.heavyShare), tt('stmt.waste.heavySub', { usd: pct(T.agents.heavyUsdShare) }), T.agents.heavyShare > 1 / 3 ? 'is-warn' : ''),
+      tile(tt('stmt.waste.runs'), num(T.runs.count), tt('stmt.waste.runsSub', { over: num(T.runs.over10), big: num(T.runs.top[0]?.agents ?? 0) }), T.runs.over10 ? 'is-warn' : ''),
+      tile(tt('stmt.waste.chats'), pct(T.chats.share), longest ? tt('stmt.waste.chatsSub', { tokens: num(longest.maxContext) }) : null),
+      tile(tt('stmt.waste.skills'), new Intl.NumberFormat(lang(), { maximumFractionDigits: 2 }).format(T.skills.perAgent), tt('stmt.waste.skillsSub', { n: num(T.skills.opened), snow: num(T.skills.snowball.length) }), T.skills.snowball.length ? 'is-warn' : ''),
+      tile(tt('stmt.waste.first'), num(T.firstTurn.median), tt('stmt.waste.firstSub', { max: num(T.firstTurn.max), read: pct(T.firstTurn.readShare) })));
+    const mix = T.agents.byModel.slice(0, 6).map((m) => `${m.model} ${m.effort}: ${num(m.count)} (${pct(m.share)}, ${usd(m.usd)})`).join(' · ');
+    const projects = Object.entries(w.byProject).sort((a, b) => b[1].usd - a[1].usd);
+    return h('div', { id: 'stmt-waste' },
+      h('h4', {}, tt('stmt.waste.title')),
+      h('p', { class: 'view-note small' }, tt('stmt.waste.note', { from: date(w.from), to: date(w.to - 1) })),
+      w.warnings.length
+        ? h('ul', { class: 'stmt-warnings', role: 'list' }, [...w.warnings.slice(0, 12).map((x) => h('li', {}, `⚠ ${text(x)}`)),
+          w.warnings.length > 12 ? h('li', {}, tt('stmt.waste.more', { n: num(w.warnings.length - 12) })) : null].filter(Boolean))
+        : h('p', { class: 'view-note', role: 'status' }, tt('stmt.waste.none')),
+      tiles,
+      topModel ? h('p', { class: 'view-note small' }, tt('stmt.waste.mix', { mix })) : null,
+      table([tt('stmt.waste.col.project'), tt('stmt.waste.agents'), tt('stmt.waste.heavy'), tt('stmt.waste.runs'), tt('stmt.waste.col.spend')],
+        projects.map(([p, f]) => [p || '?', num(f.agents.count), pct(f.agents.heavyShare), num(f.runs.count), usd(f.usd)])));
+  }
+
   function periodView(tt) {
     const grand = period.total.usd + (period.outside?.usd ?? 0);
-    return [kpis(tt, grand), dayBars(tt), costTree(tt, grand), journalTable(tt)];
+    return [kpis(tt, grand), dayBars(tt), wasteView(tt), costTree(tt, grand), journalTable(tt)].filter(Boolean);
   }
 
   // ----- one chat opened: who worked, files, kinds of work, days -----

@@ -10,9 +10,10 @@ import { join } from 'node:path';
 import { accountSnapshot, buildStatement, detailCsv, rowOut } from './statement.mjs';
 import { chatLedger, ledgerRows, outsideLedger, periodLedger, periodOf } from './ledger.mjs';
 import { loadPrices } from './cost.mjs';
+import { wasteSignals } from './waste.mjs';
 
 const CACHE_FILE = 'statement-cache.json';
-const CACHE_VERSION = 3; // 2: each reply keeps what it did (files, lines); 3: and the lines of each file it read
+const CACHE_VERSION = 4; // 2: each reply keeps what it did (files, lines); 3: and the lines of each file it read; 4: and the skills it opened
 const FRESH_MS = 60_000; // a statement younger than this is served as is
 const DAY = 86_400_000;
 const WINDOW_DAYS = 90; // read at least this far back, so any period in it is answered at once
@@ -121,6 +122,8 @@ export function createStatementStore({ projectsDir, smDir, account = () => accou
           events: (ready.st.events ?? []).filter((e) => e.at >= period.from && e.at < period.to),
           pricesAsOf: ready.pricesAsOf,
           readSince: ready.since,
+          // The waste signals (or24) for the chosen period, from the same priced lines.
+          waste: wasteSignals(ready.st.rows, { from: period.from, to: period.to, titleOf: (id) => ready.st.sessions.get(id)?.title ?? null }),
           outside: outsideLedger(smDir ? readActivity(smDir) : [], period),
         } : null,
       };
