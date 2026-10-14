@@ -419,7 +419,7 @@ test('the tail gives every measured kind its lines, the best Claude level and th
 test('the prompt says large applies to every Fable case, its last word comes after the review, and how to skip a failed AI', () => {
   for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
     const p = runPrompt(run);
-    assert.match(p, /fable[^\n]*only for large work that is also long and autonomous \(code or a decision\) or that Opus already failed/i);
+    assert.match(p, /fable[^\n]*only when Opus already failed/i, 'the same rule as recommend() (or31)');
     assert.match(p, /fable[^\n]*large critical delivery[^\n]*last word after the other family/i);
     assert.match(p, /exclude/);
     assert.ok(Buffer.byteLength(p, 'utf8') < 4096);
