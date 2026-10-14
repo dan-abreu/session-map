@@ -70,9 +70,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [ ] Measure the week after the routing change with the same counts (share of Opus agents, agents per workflow, skills opened per agent, cost per chat) and show them on the Costs tab as waste signals `or24`
   - The counts of `or23` came from a one-off script over the transcripts; the statement already reads every reply, so it can keep them and warn when a workflow grows past 10 agents or Opus passes a third of the agents.
   - From `id105`.
-- [ ] **important:** The engine guards every agent, not the prompt: no model or effort, Opus or Fable outside a sensitive request, or a workflow past 10 agents are stopped before they start `or25`
+- [x] **important:** The engine guards every agent, not the prompt: no model or effort, Opus or Fable outside a sensitive request, or a workflow past 10 agents are stopped before they start `or25`
   - A PreToolUse hook on the Agent and Workflow tools, passed to each chat by session-map (it runs inside subagents too): it denies the call with the reason, so the conductor picks again; the request's measure (`or14`) says what is sensitive. The prompt rules of `or23` stay as advice; this makes them hold.
   - From `id106`.
+  - Built on 2026-10-13 (`server/chat/guard.mjs`, guardAgent): no model, or Opus, Fable, xhigh or max without a reason word, is denied before the agent starts. The cap of 10 agents per workflow stays advice in the prompt: a workflow script builds its agents in loops, so counting them before it runs is not exact.
 - [ ] An OK at the end of each request, checked by the engine without AI: tests ran and passed, the item ticked, the work saved, what the request cost `or26`
   - Read from the transcript and the plan file at turn end; the card shows OK, or what is missing. It never forces more work (a blocking stop hook can loop and spend).
   - From `id106`.
@@ -99,10 +100,11 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - The page says which model and level runs and why, in one line, so what is said and what runs are the same. Each choice and its outcome (tests, review, the owner's correction) feed the bench (`or30`).
   - Research: RouteLLM (Berkeley, 2024) cut over 85% of the cost on general chat keeping about 95% of the strong model's quality; coding agents will save less, so it is measured here before it is trusted.
   - From `id110`.
-- [ ] **important:** Read once, hand the chapter: the conductor reads the activity and opens a skill once, then each agent gets only the chapter it needs; agents do not open skills or re-read the activity unless their brief names it `or32`
+- [x] **important:** Read once, hand the chapter: the conductor reads the activity and opens a skill once, then each agent gets only the chapter it needs; agents do not open skills or re-read the activity unless their brief names it `or32`
   - Agents do not share memory: what one read is not in another's head, so 150 agents told to open a skill read it 150 times (on the week to 2026-10-13, the test-driven-development skill, 9.6 KB, was opened 275 times). The fix is not to make them read: the brief carries the few lines of the skill and of the activity that the task needs.
   - Held by the engine: a PreToolUse hook denies a Skill call inside an agent unless its brief names that skill (`or25`, `pc26` proves the hook sees agents). The shared part of the briefs goes first and byte-identical, so the agents after the first pay the cache price (5% of a full read), if Claude Code's cache marks allow it; `pc26` measures that.
   - From `id111`.
+  - Built on 2026-10-13: a Skill call inside an agent is denied unless the agent's brief names that skill (whole name, not a part of a word); the main chat's own skills are never blocked. The cache share of identical briefs is left to measure in `or24`.
 
 ### Board of roles
 
