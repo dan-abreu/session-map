@@ -2,7 +2,7 @@
 // The measuring bench (or12): every chosen AI does the same session-map tasks, in the same order, under a hard money
 // cap, and the owner gets accuracy and cost per right answer for each. See docs/architecture/orchestration.md.
 //
-//   node server/bench/run.mjs [--kinds classify,code,review,pt] [--only claude:haiku,openai:gpt-6-luna] [--limit N]
+//   node server/bench/run.mjs [--kinds classify,code,review,pt,plan] [--only claude:haiku,openai:gpt-6-luna] [--limit N]
 //                             [--max-usd 8] [--max-usd-each N] [--dry-run] [--resume <runId>] [--allow-deepseek-personal]
 //                             [--redo <contestants>] [--new-money]
 //   --redo asks again every answer of these contestants (their request settings changed); --new-money makes the caps count
@@ -48,6 +48,9 @@ const usd = (n) => `US$ ${n.toFixed(2).replace('.', ',')}`;
 const CODE_SCHEMA = '{"code": "<the complete ES module, exporting the function>"}';
 const REVIEW_SCHEMA = '{"bugs": [{"line": 12, "why": "one short sentence"}]}';
 const PT_SCHEMA = '{"text": "..."}';
+const PLAN_SCHEMA = '{"summary": "one or two sentences", "tasks": [{"task": "what is done", "model": "haiku|sonnet|opus", "effort": "low|medium|high", "why": "one short sentence"}], "agents": 3, "waitsForApproval": true, "questions": ["at most two, only if needed"]}';
+// The level each Claude model plans at (or30): the cheap one thinks little, the dear one thinks hard. Outside AIs have no such knob.
+export const PLAN_EFFORT = Object.freeze({ haiku: 'low', sonnet: 'medium', opus: 'high' });
 
 // What each model is asked. The classify and pt sets carry their own prompt; code and review are framed here, and
 // never show the tests or the planted bug.
@@ -83,6 +86,19 @@ export function promptFor(kind, item) {
         ...lines.map((l, i) => `${String(i + 1).padStart(width)}| ${l}`),
       ].join('\n'),
       schemaHint: REVIEW_SCHEMA,
+    };
+  }
+  if (kind === 'plan') {
+    return {
+      prompt: [
+        "You are the planner of session-map, a tool that runs coding agents for a business owner who does not program. The owner asked, in Brazilian Portuguese:",
+        '',
+        `"${item.request}"`,
+        '',
+        'Write the plan to do this work. Do not build anything yet: the owner approves the plan first.',
+        'Rules: split the work into tasks; give each task the cheapest Claude model (haiku, sonnet or opus) and effort (low, medium or high) that does it well; work on security or money gets a stronger model; use at most 10 agents. Write the plan in the language of the request.',
+      ].join('\n'),
+      schemaHint: PLAN_SCHEMA,
     };
   }
   throw new Error(`unknown kind: ${kind}`);
@@ -144,7 +160,8 @@ async function testCode({ base, item, code, runCode, expectedTests }) {
 async function answerOne({ contestant, kind, item, call, runCode, est = 0, expectedTests = null }) {
   const { prompt, schemaHint } = promptFor(kind, item);
   const started = Date.now();
-  const res = await call(contestant, prompt, schemaHint);
+  const effort = kind === 'plan' && contestant.via === 'claude' ? PLAN_EFFORT[contestant.model] : undefined;
+  const res = await call(contestant, prompt, schemaHint, effort ? { effort } : undefined);
   const ms = Date.now() - started;
   const error = res.ok ? null : (res.error ?? 'failed');
   const billed = Number(res.costUSD) || 0;

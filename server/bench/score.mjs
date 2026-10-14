@@ -66,7 +66,72 @@ export function scorePt(item, value) {
   };
 }
 
-const SCORERS = { classify: scoreClassify, code: scoreCode, review: scoreReview, pt: scorePt };
+// Planning (or30), scored with no judge model: the share of criteria a plan meets. Always: the work is split into tasks,
+// each task has a known model and effort, at most 10 agents, and the plan waits for the owner's approval. In a sensitive
+// item (money or security) one more: a task on a strong model, and none of the guarding work on a weak one. Then the item's
+// own points, each a list of groups of regexes in Portuguese and English: every group needs one match in the plan's text.
+export const PLAN_RIGHT_AT = 0.8;
+const PLAN_MAX_AGENTS = 10;
+const PLAN_ANSWER_MAX = 12;
+const MODEL_RX = /\b(haiku|sonnet|opus|fable)\b/;
+const EFFORT_RX = /\b(low|medium|high|xhigh|max)\b/;
+const APPROVAL_RX = /approv|aprova|confirm|your ok|seu ok|go-?ahead|sign-?off|before (building|build|starting|start|implementing)|antes de (construir|implementar|comecar|executar)|waiting for you|wait(s|ing)? for you|aguard|espera/;
+// A plan that says it will not wait is not waiting ("do not wait for approval", "nao precisa esperar a aprovacao").
+const NO_APPROVAL_RX = /(do not|don't|no need to|nao (vou |precisa |ha necessidade de )?)\s*(wait|ask|need|require|aguard|esper|pedir|precis)/;
+
+// Lower case without accents, so "capítulo" and "capitulo" are the same word.
+const plain = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const OFF_TEXT = new Set(['model', 'effort', 'level']);
+// Every string in the value except the model and effort names: "haiku" in a model field is not a point made in words.
+const wordsOf = (v) => {
+  if (typeof v === 'string') return [v];
+  if (Array.isArray(v)) return v.flatMap(wordsOf);
+  if (v && typeof v === 'object') return Object.entries(v).filter(([k]) => !OFF_TEXT.has(k)).flatMap(([, x]) => wordsOf(x));
+  return [];
+};
+const taskList = (value) => [value?.tasks, value?.steps, value?.plan?.tasks, value?.plan].find(Array.isArray) ?? null;
+const taskModel = (t) => MODEL_RX.exec(plain(t?.model))?.[1] ?? null;
+const taskEffort = (t) => EFFORT_RX.exec(plain(t?.effort ?? t?.level))?.[1] ?? null;
+const isStrong = (t) => ['opus', 'fable'].includes(taskModel(t)) || (taskModel(t) === 'sonnet' && ['high', 'xhigh', 'max'].includes(taskEffort(t)));
+const isWeak = (t) => taskModel(t) === 'haiku' || taskEffort(t) === 'low';
+
+export function scorePlan(item, value) {
+  const tasks = value && typeof value === 'object' ? taskList(value) : null;
+  if (!tasks) return { score: 0, share: 0, met: [], missed: [], answer: [], badShape: true };
+  const taskText = (t) => plain(wordsOf(t).join(' '));
+  const all = plain(wordsOf(value.summary).concat(tasks.flatMap((t) => wordsOf(t)), wordsOf(value.questions)).join('\n'));
+  const waits = value.waitsForApproval === true || value.waitsForApproval === 'true' ? true
+    : value.waitsForApproval === false || value.waitsForApproval === 'false' ? false : null;
+  const agents = Number(value.agents);
+  const said = plain(wordsOf(value.summary).concat(wordsOf(value.questions)).join('\n'));
+  const checks = [
+    ['split', tasks.length >= 2 && tasks.every((t) => taskText(t).trim() !== '')],
+    ['model-effort', tasks.length > 0 && tasks.every((t) => taskModel(t) && taskEffort(t))],
+  ];
+  if (item.sensitive) {
+    const guard = new RegExp(item.sensitiveRx, 'i');
+    checks.push(['strong-on-sensitive', tasks.some(isStrong) && !tasks.some((t) => guard.test(taskText(t)) && isWeak(t))]);
+  }
+  checks.push(
+    // Infinity is over the limit too; a missing or unreadable count (NaN) is judged by the task list alone.
+    ['max-agents', tasks.length <= PLAN_MAX_AGENTS && !(agents > PLAN_MAX_AGENTS)],
+    ['approval', waits ?? (APPROVAL_RX.test(said) && !NO_APPROVAL_RX.test(said))],
+  );
+  for (const point of item.points ?? []) {
+    checks.push([point.id, point.all.every((group) => group.some((rx) => new RegExp(rx, 'i').test(all)))]);
+  }
+  const met = checks.filter(([, ok]) => ok).map(([id]) => id);
+  const share = met.length / checks.length;
+  return {
+    score: share >= PLAN_RIGHT_AT - 1e-9 ? 1 : 0,
+    share: Math.round(share * 1000) / 1000,
+    met,
+    missed: checks.filter(([, ok]) => !ok).map(([id]) => id),
+    answer: tasks.slice(0, PLAN_ANSWER_MAX).map((t) => `${taskModel(t) ?? '?'}:${taskEffort(t) ?? '?'}`),
+  };
+}
+
+const SCORERS = { classify: scoreClassify, code: scoreCode, review: scoreReview, pt: scorePt, plan: scorePlan };
 export const KINDS = Object.freeze(Object.keys(SCORERS));
 
 export function scoreAnswer(kind, item, value) {

@@ -95,10 +95,10 @@ export function makeCaller({ smDir, runClaude = runClaudeJSON, runApi = runApiJS
     costUSD: Number(res?.costUSD) || 0,
     error: res?.ok ? null : String(res?.error ?? 'failed'),
   });
-  return async function call(contestant, prompt, schemaHint) {
+  return async function call(contestant, prompt, schemaHint, { effort } = {}) {
     try {
       if (contestant.via === 'claude') {
-        return shape(await runClaude(prompt, { model: contestant.model, cwd, schemaHint, timeoutMs: CLAUDE_TIMEOUT_MS }));
+        return shape(await runClaude(prompt, { model: contestant.model, cwd, schemaHint, timeoutMs: CLAUDE_TIMEOUT_MS, ...(effort ? { effort } : {}) }));
       }
       const key = await getKeyFn(smDir, contestant.provider);
       if (!key) return shape({ ok: false, error: 'no-key' });

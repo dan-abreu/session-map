@@ -1,0 +1,563 @@
+{
+  "kind": "plan",
+  "version": 1,
+  "about": "Planning requests taken word for word from the owner's own Asked lines (docs/architecture/ideas.md, id105 to id111; id105 holds two requests). The model answers {\"summary\", \"tasks\": [{\"task\", \"model\", \"effort\", \"why\"}], \"agents\", \"waitsForApproval\", \"questions\"}. Scored without a judge (scorePlan): a share of criteria met, right at 0.8 or more. Always: the work is split into at least two tasks; every task has a known model and effort; at most 10 agents; the plan waits for approval; and, in a sensitive item (money or security), a task on a stronger model and none of the guarding work on haiku or low effort. Then each item's own points (3), each a set of keyword or regex groups in Portuguese and English: every group of a point must match the plan's text (accents and case ignored).",
+  "items": [
+    {
+      "id": "pl-agents-reread",
+      "source": "id105",
+      "request": "os agentes estão lendo tudo de uma vez, cada agente ele reler tudo de novo para cumprir a tarefa, também acontece que tem um snow ball no programa, voce ta acionando todas as skills os agentes fazem a mesma coisa, reler tudo antes de começar a trabalhar, precisamos refinar",
+      "sensitive": true,
+      "sensitiveRx": "(enforce|guard|\\bgate\\b|\\bcaps?\\b|\\blaw\\b|\\blei\\b|trava|bloque|block|billing|cobranca|pric|preco|segur|secur|secret|segredo|credential|permiss)",
+      "points": [
+        {
+          "id": "brief-has-excerpt",
+          "why": "each agent gets only the excerpt it needs",
+          "all": [
+            [
+              "excerpt",
+              "extract",
+              "chapter",
+              "capitulo",
+              "trecho",
+              "resum",
+              "summar",
+              "slice",
+              "only what",
+              "apenas o",
+              "so o necessario",
+              "somente o",
+              "minimal brief",
+              "brief (curto|enxuto|minimo)"
+            ]
+          ]
+        },
+        {
+          "id": "read-once",
+          "why": "a thing is read once for all agents",
+          "all": [
+            [
+              "once",
+              "uma vez",
+              "single read",
+              "leitura unica",
+              "shared",
+              "compartilh",
+              "cache",
+              "conductor",
+              "maestro",
+              "orquestrador"
+            ]
+          ]
+        },
+        {
+          "id": "skills-not-reopened",
+          "why": "agents do not open the skills again",
+          "all": [
+            [
+              "skill"
+            ],
+            [
+              "not open",
+              "nao abr",
+              "sem abrir",
+              "nao (re)?le",
+              "do not (re)?read",
+              "don't (re)?read",
+              "stop open",
+              "avoid",
+              "evit",
+              "instead of",
+              "em vez de",
+              "only the",
+              "so as",
+              "apenas as",
+              "index",
+              "indice",
+              "catalog"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-all-high-critical",
+      "source": "id105",
+      "request": "voce não esta classificando corretamente as IA, todas estão trabalhando com o claude nivel HIGH ... nao falou pra mim que as skill instaladas estão fazendo um gasto gigante ... Eu quero que voce tenha o poder de dizer e tomar decisoes de forma critica pensando no melhor para o projeto e não apenas concordando com as minhas ideias",
+      "sensitive": true,
+      "sensitiveRx": "(enforce|guard|\\bgate\\b|\\bcaps?\\b|\\blaw\\b|\\blei\\b|trava|bloque|block|billing|cobranca|pric|preco|segur|secur|secret|segredo|credential|permiss)",
+      "points": [
+        {
+          "id": "level-per-task",
+          "why": "model and effort chosen per task, not all high",
+          "all": [
+            [
+              "per task",
+              "por tarefa",
+              "each task",
+              "cada tarefa",
+              "por tipo",
+              "by (kind|type|size)",
+              "classif",
+              "cheapest",
+              "mais barat",
+              "downgrade",
+              "right (model|level)",
+              "nivel certo",
+              "modelo certo"
+            ]
+          ]
+        },
+        {
+          "id": "skill-cost-report",
+          "why": "tells the owner what the installed skills and plugins cost",
+          "all": [
+            [
+              "(skill|plugin).{0,80}(cost|custo|gasto|spend|token)",
+              "(cost|custo|gasto|spend|token).{0,80}(skill|plugin)",
+              "(skill|plugin).{0,80}(expens|caro|gigante|heav|pesad)",
+              "(instalad|installed).{0,60}(cost|custo|gasto|spend)"
+            ]
+          ]
+        },
+        {
+          "id": "may-disagree",
+          "why": "the AI may disagree and warn, with evidence",
+          "all": [
+            [
+              "disagree",
+              "discord",
+              "pushback",
+              "push back",
+              "critic",
+              "contest",
+              "challenge",
+              "objec",
+              "warn",
+              "avis",
+              "alert",
+              "honest",
+              "recommend against",
+              "contra"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-ok-and-books",
+      "source": "id106",
+      "request": "quero como sistema, na engrenagem, da OK, na finalização das tarefas, Fazer o conceito de um livro que vem o indice, com capitulos e subcapitulos, para as skills e plugins; quando eu falo planejar voce ja sabe ... ou quando estamos conversando poderia ser automaticamente um planejamento; em conversas longas o proprio sistema criar um sistema igual de livro, assim não precisa ler a conversa toda ... ler apenas o que for necessario",
+      "sensitive": false,
+      "points": [
+        {
+          "id": "ok-at-task-end",
+          "why": "an OK is given when a task finishes",
+          "all": [
+            [
+              "\\bok\\b",
+              "confirm",
+              "sign-?off",
+              "acceptance",
+              "aceite",
+              "approv",
+              "aprova",
+              "done check",
+              "check-?out",
+              "definition of done",
+              "pronto"
+            ],
+            [
+              "end of (each |every |the )?task",
+              "fim d[ae] (cada )?tarefa",
+              "final(iza|ization|izacao)",
+              "ao final",
+              "when (a |the |each )?task (is )?(done|finish|complete)",
+              "task (done|finish|complet)",
+              "on completion",
+              "ao concluir",
+              "conclusao"
+            ]
+          ]
+        },
+        {
+          "id": "index-for-skills",
+          "why": "skills and plugins get an index with chapters",
+          "all": [
+            [
+              "index",
+              "indice",
+              "table of contents",
+              "sumario"
+            ],
+            [
+              "chapter",
+              "capitulo"
+            ]
+          ]
+        },
+        {
+          "id": "auto-plan-in-talk",
+          "why": "talking about work turns into a plan by itself",
+          "all": [
+            [
+              "auto",
+              "sozinh",
+              "by itself",
+              "detect",
+              "trigger",
+              "gatilho"
+            ],
+            [
+              "plan",
+              "planej"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-agree-on-data",
+      "source": "id107",
+      "request": "voce pode concorda comigo ou discorda, veja ai por favor, quero que na engrenagem, eu não quero uma IA que concorda, não importa qual, quero uma IA consciente que concorde e discorde baseada em dados",
+      "sensitive": false,
+      "points": [
+        {
+          "id": "based-on-data",
+          "why": "the position rests on measured data",
+          "all": [
+            [
+              "data",
+              "dados",
+              "bench",
+              "measure",
+              "medi[cd]",
+              "evidence",
+              "evidenc",
+              "metric",
+              "numbers",
+              "numeros",
+              "outcome",
+              "resultado"
+            ]
+          ]
+        },
+        {
+          "id": "can-disagree",
+          "why": "it may state disagreement, not only agree",
+          "all": [
+            [
+              "disagree",
+              "discord",
+              "objec",
+              "contest",
+              "counter",
+              "push ?back",
+              "oppos",
+              "contra",
+              "dissent"
+            ]
+          ]
+        },
+        {
+          "id": "in-the-engine-any-ai",
+          "why": "lives in the engine and holds for whichever AI answers",
+          "all": [
+            [
+              "engine",
+              "engrenagem",
+              "motor",
+              "orchestrat",
+              "orquestra"
+            ],
+            [
+              "any ai",
+              "qualquer ia",
+              "every (ai|provider|model)",
+              "todas as ia",
+              "whichever",
+              "provider",
+              "provedor",
+              "all (ai|model)s?",
+              "each (ai|provider|model)"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-cheap-layers",
+      "source": "id108",
+      "request": "imagens da pesquisa do dono com o irmão: Ollama fazendo \"Interface Skeletons\" (imports, tipos, assinaturas, sem corpos), changelogs semânticos em JSON, extração de variáveis e dependências; \"AST determinístico + Ollama cirúrgico\"; cascata de modelos (modelos baratos ou locais leem e separam, o modelo de fronteira só decide e escreve o código difícil)",
+      "sensitive": false,
+      "points": [
+        {
+          "id": "skeletons",
+          "why": "builds exact skeletons of the code (signatures, no bodies)",
+          "all": [
+            [
+              "skeleton",
+              "esqueleto",
+              "signature",
+              "assinatura",
+              "\\bast\\b",
+              "parser",
+              "tree-?sitter",
+              "outline"
+            ]
+          ]
+        },
+        {
+          "id": "local-model",
+          "why": "a local model does the heavy reading",
+          "all": [
+            [
+              "ollama",
+              "local (llm|model|ai)",
+              "modelo local",
+              "ia local",
+              "on-?device",
+              "llama",
+              "qwen"
+            ]
+          ]
+        },
+        {
+          "id": "paid-last",
+          "why": "the paid model only decides and writes the hard code",
+          "all": [
+            [
+              "cascad",
+              "tier",
+              "camada",
+              "cheap(est)? (first|layer)",
+              "barato primeiro",
+              "escalat",
+              "only (for|to) (decid|hard|write)",
+              "so para decid",
+              "apenas para decid",
+              "frontier",
+              "fronteira",
+              "paid model",
+              "modelo pago",
+              "last resort"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-plan-first-cheap",
+      "source": "id109",
+      "request": "tem um problema a entrada, que nivel é? Qual modelo de IA, que nivel da IA ... a OPUS e Fable com certeza iria pensar melhor que o sonnet, mas as vezes nao por apenas está conversando, e o que deve exitir de lei na engrenagem antes de começar sair fazendo qualquer coisa é traçar um plano com a mais barata organizar a ideia e depois construir usando as IA e modelos de acordo com a tarefa ... estava jogando tudo no nivel HIGH e usando opus, e voce ainda me dizia que estava usando o modelo mais fraco, mas por traz os agentes eram sempre os mais caros",
+      "sensitive": true,
+      "sensitiveRx": "(enforce|guard|\\bgate\\b|\\bcaps?\\b|\\blaw\\b|\\blei\\b|trava|bloque|block|billing|cobranca|pric|preco|segur|secur|secret|segredo|credential|permiss)",
+      "points": [
+        {
+          "id": "plan-first-cheap",
+          "why": "plan first with the cheapest model that is good enough",
+          "all": [
+            [
+              "plan",
+              "planej"
+            ],
+            [
+              "cheap",
+              "barat",
+              "haiku",
+              "sonnet",
+              "low",
+              "baixo",
+              "smallest",
+              "menor"
+            ]
+          ]
+        },
+        {
+          "id": "model-per-task",
+          "why": "build with the right model and level per task",
+          "all": [
+            [
+              "per task",
+              "por tarefa",
+              "each task",
+              "cada tarefa",
+              "right model",
+              "modelo certo",
+              "de acordo com a tarefa",
+              "according to (the )?task",
+              "task-?by-?task"
+            ]
+          ]
+        },
+        {
+          "id": "law-in-engine",
+          "why": "enforced as a rule of the engine, not a request to the AI",
+          "all": [
+            [
+              "enforce",
+              "engine",
+              "engrenagem",
+              "motor",
+              "\\blaw\\b",
+              "\\blei\\b",
+              "hard rule",
+              "regra",
+              "guard",
+              "block",
+              "bloque",
+              "refus",
+              "reject",
+              "recus",
+              "cannot start",
+              "nao (deixa|pode|permite)",
+              "gate"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-thinking-brain",
+      "source": "id110",
+      "request": "poxa a gente nao consegue colocar a entrada e saida como um cerebro pensante? tipo, recebi essa mensagem, é uma mensagem barata, nossa recebi essa mensagem é um projeto grande preciso dar mais atenção, podemos fazer começnado com o mais barato, ele faz umas perguntas para ter ideia do nivel da conversa e dali mudar para a IA mais e modelo mais desenvolvido?",
+      "sensitive": false,
+      "points": [
+        {
+          "id": "cheap-weigher-first",
+          "why": "the cheapest model weighs each message first",
+          "all": [
+            [
+              "haiku",
+              "cheapest",
+              "mais barat",
+              "classif",
+              "weigh",
+              "pesa",
+              "triag",
+              "router",
+              "roteador",
+              "gateway",
+              "light(weight)? model",
+              "small model",
+              "modelo pequeno"
+            ]
+          ]
+        },
+        {
+          "id": "asks-a-little",
+          "why": "it asks a few questions to gauge the size",
+          "all": [
+            [
+              "question",
+              "pergunta",
+              "clarif",
+              "ask the owner",
+              "ask the user",
+              "perguntar"
+            ]
+          ]
+        },
+        {
+          "id": "hands-up",
+          "why": "hands over to a stronger model when the work is big",
+          "all": [
+            [
+              "escalat",
+              "hand(s|ing)? ?(off|over|up)",
+              "upgrad",
+              "sobe",
+              "subir",
+              "passa (para|pra)",
+              "switch",
+              "troca",
+              "mudar? (de |para )?(o )?modelo",
+              "move[sd]? (up|to)",
+              "stronger",
+              "mais forte",
+              "mais desenvolvid",
+              "bigger model"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pl-conversation-book",
+      "source": "id111",
+      "request": "eu gostaria de saber quais skills e plugins instalados por repositorios, quais estão sendo usadas no momento que pode ser nos balões, um metodo de que uma skill ja foi lida, nem todos os agente precisam ler novamente ... aqui ta acontecendo que os 150 agentes vao ler novamente as mesma atividade isso gera um snowball sem tamanho e também o indice nas conversas, a conversa vai passando dos limites, vai se criando indices, com capitulos mais curtos dentro da propria conversa diminuindo o custo da conversa, teria como isso tudo acontecer?",
+      "sensitive": false,
+      "points": [
+        {
+          "id": "installed-vs-used",
+          "why": "shows what is installed and what is in use",
+          "all": [
+            [
+              "install",
+              "instalad"
+            ],
+            [
+              "in use",
+              "em uso",
+              "used",
+              "usad",
+              "usage",
+              "uso",
+              "active",
+              "ativ"
+            ]
+          ]
+        },
+        {
+          "id": "chapters-from-transcript",
+          "why": "chapters are cut from the conversation transcript",
+          "all": [
+            [
+              "chapter",
+              "capitulo"
+            ],
+            [
+              "transcript",
+              "conversation",
+              "conversa",
+              "jsonl",
+              "history",
+              "historico",
+              "messages",
+              "mensagens"
+            ]
+          ]
+        },
+        {
+          "id": "summary-at-size-limit",
+          "why": "a chapter is summarised when the conversation reaches a size limit",
+          "all": [
+            [
+              "summar",
+              "resum",
+              "condens",
+              "compact"
+            ],
+            [
+              "limit",
+              "limite",
+              "threshold",
+              "limiar",
+              "size",
+              "tamanho",
+              "tokens?",
+              "bytes",
+              "kb\\b",
+              "chars",
+              "caracteres",
+              "grows? past",
+              "passa de",
+              "exceed",
+              "ultrapass"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

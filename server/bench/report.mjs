@@ -42,6 +42,7 @@ const KIND_TITLES = {
   classify: ['Classificar conversas', 'Cada conversa sua foi posta numa parte do mapa; acerto é escolher a mesma parte que você escolheria.'],
   code: ['Escrever código', 'A IA escreve uma função a partir de uma descrição; acerto é passar em todos os testes, rodados num lugar fechado do computador.'],
   review: ['Revisão de código', 'A IA procura um erro plantado num trecho (alguns trechos não têm erro); acerto é apontar a linha certa, ou não apontar nada quando não há erro. Alarme falso é apontar erro onde não há.'],
+  plan: ['Planejar o trabalho', 'A IA recebe um pedido seu de verdade e escreve o plano (tarefas, modelo e nível de cada uma, no máximo 10 agentes, esperando a sua aprovação). Acerto é cumprir 80% ou mais dos critérios, conferidos sem outra IA.'],
   pt: ['Textos em português', 'A IA escreve uma mensagem simples para você; acerto automático é estar em português, no tamanho pedido e sem palavras técnicas. A sua nota, no arquivo pt-blind.md, vale mais.'],
 };
 

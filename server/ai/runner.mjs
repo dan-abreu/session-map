@@ -113,12 +113,13 @@ export function extractJSON(text) {
 }
 
 export async function runClaudeJSON(prompt, {
-  model = 'haiku', cwd, schemaHint, bin = findClaude(), env = process.env, exec = spawnCapture, timeoutMs = TIMEOUT_MS,
+  model = 'haiku', effort, cwd, schemaHint, bin = findClaude(), env = process.env, exec = spawnCapture, timeoutMs = TIMEOUT_MS,
 } = {}) {
   if (!bin) return { ok: false, error: 'claude-not-found' };
   mkdirSync(cwd, { recursive: true });
   // No tools: the digest quotes user prompts, and nothing in them may make the model act on the machine.
-  const args = ['-p', '--output-format', 'json', '--model', model, '--tools', '', '--strict-mcp-config', '--no-session-persistence'];
+  // effort: only the bench sets it (planning at the level each model would plan at); everything else keeps the CLI's own.
+  const args = ['-p', '--output-format', 'json', '--model', model, ...(effort ? ['--effort', effort] : []), '--tools', '', '--strict-mcp-config', '--no-session-persistence'];
   const input = schemaHint ? `${prompt}\n\nReply with one JSON object only, no prose, shaped like:\n${schemaHint}\n` : prompt;
   const out = await exec(bin, args, { cwd, env: cleanEnv(env), input, timeoutMs });
   const fail = (error, extra = {}) => {
