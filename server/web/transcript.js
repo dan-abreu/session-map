@@ -129,7 +129,7 @@ export function createTranscript({ h, t, time, day, money, imageUrl, icon = null
   function replyMeta(item) {
     const tt = t();
     const cost = Number.isFinite(item.replyCostUSD) ? h('span', { class: 'num', title: tt('chat.replyCostTitle') }, tt('chat.replyCost', { cost: money(item.replyCostUSD) })) : null;
-    const who = h('span', { title: tt('chat.replyWhoTitle') }, item.model ? tt('chat.replyWho', { model: modelName(item.model) }) : 'Claude');
+    const who = h('span', { title: tt('chat.replyWhoTitle') }, item.model ? tt('chat.replyWho', { model: modelName(item.model) }) : tt('chat.replyWhoNoModel'));
     const split = Number.isFinite(item.replyInUSD) && Number.isFinite(item.replyOutUSD)
       ? h('span', { class: 'num', title: tt('chat.replySplitTitle') }, tt('chat.replySplit', { sent: money(item.replyInUSD), back: money(item.replyOutUSD) })) : null;
     return meta(item, [who, split, cost, copyButton(item.text, tt('chat.copyReply'))]);
