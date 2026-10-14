@@ -481,6 +481,9 @@ function summarize(entries, sessionId) {
     turnOpen,
     liveSteps: liveStepsOf(entries, cwd),
     editedFiles,
+    // The skills it opened (mm52): the Skill tool's calls, with when.
+    // One call can repeat on several lines of a split reply: count each tool_use id once.
+    skillCalls: toolUses.filter((t, i) => t.name === 'Skill' && typeof t.input.skill === 'string' && toolUses.findIndex((u) => u.id === t.id) === i).map((t) => ({ name: t.input.skill, ts: t.ts })),
     lastFile,
     commits,
     pushes,
@@ -535,6 +538,8 @@ function fullScan(path, st) {
   if (hit?.key === key) return hit.value;
   const usageById = new Map();
   const edited = new Set();
+  const skillCalls = [];
+  const skillIds = new Set();
   let lastCardText = null;
   let aiTitle = null;
   let customTitle = null;
@@ -542,7 +547,7 @@ function fullScan(path, st) {
   let lastHuman = null;
   forEachLine(path, (line, i) => {
     const maybeHuman = line.includes('"type":"user"') && !line.includes('"tool_result"');
-    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"agentId"') &&!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"custom-title"') && !line.includes('"file_path"')) return;
+    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"agentId"') && !line.includes('"usage"') && !line.includes('"name":"Skill"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"custom-title"') && !line.includes('"file_path"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
     const prompt = maybeHuman ? humanPromptOf(entry) : null;
@@ -555,8 +560,11 @@ function fullScan(path, st) {
     if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') aiTitle = entry.aiTitle;
     if (entry.type === 'custom-title' && typeof entry.customTitle === 'string' && entry.customTitle.trim()) customTitle = entry.customTitle.trim();
     for (const file of editsIn(entry)) edited.add(file);
+    if (entry.type === 'assistant') {
+      for (const b of blocksOf(entry)) if (b.type === 'tool_use' && b.name === 'Skill' && typeof b.input?.skill === 'string' && !skillIds.has(b.id) && skillIds.add(b.id)) skillCalls.push({ name: b.input.skill, ts: entry.timestamp ?? null });
+    }
   });
-  const value = { usage: [...usageById.values()], lastCardText, aiTitle, customTitle, editedFiles: [...edited], launches };
+  const value = { usage: [...usageById.values()], lastCardText, aiTitle, customTitle, editedFiles: [...edited], skillCalls, launches };
   fullScanCache.set(path, { key, value });
   return value;
 }
@@ -575,6 +583,7 @@ export function readTranscript(path, { tailBytes = 2_000_000 } = {}) {
       const head = summarize(parseLines(readSlice(path, 0, HEAD_BYTES).replace(/\n[^\n]*$/, '')), summary.sessionId);
       summary.usage = full.usage;
       summary.editedFiles = [...new Set([...full.editedFiles, ...summary.editedFiles])];
+      summary.skillCalls = full.skillCalls;
       summary.launches = { ...full.launches, ...summary.launches };
       summary.lastCardText ??= full.lastCardText;
       summary.startedAt = head.startedAt ?? summary.startedAt;
@@ -652,7 +661,7 @@ function agentWork(file) {
     if (text === null) return null;
     const s = summarize(parseLines(text), basename(file, '.jsonl'));
     const step = s.liveSteps.filter((x) => x.kind !== 'think').at(-1) ?? null;
-    hit = { sig, commits: s.commits, editedFiles: s.editedFiles, lastFile: s.lastFile, step, at: st.mtimeMs };
+    hit = { sig, commits: s.commits, editedFiles: s.editedFiles, skillCalls: s.skillCalls, lastFile: s.lastFile, step, at: st.mtimeMs };
     helperMemo.set(file, hit);
   }
   return hit;
@@ -661,15 +670,17 @@ function agentWork(file) {
 export function readHelperWork(sessionDir) {
   const commits = [];
   const edited = new Set();
+  const skillRuns = [];
   let last = null;
   for (const file of helperFiles(sessionDir)) {
     const hit = agentWork(file);
     if (!hit) continue;
+    if (hit.skillCalls.length) skillRuns.push({ agent: basename(file, '.jsonl').slice('agent-'.length), calls: hit.skillCalls });
     commits.push(...hit.commits);
     for (const f of hit.editedFiles) edited.add(f);
     if (hit.lastFile && (!last || hit.at > last.at)) last = { file: hit.lastFile, at: hit.at };
   }
-  return { commits, editedFiles: [...edited], last };
+  return { commits, editedFiles: [...edited], last, skillRuns };
 }
 
 // The model a workflow agent runs on, from its meta file ('opus', 'sonnet'...); none when it inherits the conversation's.

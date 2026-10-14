@@ -359,7 +359,7 @@ test('readHelperWork: the files the helpers and workflow agents edited belong to
     assert.deepEqual(work.editedFiles.sort(), ['/work/b/src/one.js', '/work/b/src/two.js']);
     assert.deepEqual(work.commits, []);
     assert.equal(work.last.file, '/work/b/src/one.js', 'the newest agent step that names a file');
-    assert.deepEqual(readHelperWork(join(dir, 'none')), { editedFiles: [], commits: [], last: null });
+    assert.deepEqual(readHelperWork(join(dir, 'none')), { editedFiles: [], commits: [], last: null, skillRuns: [] });
   });
 });
 

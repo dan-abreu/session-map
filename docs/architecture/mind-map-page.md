@@ -194,9 +194,10 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - [ ] **detail:** The rest of the walk through the files `mm36`
   - What is left of `mm26`: the files it uses and that use it for other languages (Python, Go and the rest, with the foundation's readers, `fd` series) and for path aliases; a new file not saved yet in "used by"; files of tens of thousands of lines drawn as they scroll instead of in slices of 1,500.
   - How to confirm it is done: a Python file lists its imports; a file just created by a conversation shows in "used by" of what it imports; a 50,000-line file scrolls smoothly to its end.
-- [ ] **in progress:** The skills and plugins on the balloons: per project, what is installed (from which repository), on or off and how heavy; per chat and per agent, which skills it opened now and what they weighed `mm52`
+- [x] The skills and plugins on the balloons: per project, what is installed (from which repository), on or off and how heavy; per chat and per agent, which skills it opened now and what they weighed `mm52`
   - Read from the plugin folders and the transcripts, no AI. A skill opened by many agents shows its count and its weight, so a snowball is seen while it happens, not a week later.
   - From `id111`.
+  - Built on 2026-10-13: `server/sources/skill-use.mjs` counts the Skill tool calls of a chat and its subagents (a skill opened by 3+ agents is a snowball); `listPlugins` in `server/sources/skills.mjs` gives each plugin its repository, listing weight and SKILL.md weight; the chat panel shows the one skills line and the Plugins tab shows from, on/off, skills, weight and opened this week.
 
 ### Ideas
 

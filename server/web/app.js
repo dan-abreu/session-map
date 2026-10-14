@@ -1789,6 +1789,23 @@ const wfCtx = () => ({
 });
 const newestWorkflow = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
 
+// Bytes in a few plain words: B under 1 KB, KB after.
+const bytesText = (n) => ((n ?? 0) < 1024 ? `${n ?? 0} B` : `${Math.round(n / 1024)} KB`);
+
+// The one small line of the skills a chat and its agents opened (mm52); a snowball (3+ agents) is in the warning color.
+const SKILL_LINE_MAX = 3;
+function skillUseLine(use) {
+  if (!use?.skills?.length) return null;
+  const shown = use.skills.slice(0, SKILL_LINE_MAX);
+  const parts = shown.flatMap((s, i) => [
+    i ? ', ' : null,
+    s.snowball ? h('span', { class: 'skill-snow', title: t('chat.skills.snow', { n: s.agents }) }, `${s.name} ×${s.count}`) : `${s.name} ×${s.count}`,
+  ]).filter(Boolean);
+  if (use.skills.length > shown.length) parts.push(` ${t('chat.skills.more', { n: use.skills.length - shown.length })}`);
+  const [before, after] = t('chat.skills', { list: '\u0000', size: bytesText(use.bytes) }).split('\u0000');
+  return h('p', { class: 'muted small skill-use' }, before, ...parts, after);
+}
+
 function renderChatPanel(c) {
   const part = partById(c.partId);
   const wc = c.workCellId && workCellById(c.workCellId);
@@ -1813,6 +1830,7 @@ function renderChatPanel(c) {
     chatTools(c),
     section(t('chat.doing'), card.doing ? h('p', { class: 'lead' }, card.doing) : null),
     kblock('tasks', { from: t('kind.tasks.fromChat') }, list(card.todo)),
+    skillUseLine(c.skillUse),
     c.workflows?.length ? section(t('wf.title'), h('div', { class: 'wf-list' }, [...c.workflows].sort(newestWorkflow).map((w) => workflowView(wfCtx(), w)))) : null,
     section(t('chat.lastPrompt'), c.lastPrompt ? h('p', { class: 'quote' }, c.lastPrompt) : null),
     section(t('chat.lastReply'), c.lastAssistantText ? h('p', {}, c.lastAssistantText) : null),
@@ -1847,7 +1865,9 @@ function renderProjectPanel() {
         h('div', { class: 'skill-head' },
           h('span', { class: 'skill-name' }, pl.name),
           pill(pl.enabled ? 'active' : 'idle', pl.enabled ? t('skills.on') : t('skills.off'))),
-        h('p', { class: 'skill-desc' }, t.count('plugins.skills', skills.length)),
+        h('p', { class: 'skill-desc' }, [t.count('plugins.skills', pl.skillCount ?? skills.length), pl.from ? t('plugins.from', { from: pl.from }) : null].filter(Boolean).join(' · ')),
+        h('p', { class: 'skill-desc' }, t('plugins.weight', { size: bytesText(pl.listingBytes) }), ' · ', t('plugins.skillsFull', { size: bytesText(pl.skillBytes) })),
+        h('p', { class: 'skill-desc' }, t(`plugins.week.${pl.week?.count === 1 ? 'one' : 'other'}`, { n: pl.week?.count ?? 0, size: bytesText(pl.week?.bytes) })),
         pl.installPath ? h('div', { class: 'skill-cmd' }, h('code', {}, pl.installPath)) : null);
     })) : h('p', { class: 'muted' }, t('plugins.none'));
   } else if (projectTab === 'skills') {

@@ -1526,6 +1526,7 @@ body.is-resizing .sheet { animation: none; }
 .skill-desc { margin: 6px 0 0 !important; font-size: var(--fs-sm); color: var(--ink-2); }
 .skill-cmd { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .skill-cmd code { flex: 1; min-width: 0; padding: 4px 8px; border-radius: var(--r-sm); background: var(--bg-3); font: var(--fs-sm)/1.4 var(--mono); overflow-wrap: anywhere; }
+.skill-snow { color: var(--waiting-ink); font-weight: 650; }
 
 .confirm p { margin: 0; line-height: 1.5; }
 .confirm .actions { justify-content: flex-end; }

@@ -58,6 +58,9 @@ function readSkillsDir(dir, origin, plugin, enabled) {
       plugin,
       enabled,
       command: plugin ? `/${plugin}:${name}` : `/${name}`,
+      // Weight (mm52): the name and description ride along with every request; SKILL.md is read in full when opened.
+      listingBytes: Buffer.byteLength(name) + Buffer.byteLength(fm.description ?? ''),
+      fullBytes: Buffer.byteLength(text),
     });
   }
   return skills;
@@ -76,11 +79,38 @@ function pluginsFromSettings(root, dir) {
   });
 }
 
+// Where each marketplace came from: the repository (owner/repo), the address or the folder it was added from.
+function marketplaceSources(root, dir) {
+  const out = {};
+  const files = [join(dir, 'settings.json'), join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json')];
+  const groups = [readJson(join(dir, 'plugins', 'known_marketplaces.json')), ...files.map((f) => readJson(f).extraKnownMarketplaces ?? {})];
+  for (const group of groups) {
+    for (const [name, entry] of Object.entries(group)) {
+      const src = entry?.source ?? {};
+      const from = src.repo ?? src.url ?? src.path;
+      if (typeof from === 'string' && from) out[name] = from;
+    }
+  }
+  return out;
+}
+
 export function listPlugins(root, dir, { pluginList } = {}) {
   const here = normalizePath(root);
+  const sources = marketplaceSources(root, dir);
   return (pluginList ?? pluginsFromSettings(root, dir)).filter(
     (p) => p.installPath && (p.scope !== 'project' || !p.projectPath || normalizePath(p.projectPath) === here),
-  ).map((p) => ({ ...p, name: String(p.id ?? '').split('@')[0] }));
+  ).map((p) => {
+    const [name, market = ''] = String(p.id ?? '').split('@');
+    const skills = readSkillsDir(join(p.installPath, 'skills'), 'plugin', name, p.enabled === true);
+    return {
+      ...p, name,
+      // Declared repository first; without one the marketplace's own name is all that is known.
+      from: sources[market] ?? market,
+      skillCount: skills.length,
+      listingBytes: skills.reduce((n, k) => n + k.listingBytes, 0),
+      skillBytes: skills.reduce((n, k) => n + k.fullBytes, 0),
+    };
+  });
 }
 
 export function listSkills(root, dir, { pluginList } = {}) {

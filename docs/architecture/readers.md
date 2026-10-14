@@ -43,6 +43,7 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
   - Every installed skill's name and description sits in every context, every turn, every agent; with hundreds installed that costs more than the skills themselves. The page shows the count and a one-press off, and the conductor prefers the few skills it really needs.
   - From `id100`.
   - Built so far (2026-10-13): a Plugins tab per project lists each plugin, on or off, with its skill count (`listPlugins` in `server/sources/skills.mjs`). Missing: the one-press off.
+  - Also on 2026-10-13 (mm52): each plugin shows its repository, on or off, skill count, listing weight and the weight of its SKILL.md files, and opened this week. Still open for rd09: the one-press off and the conductor preferring few skills; mm52 does not cover those.
 ### Sources
 
 - [ ] **with the owner:** Import the claude.ai history `rd04`

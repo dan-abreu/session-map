@@ -37,6 +37,7 @@ import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills, listPlugins } from './sources/skills.mjs';
+import { skillUseOf, weekByPlugin } from './sources/skill-use.mjs';
 import { readJsonFile } from './store.mjs';
 import { expectedRun, parseRun } from './chat/run.mjs';
 import { queueView, readWeekUse } from './chat/priority.mjs';
@@ -87,7 +88,7 @@ async function git(cwd, args) {
 
 function helperWork(sessionDir) {
   const work = readHelperWork(sessionDir);
-  return { helperCommits: work.commits, helperEdits: work.editedFiles, helperLast: work.last };
+  return { helperCommits: work.commits, helperEdits: work.editedFiles, helperLast: work.last, helperSkills: work.skillRuns };
 }
 
 // liveIds: a live conversation's workflow agents move on while its own transcript sits still, so their journals and the
@@ -479,6 +480,13 @@ async function buildProject(ctx, { root, items }) {
   });
   const forLineage = (partId) => placed.filter((x) => x.partId === partId && !removed.has(x.item.summary.sessionId)).map((x) => ({ sessionId: x.item.summary.sessionId, startedAt: x.item.summary.startedAt, editedFiles: x.item.summary.editedFiles }));
 
+  // The skills and plugins installed, and what each opened skill weighs (mm52): the weight is its SKILL.md, per opening.
+  const skillList = listSkills(root, dir);
+  const pluginList = listPlugins(root, dir);
+  const skillSizes = new Map();
+  for (const k of skillList) skillSizes.set(k.plugin ? `${k.plugin}:${k.name}` : k.name, k.fullBytes);
+  for (const k of skillList) if (k.plugin && !skillSizes.has(k.name)) skillSizes.set(k.name, k.fullBytes);
+  const weekPlugins = weekByPlugin(items.flatMap((i) => [...(i.summary.skillCalls ?? []), ...(i.helperSkills ?? []).flatMap((r) => r.calls)]), skillSizes, now.getTime());
   const chats = placed.filter((x) => x.shown).map((x) => {
     const s = x.item.summary;
     const live = liveById.get(s.sessionId) ?? null;
@@ -507,6 +515,7 @@ async function buildProject(ctx, { root, items }) {
       costUSD: x.costUSD,
       advice: adviceOf(x.item.summary.usage, prices),
       workflows: x.item.workflows,
+      skillUse: skillUseOf({ own: s.skillCalls ?? [], runs: x.item.helperSkills ?? [], sizes: skillSizes }),
       liveSteps: s.liveSteps ?? [],
       startedAt: s.startedAt,
       updatedAt: x.updatedAt,
@@ -595,8 +604,8 @@ async function buildProject(ctx, { root, items }) {
         ...clashItems(workCells.filter((w) => w.status !== 'merged'), projectId),
         ...waitingItems(arch, projectId),
       ],
-      skills: listSkills(root, dir),
-      plugins: listPlugins(root, dir),
+      skills: skillList,
+      plugins: pluginList.map((pl) => ({ ...pl, week: weekPlugins.get(pl.name) ?? { count: 0, bytes: 0 } })),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
       costByDay: dailyCost(allRows, prices),
       costByModel: modelDaily(allRows, prices),
