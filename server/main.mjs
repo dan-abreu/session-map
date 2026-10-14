@@ -50,6 +50,7 @@ import { addCard, moveCard, readCards, removeCard } from './cards.mjs';
 import { readJsonFile, writeAtomic } from './store.mjs';
 import { LISTEN_RETRY_MS, createRestarter, listenWithRetry, resumeAfterRestart } from './restart.mjs';
 import { createStatementStore, isStatementPath, statementRoute } from './statement-route.mjs';
+import { readBook, readChapter } from './chat/book-view.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
@@ -299,6 +300,13 @@ export function createApp({
     if (req.method === 'GET' && key === 'helper' && parts.length === 6) {
       const result = chat.helper(verb, parts[5], await quickState());
       return send(res, result.status, result.body);
+    }
+    // The book panel (pc28): the chapter list, and one chapter's text only when the person opens it.
+    if (req.method === 'GET' && key === 'book' && (parts.length === 5 || parts.length === 6)) {
+      if (parts.length === 5) return send(res, 200, readBook(smDir, verb));
+      const text = readChapter(smDir, verb, parts[5]);
+      if (text === null) throw new HttpError(404, 'not-found');
+      return send(res, 200, { text });
     }
     if (parts.length !== 5) throw new HttpError(404, 'not-found');
     if (req.method === 'GET' && verb === 'events') {

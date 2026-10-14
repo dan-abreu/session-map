@@ -109,6 +109,8 @@ export const api = {
     const query = new URLSearchParams([...(since ? [['since', since]] : []), ...Object.entries(cursor).filter(([, n]) => Number.isInteger(n)).map(([k, n]) => [k, String(n)])]).toString();
     return call('GET', `/api/chat/history/${seg(sessionId)}${query ? `?${query}` : ''}`);
   },
+  chatBook: (sessionId) => call('GET', `/api/chat/book/${seg(sessionId)}`),
+  chatBookChapter: (sessionId, n) => call('GET', `/api/chat/book/${seg(sessionId)}/${seg(n)}`),
   chatHelper: (sessionId, agentId) => call('GET', `/api/chat/helper/${seg(sessionId)}/${seg(agentId)}`),
   settingsMode: () => call('GET', '/api/settings/permission-mode'),
   setSettingsMode: (mode) => call('POST', '/api/settings/permission-mode', { mode }),

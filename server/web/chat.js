@@ -1157,6 +1157,50 @@ export function createChat({
     radios()[to]?.focus();
   });
 
+// ---- the book panel (pc28): the chapters of this conversation, each opened on its own ----
+  // Only the list is read at first; a chapter's text is fetched when it is opened. Nothing here goes to the AI.
+  let bookEl = null;
+  let bookBig = false;
+
+  function closeBook() {
+    if (bookEl) bookEl.hidden = true;
+    (moreEl && !moreEl.hidden ? moreEl : logEl).focus();
+  }
+
+  async function openBook() {
+    const id = shownId();
+    if (!id || !findEl) return;
+    const tt = t();
+    if (!bookEl) {
+      bookEl = h('section', { class: 'chat-book', 'aria-label': tt('chat.book') });
+      findEl.after(bookEl);
+    }
+    bookEl.hidden = false;
+    bookEl.classList.toggle('big', bookBig);
+    const body = h('div', { class: 'chat-book-body' }, h('p', { class: 'muted' }, tt('chat.bookLoading')));
+    const sizeBtn = h('button', { type: 'button', class: 'icon-btn small', 'aria-label': tt(bookBig ? 'chat.bookSmaller' : 'chat.bookBigger'), title: tt(bookBig ? 'chat.bookSmaller' : 'chat.bookBigger'),
+      onclick: () => { bookBig = !bookBig; openBook(); } }, bookBig ? '▁' : '▢');
+    const closeBtn = h('button', { type: 'button', class: 'icon-btn small', 'aria-label': tt('chat.bookClose'), title: tt('chat.bookClose'), onclick: closeBook }, '✕');
+    bookEl.replaceChildren(h('header', { class: 'chat-book-head' }, h('strong', {}, tt('chat.book')), sizeBtn, closeBtn), body);
+    let book;
+    try { book = await api.chatBook(id); } catch { book = null; }
+    if (!book?.chapters?.length) { body.replaceChildren(h('p', { class: 'muted' }, tt('chat.bookEmpty'))); return; }
+    body.replaceChildren(...(book.title ? [h('p', { class: 'chat-book-title' }, book.title)] : []), ...book.chapters.map((c) => {
+      const text = h('pre', { class: 'chat-book-text' });
+      const det = h('details', { class: 'chat-book-cap' },
+        h('summary', {}, h('span', { class: 'num' }, `${c.n}. `), c.title || tt('chat.bookUntitled', { n: c.n }), c.closed ? '' : ` (${tt('chat.bookOpen')})`),
+        c.summary ? h('p', { class: 'muted' }, c.summary) : null, text);
+      let loaded = false;
+      det.addEventListener('toggle', async () => {
+        if (!det.open || loaded) return;
+        loaded = true;
+        text.textContent = tt('chat.bookLoading');
+        try { text.textContent = (await api.chatBookChapter(id, c.n)).text; } catch { text.textContent = c.closed ? tt('chat.bookFail') : tt('chat.bookNotYet'); loaded = false; }
+      });
+      return det;
+    }));
+  }
+
   // ---- the header's ⋯ menu (pc18): everything that is not the conversation itself, in three groups ----
 
   // About this part and find; what can be done with the conversation (rename or move, archive, open where it lives,
@@ -1169,6 +1213,7 @@ export function createChat({
     return [
       [
         showAbout ? { id: 'about', label: tt('chat.about'), icon: 'book', run: showAbout } : null,
+        id && findEl ? { id: 'book', label: tt('chat.book'), icon: 'book', run: openBook } : null,
         has && findEl ? { id: 'find', label: tt('chat.find'), icon: 'search', keys: 'Ctrl F', run: openFind } : null,
       ],
       id && more ? more(id) : [],
