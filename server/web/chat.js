@@ -266,7 +266,7 @@ export function createChat({
       text || item.streaming ? h('div', { class: 'md' }, text ? tv.markdown(text) : h('p', {})) : null,
       folded.card ? chip('card', folded.card.title ? tt('fold.card', { title: folded.card.title }) : tt('fold.cardUntitled'), cardBody(folded.card)) : null,
       asks ? askCard(folded.run) : null,
-      item.streaming ? null : tv.replyMeta({ ...item, text }),
+      item.streaming ? null : tv.replyMeta({ ...item, text, model: item.model ?? (isLast ? log.run?.model : null) ?? null, effort: item.effort ?? (isLast ? log.run?.effort : null) ?? null }),
       isLast && !item.streaming && !log.running && log.check ? h('p', { class: 'turn-check num', 'data-run': 'check' }, checkLine(tt, log.check, money)) : null,
       quick.length ? quickView(quick) : null);
   }

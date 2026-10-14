@@ -76,6 +76,11 @@ test('a reply names the AI and model and splits the cost into sent and back', ()
   assert.match(text(node), /chat.replySplit/);
 });
 
+test('a reply with an effort names the level too', () => {
+  const node = view().node({ type: 'assistant', text: 'ok', model: 'claude-sonnet-5-5', effort: 'medium', ts: '2026-10-09T10:05:00Z' });
+  assert.match(text(node), /chat.replyWhoLevel/);
+});
+
 test('a step folds with its words, input and result; an edit shows before and after', () => {
   const tv = view();
   const run = tv.node({ type: 'tool', name: 'Bash', ts: '2026-10-09T10:05:00Z', step: { kind: 'run', target: 'npm test' }, input: '{"command":"npm test"}', result: 'ok', isError: false });
