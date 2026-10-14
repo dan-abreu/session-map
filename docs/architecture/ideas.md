@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113
+- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114
 - This registry: id65, id66, id67
 - Economy, context and skills: id100, id101, id102, id103, id104
 
@@ -334,6 +334,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: ask for something new in a chat: the request, its item with the next code, the part and the flow change appear in that order without the AI editing a file; an AI that tries to edit a plan file by hand is stopped and pointed to the robot.
   - Where it went: `am04` (with `sb13`, `or26`).
   - Status: accepted; built after `sb13` and the skeleton tool are joined, since it shares their files.
+
+- [ ] **in progress:** A robot and one well-made document decide which model and level runs, not the AI's choice `id114`
+  - Asked: 2026-10-13 — "precisamos criar um robo, um documento alguma coisa que não depende apenas de voce fazer a escolha do liga e desliga, porque voce soube o que era, mas no documento já tem um padrao, e estão seguindo esse padrao e esse documento esta mal feito de mais, voce não fez com profissionalismo"
+  - What it means: the model and effort of every agent and every phase come from one policy file with its evidence, applied by the engine; the AI only declares the kind of task.
+  - How to confirm it is done: an agent started as "[code] ..." with opus/high runs as Sonnet medium anyway; one without a kind is refused; the policy page shows the same table the engine uses, with where each row's number came from.
+  - Where it went: `or33`.
+  - Status: in progress: `or33` being built on 2026-10-13.
 
 ### This registry
 

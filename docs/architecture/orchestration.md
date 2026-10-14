@@ -110,6 +110,11 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Held by the engine: a PreToolUse hook denies a Skill call inside an agent unless its brief names that skill (`or25`, `pc26` proves the hook sees agents). The shared part of the briefs goes first and byte-identical, so the agents after the first pay the cache price (5% of a full read), if Claude Code's cache marks allow it; `pc26` measures that.
   - From `id111`.
   - Built on 2026-10-13: a Skill call inside an agent is denied unless the agent's brief names that skill (whole name, not a part of a word); the main chat's own skills are never blocked. The cache share of identical briefs is left to measure in `or24`.
+- [ ] **in progress · important:** One routing policy, read by the engine: the AI only says what kind of task it is, the robot sets the model and effort `or33`
+  - On 2026-10-13 four places chose models and disagreed: the owner's CLAUDE.md table ("hard logic -> Sonnet high", which let the conductor pick high freely), the conductor prompt, `recommend()` (it answered "Fable at max" for large work) and the entry brain's table.
+  - One file, `server/ai/policy.json`, each row with its evidence: search, read, bulk, text, commit -> Haiku low; docs -> Sonnet low; code, tests, screens, debug, plan, review -> Sonnet medium (bench: code 22/22, review 20/20, plan 8/8); architecture, security, money, personal data -> Opus high. A failure climbs one rung: Haiku low, Sonnet medium, Sonnet high, Opus high, Opus xhigh, Fable high (only after Opus failed); max never on its own. The conversation's phases (trivial, talk, plan, build) live in the same file.
+  - Held by the guard: an agent's description starts with its kind ("[code] ..."); the hook sets model and effort from the policy (updatedInput), so the AI never picks them; no kind, no agent. The brain, `recommend()`, the conductor prompt and the human page `docs/standard/politica-de-modelos.md` (generated from the file, checked by a test) all read the same table.
+  - From `id114`.
 
 ### Board of roles
 
