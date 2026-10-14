@@ -276,21 +276,21 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: measure where the tokens really go, remove what makes the snowball (rules that open every skill, Opus by default, too many agents per workflow, every agent starting from zero) and speak up with numbers instead of agreeing.
   - How to confirm it is done: a week later, the share of Opus agents, the agents per workflow and the skills opened per agent are clearly lower, with the tests still passing and the reviews still holding.
   - Where it went: `or23`, `or24`.
-  - Status: built on main on 2026-10-13 (`or23`); waiting for the next week's measure (`or24`).
+  - Status: built on main on 2026-10-13 (`or23`, `or24` measured: the waste section on the Costs tab); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** Economy by the engine, not by asking: an OK at the end of each task, a book index for skills, plugins and long conversations, planning by itself `id106`
+- [ ] Economy by the engine, not by asking: an OK at the end of each task, a book index for skills, plugins and long conversations, planning by itself `id106`
   - Asked: 2026-10-13 — "quero como sistema, na engrenagem, da OK, na finalização das tarefas, Fazer o conceito de um livro que vem o indice, com capitulos e subcapitulos, para as skills e plugins"; "quando eu falo planejar voce ja sabe ... ou quando estamos conversando poderia ser automaticamente um planejamento"; "em conversas longas o proprio sistema criar um sistema igual de livro, assim não precisa ler a conversa toda ... ler apenas o que for necessario"
   - What it means: the savings rules live in session-map's engine (settings and hooks it hands each chat), not in text the AI may ignore; skills, plugins and long conversations are read through an index and only the needed chapter; planning talk opens in plan mode by itself.
   - How to confirm it is done: a chat with an Opus agent for ordinary code is stopped by the engine; a long chat goes on from its index; a new chat lists only skill names plus the few that fit; a planning message opens in plan mode; each finished request shows OK or what is missing.
   - Where it went: `or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`.
-  - Status: in progress: `or25`, `or32`, `pc26`, `pc28` built on 2026-10-13; `pc27` being built; `or26` and `pc29` next.
+  - Status: built on main on 2026-10-13 (`or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
 - [x] An AI that agrees or disagrees on data, in the engine, whichever AI it is `id107`
   - Asked: 2026-10-13 — "voce pode concorda comigo ou discorda, veja ai por favor, quero que na engrenagem, eu não quero uma IA que concorda, não importa qual, quero uma IA consciente que concorde e discorde baseada em dados"
   - What it means: every AI session-map talks to (Claude in any way a chat runs, and the outside AIs when they judge) takes a stance from the facts and shows them, instead of agreeing to please.
   - How to confirm it is done: start a chat in any way and bring an idea the numbers contradict: the answer says it disagrees, with the numbers; ask an outside AI for a review: the request it receives starts with the same rule.
   - Where it went: `or27`.
-  - Status: built on main on 2026-10-13 (`or27`); new chats get it, chats already open keep their old text.
+  - Status: built on main on 2026-10-13 (`or27`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
 - [ ] Cheap layers first: exact skeletons of the code, a local model for heavy reading, the paid model only for decisions `id108`
   - Asked: 2026-10-13 — four images from the owner's research with his brother: Ollama making "Interface Skeletons" (imports, types, signatures, no bodies), semantic changelogs in JSON, extraction of variables and dependencies; "AST determinístico + Ollama cirúrgico"; model cascading (cheap or local models read and sort, the frontier model only decides and writes the hard code). And: "tem mais uma imagem, mas voce colocou limitador de imagens nao sei por qual motivo, quero colocar mais uma imagem".
@@ -298,56 +298,56 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Verdicts with data: skeletons yes, but from the Foundation, not from a model (measured 88 to 94% smaller); changelogs yes, but from the facts before and after, without AI; variables and dependencies already read (names and versions), the code's own `process.env` is new; a local model only as an optional, measured provider; ten images per message.
   - How to confirm it is done: an agent answers about a file by reading its skeleton and a few lines; the turn's OK lists what changed; a message takes ten images.
   - Where it went: `fd17`, `or26`, `or28`, `pc30`.
-  - Status: accepted with the verdicts above; `pc30` built on 2026-10-13.
+  - Status: built on main on 2026-10-13 (`fd17`, `pc30`, `or26`); `or28` (a local model) left for later: Ollama is not installed and the PC had 1.7 GB of RAM free; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** The entry is not Opus at high: plan first with the cheapest that is good enough, then build with the right model per task, by law in the engine `id109`
+- [ ] The entry is not Opus at high: plan first with the cheapest that is good enough, then build with the right model per task, by law in the engine `id109`
   - Asked: 2026-10-13 — "tem um problema a entrada, que nivel é? Qual modelo de IA, que nivel da IA ... a OPUS e Fable com certeza iria pensar melhor que o sonnet, mas as vezes nao por apenas está conversando, e o que deve exitir de lei na engrenagem antes de começar sair fazendo qualquer coisa é traçar um plano com a mais barata organizar a ideia e depois construir usando as IA e modelos de acordo com a tarefa ... estava jogando tudo no nivel HIGH e usando opus, e voce ainda me dizia que estava usando o modelo mais fraco, mas por traz os agentes eram sempre os mais caros"
   - What it means: the engine, not the AI, picks the model and effort of each phase: talk cheap, plan with a mid model and a short strong review when it matters, build per task; and it shows the person which model and level each phase really used.
   - How to confirm it is done: a new chat that only talks runs on Sonnet at low and says so; a large request gets a written plan before any code, with each task's model; the statement shows the real model of the chat and of every agent.
   - Where it went: `or29`, `or30` (with `pc27`, `pc28`, `or25`).
-  - Status: in progress: `or29` being built on 2026-10-13 together with `or31`; `or30` measuring planning on the bench.
+  - Status: built on main on 2026-10-13 (`or29`, `or30`: Sonnet at medium planned 8/8); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** A thinking brain at the entry and the exit: the cheapest model weighs each message, asks a little when needed, and hands it to a stronger model only when the work is big `id110`
+- [ ] A thinking brain at the entry and the exit: the cheapest model weighs each message, asks a little when needed, and hands it to a stronger model only when the work is big `id110`
   - Asked: 2026-10-13 — "poxa a gente nao consegue colocar a entrada e saida como um cerebro pensante? tipo, recebi essa mensagem, é uma mensagem barata, nossa recebi essa mensagem é um projeto grande preciso dar mais atenção, podemos fazer começnado com o mais barato, ele faz umas perguntas para ter ideia do nivel da conversa e dali mudar para a IA mais e modelo mais desenvolvido?"
   - What it means: a router before every turn: free rules, then a cheap model when unsure, a couple of questions only for big unclear work, then the right model; it also steps down when the talk gets small.
   - How to confirm it is done: "oi, tudo bem?" runs on the cheapest and says so; "quero um sistema de pagamentos" asks one or two questions, then plans on a stronger model; the page shows the model of each turn and why.
   - Where it went: `or31` (with `or29`, `or30`).
-  - Status: in progress: `or31` being built on 2026-10-13.
+  - Status: built on main on 2026-10-13 (`or31`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** The book system for skills, plugins, agents and long conversations: see what is installed and used, read a thing once for all agents, and a conversation that keeps its own short chapters `id111`
+- [ ] The book system for skills, plugins, agents and long conversations: see what is installed and used, read a thing once for all agents, and a conversation that keeps its own short chapters `id111`
   - Asked: 2026-10-13 — "eu gostaria de saber quais skills e plugins instalados por repositorios, quais estão sendo usadas no momento que pode ser nos balões, um metodo de que uma skill ja foi lida, nem todos os agente precisam ler novamente ... aqui ta acontecendo que os 150 agentes vao ler novamente as mesma atividade isso gera um snowball sem tamanho e também o indice nas conversas, a conversa vai passando dos limites, vai se criando indices, com capitulos mais curtos dentro da propria conversa diminuindo o custo da conversa, teria como isso tudo acontecer?"
   - What it means: the balloons show the skills and plugins of each project and what each chat and agent opened; the conductor reads once and hands chapters, agents never re-read by default; a long conversation shrinks itself into chapters.
   - How to confirm it is done: a balloon lists its skills with their weight; a workflow of ten agents shows the skill opened once, by the conductor; a long chat shows its chapters and its cost per turn going down after a chapter closes.
   - Where it went: `mm52`, `or32`, `pc28`.
-  - Status: in progress: `or32` and `pc28` built on 2026-10-13; `mm52` being built.
+  - Status: built on main on 2026-10-13 (`mm52`, `or32`, `pc28`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** The balloons and the items' status made by a mechanism of the program, not by an AI that can forget `id112`
+- [ ] The balloons and the items' status made by a mechanism of the program, not by an AI that can forget `id112`
   - Asked: 2026-10-13 — "questões de balões criações não era para depender da IA, você pode errar isso deveria ser mecanismo do programa, eu nao sei falar os termos mas deveria ser um robo, um sistema alguma coisa assim, não simplesmente um arquivo .md"
   - What it means: what is being worked on and what is built is read from the facts (live chats and agents, branches, commits), so the map is right even when an AI forgets to write the mark.
   - How to confirm it is done: start an agent on an item without touching the plan file: its balloon shows "working now" within a minute; merge a feat commit naming an item: it shows "built, not ticked".
   - Where it went: `sb13`.
-  - Status: in progress: `sb13` being built on 2026-10-13.
+  - Status: built on main on 2026-10-13 (`sb13`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
 - [ ] The balloons, the files and the flow are made by a robot in a correct order, whatever is created `id113`
   - Asked: 2026-10-13 — "mesma coisa para os balões e arquivos, tem que ser um robo, não importa se cria novos balões, também serve para o fluxo e nao importa o que é criado, mas tem que seguir uma ordem correta"
   - What it means: nothing on the map is hand-written by an AI any more: a robot writes requests, items, codes, new parts and flow links in a fixed order and refuses what breaks it; the AI only says what the words mean.
   - How to confirm it is done: ask for something new in a chat: the request, its item with the next code, the part and the flow change appear in that order without the AI editing a file; an AI that tries to edit a plan file by hand is stopped and pointed to the robot.
   - Where it went: `am04` (with `sb13`, `or26`).
-  - Status: accepted; built after `sb13` and the skeleton tool are joined, since it shares their files.
+  - Status: built on main on 2026-10-13 (`am04`): map edits in page chats go through the clerk; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** A robot and one well-made document decide which model and level runs, not the AI's choice `id114`
+- [ ] A robot and one well-made document decide which model and level runs, not the AI's choice `id114`
   - Asked: 2026-10-13 — "precisamos criar um robo, um documento alguma coisa que não depende apenas de voce fazer a escolha do liga e desliga, porque voce soube o que era, mas no documento já tem um padrao, e estão seguindo esse padrao e esse documento esta mal feito de mais, voce não fez com profissionalismo"
   - What it means: the model and effort of every agent and every phase come from one policy file with its evidence, applied by the engine; the AI only declares the kind of task.
   - How to confirm it is done: an agent started as "[code] ..." with opus/high runs as Sonnet medium anyway; one without a kind is refused; the policy page shows the same table the engine uses, with where each row's number came from.
   - Where it went: `or33`.
-  - Status: in progress: `or33` being built on 2026-10-13.
+  - Status: built on main on 2026-10-13 (`or33`): the guard sets each agent's model from the policy; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** Rules in code, central, not in CLAUDE.md, which fails `id115`
+- [ ] Rules in code, central, not in CLAUDE.md, which fails `id115`
   - Asked: 2026-10-13 — "não tem uma forma ou arquivo ou documento para criar isso de forma mais centrealizada baseada em codigopara nao depender so do claud md, porque eu trabalho com claude.md a um tempo e falha muito, nao podemos ter falhas"
   - What it means: what must never fail is enforced by code and settings every session obeys (defaults, hooks, the policy file); CLAUDE.md keeps only how to talk to the owner.
   - How to confirm it is done: a new terminal chat starts on Sonnet medium; an agent asked for Opus on ordinary code runs on Sonnet in any session; a long terminal chat is summarized at 100k.
   - Where it went: `or34` (with `or33`).
-  - Status: in progress: user defaults changed on 2026-10-13; the plugin hooks next.
+  - Status: built on main on 2026-10-13 (`or34`): user defaults Sonnet medium, compaction at 100k, the guard and the book installed for every session on this PC; for other PCs, with the next plugin release; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
 ### This registry
 
