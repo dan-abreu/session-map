@@ -60,7 +60,9 @@ export function guardAgent(input, { brief = readBrief } = {}) {
     const skill = fold(ti.skill ?? ti.name ?? '');
     if (text == null || !skill) return null;
     const said = fold(text);
-    return said.includes(skill) || said.includes(skill.split(':').pop()) ? null : deny(NO_SKILL);
+    // Whole names only: a brief about "commitment" does not name the skill "commit".
+    const names = (name) => new RegExp(`(?<![a-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9_-])`).test(said);
+    return names(skill) || names(skill.split(':').pop()) ? null : deny(NO_SKILL);
   }
   return null;
 }

@@ -9,13 +9,18 @@ import { writeAtomic } from '../store.mjs';
 import { acceptTidy, chaptersOf, parseLines, tidyDigest } from './book.mjs';
 
 const BATCH = 6;
+// After a failed call the AI is not asked again for this long: a turn that keeps failing must not bill a call each time.
+const BACKOFF_MS = 30 * 60_000;
 const PROMPT_MAX = 30_000;
 const SCHEMA = '{"title":"...","subjectChanged":false,"chapters":[{"n":1,"title":"...","summary":"..."}]}';
 
-const readJson = (path) => { try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; } };
+const readText = (path) => { try { return readFileSync(path, 'utf8'); } catch { return ''; } };
+const readJson = (path) => { try { return JSON.parse(readText(path)); } catch { return null; } };
 
 export async function tidyBook({ transcriptPath, bookDir, run = runClaudeJSON, now = Date.now }) {
   const lock = join(bookDir, 'tidy.lock');
+  const failFile = join(bookDir, 'tidy.fail');
+  if (now() - (Number(readText(failFile)) || 0) < BACKOFF_MS) return;
   writeAtomic(lock, String(now()));
   try {
     const entries = parseLines(readFileSync(transcriptPath, 'utf8'));
@@ -33,7 +38,7 @@ export async function tidyBook({ transcriptPath, bookDir, run = runClaudeJSON, n
       '', tidyDigest(todo, entries),
     ].join('\n').slice(0, PROMPT_MAX);
     const res = await run(prompt, { model: 'haiku', cwd: join(tmpdir(), 'session-map-book'), schemaHint: SCHEMA });
-    if (!res?.ok) return;
+    if (!res?.ok) { writeAtomic(failFile, String(now())); return; }
     const accepted = acceptTidy(res.value, todo);
     const merged = { ...(tidy?.chapters ?? {}) };
     for (const c of todo) {

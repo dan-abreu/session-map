@@ -96,3 +96,23 @@ test('tidyBook sets the title, stores a rejected chapter as nulls, keeps the old
     assert.ok(!existsSync(lock));
   } finally { await cleanup(s.root); }
 });
+
+test('tidyBook backs off after a failed call: the next turns do not pay for the same chapters again', async () => {
+  const s = setup();
+  try {
+    mkdirSync(s.bookDir, { recursive: true });
+    let calls = 0;
+    let clock = 1_700_000_000_000;
+    const now = () => clock;
+    const fail = async () => { calls++; return { ok: false, error: 'no-json', costUSD: 0.01 }; };
+    await tidyBook({ transcriptPath: s.transcript, bookDir: s.bookDir, run: fail, now });
+    assert.equal(calls, 1);
+    clock += 60_000;
+    await tidyBook({ transcriptPath: s.transcript, bookDir: s.bookDir, run: fail, now });
+    assert.equal(calls, 1, 'inside the backoff the AI is not asked again');
+    clock += 60 * 60_000;
+    await tidyBook({ transcriptPath: s.transcript, bookDir: s.bookDir, run: fail, now });
+    assert.equal(calls, 2, 'after the backoff it tries again');
+    assert.ok(!existsSync(join(s.bookDir, 'tidy.lock')));
+  } finally { await cleanup(s.root); }
+});

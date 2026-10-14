@@ -136,10 +136,15 @@ test('guardAgent: an agent needs a model, Opus-class ones need a reason, a skill
 
   const skill = { tool_name: 'Skill', tool_input: { skill: 'superpowers:brainstorming' } };
   assert.equal(guardAgent(skill), null, 'the chat itself may open skills');
+  assert.equal(await guardStep(skill), null, 'also through the hook entry, with no brief read');
   const sub = { ...skill, agent_id: 'a1' };
   assert.equal(guardAgent(sub, { brief: () => 'Use the skill superpowers:brainstorming' }), null);
   assert.equal(why(guardAgent(sub, { brief: () => 'Just fix the typo' })), NO_SKILL);
   assert.equal(guardAgent(sub, { brief: () => null }), null);
+  const commit = { ...sub, tool_input: { skill: 'commit' } };
+  assert.equal(why(guardAgent(commit, { brief: () => 'Review the commitment to compatibility' })), NO_SKILL, 'a word that only contains the name is not naming it');
+  assert.equal(guardAgent(commit, { brief: () => 'Run the commit skill, then stop.' }), null);
+  assert.equal(guardAgent(sub, { brief: () => 'use brainstorming first' }), null, 'the name after the colon is enough');
 });
 
 test('readBrief returns the first user line of the agent transcript', () => {
