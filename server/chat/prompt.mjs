@@ -1,5 +1,6 @@
 import { PHASE_NOTE_END, PHASE_NOTE_HEAD } from '../ai/brain.mjs';
 import { RUN_NOTE_END, RUN_NOTE_HEAD } from './run.mjs';
+import { originalOf } from './tidy-words.mjs';
 
 // The first message of a chat the page starts: what session-map knows, then the person's words.
 const list = (items) => items.map((i) => `- ${i}`).join('\n');
@@ -40,6 +41,9 @@ export function firstPrompt({ sections = [], mother, workCell, text, board = fal
 // A prompt as the person wrote it, without the notes session-map put before it (the changed way of working, run.mjs; the
 // phase of the turn, ai/brain.mjs) or the context block firstPrompt put before it.
 export function personsWords(prompt) {
+  // A tidied message carries the person's own words at its end: those are what a page shows.
+  const own = originalOf(prompt);
+  if (own !== null) return own;
   for (const [head, end] of [[RUN_NOTE_HEAD, RUN_NOTE_END], [PHASE_NOTE_HEAD, PHASE_NOTE_END]]) {
     if (!prompt.startsWith(head)) continue;
     const at = prompt.indexOf(`\n${end}\n\n`);

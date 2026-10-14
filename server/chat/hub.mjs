@@ -22,6 +22,7 @@ import { contextOf } from './context.mjs';
 import { FOCUS_KINDS, focusInputs } from '../foundation/practices-focus.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
+import { createTidier, wantsTidy, withOriginal } from './tidy-words.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
 import {
   DEFAULT_RUN, addReinforcedSpend, budgetLine, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
@@ -215,11 +216,12 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // chatsMax: how many chats may run at once; tests make it larger.
 // projectBudget(projectId): that project's month against its budget (budget.mjs) from the newest finished state, or null.
 // turnInputs({chat, file, startedAt}): what the OK at the end of a request reads ({entries, gitAfter}), null for none; tests inject it.
+// tidyText(text): the cheap rewrite of the person's message (tidy-words.mjs; null: the real one, only when bin is not set); tests inject it.
 // askHaiku(text): the one cheap call that helps the entry brain with a long text it cannot read (runClaudeJSON's answer); tests inject it.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
-  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null,
+  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null, tidyText = null,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -665,6 +667,18 @@ export function createChatHub({
   const wantsHaikuFor = (text) => wantsHaiku({ text, measured: sizeRequest({ text }) });
   const weighText = (text, { haiku = null, prev = null, planned = null } = {}) => settle(prev, weigh({ text, measured: sizeRequest({ text }), haiku, planned }));
 
+  // ---- the person's message, tidied (id111) ----
+
+  const tidier = createTidier({ run: (prompt, o) => runClaudeJSON(prompt, { ...o, bin: findClaude(), env }) });
+  // On by default; the file <state>/tidy-words.off turns it off. With a fake claude (tests) it only runs when injected.
+  const tidyOn = () => (tidyText !== null || bin === undefined) && !existsSync(join(smDir, 'tidy-words.off'));
+  // → the prompt the working AI gets: the tidied request with the person's own words at its end, or the message as it is.
+  async function tidiedPrompt(text) {
+    if (!tidyOn() || !wantsTidy(text)) return text;
+    const tidied = await (tidyText ?? tidier)(text);
+    return tidied ? withOriginal(tidied, text) : text;
+  }
+
   // A plan makes later "pode construir" build at its size; a build of a bigger size raises it.
   function rememberPlan(chat, turn) {
     let planned = chat.planned;
@@ -828,6 +842,8 @@ ${prompt}`;
     // continue after a cut); the one Haiku call for a long text it cannot read comes before anything is checked or started.
     const mine = !idle && internal.auto === undefined && !internal.orchestrator && internal.restart !== true && body.cut !== true;
     const haiku = mine && (asked ? isWeighed(asked) : true) && wantsHaikuFor(body.text) ? await haikuFor(body.text, body.sessionId) : null;
+    // The person's words, tidied by the cheap AI, are what the work and the book get (tidy-words.mjs).
+    const asking = mine ? await tidiedPrompt(body.text) : body.text;
     const fromSettings = settingsMode(project.root, dir);
 
     // The entry brain weighs the first message of a process (a fresh one has nothing to lose by starting low or high); the
@@ -836,10 +852,10 @@ ${prompt}`;
     const planned = () => (PLANNED.has(saved?.planned) ? saved.planned : null);
     const weighFirst = (run) => {
       turn = mine && isWeighed(run) ? weighText(body.text, { haiku, planned: planned() }) : null;
-      return phaseNote(turn?.phase, body.text);
+      return phaseNote(turn?.phase, asking);
     };
     let cwd;
-    let prompt = body.text;
+    let prompt = asking;
     let skillFocus = null; // pc29: set when the chat opens on a point; a resumed one lists everything as before
     let resume = null;
     let cutTold = null;
@@ -1135,8 +1151,17 @@ ${prompt}`;
     if (holding) return reply(409, { error: 'server-restarting' });
     const images = imagesOf(body.images);
     if (!images) return reply(400, { error: 'bad-images' });
-    const waiting = deliver(chat, { text: body.text, images, quiet });
-    return waiting ? waiting.then((busy) => busy ?? reply(200)) : reply(200);
+    const hand = (prompt) => {
+      const waiting = deliver(chat, { text: body.text, prompt, images, quiet });
+      return waiting ? waiting.then((busy) => busy ?? reply(200)) : reply(200);
+    };
+    if (quiet || !tidyOn() || !wantsTidy(body.text)) return hand(body.text);
+    chat.weighing = true;
+    return tidiedPrompt(body.text).catch(() => body.text).then((prompt) => {
+      chat.weighing = false;
+      if (chat.ended || chat.running || chat.restart || holding) return reply(409, { error: 'busy', chatKey: chat.key });
+      return hand(prompt);
+    });
   }
 
   function permission(key, body) {
