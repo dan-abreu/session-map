@@ -99,6 +99,8 @@ export function createChat({
   // The compact button by Send opens this menu (the three ways, the model and level, the cost), as Claude's model button does.
   const menuEl = q('menu') ?? panelEl;
   const moreEl = q('more');
+  const bookBtn = q('bookbtn');
+  bookBtn?.addEventListener('click', () => (bookEl && !bookEl.hidden ? closeBook() : openBook()));
   const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
   const uid = root.id || 'chat';
@@ -814,6 +816,8 @@ export function createChat({
     input.disabled = stuck;
     // The ⋯ shows once it has something to offer (a conversation the page started a moment ago has no id yet).
     if (moreEl) moreEl.hidden = !moreActions().length;
+    // The book has its own button in the header, so it is one click away and not hidden in the ⋯.
+    if (bookBtn) bookBtn.hidden = !(shownId() && findEl);
     renderHead(state, items);
   }
 
@@ -1167,6 +1171,31 @@ export function createChat({
     (moreEl && !moreEl.hidden ? moreEl : logEl).focus();
   }
 
+  // A chapter's saved text, laid out as a page: the request, the AI's words, and its tool steps folded away.
+  function bookPage(raw, tt) {
+    const CUT = '[… meio do capítulo cortado …]';
+    const parts = String(raw ?? '').replace(CUT, '\n\n§CUT§\n\n').split(/\n\n+/).map((p) => p.replace(/\s+$/, '')).filter((p) => p.trim());
+    const out = [];
+    let steps = [];
+    const flush = () => {
+      if (!steps.length) return;
+      out.push(h('details', { class: 'chat-book-steps' }, h('summary', {}, tt('chat.bookSteps', { n: steps.length })), h('pre', {}, steps.join('\n'))));
+      steps = [];
+    };
+    let afterRequest = false;
+    for (const p of parts) {
+      if (/^# Cap\. \d+$/.test(p)) continue;
+      if (p === '## Pedido') { out.push(h('div', { class: 'chat-book-label' }, tt('chat.bookRequest'))); afterRequest = true; continue; }
+      if (afterRequest) { afterRequest = false; out.push(h('blockquote', { class: 'chat-book-ask' }, p)); continue; }
+      if (p === '§CUT§') { flush(); out.push(h('p', { class: 'chat-book-cut muted' }, CUT)); continue; }
+      if (/^→ /.test(p) || /^\s+← /.test(p)) { steps.push(p.trim()); continue; }
+      flush();
+      out.push(h('p', { class: 'chat-book-p' }, p));
+    }
+    flush();
+    return out;
+  }
+
   async function openBook() {
     const id = shownId();
     if (!id || !findEl) return;
@@ -1185,20 +1214,28 @@ export function createChat({
     let book;
     try { book = await api.chatBook(id); } catch { book = null; }
     if (!book?.chapters?.length) { body.replaceChildren(h('p', { class: 'muted' }, tt('chat.bookEmpty'))); return; }
-    body.replaceChildren(...(book.title ? [h('p', { class: 'chat-book-title' }, book.title)] : []), ...book.chapters.map((c) => {
-      const text = h('pre', { class: 'chat-book-text' });
-      const det = h('details', { class: 'chat-book-cap' },
-        h('summary', {}, h('span', { class: 'num' }, `${c.n}. `), c.title || tt('chat.bookUntitled', { n: c.n }), c.closed ? '' : ` (${tt('chat.bookOpen')})`),
-        c.summary ? h('p', { class: 'muted' }, c.summary) : null, text);
+    const label = (c) => (c.title || tt('chat.bookUntitled', { n: c.n })) + (c.closed ? '' : ` (${tt('chat.bookOpen')})`);
+    const caps = book.chapters.map((c) => {
+      const page = h('div', { class: 'chat-book-page' });
+      const det = h('details', { class: 'chat-book-cap', id: `book-cap-${c.n}` },
+        h('summary', {}, h('span', { class: 'num' }, `${c.n}. `), h('span', { class: 'chat-book-ctitle' }, label(c)),
+          c.summary ? h('span', { class: 'chat-book-sum muted' }, c.summary) : null), page);
       let loaded = false;
       det.addEventListener('toggle', async () => {
         if (!det.open || loaded) return;
         loaded = true;
-        text.textContent = tt('chat.bookLoading');
-        try { text.textContent = (await api.chatBookChapter(id, c.n)).text; } catch { text.textContent = c.closed ? tt('chat.bookFail') : tt('chat.bookNotYet'); loaded = false; }
+        page.replaceChildren(h('p', { class: 'muted' }, tt('chat.bookLoading')));
+        const res = await api.chatBookChapter(id, c.n).catch(() => null);
+        if (res?.text) page.replaceChildren(...bookPage(res.text, tt));
+        else { page.replaceChildren(h('p', { class: 'muted' }, c.closed ? tt('chat.bookFail') : tt('chat.bookNotYet'))); loaded = false; }
       });
       return det;
-    }));
+    });
+    const index = h('nav', { class: 'chat-book-index', 'aria-label': tt('chat.bookIndex') },
+      h('div', { class: 'chat-book-label' }, tt('chat.bookIndex')),
+      h('ol', {}, ...book.chapters.map((c, i) => h('li', {}, h('a', { href: `#book-cap-${c.n}`,
+        onclick: (e) => { e.preventDefault(); caps[i].open = true; caps[i].scrollIntoView({ block: 'nearest' }); } }, label(c))))));
+    body.replaceChildren(...(book.title ? [h('h3', { class: 'chat-book-title' }, book.title)] : []), index, ...caps);
   }
 
   // ---- the header's ⋯ menu (pc18): everything that is not the conversation itself, in three groups ----

@@ -345,8 +345,8 @@ test('the ⋯ holds every moved action: about this part, find, rename or move, a
   part('more').fire('click');
   assert.equal(part('moremenu').hidden, false);
   const rows = walk(part('moremenu')).filter((e) => e.attrs.role === 'menuitem');
-  assert.deepEqual(rows.map((r) => r.attrs['data-more']), ['about', 'find', 'rename', 'archive', 'open', 'delete', 'new']);
-  assert.ok(text(rows[0]).includes('chat.about') && text(rows[1]).includes('chat.find') && text(rows[6]).includes('chat.moreNew'));
+  assert.deepEqual(rows.map((r) => r.attrs['data-more']), ['about', 'book', 'find', 'rename', 'archive', 'open', 'delete', 'new']);
+  assert.ok(text(rows[0]).includes('chat.about') && text(rows[2]).includes('chat.find') && text(rows[7]).includes('chat.moreNew'));
   rows[0].attrs.onclick();
   assert.deepEqual(done, [['about']]);
   assert.equal(part('moremenu').hidden, true, 'a choice closes it');
