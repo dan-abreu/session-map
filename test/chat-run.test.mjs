@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DEFAULT_RUN, parseRun, runArgs, runPrompt, expectedRun, settingsRun, readRunBlock, mayReinforce,
-  reinforcedSpend, addReinforcedSpend, reinforcedLimit, setReinforcedLimit, withRunNote, budgetLine,
+  reinforcedSpend, addReinforcedSpend, reinforcedLimit, setReinforcedLimit, withRunNote, budgetLine, isWeighed, withWeighed,
 } from '../server/chat/run.mjs';
 import { conductorTail } from '../server/ai/conductor.mjs';
 import { personsWords } from '../server/chat/prompt.mjs';
@@ -234,4 +234,34 @@ test('a run note goes before the person\'s words when the way of working changes
   const fixed = withRunNote({ kind: 'fixed', model: 'haiku', effort: 'low' }, 'Rename it');
   assert.equal(personsWords(fixed), 'Rename it');
   assert.equal(personsWords('plain words'), 'plain words');
+});
+
+// ---- the entry brain's level on top of the run (or31) ----
+
+test('withWeighed puts the brain\'s level on Autonomous and Automatic only when no model or effort was named; the prompt names the real model', () => {
+  const level = { model: 'sonnet', effort: 'low' };
+  assert.equal(isWeighed({ kind: 'autonomous' }), true);
+  assert.equal(isWeighed({ kind: 'auto', selfReinforce: true }), true);
+  for (const run of [{ kind: 'autonomous', model: 'opus' }, { kind: 'autonomous', effort: 'high' }, { kind: 'maestro' }, { kind: 'fixed', model: 'haiku', effort: 'low' }, { kind: 'settings' }]) {
+    assert.equal(isWeighed(run), false, JSON.stringify(run));
+    assert.deepEqual(withWeighed(run, level), run);
+  }
+  assert.deepEqual(withWeighed({ kind: 'autonomous' }, null), { kind: 'autonomous' });
+  const auto = withWeighed({ kind: 'auto', selfReinforce: false }, level);
+  assert.deepEqual(auto, { kind: 'auto', selfReinforce: false, model: 'sonnet', effort: 'low' });
+  const args = runArgs(auto);
+  assert.deepEqual([flag(args, '--model'), flag(args, '--effort')], ['sonnet', 'low']);
+  assert.match(flag(args, '--append-system-prompt'), /You run on Sonnet at low effort/);
+  assert.deepEqual(expectedRun(auto, null), { model: 'sonnet', effort: 'low', ultracode: false });
+  assert.match(runPrompt(withWeighed({ kind: 'autonomous' }, { model: 'haiku', effort: 'low' })), /on Haiku at low effort/);
+  // The plain run is what the page sends and what is saved: parseRun never lets a level in through Automatic.
+  assert.deepEqual(parseRun({ kind: 'auto', model: 'haiku', effort: 'low' }), { kind: 'auto', selfReinforce: false });
+});
+
+test('the weighed Autonomous prompt with its tail stays under 4 KB at every level', () => {
+  const tail = [conductorTail({ others: null, stats: [] }), budgetLine({ limitUSD: 1234.5, spentUSD: 999.25 })].join('\n');
+  for (const level of [{ model: 'haiku', effort: 'low' }, { model: 'sonnet', effort: 'medium' }, { model: 'opus', effort: 'high' }]) {
+    const sent = flag(runArgs(withWeighed({ kind: 'autonomous' }, level), tail), '--append-system-prompt');
+    assert.ok(Buffer.byteLength(sent, 'utf8') < 4096, `${level.model}: ${Buffer.byteLength(sent, 'utf8')} bytes`);
+  }
 });

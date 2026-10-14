@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { exportMermaid, readDraft, writeDraft } from '../arch/flow.mjs';
-import { cleanEnv, findClaude } from '../ai/runner.mjs';
+import { cleanEnv, findClaude, runClaudeJSON } from '../ai/runner.mjs';
+import { HAIKU_SCHEMA, haikuOf, haikuPrompt, levelRank, phaseNote, wantsHaiku, weigh } from '../ai/brain.mjs';
 import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
@@ -23,7 +25,7 @@ import { firstPrompt, personsWords } from './prompt.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
 import {
   DEFAULT_RUN, addReinforcedSpend, budgetLine, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
-  settingsRun, withRunNote,
+  isWeighed, settingsRun, withRunNote, withWeighed,
 } from './run.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 import { guardSettings } from './guard.mjs';
@@ -34,7 +36,7 @@ import { readJsonFile, writeAtomic } from '../store.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
 import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
-import { measureWork, directiveOf } from '../ai/size.mjs';
+import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
@@ -135,6 +137,26 @@ const isAutonomous = (chat) => chat.processRun.kind === 'autonomous';
 const instructionsOf = (run) => (run.kind === 'fixed' || run.kind === 'settings' ? 'plain' : run.kind);
 const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 
+// ---- the entry brain (or31/or29): each message of the person is weighed before it runs ----
+// The one cheap Haiku call for a long text the rules cannot read runs in a folder of its own under the OS temp dir, with no tools.
+const BRAIN_DIR = join(tmpdir(), 'session-map-brain');
+const HAIKU_TIMEOUT_MS = 20_000;
+const HAIKU_MAX = 2;
+// What a conversation planned, kept so a bare "pode construir" later builds at the plan's size.
+const PLANNED = new Set(['medium', 'large']);
+const BIGGER = { medium: 1, large: 2 };
+// The level the conversation moves to. Up at once; down only when the talk gets small (talk or trivial), never mid-turn
+// (the caller only gives an idle chat's message). Otherwise the level stays and only the phase of the turn changes.
+function settle(prev, next) {
+  const same = prev && levelRank(next.model, next.effort) < levelRank(prev.model, prev.effort) && next.phase !== 'talk' && next.phase !== 'trivial';
+  return same ? { ...next, model: prev.model, effort: prev.effort, why: prev.why } : next;
+}
+// The run as the process runs it: the person's choice with the brain's level on top.
+const runOf = (chat) => withWeighed(chat.run, chat.weighed);
+const flagsOf = (run) => JSON.stringify(runArgs(run));
+// A process that was told to end for a change of level is killed after this, so the message that asked for it does not wait for ever.
+const SWAP_KILL_MS = 8000;
+
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 // → the images of a message, [] when it has none, null when they are not images we pass on.
 const imagesOf = (v) => {
@@ -189,10 +211,11 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // show; orchestra ({now, every, stopEvery, tickMs, namedMs}): the orchestrator's clock and timer (orchestra.mjs), for tests.
 // chatsMax: how many chats may run at once; tests make it larger.
 // projectBudget(projectId): that project's month against its budget (budget.mjs) from the newest finished state, or null.
+// askHaiku(text): the one cheap call that helps the entry brain with a long text it cannot read (runClaudeJSON's answer); tests inject it.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
-  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null,
+  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -380,12 +403,27 @@ export function createChatHub({
   }
 
   function onDriverEvent(chat, evt) {
+    // The process the entry brain is replacing has gone: the new one takes its place (swapDriver).
+    if (evt.type === 'exit' && chat.swapExit) {
+      const next = chat.swapExit;
+      chat.swapExit = null;
+      if (!chat.closing) return next();
+    }
     if (evt.type === 'session') {
-      // The CLI repeats init every turn: only the first one is news, or a mode the header changed since.
+      if (chat.moveMark) {
+        chat.moveMark = false;
+        if (chat.turns.length) chat.turns[chat.turns.length - 1].at = now();
+      }
+      // The CLI repeats init every turn: only the first one is news, or a mode the header changed since, or the model of a
+      // process the entry brain swapped in.
       if (chat.announced) {
         if (evt.data.mode && evt.data.mode !== chat.reported) {
           chat.reported = evt.data.mode;
           emit(chat, 'mode', { mode: chat.reported });
+        }
+        if (evt.data.model && evt.data.model !== chat.model) {
+          chat.model = evt.data.model;
+          emitRun(chat);
         }
         return undefined;
       }
@@ -402,6 +440,7 @@ export function createChatHub({
       // parentId: the mother, kept also for a conversation the orchestrator adopted (its list_chats reads it).
       savePageChat(chat.sessionId, {
         projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, running: chat.running, updatedAt: now(),
+        ...(chat.planned ? { planned: chat.planned } : {}),
         ...(chat.parentId && chat.parentId !== chat.sessionId ? { parentId: chat.parentId } : {}),
         ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
       });
@@ -451,10 +490,12 @@ export function createChatHub({
   // What the header shows: the way it runs, the model claude reported (the alias until it does), the level the maestro
   // works at and why, and what the conversation has cost.
   function emitRun(chat) {
-    const expected = expectedRun(chat.run, settingsRun(chat.root, dir));
+    const expected = expectedRun(runOf(chat), settingsRun(chat.root, dir));
     emit(chat, 'run', {
       run: chat.run, model: chat.model ?? expected.model, effort: expected.effort, ultracode: expected.ultracode,
       level: chat.level?.level ?? null, why: chat.level?.why ?? null, estimateUSD: chat.level?.estimateUSD ?? null, costUSD: chat.costUSD,
+      // The entry brain's weight of the turn ("Sonnet · low: conversa"): its phase and the key of its reason (run.brain.<why>).
+      brain: chat.weighed ? { phase: chat.weighed.phase, why: chat.weighed.why } : null,
     });
   }
 
@@ -578,13 +619,130 @@ export function createChatHub({
     return { at: newest, cut };
   }
 
+  // ---- the entry brain (or31/or29) ----
+
+  // The one cheap call; a failed one never blocks, the rules decide alone.
+  // At most HAIKU_MAX calls at once, and none for a request the guards would refuse (a busy chat, the chat limit): the
+  // chat limit then also bounds this subprocess work.
+  let haikuBusy = 0;
+  async function haikuFor(text, sessionId) {
+    if (haikuBusy >= HAIKU_MAX || [...chats.values()].filter((c) => !c.ended).length >= chatsMax) return null;
+    const driven = sessionId ? drivenNow(sessionId) : null;
+    if (driven && (driven.running || driven.weighing || driven.restart)) return null;
+    haikuBusy += 1;
+    try {
+      const claude = bin !== undefined ? bin : findClaude();
+      if (!askHaiku && !claude) return null;
+      const res = askHaiku ? await askHaiku(text) : await runClaudeJSON(haikuPrompt(text), { model: 'haiku', cwd: BRAIN_DIR, schemaHint: HAIKU_SCHEMA, bin: claude, env, timeoutMs: HAIKU_TIMEOUT_MS });
+      return haikuOf(res);
+    } catch { return null; } finally { haikuBusy -= 1; }
+  }
+
+  const wantsHaikuFor = (text) => wantsHaiku({ text, measured: sizeRequest({ text }) });
+  const weighText = (text, { haiku = null, prev = null, planned = null } = {}) => settle(prev, weigh({ text, measured: sizeRequest({ text }), haiku, planned }));
+
+  // A plan makes later "pode construir" build at its size; a build of a bigger size raises it.
+  function rememberPlan(chat, turn) {
+    let planned = chat.planned;
+    if (turn.phase === 'plan') planned = turn.size === 'large' ? 'large' : 'medium';
+    else if (turn.phase === 'build' && PLANNED.has(turn.size) && (BIGGER[turn.size] > (BIGGER[planned] ?? 0))) planned = turn.size;
+    if (planned === chat.planned) return;
+    chat.planned = planned;
+    if (chat.sessionId) savePageChat(chat.sessionId, { planned });
+  }
+
+  // The process runs flags (model, effort, prompt) it cannot change: the idle one is ended and a new one resumes the same
+  // conversation under the same key, so the page keeps its stream. The message that asked for the move waits for it.
+  function launch(chat, resume) {
+    const run = runOf(chat);
+    const tail = [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n');
+    return startDriver({
+      bin: chat.bin,
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
+      cwd: chat.cwd, env: cleanEnv(env),
+      onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
+    });
+  }
+
+  function swapDriver(chat) {
+    const old = chat.driver;
+    const held = { message: null, stopped: false };
+    chat.swapExit = () => {
+      clearTimeout(chat.swapTimer);
+      // The old process's cost joins the base; the new one counts from zero, and reports its own model.
+      chat.baseCostUSD = chat.costUSD;
+      chat.processCostUSD = 0;
+      chat.model = null;
+      chat.processRun = chat.run;
+      chat.driver = launch(chat, chat.sessionId);
+      if (held.stopped) return onDriverEvent(chat, { type: 'turn-end', data: { isError: false } });
+      if (held.message) {
+        // The transcript stamps the message when the new process reads it, seconds after it started: the turn's mark moves
+        // to the process's first line (onDriverEvent), or the next turn's message would be read as this one (pc13).
+        chat.moveMark = true;
+        chat.driver.send(...held.message);
+      }
+      return undefined;
+    };
+    chat.driver = {
+      send: (prompt, images) => { held.message = [prompt, images]; },
+      interrupt: () => { held.message = null; held.stopped = true; },
+      setMode: () => {},
+      end: () => old.end(),
+      kill: () => old.kill(),
+    };
+    // A process that does not leave on its own is killed: the person's message is waiting.
+    chat.swapTimer = setTimeout(() => old.kill(), SWAP_KILL_MS);
+    chat.swapTimer.unref?.();
+    old.end();
+  }
+
+  // Put the turn's level on the chat: the same flags only change the header; others swap the process.
+  function applyTurn(chat, turn) {
+    const differs = flagsOf(withWeighed(chat.run, turn)) !== flagsOf(runOf(chat));
+    // A process that never announced its session cannot be resumed: it keeps its level.
+    const moves = differs && Boolean(chat.sessionId && chat.announced);
+    const prev = chat.weighed;
+    chat.weighed = differs && !moves && prev ? { ...turn, model: prev.model, effort: prev.effort, why: prev.why } : turn;
+    rememberPlan(chat, turn);
+    if (moves) swapDriver(chat);
+    emitRun(chat);
+  }
+
+  // The message of the person into an idle live chat. In the run the brain weighs, the message is weighed first (Haiku once
+  // when the rules are unsure and the text is long), the chat moves to the level it asks for and the turn opens with its
+  // phase note. Any other message goes as it is. -> null when sent, or a Promise of null | a busy reply while Haiku was asked.
+  // haiku: given when the caller asked already (null: it failed or was not needed).
+  function deliver(chat, { text, prompt = text, images = [], auto, from = auto, quiet = false, haiku }) {
+    if (quiet || auto !== undefined || !isWeighed(chat.run)) {
+      sendTo(chat, text, prompt, auto, images, from);
+      return null;
+    }
+    const go = (h) => {
+      const turn = weighText(text, { haiku: h, prev: chat.weighed, planned: chat.planned });
+      applyTurn(chat, turn);
+      sendTo(chat, text, phaseNote(turn.phase, prompt), auto, images, from);
+    };
+    if (haiku !== undefined || !wantsHaikuFor(text)) {
+      go(haiku ?? null);
+      return null;
+    }
+    chat.weighing = true;
+    return haikuFor(text).then((h) => {
+      chat.weighing = false;
+      if (chat.ended || chat.running || chat.restart || holding) return reply(409, { error: 'busy', chatKey: chat.key });
+      go(h);
+      return null;
+    });
+  }
+
   // shown: what the person wrote, for a page that opens the conversation later; prompt may carry the context block.
   // from: who sent it, for the orchestrator's count of turns in a row: auto, or 'restart' for the agreed restart's note,
   // which shows as the person's text but is session-map's.
   function sendTo(chat, shown, prompt = shown, auto = undefined, images = [], from = auto) {
     clearTimeout(chat.idleTimer);
     if (instructionsOf(chat.run) !== chat.prompted) {
-      prompt = withRunNote(chat.run, prompt);
+      prompt = withRunNote(runOf(chat), prompt);
       chat.prompted = instructionsOf(chat.run);
       if (chat.sessionId) savePageChat(chat.sessionId, { prompted: chat.prompted });
     }
@@ -640,8 +798,20 @@ ${prompt}`;
     if (body.mode !== undefined && pickMode(body.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
     const asked = body.run === undefined ? null : parseRun(body.run);
     if (body.run !== undefined && !asked) return reply(400, { error: 'bad-run' });
+    // The entry brain weighs only the person's own words (not an orchestrator's message, the agreed restart's note or a
+    // continue after a cut); the one Haiku call for a long text it cannot read comes before anything is checked or started.
+    const mine = !idle && internal.auto === undefined && !internal.orchestrator && internal.restart !== true && body.cut !== true;
+    const haiku = mine && (asked ? isWeighed(asked) : true) && wantsHaikuFor(body.text) ? await haikuFor(body.text, body.sessionId) : null;
     const fromSettings = settingsMode(project.root, dir);
 
+    // The entry brain weighs the first message of a process (a fresh one has nothing to lose by starting low or high); the
+    // phase note goes right before the person's words, after the context block.
+    let turn = null;
+    const planned = () => (PLANNED.has(saved?.planned) ? saved.planned : null);
+    const weighFirst = (run) => {
+      turn = mine && isWeighed(run) ? weighText(body.text, { haiku, planned: planned() }) : null;
+      return phaseNote(turn?.phase, body.text);
+    };
     let cwd;
     let prompt = body.text;
     let resume = null;
@@ -663,11 +833,11 @@ ${prompt}`;
       if (body.cut === true && (driven || (page && page.running !== true))) return reply(409, { error: 'busy', ...(driven ? { chatKey: driven.key } : {}) });
       if (driven && idle) return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: false });
       if (driven) {
-        if (driven.running) return reply(409, { error: 'busy', chatKey: driven.key });
+        if (driven.running || driven.weighing) return reply(409, { error: 'busy', chatKey: driven.key });
         if (body.mode !== undefined) changeMode(driven, body.mode);
         if (asked) changeRun(driven, asked);
         if (driven.restart) return reply(409, { error: 'restarting' });
-        sendTo(driven, body.text, body.text, internal.auto, images, fromOf(internal));
+        deliver(driven, { text: body.text, images, auto: internal.auto, from: fromOf(internal), quiet: !mine, haiku });
         return reply(200, { chatKey: driven.key, mode: driven.mode, downgraded: driven.choice === 'settings' && fromSettings.downgraded });
       }
       // A conversation open in VS Code or a terminal is someone else's: writing into it would interleave two drivers.
@@ -680,6 +850,7 @@ ${prompt}`;
       // Its process is gone: a team it ran in the background died with it. Claude reads which and how to resume it, after
       // the message; the page shows the message alone.
       cutTold = idle ? null : internal.teams ?? cutTeamsOf(resume);
+      prompt = weighFirst(asked ?? parseRun(saved?.run) ?? { kind: 'settings' });
       if (cutTold) prompt = `${prompt}\n\n${teamsNote(cutTold)}`;
       if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
       // The point it was opened on comes back with it: a resumed orchestrator is still the project's orchestrator.
@@ -708,7 +879,7 @@ ${prompt}`;
           if (directive) sections = [directive, ...sections];
         } catch { /* a failed measure never blocks the chat */ }
       }
-      prompt = firstPrompt({ sections, mother, workCell, text: body.text, board });
+      prompt = firstPrompt({ sections, mother, workCell, text: weighFirst(asked ?? DEFAULT_RUN), board });
 
       // An idea, a new map or a project chat is about the whole project: it starts at the root, whatever branch is picked.
       const atRoot = ['idea', 'create-arch', 'flow', 'project'].includes(node?.kind);
@@ -737,7 +908,9 @@ ${prompt}`;
       configPath: join(smDir, 'chat', `${key}.json`), flow,
       run, processRun: run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
       reinforcing: false, autoAnswered: false,
+      bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false, swapExit: null, swapTimer: null, moveMark: false,
     };
+    if (turn) rememberPlan(chat, turn);
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     if (resume) resuming.add(resume);
     try {
@@ -753,12 +926,7 @@ ${prompt}`;
     } finally {
       if (resume) resuming.delete(resume);
     }
-    chat.driver = startDriver({
-      bin: claude,
-      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode, run: runArgs(run, [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n')), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: orchestrator ? ORCH_ALLOWED : [] }),
-      cwd, env: cleanEnv(env),
-      onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
-    });
+    chat.driver = launch(chat, resume);
     // Waiting: closed as any quiet chat is, once idleMs passes with no message.
     if (idle) armIdle(chat, idleMs);
     else sendTo(chat, body.text, prompt, internal.auto, images, fromOf(internal));
@@ -776,9 +944,12 @@ ${prompt}`;
 
   // Model and effort are flags of the process: a change that touches them ends it (now, or after the running turn) and
   // the next message resumes the conversation with the new ones. "May reinforce on its own" alone needs no restart.
-  function changeRun(chat, run) {
-    const restart = JSON.stringify(runArgs(run)) !== JSON.stringify(runArgs(chat.run));
+  // weighed: the entry brain's level for the new run (the same one by default); only a weighed run keeps one.
+  function changeRun(chat, run, weighed = chat.weighed) {
+    const level = isWeighed(run) ? weighed : null;
+    const restart = flagsOf(withWeighed(run, level)) !== flagsOf(runOf(chat));
     chat.run = run;
+    chat.weighed = level;
     // The same flags: the live process already runs this way.
     if (!restart) chat.processRun = run;
     if (chat.sessionId) savePageChat(chat.sessionId, { run });
@@ -924,17 +1095,19 @@ ${prompt}`;
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);
 
-  function send(key, body) {
+  // -> the reply, or a Promise of it when the entry brain waited for its one Haiku call. quiet: not the person's own words
+  // (the orchestrator speaking into a chat), so nothing is weighed.
+  function send(key, body, quiet = false) {
     const chat = chatOf(key);
     if (!chat) return reply(404, { error: 'unknown-chat' });
     if (chat.ended) return reply(409, { error: 'ended' });
-    if (chat.running) return reply(409, { error: 'busy' });
+    if (chat.running || chat.weighing) return reply(409, { error: 'busy' });
     if (!isText(body?.text)) return reply(400, { error: 'bad-text' });
     if (holding) return reply(409, { error: 'server-restarting' });
     const images = imagesOf(body.images);
     if (!images) return reply(400, { error: 'bad-images' });
-    sendTo(chat, body.text, body.text, undefined, images);
-    return reply(200);
+    const waiting = deliver(chat, { text: body.text, images, quiet });
+    return waiting ? waiting.then((busy) => busy ?? reply(200)) : reply(200);
   }
 
   function permission(key, body) {
@@ -1034,7 +1207,7 @@ ${prompt}`;
     smDir, readState, changed, ...orchestraOptions,
     hub: {
       live: () => [...chats.values()].filter((c) => !c.ended), byKey: chatOf, driven: drivenNow, start, holding: () => holding,
-      send: (chat, text, auto) => sendTo(chat, text, text, auto), say: (key, text, images) => send(key, { text, images }),
+      send: (chat, text, auto) => sendTo(chat, text, text, auto), say: (key, text, images) => send(key, { text, images }, true),
       pageChats: readPageChats, closeIdle, emit, alert, transcript: transcriptOf, driving: drivingIds, chatsMax,
     },
   });

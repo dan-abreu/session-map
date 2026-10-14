@@ -80,13 +80,23 @@ test('Fable only for large work that is critical, long and autonomous, or where 
     assert.ok(crit.reviewer && crit.reviewer.provider !== 'claude', `${kind}: the other family reviews first`);
     assert.match(crit.why, /Fable[^.]*last word/, kind);
   }
-  // Large and long autonomous work: Fable at high, for code and decisions only.
+  // Large and long autonomous work is not Fable's either (the routing rule): code stays on Sonnet, decisions on Opus.
   const long = rec({ kind: 'code', size: 'large', longRun: true, others: OFF });
-  assert.equal(id(long.worker), 'claude:fable');
-  assert.equal(long.worker.effort, 'high');
-  assert.equal(long.finalCheck, null, 'Fable does not have the last word on its own work');
-  assert.equal(id(rec({ kind: 'architecture', size: 'large', longRun: true }).worker), 'claude:fable');
-  assert.equal(id(rec({ kind: 'reasoning', size: 'large', critical: true, longRun: true, others: OFF }).worker), 'claude:fable');
+  assert.deepEqual(long.worker, { provider: 'claude', model: 'sonnet', effort: 'high' });
+  assert.equal(long.finalCheck, null);
+  assert.equal(id(rec({ kind: 'architecture', size: 'large', longRun: true }).worker), 'claude:opus');
+  // Large, critical and long: Opus at high (pick_worker used to answer "Claude Fable at max" for large critical code),
+  // the other family reviews it, and Fable keeps only the last word.
+  for (const kind of ['code', 'reasoning', 'architecture', 'security']) {
+    const r = rec({ kind, size: 'large', critical: true, longRun: true });
+    assert.deepEqual(r.worker, { provider: 'claude', model: 'opus', effort: 'high' }, kind);
+    assert.deepEqual(r.finalCheck, { provider: 'claude', model: 'fable', effort: 'high' }, kind);
+    assert.ok(!r.alternatives.some((w) => w.model === 'fable'), kind);
+  }
+  // Once Opus failed it, the long-run rule does not keep it at high: the failure ladder decides (last resort Opus at xhigh).
+  const failedBoth = rec({ kind: 'code', size: 'large', critical: true, longRun: true, failedBefore: ['claude:opus', 'claude:fable'], others: OFF });
+  assert.equal(failedBoth.worker.effort, 'xhigh');
+  assert.match(failedBoth.why, /failed/i);
   for (const kind of ['text', 'portuguese', 'review']) {
     const r = rec({ kind, size: 'large', longRun: true, others: OFF });
     assert.notEqual(r.worker.model, 'fable', `${kind}: long text work is not Fable's`);

@@ -30,8 +30,15 @@ function autonomousRun({ model, effort }) {
   if ((model !== undefined && !MODELS.includes(model)) || (effort !== undefined && !EFFORTS.includes(effort))) return null;
   return { kind: 'autonomous', ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
 }
-const modelOf = (run) => (run.kind === 'autonomous' && run.model) || 'opus';
-const effortOf = (run) => (run.kind === 'autonomous' && run.effort) || 'high';
+const WEIGHABLE = new Set(['autonomous', 'auto']);
+const modelOf = (run) => (WEIGHABLE.has(run.kind) && run.model) || 'opus';
+const effortOf = (run) => (WEIGHABLE.has(run.kind) && run.effort) || 'high';
+
+// Does the entry brain (ai/brain.mjs) pick this run's model and effort? Only Autonomous and Automatic, and only when the
+// run names none. The hub keeps the run the person chose as it is and puts the brain's level on top of it for the process.
+export const isWeighed = (run) => WEIGHABLE.has(run?.kind) && !run.model && !run.effort;
+// The run with the brain's level ({model, effort}) on top; any other run, or none weighed yet, comes back as it is.
+export const withWeighed = (run, level) => (level && isWeighed(run) ? { ...run, model: level.model, effort: level.effort } : run);
 const MODEL_NAMES = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
 
 // → the run as stored and passed on, or null for anything the page must not send to claude.
@@ -110,8 +117,8 @@ const AUTONOMOUS_PROMPT = [
 const PROMPTS = { autonomous: AUTONOMOUS_PROMPT, auto: AUTO_PROMPT, maestro: MAESTRO_PROMPT };
 
 export function runPrompt(run) {
-  if (run.kind === 'autonomous') return AUTONOMOUS_PROMPT.replace('on Opus at high', `on ${MODEL_NAMES[modelOf(run)]} at ${effortOf(run)}`);
-  return PROMPTS[run.kind] ?? null;
+  const prompt = PROMPTS[run.kind] ?? null;
+  return WEIGHABLE.has(run.kind) ? prompt.replace('on Opus at high', `on ${MODEL_NAMES[modelOf(run)]} at ${effortOf(run)}`) : prompt;
 }
 
 // The tail line of the Autonomous way: what the month still allows for reinforced work, so it knows when to stop.

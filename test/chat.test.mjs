@@ -921,7 +921,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 test('Automatic: Opus at high with the maestro prompt; the run event names the real model and the cost', async () => {
   const log = fakeLog();
   await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state, smDir }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run: AUTO }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'corrige o bug do pagamento', run: AUTO }, state);
     assert.equal(res.status, 200);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
@@ -1103,7 +1103,7 @@ test('a new conversation runs Autonomous: Opus at high with its prompt and the m
     const log = fakeLog();
     await withHub({ dir, env: { ...env, FAKE_LOG: log } }, async ({ hub, state, smDir }) => {
       writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 20 } }));
-      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', mode: 'acceptEdits' }, state);
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'corrige o bug do pagamento', mode: 'acceptEdits' }, state);
       assert.equal(res.status, 200);
       assert.equal(res.body.mode, 'auto');
       const r = recorder();

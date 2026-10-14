@@ -14,8 +14,8 @@ import { SENSITIVITIES, explainRoute, familyOf, loadStats, routeKindOf } from '.
 //   opus   high|xhigh   business rules, security, money, architecture, hard reasoning, review of critical work or of
 //                       what another AI wrote
 //   fable  high|max     the top (2.5x Opus' price; it leads only the agent indexes): the worker only for large work
-//                       that is also long and autonomous (code or a decision) or that Opus already failed, and the
-//                       last word on a large critical delivery, after the other family's review. Never a default.
+//                       that Opus already failed, and the last word on a large critical delivery, after the other
+//                       family's review. Never a default; long autonomous work alone does not call it.
 // Outside AIs come from router.explainRoute when the kind of work fits theirs and they are ready (key, switched on,
 // not paused for that kind of work, cap left). The reviewer is always from another family than the worker.
 
@@ -166,10 +166,13 @@ function baseLevel(kind, size, critical, outsideAuthor) {
 // Fable's: large critical work stays on Opus at xhigh, and Fable has the last word on it (recommend's finalCheck).
 function claudeWorker({ kind, size, critical, longRun, failed, outsideAuthor }) {
   const w = baseLevel(kind, size, critical, outsideAuthor);
-  const fable = (reason) => claudeAt('fable', critical ? 'max' : 'high', `Fable: ${reason}`);
-  if (size === 'large' && !failed.has('claude:fable')) {
-    if (longRun && LONG_FITS.has(kind)) return fable('large, long autonomous work');
-    if (w.model === 'opus' && failed.has('claude:opus')) return fable('large, and Opus failed it before');
+  // Fable only after Opus failed the large work (the routing rule); long autonomous work alone is not enough.
+  if (size === 'large' && !failed.has('claude:fable') && w.model === 'opus' && failed.has('claude:opus')) {
+    return claudeAt('fable', critical ? 'max' : 'high', 'Fable: large, and Opus failed it before');
+  }
+  // Large, critical and long: Opus at high, not Fable; the other family reviews and Fable has the last word (finalCheck).
+  if (size === 'large' && critical && longRun && LONG_FITS.has(kind) && w.model === 'opus' && !failed.has('claude:opus')) {
+    return claudeAt('opus', 'high', `large, critical, long ${kind} work stays on Opus at high: Fable is kept for what Opus failed`);
   }
   if (!failed.has(`claude:${w.model}`)) return w;
   const from = w.model;

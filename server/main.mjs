@@ -304,7 +304,7 @@ export function createApp({
     }
     if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req, verb === 'send' ? CHAT_BODY_MAX : BODY_MAX);
-    const result = verb === 'stop' ? chat.stop(key) : chat[verb](key, body);
+    const result = await (verb === 'stop' ? chat.stop(key) : chat[verb](key, body));
     return send(res, result.status, result.body);
   }
 
