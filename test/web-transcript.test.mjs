@@ -70,6 +70,12 @@ test('a message shows its markdown, its time and the cost of the reply', () => {
   assert.match(text(node), /\$0\.12/);
 });
 
+test('a reply names the AI and model and splits the cost into sent and back', () => {
+  const node = view().node({ type: 'assistant', text: 'ok', model: 'claude-sonnet-5-5', ts: '2026-10-09T10:05:00Z', replyCostUSD: 0.12, replyInUSD: 0.1, replyOutUSD: 0.02 });
+  assert.match(text(node), /chat.replyWho/);
+  assert.match(text(node), /chat.replySplit/);
+});
+
 test('a step folds with its words, input and result; an edit shows before and after', () => {
   const tv = view();
   const run = tv.node({ type: 'tool', name: 'Bash', ts: '2026-10-09T10:05:00Z', step: { kind: 'run', target: 'npm test' }, input: '{"command":"npm test"}', result: 'ok', isError: false });

@@ -255,10 +255,17 @@ function createBuilder({ cwd, prices, keep = null }) {
   // The message a result() put the open turn's cost on: it loses it if a later line becomes the turn's last.
   let provisional = null;
   const turnCost = () => (turn.last && turn.usage.size ? round6(costOf([...turn.usage.values()], prices).usd) : null);
+  // The reply's cost split: what was sent (the prompt side, re-read context included) and what came back (the output).
+  const stamp = (item, usd) => {
+    const out = round6(costOf([...turn.usage.values()].map((u) => ({ model: u.model, output: u.output })), prices).usd);
+    item.replyCostUSD = usd;
+    item.replyOutUSD = out;
+    item.replyInUSD = round6(usd - out);
+  };
   const closeTurn = () => {
     const usd = turnCost();
     if (usd === null) return;
-    turn.last.replyCostUSD = usd;
+    stamp(turn.last, usd);
     closed += usd;
     provisional = null;
   };
@@ -285,7 +292,7 @@ function createBuilder({ cwd, prices, keep = null }) {
         if (b.type === 'text' && b.text?.trim()) {
           const item = { type: 'assistant', text: b.text, ts, model: entry.message?.model ?? null };
           items.push(item);
-          if (provisional && provisional !== item) delete provisional.replyCostUSD;
+          if (provisional && provisional !== item) { delete provisional.replyCostUSD; delete provisional.replyOutUSD; delete provisional.replyInUSD; }
           provisional = null;
           turn.last = item;
         } else if (b.type === 'thinking' && (b.thinking?.trim() || entry.thinkingDurationMs)) {
@@ -335,7 +342,7 @@ function createBuilder({ cwd, prices, keep = null }) {
     result() {
       const usd = turnCost();
       if (usd !== null) {
-        turn.last.replyCostUSD = usd;
+        stamp(turn.last, usd);
         provisional = turn.last;
       }
       return { items: [...items], costUSD: round6(closed + (usd ?? 0)) };
