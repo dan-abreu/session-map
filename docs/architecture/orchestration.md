@@ -115,6 +115,10 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - One file, `server/ai/policy.json`, each row with its evidence: search, read, bulk, text, commit -> Haiku low; docs -> Sonnet low; code, tests, screens, debug, plan, review -> Sonnet medium (bench: code 22/22, review 20/20, plan 8/8); architecture, security, money, personal data -> Opus high. A failure climbs one rung: Haiku low, Sonnet medium, Sonnet high, Opus high, Opus xhigh, Fable high (only after Opus failed); max never on its own. The conversation's phases (trivial, talk, plan, build) live in the same file.
   - Held by the guard: an agent's description starts with its kind ("[code] ..."); the hook sets model and effort from the policy (updatedInput), so the AI never picks them; no kind, no agent. The brain, `recommend()`, the conductor prompt and the human page `docs/standard/politica-de-modelos.md` (generated from the file, checked by a test) all read the same table.
   - From `id114`.
+- [ ] **in progress · important:** The policy holds in every Claude Code session on the PC, not only in chats session-map starts; CLAUDE.md only points to it `or34`
+  - Found on 2026-10-13: the owner's user settings started every terminal and VS Code chat on Opus with a 1M context at xhigh, compacting only near 1M (a chat reached 966k and US$ 149). Changed the same day: default Sonnet at medium, Opus at high when picked by hand, compaction at 100k for both (backup `~/.claude/settings.json.bak-2026-10-13-model`).
+  - Next: the guard and the book as hooks of the session-map plugin itself (hooks/hooks.json), so every session where the plugin is on applies the policy, the agent kind tag and the chapter index; a page chat, which already gets them through --settings, skips the second copy. Workflow scripts are checked too: an agent() with a model or effort above the policy for its kind is refused. Reaches the PC with the next plugin release.
+  - From `id115`.
 
 ### Board of roles
 

@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114
+- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115
 - This registry: id65, id66, id67
 - Economy, context and skills: id100, id101, id102, id103, id104
 
@@ -341,6 +341,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: an agent started as "[code] ..." with opus/high runs as Sonnet medium anyway; one without a kind is refused; the policy page shows the same table the engine uses, with where each row's number came from.
   - Where it went: `or33`.
   - Status: in progress: `or33` being built on 2026-10-13.
+
+- [ ] **in progress:** Rules in code, central, not in CLAUDE.md, which fails `id115`
+  - Asked: 2026-10-13 — "não tem uma forma ou arquivo ou documento para criar isso de forma mais centrealizada baseada em codigopara nao depender so do claud md, porque eu trabalho com claude.md a um tempo e falha muito, nao podemos ter falhas"
+  - What it means: what must never fail is enforced by code and settings every session obeys (defaults, hooks, the policy file); CLAUDE.md keeps only how to talk to the owner.
+  - How to confirm it is done: a new terminal chat starts on Sonnet medium; an agent asked for Opus on ordinary code runs on Sonnet in any session; a long terminal chat is summarized at 100k.
+  - Where it went: `or34` (with `or33`).
+  - Status: in progress: user defaults changed on 2026-10-13; the plugin hooks next.
 
 ### This registry
 
