@@ -583,6 +583,8 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .bx-chip.is-you { background: var(--waiting-fill); color: var(--waiting-ink); }
 .bx-chip.is-blocks { background: var(--clash-fill); color: var(--clash-ink); }
 .bx-chip.is-doing { background: var(--doing-fill); color: var(--doing-ink); }
+.bx-chip.is-live-working { background: var(--active-fill); color: var(--active-ink); }
+.bx-chip.is-live-built { background: var(--doing-fill); color: var(--doing-ink); }
 .bx-code { font: 600 var(--fs-2xs)/1.6 var(--mono); color: color-mix(in srgb, var(--lv-ink, var(--ink)) 62%, transparent); }
 .bx-bar { display: block; justify-self: stretch; height: 3px; margin-top: 4px; border-radius: var(--r-xs); background: color-mix(in srgb, var(--lv-ink) 12%, transparent); overflow: hidden; }
 .bx-bar span { display: block; height: 100%; border-radius: var(--r-xs); background: color-mix(in srgb, var(--lv-ink) 55%, transparent); }

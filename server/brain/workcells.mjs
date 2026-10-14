@@ -4,6 +4,7 @@ import { runGit } from '../sources/gitqueue.mjs';
 const TIMEOUT_MS = 10_000;
 const IDLE_AFTER_MS = 7 * 86_400_000;
 const FLD = '\x1f';
+const SUBJECTS_MAX = 40;
 
 async function run(cwd, args) {
   const { err, stdout } = await runGit(cwd, args, { timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
@@ -92,6 +93,8 @@ async function cellOf(root, base, branch, place, worktrees, now) {
     estimateUSD: null,
     costUSD: 0,
     lastCommit: { hash: last.hash, subject: last.subject, ts: last.ts },
+    // The subjects of its commits not yet on main: the status robot reads which items the branch builds (sb13).
+    subjects: commits.slice(0, SUBJECTS_MAX).map((c) => c.subject.slice(0, 200)),
     status: now - Date.parse(last.ts) > IDLE_AFTER_MS ? 'idle' : 'active',
     bornAt: commits.at(-1).ts,
     mergedAt: null,
@@ -183,4 +186,15 @@ export async function backfillMerges(root, main, { since } = {}) {
     events.push({ kind: 'fused', workCellId, ts: toIso(mergedAt) });
   }
   return events.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || (b.kind === 'born') - (a.kind === 'born'));
+}
+
+// The commits of main since a date, newest first: [{hash, ts, subject}]. The status robot (sb13) reads which items they built.
+export async function mainCommitsOf(root, main, { since } = {}) {
+  const base = main ? await baseOf(root, main) : null;
+  if (!base) return [];
+  const out = await git(root, ['log', ...(since ? [`--since=${since}`] : []), `--format=%H${FLD}%cI${FLD}%s`, base]);
+  return lines(out).map((line) => {
+    const [hash, ts, subject] = line.split(FLD);
+    return { hash, ts: toIso(ts), subject };
+  });
 }

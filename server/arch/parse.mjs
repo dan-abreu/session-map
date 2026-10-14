@@ -33,7 +33,7 @@ function headingsOf(lines) {
   return out;
 }
 
-function parseBold(rest) {
+export function parseBold(rest) {
   const m = /^\*\*([^*]+?)(:?)\*\*(:?)\s*(.*)$/.exec(rest);
   if (!m || !(m[2] || m[3])) return null;
   const tokens = m[1].split(/\s*[·|]\s*/).map((t) => t.trim()).filter(Boolean).map(classifyToken);

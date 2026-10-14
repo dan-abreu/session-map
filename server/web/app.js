@@ -4,6 +4,7 @@ import {
   sizeOf, shareText, chatPointOf, noFiles,
 } from './tree.js';
 import { createMindmap } from './mindmap.js';
+import { liveBadge } from './itemlive.js';
 import { mapFileName, outlineOf, freeMindOf, xmindOf } from './mmexport.js';
 import { saveBlob } from './flowexport.js';
 import { createOutline } from './outline.js';
@@ -294,12 +295,19 @@ function partBadges(node) {
   return out;
 }
 
+// The status robot's badge on an item (sb13): working now, or built on main and not ticked.
+function liveChip(i) {
+  const b = liveBadge(i.live, t);
+  return b ? h('span', { class: `bx-chip is-live-${b.kind}`, title: b.title }, b.text) : null;
+}
+
 function itemBody(node) {
   const i = node.item;
   return [
     h('span', { class: 'bx-head' }, h('span', { class: `bx-status st-${i.status}`, title: t(`item.status.${i.status}`) }, h('span', { class: 'visually-hidden' }, t(`item.status.${i.status}`))), h('span', { class: 'bx-title' }, node.label)),
     h('span', { class: 'bx-meta' },
       i.status === 'doing' ? h('span', { class: 'bx-chip is-doing' }, t('item.status.doing')) : null,
+      liveChip(i),
       i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
       i.weight === 'blocks' && i.status !== 'done' ? h('span', { class: 'bx-chip is-blocks' }, t('item.weight.blocks')) : null,
       i.code ? h('code', { class: 'bx-code' }, i.code) : null),
@@ -428,7 +436,7 @@ function boxContent(node) {
 
 function signature(node) {
   const part = node.kind === 'part' ? node.part.id : null;
-  return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, marks.live.has(node.id),
+  return JSON.stringify([lang, node.label, node.counts, node.item?.status, node.item?.who, node.item?.weight, node.item?.code, node.item?.live, marks.live.has(node.id),
     part && marks.branches.get(part), part && marks.clashes.get(part), node.kind === 'project' && shown.chats.length, node.kind === 'project' && projectChats(project).length, node.kind === 'project' && JSON.stringify(orchState(project)),
     sizeOf(project.arch?.sizes, node), node.kind === 'project' && project.arch?.sizes?.unowned?.files, part && footShares()?.get(part), freshOfNode(node), dotsSig(node)]);
 }
@@ -1264,7 +1272,7 @@ function itemRow(node) {
   return h('li', {}, h('button', { type: 'button', class: `item-row st-${i.status}`, onclick: () => openPoint(node) },
     h('span', { class: `bx-status st-${i.status}`, 'aria-hidden': 'true' }),
     h('span', { class: 'ir-title' }, node.label),
-    h('span', { class: 'ir-meta' }, [i.status === 'doing' ? t('item.status.doing') : null, i.status === 'done' ? t('item.status.done') : null, i.who, i.weight ? t(`item.weight.${i.weight}`) : null, tech ? i.code : null].filter(Boolean).join(' · '))));
+    h('span', { class: 'ir-meta' }, [i.status === 'doing' ? t('item.status.doing') : null, liveBadge(i.live, t)?.text, i.status === 'done' ? t('item.status.done') : null, i.who, i.weight ? t(`item.weight.${i.weight}`) : null, tech ? i.code : null].filter(Boolean).join(' · '))));
 }
 
 function itemList(nodes) {
@@ -1408,6 +1416,7 @@ function itemDetails(node) {
         i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
         i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
         i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,
+        liveChip(i),
         i.code ? h('code', { class: 'bx-code' }, i.code) : null),
       itemSign(i, part),
       withYou,

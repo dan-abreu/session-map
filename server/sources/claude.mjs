@@ -683,6 +683,43 @@ export function readHelperWork(sessionDir) {
   return { commits, editedFiles: [...edited], last, skillRuns };
 }
 
+// The helpers and workflow agents of a conversation as the status robot reads them (sb13): who it is, the brief it was
+// given (its first user message), where it works and when it last wrote. A brief never changes, so it is read once per file.
+const BRIEF_BYTES = 256 * 1024;
+const BRIEF_MAX = 4000;
+const briefMemo = new Map();
+function briefOf(file) {
+  const hit = briefMemo.get(file);
+  if (hit) return hit;
+  let head;
+  try { head = readSlice(file, 0, BRIEF_BYTES); } catch { return null; }
+  let cwd = null;
+  let startedAt = null;
+  for (const entry of parseLines(head)) {
+    if (typeof entry.cwd === 'string') cwd ??= entry.cwd;
+    if (typeof entry.timestamp === 'string') startedAt ??= entry.timestamp;
+    if (entry.type !== 'user') continue;
+    const blocks = blocksOf(entry);
+    if (blocks.some((b) => b.type === 'tool_result')) continue;
+    const brief = blocks.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text.trim()).filter(Boolean).join('\n');
+    if (!brief) continue;
+    const found = { brief: brief.slice(0, BRIEF_MAX), cwd, startedAt };
+    briefMemo.set(file, found);
+    return found;
+  }
+  return null;
+}
+
+export function readAgentBriefs(sessionDir) {
+  const out = [];
+  for (const agent of helperAgents(sessionDir)) {
+    const st = statSync(agent.file, { throwIfNoEntry: false });
+    const b = st ? briefOf(agent.file) : null;
+    if (b) out.push({ agentId: agent.agentId, label: agent.label || agent.agentId, brief: b.brief, cwd: b.cwd, startedAt: b.startedAt, activeAt: new Date(st.mtimeMs).toISOString() });
+  }
+  return out;
+}
+
 // The model and effort an agent runs on, from its meta file ('sonnet', 'medium'...); null when it inherits the
 // conversation's. Both, so the page never shows the conversation's level for an agent that runs on another one.
 function agentRun(dir, agentId) {

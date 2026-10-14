@@ -13,7 +13,9 @@ import { norm } from './arch/parse.mjs';
 import { sizesOf } from './arch/sizes.mjs';
 import { appendEvents, readEvents } from './brain/events.mjs';
 import { parentOf, readLineage } from './brain/lineage.mjs';
-import { backfillMerges, detectTransitions, workCellsOf } from './brain/workcells.mjs';
+import { backfillMerges, detectTransitions, mainCommitsOf, workCellsOf } from './brain/workcells.mjs';
+import { liveOfProject, markWorking } from './arch/livefacts.mjs';
+import { withLive } from './arch/live.mjs';
 import { loadConfig } from './config.mjs';
 import { costOf, dailyCost, loadPrices, windowed } from './cost.mjs';
 import { adviceFor, modelDaily } from './savings.mjs';
@@ -166,6 +168,7 @@ async function gitSide(smDir, root, projectId, main, arch, placeFiles, nowIso) {
   if (backfill) appendEvents(smDir, projectId, await backfillMerges(root, main, { since }));
   memo.backfilled = true;
   memo.activity = await activityOf(root, { since });
+  memo.mainCommits = await mainCommitsOf(root, main, { since });
   memo.workCells = workCells;
   memo.signature = signature;
   return memo;
@@ -583,10 +586,13 @@ async function buildProject(ctx, { root, items }) {
   const allRows = items.flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
   const cost = windowed(allRows, now, prices);
   const name = basename(root.replace(/[\\/]+$/, '')) || root;
+  // The status robot (sb13): what is being built now and what main has built, from facts; it also marks the plan.
+  const live = liveOfProject({ arch, placed, liveById, titleOf, workCells, mainCommits: memo.mainCommits ?? [], nowMs: now.getTime() });
+  markWorking({ root, arch, live, config, nowMs: now.getTime() });
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
-      arch: { ...attachToParts(arch, chats, workCells), links: explained(linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel })), sizes },
+      arch: { ...attachToParts(withLive(arch, live), chats, workCells), links: explained(linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel })), sizes },
       workCells,
       // The words of a registry of requests kept translated in session-map's folder, by language and code (id76).
       requestWords: readJsonFile(join(smDir, 'projects', projectId, 'requests-words.json'), null),
