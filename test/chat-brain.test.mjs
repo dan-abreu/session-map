@@ -99,14 +99,13 @@ test('the level follows the talk: up at once, down when it gets small, and the p
     assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0, 'same key, same stream');
     assert.deepEqual(r.events.filter((e) => e.type === 'run').at(-1).data.brain, { phase: 'plan', why: 'plan-big' });
 
-    // "pode construir" after a large plan builds at the plan's size: up to Sonnet at high, with the build directive.
+    // "pode construir" after a large plan builds at the plan's size: Sonnet at medium still (high only after a failure, or33), so the same process, with the build directive.
     rmSync(log);
     assert.equal(hub.send(key, { text: 'pode construir' }).status, 200);
     await nthTurnEnd(r, 3);
-    assert.equal(level(), 'sonnet/high');
+    assert.equal(existsSync(log), false, 'plan and build share a level: the same process');
     assert.match(echoOf(r, 3), /Build phase: follow the approved plan/);
     // The same level keeps the same process.
-    rmSync(log);
     assert.equal(hub.send(key, { text: 'pode seguir' }).status, 200);
     await nthTurnEnd(r, 4);
     assert.equal(existsSync(log), false, 'the same level keeps the same process');

@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { POLICY, levelFor, rungsOfModel } from './policy.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { redact } from './redact.mjs';
 import { SENSITIVITIES, explainRoute, familyOf, loadStats, routeKindOf } from './router.mjs';
@@ -9,13 +10,10 @@ import { SENSITIVITIES, explainRoute, familyOf, loadStats, routeKindOf } from '.
 // rules that protect money and privacy are not advice: assertWorker() throws, and nothing it refuses is ever offered.
 //
 // One arsenal: Claude's four models are workers like the outside AIs (provider 'claude', model haiku|sonnet|opus|fable).
-//   haiku  low          search, reading, bulk
-//   sonnet medium|high  ordinary code and text
-//   opus   high|xhigh   business rules, security, money, architecture, hard reasoning, review of critical work or of
-//                       what another AI wrote
-//   fable  high|max     the top (2.5x Opus' price; it leads only the agent indexes): the worker only for large work
-//                       that Opus already failed, and the last word on a large critical delivery, after the other
-//                       family's review. Never a default; long autonomous work alone does not call it.
+// The levels come from server/ai/policy.json (or33), the one table; the numbers are not repeated here. In short: Haiku
+// reads, Sonnet writes, Opus decides (and reviews critical work or what another AI wrote); Fable is the worker only for
+// large work that Opus already failed, and the last word on a large critical delivery, after the other family's review.
+// Never a default; long autonomous work alone does not call it; max is never automatic.
 // Outside AIs come from router.explainRoute when the kind of work fits theirs and they are ready (key, switched on,
 // not paused for that kind of work, cap left). The reviewer is always from another family than the worker.
 
@@ -23,11 +21,13 @@ export const CONDUCTOR_KINDS = Object.freeze([
   'search', 'read', 'bulk', 'code', 'text', 'portuguese', 'review', 'reasoning', 'business', 'security', 'money', 'architecture',
 ]);
 export const SIZES = Object.freeze(['trivial', 'small', 'medium', 'large']);
-export const CLAUDE_LEVELS = Object.freeze({
-  haiku: Object.freeze(['low']), sonnet: Object.freeze(['medium', 'high']), opus: Object.freeze(['high', 'xhigh']), fable: Object.freeze(['high', 'max']),
-});
 const LADDER = ['haiku', 'sonnet', 'opus', 'fable'];
 const NAME = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
+// The conductor's kinds, read as the policy's kinds (portuguese is prose to read by a person: docs).
+const POLICY_KIND = Object.freeze({
+  search: 'search', read: 'read', bulk: 'bulk', code: 'code', text: 'text', portuguese: 'docs', review: 'review',
+  reasoning: 'architecture', business: 'architecture', security: 'security', money: 'money', architecture: 'architecture',
+});
 const DECIDING = new Set(['business', 'security', 'money', 'architecture', 'reasoning']);
 const WRITING = new Set(['code', 'text', 'portuguese']);
 // What Fable may take as long autonomous work, and what is a delivery that gets its last word when critical.
@@ -147,28 +147,33 @@ function claudeWrote(author) {
   return a === 'claude' || a.toLowerCase() === 'anthropic';
 }
 
-// The level the kind of work asks for, before Fable and before failures.
+// The level the kind of work asks for, before Fable and before failures: the policy's row, with Opus (high; xhigh when
+// large) for what is critical, and for a review of what another AI wrote.
 function baseLevel(kind, size, critical, outsideAuthor) {
-  if (DECIDING.has(kind)) return claudeAt('opus', size === 'large' || critical ? 'xhigh' : 'high', `${kind} work is decided by Opus`);
+  const row = levelFor(POLICY_KIND[kind]);
+  const opus = rungsOfModel('opus');
+  const opusAt = (xhigh) => opus[xhigh ? opus.length - 1 : 0];
+  const at = (lv, why) => claudeAt(lv.model, lv.effort, why);
+  if (DECIDING.has(kind)) return at(size === 'large' || critical ? opusAt(true) : row, `${kind} work is decided by Opus`);
   if (kind === 'review') {
-    if (outsideAuthor) return claudeAt('opus', critical ? 'xhigh' : 'high', 'another AI wrote it, so Opus reviews it');
-    return critical ? claudeAt('opus', 'xhigh', 'a review of critical work goes to Opus') : claudeAt('sonnet', 'high', 'an ordinary review');
+    if (outsideAuthor) return at(opusAt(critical), 'another AI wrote it, so Opus reviews it');
+    return critical ? at(opusAt(true), 'a review of critical work goes to Opus') : at(row, 'an ordinary review');
   }
   if (WRITING.has(kind)) {
-    if (critical) return claudeAt('opus', size === 'large' ? 'xhigh' : 'high', `critical ${kind} goes to Opus`);
-    return claudeAt('sonnet', size === 'large' ? 'high' : 'medium', `ordinary ${kind} is Sonnet's`);
+    if (critical) return at(opusAt(size === 'large'), `critical ${kind} goes to Opus`);
+    return at(row, `ordinary ${kind} is ${row.model === 'haiku' ? "Haiku's" : "Sonnet's"}`);
   }
-  if (kind === 'read' && (size === 'large' || critical)) return claudeAt('sonnet', critical ? 'high' : 'medium', 'long or critical reading');
-  return claudeAt('haiku', 'low', `${kind} is Haiku's: fast and cheap`);
+  if (kind === 'read' && (size === 'large' || critical)) return at(levelFor('read', critical ? 2 : 1), 'long or critical reading');
+  return at(row, `${kind} is Haiku's: fast and cheap`);
 }
 
-// The Claude worker: the base level, Fable when its rule holds, one level up past what failed. Critical alone is not
+// The Claude worker: the base level, Fable when its rule holds, one rung up past what failed. Critical alone is not
 // Fable's: large critical work stays on Opus at xhigh, and Fable has the last word on it (recommend's finalCheck).
 function claudeWorker({ kind, size, critical, longRun, failed, outsideAuthor }) {
   const w = baseLevel(kind, size, critical, outsideAuthor);
   // Fable only after Opus failed the large work (the routing rule); long autonomous work alone is not enough.
   if (size === 'large' && !failed.has('claude:fable') && w.model === 'opus' && failed.has('claude:opus')) {
-    return claudeAt('fable', critical ? 'max' : 'high', 'Fable: large, and Opus failed it before');
+    return claudeAt('fable', 'high', 'Fable: large, and Opus failed it before');
   }
   // Large, critical and long: Opus at high, not Fable; the other family reviews and Fable has the last word (finalCheck).
   if (size === 'large' && critical && longRun && LONG_FITS.has(kind) && w.model === 'opus' && !failed.has('claude:opus')) {
@@ -176,9 +181,11 @@ function claudeWorker({ kind, size, critical, longRun, failed, outsideAuthor }) 
   }
   if (!failed.has(`claude:${w.model}`)) return w;
   const from = w.model;
-  const next = LADDER.slice(LADDER.indexOf(from) + 1).find((m) => !failed.has(`claude:${m}`));
-  if (next && next !== 'fable') return claudeAt(next, CLAUDE_LEVELS[next][critical ? CLAUDE_LEVELS[next].length - 1 : 0], `${NAME[from]} failed this before: one level up`);
-  if (next === 'fable' && size === 'large') return claudeAt('fable', critical ? 'max' : 'high', `Fable: ${NAME[from]} failed this large work before`);
+  // The next rung of the ladder whose model has not failed.
+  const here = POLICY.ladder.findLastIndex((r) => r.model === from);
+  const rung = POLICY.ladder.slice(here + 1).find((r) => !failed.has(`claude:${r.model}`));
+  if (rung && rung.model !== 'fable') return claudeAt(rung.model, rung.effort, `${NAME[from]} failed this before: one level up`);
+  if (rung && size === 'large') return claudeAt(rung.model, rung.effort, `Fable: ${NAME[from]} failed this large work before`);
   // Fable is only for large work: Opus again, at its highest level, and the task split smaller.
   return claudeAt('opus', 'xhigh', `${NAME[from]} failed this before; Fable is kept for large work, so Opus at xhigh, in smaller pieces`);
 }
@@ -196,8 +203,9 @@ function measuredStep(claude, { routeKind, measured, failed, critical }) {
     if (a !== undefined && a > mine + nearBestOf(routeKind) && (!best || a > best.a)) best = { m, a };
   }
   if (!best) return claude;
-  const levels = CLAUDE_LEVELS[best.m];
-  return claudeAt(best.m, levels[critical ? levels.length - 1 : 0], `${claude.why}, but the bench measured ${NAME[best.m]} at ${pct(best.a)} against ${pct(mine)} for ${NAME[claude.model]}: one level up`);
+  const levels = rungsOfModel(best.m);
+  const at = levels[critical ? levels.length - 1 : 0];
+  return claudeAt(best.m, at.effort, `${claude.why}, but the bench measured ${NAME[best.m]} at ${pct(best.a)} against ${pct(mine)} for ${NAME[claude.model]}: one level up`);
 }
 
 const label = (w) => (w.provider === 'claude' ? `Claude ${NAME[w.model] ?? w.model} at ${w.effort}` : `${w.provider} ${w.model}`);

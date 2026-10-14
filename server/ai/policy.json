@@ -1,0 +1,36 @@
+{
+  "tasks": {
+    "search": { "model": "haiku", "effort": "low", "why": "finding and reading needs no judgment", "whyPt": "achar e ler não pede julgamento", "evidence": "rule: no judgment needed" },
+    "read": { "model": "haiku", "effort": "low", "why": "reading and listing needs no judgment", "whyPt": "ler e listar não pede julgamento", "evidence": "rule: no judgment needed" },
+    "bulk": { "model": "haiku", "effort": "low", "why": "many small mechanical items", "whyPt": "muitos itens pequenos e mecânicos", "evidence": "rule: no judgment needed" },
+    "text": { "model": "haiku", "effort": "low", "why": "short texts and labels", "whyPt": "textos curtos e rótulos", "evidence": "rule: no judgment needed" },
+    "commit": { "model": "haiku", "effort": "low", "why": "a commit message from a known diff", "whyPt": "a mensagem do commit sai de uma mudança já conhecida", "evidence": "rule: no judgment needed" },
+    "docs": { "model": "sonnet", "effort": "low", "why": "documentation follows what the code already says", "whyPt": "a documentação segue o que o código já diz", "evidence": "rule: known facts only" },
+    "code": { "model": "sonnet", "effort": "medium", "why": "Sonnet at medium wrote correct code in every bench case", "whyPt": "o Sonnet em nível médio acertou o código em todos os casos medidos", "evidence": "bench 2026-10-10 code 22/22" },
+    "test": { "model": "sonnet", "effort": "medium", "why": "tests are code with a known goal", "whyPt": "teste é código com objetivo conhecido", "evidence": "bench 2026-10-10 code 22/22" },
+    "screen": { "model": "sonnet", "effort": "medium", "why": "screens are code plus taste, and Sonnet at medium holds both", "whyPt": "tela é código mais bom gosto, e o Sonnet em nível médio dá conta dos dois", "evidence": "bench 2026-10-10 code 22/22" },
+    "debug": { "model": "sonnet", "effort": "medium", "why": "finding a bug is code reading with a test", "whyPt": "achar um defeito é ler código com um teste na mão", "evidence": "bench 2026-10-10 code 22/22" },
+    "plan": { "model": "sonnet", "effort": "medium", "why": "Sonnet at medium planned every case; Opus at high missed one at 2.5x the cost", "whyPt": "o Sonnet em nível médio planejou todos os casos; o Opus em nível alto errou um e custou 2,5 vezes mais", "evidence": "bench 2026-10-13 plan 8/8 (or30)" },
+    "review": { "model": "sonnet", "effort": "medium", "why": "Sonnet at medium found every planted defect", "whyPt": "o Sonnet em nível médio achou todos os defeitos plantados", "evidence": "bench 2026-10-10 review 20/20" },
+    "architecture": { "model": "opus", "effort": "high", "why": "a wrong structure costs the most to undo", "whyPt": "uma estrutura errada é a mais cara de desfazer", "evidence": "rule: high risk" },
+    "security": { "model": "opus", "effort": "high", "why": "a missed hole is paid by the person's users", "whyPt": "uma brecha esquecida é paga pelos usuários", "evidence": "rule: high risk" },
+    "money": { "model": "opus", "effort": "high", "why": "a mistake here loses real money", "whyPt": "um erro aqui perde dinheiro de verdade", "evidence": "rule: high risk" },
+    "personal-data": { "model": "opus", "effort": "high", "why": "a mistake here breaks the privacy law (LGPD)", "whyPt": "um erro aqui fere a lei de proteção de dados (LGPD)", "evidence": "rule: high risk" }
+  },
+  "ladder": [
+    { "model": "haiku", "effort": "low" },
+    { "model": "sonnet", "effort": "medium" },
+    { "model": "sonnet", "effort": "high" },
+    { "model": "opus", "effort": "high" },
+    { "model": "opus", "effort": "xhigh" },
+    { "model": "fable", "effort": "high" }
+  ],
+  "phases": {
+    "trivial": { "model": "haiku", "effort": "low", "why": "a greeting or one short command", "whyPt": "um cumprimento ou um comando curto" },
+    "talk": { "model": "sonnet", "effort": "low", "why": "a question or an opinion, no work", "whyPt": "uma pergunta ou uma opinião, sem trabalho a fazer" },
+    "plan": { "model": "sonnet", "effort": "medium", "why": "bench 2026-10-13 plan 8/8 (or30)", "whyPt": "planejar: o mesmo resultado medido do tipo plano (8 de 8)" },
+    "build": { "model": "sonnet", "effort": "medium", "why": "any size; high only after a failure", "whyPt": "qualquer tamanho; nível alto só depois de uma falha" },
+    "sensitive": { "model": "opus", "effort": "high", "why": "security, money or personal data, in plan or build", "whyPt": "segurança, dinheiro ou dado pessoal, no plano ou na construção" }
+  },
+  "limits": { "agentsPerWorkflow": 10 }
+}

@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickSkills } from '../foundation/skills-focus.mjs';
+import { KINDS, hasKind, levelFor } from '../ai/policy.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 
 // The guard of every page chat (pc16): a PreToolUse hook Claude Code runs before its own permission check, in every
 // permission mode. The relay (hub.mjs ask()) only sees what auto mode leaves to it; this sees every shell step. It denies
-// a force push, and for the Autonomous way snapshots before a destructive step. It never allows anything.
+// a force push, and for the Autonomous way snapshots before a destructive step. It denies and, for agents, sets the level (below); it never allows anything else.
 export const GUARD_HOOK = fileURLToPath(new URL('./guard-hook.mjs', import.meta.url));
 export const BOOK_HOOK = fileURLToPath(new URL('./book-hook.mjs', import.meta.url));
 // Claude Code gives the hook this long (s); the snapshot is given up a while before, so the step is never held past it.
@@ -15,18 +16,17 @@ const SNAPSHOT_WAIT_MS = 45_000;
 
 const deny = (reason) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
 
-// The engine's hold on agents (or25, or32): the conductor's prompt advises a cheap model and a narrow brief; this makes
-// it hold. An agent with no model inherits the chat's (often Opus at high); Opus, Fable, xhigh and max need a reason in
-// the call (security, money, personal data, a hard design call, or what a cheaper one failed); an agent opens a skill
-// only when its brief names it, since each agent that opens one reads it all again.
+// The engine's hold on agents (or25, or32, or33): the AI only says what kind of task an agent does, by the tag that starts
+// its description ("[code] fix the header"); the model and effort come from server/ai/policy.json, set here with
+// updatedInput (proved on 2026-10-13: the subagent ran on the model the hook wrote, not the one the call asked for).
+// "[code^1]" is one rung up the ladder and "[code^2]" two, each for a real failure, so the prompt must say "failed".
+// An agent opens a skill only when its brief names it, since each agent that opens one reads it all again.
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
-const DEAR_MODEL = /opus|fable/i;
-const DEAR_EFFORT = new Set(['xhigh', 'max']);
-const DEAR_REASON = /segur|security|auth|senha|password|secret|credencia|dinheiro|money|pagamento|payment|cobranc|billing|financ|lgpd|dado pessoal|dados pessoais|personal data|privacy|privacidade|arquitet|architect|producao|production|falhou|failed|critic/;
-const REASON_CHARS = 600;
+const TAG_RE = /^\s*\[([a-z-]+)(?:\^([12]))?\]/;
+const FAILED_RE = /\b(?:failed|falhou)\b/i;
 const BRIEF_BYTES = 64 * 1024;
-export const NO_MODEL = 'session-map: give this agent a model (haiku for search and reading, sonnet for code, tests, text and review, opus only with a reason). Without one it inherits the chat\'s own, often Opus at high.';
-export const NO_REASON = 'session-map: Opus, Fable, xhigh and max are for security, money, personal data, a hard architecture call or work a cheaper model already failed. Pick a cheaper model, or say that reason in the description.';
+export const NO_KIND = `session-map: start the agent's description with its kind, e.g. [code], [review], [search]; the model and effort come from the policy. Kinds: ${KINDS.join(', ')}.`;
+export const NO_FAILED = 'session-map: [kind^1] and [kind^2] climb the ladder for a real failure: say in the prompt what failed ("failed"), or use the plain kind tag.';
 export const NO_SKILL = 'session-map: an agent opens a skill only when its brief names it; every agent that opens one reads it all again. Do the task with the brief you got.';
 
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -46,15 +46,22 @@ export function readBrief(input, { read = readFileSync } = {}) {
   return null;
 }
 
+// An Agent/Task call's input -> the answer: deny without a known kind tag, else allow with the policy's model and effort
+// (the other fields as they were).
+function agentLevel(ti) {
+  const tag = TAG_RE.exec(String(ti.description ?? ''));
+  if (!tag || !hasKind(tag[1])) return deny(NO_KIND);
+  const up = Number(tag[2] ?? 0);
+  if (up && !FAILED_RE.test(String(ti.prompt ?? ''))) return deny(NO_FAILED);
+  const { model, effort } = levelFor(tag[1], up);
+  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: `session-map policy: ${tag[1]}${up ? `^${up}` : ''} runs on ${model} at ${effort}`, updatedInput: { ...ti, model, effort } } };
+}
+
 export function guardAgent(input, { brief = readBrief } = {}) {
   const tool = String(input?.tool_name ?? '');
   const ti = input?.tool_input ?? {};
   if (AGENT_TOOLS.has(tool)) {
-    const model = String(ti.model ?? '').trim();
-    if (!model) return deny(NO_MODEL);
-    const dear = DEAR_MODEL.test(model) || DEAR_EFFORT.has(String(ti.effort ?? '').toLowerCase());
-    if (dear && !DEAR_REASON.test(fold(`${ti.description ?? ''} ${String(ti.prompt ?? '').slice(0, REASON_CHARS)}`))) return deny(NO_REASON);
-    return null;
+    return agentLevel(ti);
   }
   if (tool === 'Skill' && input?.agent_id) {
     const text = brief(input);

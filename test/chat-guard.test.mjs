@@ -6,7 +6,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOK_HOOK, GUARD_HOOK, NO_MAP_EDIT, NO_MODEL, NO_REASON, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
+import { BOOK_HOOK, GUARD_HOOK, NO_FAILED, NO_KIND, NO_MAP_EDIT, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
 import { SAFETY_REFS } from '../server/chat/safety.mjs';
 import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
@@ -124,15 +124,26 @@ test('every page chat starts with the guard in its settings; the Autonomous way 
   }
 });
 
-test('guardAgent: an agent needs a model, Opus-class ones need a reason, a skill needs a brief that names it', async () => {
-  const agent = (ti) => ({ tool_name: 'Agent', tool_input: ti });
+test('guardAgent: an agent needs a kind tag and gets its model and effort from the policy; a skill needs a brief that names it', async () => {
+  const agent = (ti, tool_name = 'Agent') => ({ tool_name, tool_input: ti });
   const why = (out) => out?.hookSpecificOutput.permissionDecisionReason;
-  assert.equal(why(guardAgent(agent({ description: 'x' }))), NO_MODEL);
-  assert.equal(guardAgent(agent({ model: 'sonnet', description: 'x' })), null);
-  assert.equal(why(guardAgent(agent({ model: 'opus', description: 'Revisar o código' }))), NO_REASON);
-  assert.equal(guardAgent(agent({ model: 'opus', description: 'Revisão de segurança do login' })), null);
-  assert.equal(guardAgent(agent({ model: 'haiku', effort: 'max', description: 'x' })).hookSpecificOutput.permissionDecision, 'deny');
-  assert.equal(why(await guardStep(agent({}))), NO_MODEL);
+  const set = (out) => out.hookSpecificOutput.updatedInput;
+  assert.equal(why(guardAgent(agent({ description: 'fix the header' }))), NO_KIND);
+  assert.equal(why(guardAgent(agent({ model: 'opus', description: 'Revisão de segurança do login' }))), NO_KIND, 'a model chosen by the AI is no kind');
+  assert.equal(why(guardAgent(agent({ description: '[dance] fix' }))), NO_KIND, 'an unknown kind');
+  assert.equal(why(await guardStep(agent({}))), NO_KIND);
+  const ok = guardAgent(agent({ description: '[code] fix the header', prompt: 'p', model: 'opus', effort: 'max', run_in_background: true }));
+  assert.equal(ok.hookSpecificOutput.permissionDecision, 'allow');
+  assert.deepEqual(set(ok), { description: '[code] fix the header', prompt: 'p', model: 'sonnet', effort: 'medium', run_in_background: true }, 'the AIs own model is overwritten, the other fields stay');
+  assert.deepEqual(set(guardAgent(agent({ description: '[search] where is x', prompt: 'p' }, 'Task'))), { description: '[search] where is x', prompt: 'p', model: 'haiku', effort: 'low' });
+  assert.deepEqual(set(guardAgent(agent({ description: '[security] review login' }))).model, 'opus');
+  // One rung up needs the word "failed" in the prompt.
+  assert.equal(why(guardAgent(agent({ description: '[code^1] again', prompt: 'redo it' }))), NO_FAILED);
+  const up = guardAgent(agent({ description: '[code^1] again', prompt: 'The first try failed: tests red.' }));
+  assert.deepEqual([set(up).model, set(up).effort], ['sonnet', 'high']);
+  const up2 = guardAgent(agent({ description: '[code^2] again', prompt: 'Two tries failed.' }));
+  assert.deepEqual([set(up2).model, set(up2).effort], ['opus', 'high']);
+  assert.equal(why(guardAgent(agent({ description: '[code^3] x', prompt: 'failed' }))), NO_KIND, 'only ^1 and ^2');
 
   const skill = { tool_name: 'Skill', tool_input: { skill: 'superpowers:brainstorming' } };
   assert.equal(guardAgent(skill), null, 'the chat itself may open skills');

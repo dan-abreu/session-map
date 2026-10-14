@@ -9,6 +9,8 @@
 // plan (an idea, or a medium or large request nobody approved yet), build (a go-ahead, or a small concrete change).
 // Never Fable, never xhigh or max on its own: those belong to a task the plan names, not to the entry chat.
 
+import { phaseLevel } from './policy.mjs';
+
 export const PHASES = Object.freeze(['trivial', 'talk', 'plan', 'build']);
 const SIZES = ['trivial', 'small', 'medium', 'large'];
 const MODEL_ORDER = ['haiku', 'sonnet', 'opus', 'fable'];
@@ -41,15 +43,9 @@ function sensitiveOf(t, kind) {
   return null;
 }
 
-// The table (or29): the cheapest level that does the phase well.
-// plan: sonnet medium, by the bench (or30): Sonnet at medium planned 8/8 cases; Opus at high 7/8 at about 2.5x the cost per right answer.
-function tableFor(phase, size, sensitive) {
-  if (phase === 'trivial') return { model: 'haiku', effort: 'low' };
-  if (phase === 'talk') return { model: 'sonnet', effort: 'low' };
-  if (sensitive) return { model: 'opus', effort: 'high' };
-  if (phase === 'plan') return { model: 'sonnet', effort: 'medium' };
-  return { model: 'sonnet', effort: size === 'medium' || size === 'large' ? 'high' : 'medium' };
-}
+// The table (or29, or33) is server/ai/policy.json, read through phaseLevel: the cheapest level that does the phase well.
+// Size never raises it (high only after a failure, by the ladder); security, money and personal data go to Opus in plan and build.
+const tableFor = (phase, size, sensitive) => phaseLevel(phase, size, Boolean(sensitive));
 
 const bigger = (a, b) => (SIZES.indexOf(a) >= SIZES.indexOf(b) ? a : b);
 const isBig = (size) => size === 'medium' || size === 'large';

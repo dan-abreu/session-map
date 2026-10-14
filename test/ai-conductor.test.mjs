@@ -42,8 +42,9 @@ test('the Claude level follows the kind of work: Haiku reads, Sonnet writes, Opu
     [{ kind: 'search', size: 'medium' }, 'claude:haiku', 'low'],
     [{ kind: 'bulk', size: 'small', others: OFF }, 'claude:haiku', 'low'],
     [{ kind: 'code', size: 'small', others: OFF }, 'claude:sonnet', 'medium'],
-    [{ kind: 'code', size: 'large', others: OFF }, 'claude:sonnet', 'high'],
-    [{ kind: 'text', size: 'medium' }, 'claude:sonnet', 'medium'],
+    [{ kind: 'code', size: 'large', others: OFF }, 'claude:sonnet', 'medium'],
+    [{ kind: 'text', size: 'medium' }, 'claude:haiku', 'low'],
+    [{ kind: 'portuguese', size: 'small', others: OFF }, 'claude:sonnet', 'low'],
     [{ kind: 'business', size: 'medium' }, 'claude:opus', 'high'],
     [{ kind: 'security', size: 'small' }, 'claude:opus', 'high'],
     [{ kind: 'money', size: 'large' }, 'claude:opus', 'xhigh'],
@@ -82,7 +83,7 @@ test('Fable only for large work that is critical, long and autonomous, or where 
   }
   // Large and long autonomous work is not Fable's either (the routing rule): code stays on Sonnet, decisions on Opus.
   const long = rec({ kind: 'code', size: 'large', longRun: true, others: OFF });
-  assert.deepEqual(long.worker, { provider: 'claude', model: 'sonnet', effort: 'high' });
+  assert.deepEqual(long.worker, { provider: 'claude', model: 'sonnet', effort: 'medium' });
   assert.equal(long.finalCheck, null);
   assert.equal(id(rec({ kind: 'architecture', size: 'large', longRun: true }).worker), 'claude:opus');
   // Large, critical and long: Opus at high (pick_worker used to answer "Claude Fable at max" for large critical code),
@@ -277,8 +278,9 @@ test('the conductor prompt knows the one arsenal: four Claude models, the outsid
   for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
     const p = runPrompt(run);
     assert.ok(Buffer.byteLength(p, 'utf8') < 4096, `${run.kind}: ${Buffer.byteLength(p, 'utf8')} bytes`);
-    for (const m of ['haiku', 'sonnet', 'opus', 'fable']) assert.match(p, new RegExp(m, 'i'), `${run.kind}: ${m}`);
-    for (const e of ['low', 'medium', 'high', 'xhigh', 'max']) assert.match(p, new RegExp(`\\b${e}\\b`), `${run.kind}: ${e}`);
+    assert.match(p, /fable/i, `${run.kind}: fable`);
+    assert.match(p, /kind tag[^\n]*session-map sets their model and effort from its policy/i, `${run.kind}: the policy sets the level`);
+    assert.match(p, /\[code\^1\]/, `${run.kind}: a failure climbs one rung`);
     assert.match(p, /never the default/i);
     assert.match(p, /ask_other_ai/);
     assert.match(p, /pick_worker/);
@@ -431,9 +433,7 @@ test('the prompt says large applies to every Fable case, its last word comes aft
 test('the prompt routes down by default, briefs each agent narrowly, reviews once per delivery and caps a workflow', () => {
   for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
     const p = runPrompt(run);
-    assert.match(p, /opus, high: only security, money, personal data/i);
-    assert.match(p, /sonnet[^\n]*commits/i, 'docs and commits are Sonnet work, not Opus');
-    assert.match(p, /always pass model and effort/i);
+    assert.doesNotMatch(p, /^- (?:haiku|sonnet|opus|fable),/m, 'the levels live in the policy, not in the prompt (or33)');
     assert.match(p, /brief[^\n]*exact files and lines[^\n]*when to stop/i);
     assert.match(p, /no skill unless you name one/i);
     assert.match(p, /one review per delivery, not per task/i);

@@ -81,7 +81,7 @@ Em **todos** os modos, ações sensíveis pedem confirmação: apagar, publicar,
 
 ## 5. Quem faz o quê: papéis, modelos e níveis
 
-O trabalho é dividido por papéis de profissional sênior. Cada agente recebe no pedido o papel, o modelo, o nível de raciocínio e o nome das skills que deve invocar. A política completa está na [etapa 14](14-trabalho-com-ia.md); o resumo:
+O trabalho é dividido por papéis de profissional sênior. Cada agente recebe no pedido o papel, o modelo, o nível de raciocínio e o nome das skills que deve invocar. A política completa está na [etapa 14](14-trabalho-com-ia.md) e a tabela de modelos e níveis, gerada do código, em [politica-de-modelos.md](politica-de-modelos.md); o resumo:
 
 | Atividade | Modelo | Nível |
 |---|---|---|

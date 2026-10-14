@@ -31,13 +31,13 @@ test('planning words, or a medium or large request with no go-ahead, are the pla
   assert.equal(at(w('mexer em server/a.mjs, server/b.mjs e server/c.mjs')), 'plan sonnet/medium', 'medium, no go-ahead');
 });
 
-test('a go-ahead or a small concrete change is the build phase: Sonnet at medium, high when it is medium or large', () => {
+test('a go-ahead or a small concrete change is the build phase: Sonnet at medium at any size (high only after a failure, or33)', () => {
   assert.equal(at(w('pode construir')), 'build sonnet/medium');
   assert.equal(at(w('corrige o título cortado em header.js')), 'build sonnet/medium');
   assert.equal(at(w('fix the typo in README.md')), 'build sonnet/medium');
-  assert.equal(at(w('implementa isso em server/a.mjs e server/b.mjs')), 'build sonnet/high');
-  assert.equal(at(w('pode construir', { planned: 'large' })), 'build sonnet/high', 'a bare go-ahead after a large plan builds at the plan\'s size');
-  assert.equal(at(w('ok, pode seguir', { planned: 'medium' })), 'build sonnet/high');
+  assert.equal(at(w('implementa isso em server/a.mjs e server/b.mjs')), 'build sonnet/medium');
+  assert.equal(at(w('pode construir', { planned: 'large' })), 'build sonnet/medium', 'a bare go-ahead after a large plan builds at the plan\'s size');
+  assert.equal(at(w('ok, pode seguir', { planned: 'medium' })), 'build sonnet/medium');
   assert.equal(at(w('pode construir', { planned: 'small' })), 'build sonnet/medium');
 });
 
