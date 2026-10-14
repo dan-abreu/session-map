@@ -1196,6 +1196,22 @@ export function createChat({
     return out;
   }
 
+  // The book's general summary (resumo.md), open on top: "## " lines are headings, "- " lines a list, the rest paragraphs.
+  // All of it as text, never as HTML.
+  function bookSummary(raw, tt) {
+    const out = [];
+    let items = [];
+    const flush = () => { if (items.length) out.push(h('ul', {}, ...items.map((i) => h('li', {}, i)))); items = []; };
+    for (const line of String(raw ?? '').split('\n').map((l) => l.trim()).filter(Boolean)) {
+      if (/^- /.test(line)) { items.push(line.slice(2)); continue; }
+      flush();
+      const head = line.match(/^#{1,6}\s+(.*)$/);
+      out.push(head ? h('h4', { class: 'chat-book-label' }, head[1]) : h('p', { class: 'chat-book-p' }, line));
+    }
+    flush();
+    return h('details', { class: 'chat-book-summary', open: true }, h('summary', {}, h('strong', {}, tt('chat.bookSummary'))), ...out);
+  }
+
   async function openBook() {
     const id = shownId();
     if (!id || !findEl) return;
@@ -1213,7 +1229,8 @@ export function createChat({
     bookEl.replaceChildren(h('header', { class: 'chat-book-head' }, h('strong', {}, tt('chat.book')), sizeBtn, closeBtn), body);
     let book;
     try { book = await api.chatBook(id); } catch { book = null; }
-    if (!book?.chapters?.length) { body.replaceChildren(h('p', { class: 'muted' }, tt('chat.bookEmpty'))); return; }
+    const summary = book?.summary ? [bookSummary(book.summary, tt)] : [];
+    if (!book?.chapters?.length) { body.replaceChildren(...summary, h('p', { class: 'muted' }, tt('chat.bookEmpty'))); return; }
     const label = (c) => (c.title || tt('chat.bookUntitled', { n: c.n })) + (c.closed ? '' : ` (${tt('chat.bookOpen')})`);
     const caps = book.chapters.map((c) => {
       const page = h('div', { class: 'chat-book-page' });
@@ -1235,7 +1252,7 @@ export function createChat({
       h('div', { class: 'chat-book-label' }, tt('chat.bookIndex')),
       h('ol', {}, ...book.chapters.map((c, i) => h('li', {}, h('a', { href: `#book-cap-${c.n}`,
         onclick: (e) => { e.preventDefault(); caps[i].open = true; caps[i].scrollIntoView({ block: 'nearest' }); } }, label(c))))));
-    body.replaceChildren(...(book.title ? [h('h3', { class: 'chat-book-title' }, book.title)] : []), index, ...caps);
+    body.replaceChildren(...(book.title ? [h('h3', { class: 'chat-book-title' }, book.title)] : []), ...summary, index, ...caps);
   }
 
   // ---- the header's ⋯ menu (pc18): everything that is not the conversation itself, in three groups ----

@@ -51,6 +51,7 @@ import { readJsonFile, writeAtomic } from './store.mjs';
 import { LISTEN_RETRY_MS, createRestarter, listenWithRetry, resumeAfterRestart } from './restart.mjs';
 import { createStatementStore, isStatementPath, statementRoute } from './statement-route.mjs';
 import { readBook, readChapter } from './chat/book-view.mjs';
+import { readBookSummary } from './chat/book-summary.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(here, 'web');
@@ -303,7 +304,7 @@ export function createApp({
     }
     // The book panel (pc28): the chapter list, and one chapter's text only when the person opens it.
     if (req.method === 'GET' && key === 'book' && (parts.length === 5 || parts.length === 6)) {
-      if (parts.length === 5) return send(res, 200, readBook(smDir, verb));
+      if (parts.length === 5) return send(res, 200, { ...readBook(smDir, verb), summary: readBookSummary(smDir, verb) });
       const text = readChapter(smDir, verb, parts[5]);
       if (text === null) throw new HttpError(404, 'not-found');
       return send(res, 200, { text });
