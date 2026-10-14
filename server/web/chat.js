@@ -100,6 +100,7 @@ export function createChat({
   const menuEl = q('menu') ?? panelEl;
   const moreEl = q('more');
   const bookBtn = q('bookbtn');
+  const toolsEl = q('tools');
   bookBtn?.addEventListener('click', () => (bookEl && !bookEl.hidden ? closeBook() : openBook()));
   const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
@@ -818,6 +819,7 @@ export function createChat({
     if (moreEl) moreEl.hidden = !moreActions().length;
     // The book has its own button in the header, so it is one click away and not hidden in the ⋯.
     if (bookBtn) bookBtn.hidden = !(shownId() && findEl);
+    renderTools();
     renderHead(state, items);
   }
 
@@ -1273,6 +1275,15 @@ export function createChat({
       id && more ? more(id) : [],
       [context?.newChat && (id || has) ? { id: 'new', label: tt('chat.moreNew'), icon: 'plus', run: () => context.newChat() } : null],
     ].map((group) => group.filter(Boolean)).filter((group) => group.length);
+  }
+
+  // Every action of the ⋯ also sits in the header as its own icon (its name in the tooltip), so nothing hides in a menu.
+  function renderTools() {
+    if (!toolsEl || !icon) return;
+    const acts = moreActions().flat().filter((a) => a.id !== 'book');
+    toolsEl.replaceChildren(...acts.map((a) => h('button', {
+      type: 'button', class: 'icon-btn', 'data-tool': a.id ?? null, title: a.keys ? `${a.label} (${a.keys})` : a.label, 'aria-label': a.label, onclick: () => a.run(),
+    }, icon(a.icon ?? 'more'))));
   }
 
   function setMore(open, { focusBack = false } = {}) {

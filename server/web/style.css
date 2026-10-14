@@ -1281,6 +1281,7 @@ body.is-resizing .sheet { animation: none; }
 .chat-head .icon-btn[aria-expanded="true"] { background: var(--bg-3); color: var(--ink); }
 /* The ⋯ is the page's small menu (menu.js look): rows with an icon, the words and, for find, its keys. */
 .chat-more { position: relative; display: flex; }
+.chat-tools { display: flex; gap: 2px; }
 .chat-more-menu { top: calc(100% + 4px); z-index: 6; min-width: 240px; }
 .pm-keys { justify-self: end; padding: 0 6px; border-radius: var(--r-xs); background: var(--bg-3); color: var(--ink-2); font: inherit; font-size: var(--fs-2xs); font-weight: 600; line-height: 20px; }
 .chat-note { margin: 0; padding: 8px 16px; font-size: var(--fs-sm); color: var(--ink); background: var(--bg-3); border-bottom: 1px solid var(--line); }

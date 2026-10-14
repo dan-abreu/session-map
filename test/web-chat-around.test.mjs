@@ -186,7 +186,7 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const by = (el, attr, value) => walk(el).find((e) => e.attrs?.[attr] === value);
 
 const ROLES = ['log', 'form', 'input', 'send', 'stop', 'title', 'context', 'dot', 'status', 'live', 'list', 'note', 'close', 'where', 'run', 'runpanel',
-  'menu', 'find', 'tasks', 'attach', 'filepick', 'pending', 'suggest', 'more', 'moremenu'];
+  'menu', 'find', 'tasks', 'attach', 'filepick', 'pending', 'suggest', 'more', 'moremenu', 'tools'];
 function sheet() {
   const parts = new Map(ROLES.map((r) => [r, new El()]));
   parts.get('menu').children = [parts.get('runpanel')];
@@ -643,4 +643,17 @@ test('every new word of the chat and Configurações exists in both languages', 
   assert.equal(LANGS['pt-BR']['run.settingsLink'], 'Limite do mês e permissões…');
   assert.equal(LANGS['pt-BR']['chat.quick.or'], 'Ou responda com suas palavras aqui embaixo.');
   assert.deepEqual(['send', 'file', 'command'].map((k) => LANGS['pt-BR'][`chat.hint.${k}`]), ['Enter envia', '@ arquivo', '/ comando']);
+});
+
+test('every action of the ⋯ is also an icon in the header, with its name as tooltip', async () => {
+  server({ [`GET /api/chat/history/${S1}`]: () => history(TURN) });
+  const done = [];
+  const { chat, part } = makeChat({ more: ACTIONS(done), about: () => () => done.push(['about']), icon: (name) => `icon:${name}` });
+  chat.open({ projectId: 'shop', title: 'Arrows', subtitle: 'Flow', start: { sessionId: S1 }, newChat: () => done.push(['new']) });
+  await settle();
+  const tools = part('tools').children;
+  assert.deepEqual(tools.map((b) => b.attrs['data-tool']), ['about', 'find', 'rename', 'archive', 'open', 'delete', 'new']);
+  assert.ok(tools.every((b) => b.attrs['aria-label'] && b.attrs.title), 'each icon has a name');
+  tools[2].attrs.onclick();
+  assert.deepEqual(done, [['rename', S1]]);
 });
