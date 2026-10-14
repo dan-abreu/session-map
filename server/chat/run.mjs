@@ -20,6 +20,7 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const DEFAULT_RUN = Object.freeze({ kind: 'autonomous' });
 
 const LIMIT_MAX = 100_000;
+export const DEFAULT_REINFORCED_MONTHLY_USD = 30;
 const SPEND_FILE = 'reinforced-spend.json';
 const CONFIG_FILE = 'config.json';
 
@@ -97,7 +98,7 @@ const MAESTRO_PROMPT = [
 // forces it); what that mode blocks is denied at once by the hub and listed at the end, never asked mid-task.
 const AUTONOMOUS_PROMPT = [
   'Autonomous mode of session-map: you conduct this conversation on Opus at high effort.',
-  'Finish the request end to end: understand, plan, build, test, review, publish if implied. Once a plan exists, go on until it is really done. Never ask the person anything (no AskUserQuestion, no "should I?").',
+  'Finish the request end to end: understand, plan, build, test, review, publish; once done, stop, summarize and end - never start new work. Never ask the person anything (no AskUserQuestion).',
   'At each choice or gate that waits for approval (design, plan, method, business or money), take what a senior would recommend, note it, go on. The only stop: spending past the monthly limit.',
   ...ARSENAL,
   '- large or sensitive (new system, cross-layer change, security, personal data, money, production): go reinforced on your own (an agent workflow with adversarial verification) while the monthly limit below covers your estimate; if not, say why with a US$ estimate and end with level "ask-reinforce".',
@@ -214,7 +215,7 @@ export function addReinforcedSpend(smDir, usd, now = new Date()) {
 
 export function reinforcedLimit(smDir) {
   const usd = objectOr(objectOr(readJsonFile(join(smDir, CONFIG_FILE), {}), {}).budget, {}).reinforcedMonthlyUSD;
-  return Number.isFinite(usd) && usd >= 0 ? usd : null;
+  return Number.isFinite(usd) && usd >= 0 ? usd : DEFAULT_REINFORCED_MONTHLY_USD;
 }
 
 // session-map's own config.json (budget.reinforcedMonthlyUSD), merged: every other key stays as the person wrote it.

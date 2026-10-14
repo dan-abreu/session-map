@@ -16,6 +16,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111
 - This registry: id65, id66, id67
+- Economy, context and skills: id100, id101, id102, id103, id104
 
 ## How it works
 
@@ -372,3 +373,41 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: create a project choosing "on the computer and on GitHub": the folder exists, the repository shows on github.com under your account, private, with a README; choosing "only on the computer" nothing goes to GitHub.
   - Where it went: `sv15`, `mm51`.
   - Status: built on main on 2026-10-11 (`sv15`, `mm51` done and tested; checked on the running session-map); waiting for the owner to try it.
+
+
+### Economy, context and skills
+
+- [ ] The skills are spending tokens like water; hand each task only the skill it needs `id100`
+  - Asked: 2026-10-13 — "a gente pega as skills de repositorios no github e sinto que essas skills fazem os tokens correrem igual agua"; 2026-10-13 — "teria como fazer uma forma de eu ter as skills e a engrenagem jogar exatamente o que precisa para aquela skill, assim evitaria gastos de tokens atoa e usaria a skill correta no momento correto da maneira correta"
+  - What it means: the always-on list of skill names and descriptions is a real token cost (with hundreds installed) and it multiplies with every agent. session-map should keep the list small (off the unused ones) and deliver only the relevant skill at the right moment.
+  - How to confirm it is done: the page shows how many skills are installed and which are on; turning one off removes it from every new chat; a chat on a part carries only the skills that part uses.
+  - Where it went: `rd09`, `or22`.
+  - Status: in progress: a chat opened on a part gets only the skills that fit (`or22`) and each project shows its plugins (`rd09`), built on 2026-10-13; the per-task skill choice and the one-press off are missing.
+
+- [ ] The project as a book with an index: read the index, then only the exact point, never the whole file `id101`
+  - Asked: 2026-10-13 — "colocar as coisas como se fosse um livro com indices, então a IA vai gerar alguma coisa vai fazer alguma coisa, ao inves de ir la ler o arquivo completo de tudo, ela ler o indice, dentro do indice de um livro tem os capitulos de sub capitulos, assim iria ao ponto central para ler alguma coisa se fosse preciso de uma forma mais barata"
+  - What it means: the architecture map is the book's index (layers → parts → items) and the Foundation builds the deterministic index of the code (file → function → line), so the AI reads the index and only the exact point it needs.
+  - How to confirm it is done: a chat reads the architecture README and the facts of the part it was opened on, never the whole repository; every claim points to a file and line.
+  - Where it went: `fd01`–`fd16` (the Foundation).
+  - Status: accepted (already planned; nothing new beyond the Foundation).
+
+- [ ] A rule read once serves every agent: read in full once, then a cheap cache read for the other 500 `id102`
+  - Asked: 2026-10-13 — "se quando um agente já leu a regra serve para todos os agentes, assim a regra é lida só uma vez mesmo tendo 500 agentes fazendo o serviço, assim é lido 1 vez"
+  - What it means: the fixed block (rules, CLAUDE.md, architecture) stays small and byte-identical across agents, so prompt caching reads it in full once and every other agent pays only the cache read (about 1 to 2% of a full read).
+  - How to confirm it is done: the shared prefix is identical across the agents of one project; the cost shows the cheap cache read after the first full read.
+  - Where it went: `sv17`.
+  - Status: accepted.
+
+- [x] A monthly spending cap by default, so the project never runs with no brake `id103`
+  - Asked: 2026-10-13 — the owner asked for maximum economy and to close the leak (a single chat reached thousands of dollars); session-map proposed a default monthly cap the owner can change, and the owner approved.
+  - What it means: a default monthly limit (a number the owner can change on the page) that pauses new spending past it, instead of running until the credits end.
+  - How to confirm it is done: a project with no budget set still has the default limit; past it the Autonomous way stops and asks.
+  - Where it went: `or20`.
+  - Status: built on main on 2026-10-13 (`or20`, a default of US$ 30 a month the owner can change).
+
+- [x] The conductor stops when the item is done, instead of keeping on and spawning more agents `id104`
+  - Asked: 2026-10-13 — the owner saw one request become hundreds of agents; the orchestrator should finish, mark the item done and stop.
+  - What it means: when the work is finished and the item ticked `[x]`, the conductor summarizes and ends, instead of starting more work.
+  - How to confirm it is done: a finished item ends the turn; a request that should be small does not grow into many agents.
+  - Where it went: `or21`.
+  - Status: built on main on 2026-10-13 (`or21`).

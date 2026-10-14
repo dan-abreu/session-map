@@ -34,6 +34,7 @@ import { readJsonFile, writeAtomic } from '../store.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
 import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
+import { measureWork, directiveOf } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
@@ -691,12 +692,23 @@ ${prompt}`;
       if (node?.kind === 'flow') flow = { seen: readDraft(smDir, project.id) ?? exportMermaid(project.arch ?? { layers: [], parts: [] }), reply: '' };
       // The good practices of the point are read once, here, when the conversation starts; nothing on disk means nothing added.
       const practices = FOCUS_KINDS.includes(node?.kind) ? focusInputs(smDir, project.id) : null;
-      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen, practices });
+      const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen, practices, text: body.text });
       if (context.error) return reply(context.status, { error: context.error });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
-      prompt = firstPrompt({ sections: context.sections, mother, workCell, text: body.text, board });
+
+      // The economic gate (or14/id16): measure the request once, outside the LLM, and hand the conductor the
+      // cheapest worker that can do it. A failed measure never blocks the chat.
+      let sections = context.sections;
+      if (sections.length && CONDUCTORS.has((asked ?? DEFAULT_RUN).kind)) {
+        try {
+          const directive = directiveOf(measureWork({ text: body.text, smDir, stats: loadStats(smDir), others: typeof conductorFacts === 'function' ? conductorFacts() : null }));
+          if (directive) sections = [directive, ...sections];
+        } catch { /* a failed measure never blocks the chat */ }
+      }
+      prompt = firstPrompt({ sections, mother, workCell, text: body.text, board });
+
       // An idea, a new map or a project chat is about the whole project: it starts at the root, whatever branch is picked.
       const atRoot = ['idea', 'create-arch', 'flow', 'project'].includes(node?.kind);
       cwd = atRoot ? project.root : workCell?.path ?? project.root;

@@ -113,7 +113,7 @@ test('the monthly limit for reinforcing on its own: read and set with the token,
   await withServer(async ({ call, write, token, smDir }) => {
     const path = '/api/settings/reinforced-limit';
     assert.equal((await call('GET', path)).status, 401);
-    assert.deepEqual((await call('GET', path, { headers: { cookie: `sm_token=${token}` } })).body, { ok: true, limitUSD: null, spentUSD: 0 });
+    assert.deepEqual((await call('GET', path, { headers: { cookie: `sm_token=${token}` } })).body, { ok: true, limitUSD: 30, spentUSD: 0 });
     assert.equal((await call('POST', path, { body: { usd: 10 } })).status, 403, 'no header, no origin');
     assert.deepEqual((await call('POST', path, { headers: write, body: { usd: -2 } })).body, { ok: false, error: 'bad-limit' });
     assert.equal((await call('POST', path, { headers: write, body: { usd: 25 } })).status, 200);

@@ -45,6 +45,9 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - [ ] **in progress:** The server's heavy jobs (git, re-reading projects) wait in a short queue instead of piling up `sv10`
   - Today the error log fills with "git too slow": many git commands at once until they time out. From `id84`.
 
+- [ ] **important:** The shared context (rules, CLAUDE.md, architecture) stays small and byte-identical, so prompt caching hits and every agent pays a cache read instead of a full read `sv17`
+  - Read in full once, then paid as a cheap cache read by every other agent of the same project. The prefix must be stable and shared, not rebuilt per chat or per agent.
+  - From `id102`.
 ### Restart
 
 - [x] A chat that needs to restart session-map agrees on the moment with the other chats, and every chat goes on by itself afterwards `sv13`

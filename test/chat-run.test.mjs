@@ -214,7 +214,7 @@ test('the reinforced spend is counted per calendar month, and the limit lives in
     addReinforcedSpend(smDir, Number.NaN, oct);
     assert.equal(reinforcedSpend(smDir, oct), 2);
 
-    assert.equal(reinforcedLimit(smDir), null);
+    assert.equal(reinforcedLimit(smDir), 30);
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ currency: { code: 'BRL', rate: 5 }, budget: { monthlyUSD: 100 } }, null, 2));
     assert.deepEqual(setReinforcedLimit(smDir, 30), { ok: true, limitUSD: 30 });
     assert.equal(reinforcedLimit(smDir), 30);

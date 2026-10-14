@@ -140,3 +140,19 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - Done 2026-10-10 (589249c): first run US$ 6.99 in total. Claude was the most reliable everywhere (Sonnet the best reviewer, 20/20); GPT-6.1 Sol strong on code and Portuguese; Gemini 3.8 Flash the best cheap one; DeepSeek fixed (thinking off) but too many false alarms in review. Growing the code set and re-measuring go on in `or15`.
   - 2026-10-10: a measuring bench with session-map's real tasks (classify, write code against tests, find planted bugs, plain Portuguese), run on each Claude level and each outside AI with a key; reports accuracy and cost per correct answer.
   - Audit first; measure cost against quality before trusting it.
+
+
+### Economy and brakes
+
+- [x] **important:** A monthly spending cap by default, so a project never runs with no brake `or20`
+  - A default monthly limit (a number the owner can change) that pauses new spending past it, instead of the Autonomous way running until the credits end. Without it, a single chat can burn thousands of dollars.
+  - From `id103`.
+  - Built on 2026-10-13: `DEFAULT_REINFORCED_MONTHLY_USD = 30` in `server/chat/run.mjs`; `reinforcedLimit` returns it when the owner never set one. Tests updated.
+- [x] **important:** The conductor stops when the item is done: tick it `[x]`, report, and do not keep working `or21`
+  - Today the Autonomous way keeps going after the work is finished, spawning more agents and burning tokens. When the item is ticked, the conductor summarizes and ends the turn instead of starting something new.
+  - From `id104`.
+  - Built on 2026-10-13: the Autonomous prompt now ends the turn once the request is done, instead of starting new work (`server/chat/run.mjs`).
+- [ ] **in progress · important:** The conductor routes skills like it routes models: the right skill, at the right time, only what that task needs `or22`
+  - The same decision that picks the model picks the skill, and hands the chat only the relevant skill(s) instead of leaving the whole skill list always in context.
+  - From `id100`.
+  - Built so far (2026-10-13): a chat opened on a part gets only the few skills whose words fit the request (`server/foundation/skills-focus.mjs`, via `server/chat/context.mjs`). Missing: the conductor choosing the skill per task.

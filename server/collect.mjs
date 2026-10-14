@@ -36,7 +36,7 @@ import { createdRoots } from './newproject.mjs';
 import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
-import { listSkills } from './sources/skills.mjs';
+import { listSkills, listPlugins } from './sources/skills.mjs';
 import { readJsonFile } from './store.mjs';
 import { expectedRun, parseRun } from './chat/run.mjs';
 import { queueView, readWeekUse } from './chat/priority.mjs';
@@ -596,6 +596,7 @@ async function buildProject(ctx, { root, items }) {
         ...waitingItems(arch, projectId),
       ],
       skills: listSkills(root, dir),
+      plugins: listPlugins(root, dir),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
       costByDay: dailyCost(allRows, prices),
       costByModel: modelDaily(allRows, prices),

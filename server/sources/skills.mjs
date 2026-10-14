@@ -76,11 +76,15 @@ function pluginsFromSettings(root, dir) {
   });
 }
 
-export function listSkills(root, dir, { pluginList } = {}) {
+export function listPlugins(root, dir, { pluginList } = {}) {
   const here = normalizePath(root);
-  const plugins = (pluginList ?? pluginsFromSettings(root, dir)).filter(
+  return (pluginList ?? pluginsFromSettings(root, dir)).filter(
     (p) => p.installPath && (p.scope !== 'project' || !p.projectPath || normalizePath(p.projectPath) === here),
-  );
+  ).map((p) => ({ ...p, name: String(p.id ?? '').split('@')[0] }));
+}
+
+export function listSkills(root, dir, { pluginList } = {}) {
+  const plugins = listPlugins(root, dir, { pluginList });
   return [
     ...readSkillsDir(join(dir, 'skills'), 'user', null, true),
     ...readSkillsDir(join(root, '.claude', 'skills'), 'project', null, true),

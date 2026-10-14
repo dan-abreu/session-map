@@ -1839,7 +1839,18 @@ function renderProjectPanel() {
     }
   };
   let body;
-  if (projectTab === 'skills') {
+  if (projectTab === 'plugins') {
+    const plugins = p.plugins ?? [];
+    body = plugins.length ? h('ul', { class: 'skills' }, plugins.map((pl) => {
+      const skills = (p.skills ?? []).filter((k) => k.plugin === pl.name);
+      return h('li', { class: `skill${pl.enabled ? '' : ' is-off'}` },
+        h('div', { class: 'skill-head' },
+          h('span', { class: 'skill-name' }, pl.name),
+          pill(pl.enabled ? 'active' : 'idle', pl.enabled ? t('skills.on') : t('skills.off'))),
+        h('p', { class: 'skill-desc' }, t.count('plugins.skills', skills.length)),
+        pl.installPath ? h('div', { class: 'skill-cmd' }, h('code', {}, pl.installPath)) : null);
+    })) : h('p', { class: 'muted' }, t('plugins.none'));
+  } else if (projectTab === 'skills') {
     body = p.skills.length ? h('ul', { class: 'skills' }, p.skills.map((s) => h('li', { class: `skill${s.enabled ? '' : ' is-off'}` },
       h('div', { class: 'skill-head' },
         h('span', { class: 'skill-name' }, s.name),
@@ -1871,7 +1882,7 @@ function renderProjectPanel() {
         h('span', {}, t('map.showArchived'))));
   }
   $('#panelBody').replaceChildren(
-    h('div', { class: 'seg tabs-mini', role: 'tablist', 'aria-label': t('project.tabs') }, tab('overview', t('project.overview')), tab('skills', t.count('project.skills', p.skills.length))),
+    h('div', { class: 'seg tabs-mini', role: 'tablist', 'aria-label': t('project.tabs') }, tab('overview', t('project.overview')), tab('skills', t.count('project.skills', p.skills.length)), tab('plugins', t.count('project.plugins', (p.plugins ?? []).length))),
     h('div', { id: 'ptab-panel', role: 'tabpanel', 'aria-labelledby': `ptab-${projectTab}` }, body));
 }
 

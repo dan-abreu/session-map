@@ -3,6 +3,7 @@
 // Keep code-shaped tokens out of the fixed texts: the transcript reader counts them as item codes and places the chat by them.
 
 import { practicesFocus } from '../foundation/practices-focus.mjs';
+import { skillsFocus } from '../foundation/skills-focus.mjs';
 import { projectSections } from './project.mjs';
 
 const KINDS = new Set(['layer', 'part', 'group', 'item', 'idea', 'create-arch', 'flow', 'clash', 'project']);
@@ -149,22 +150,24 @@ function findItem(part, node) {
 
 // practices: what the hub read once for this conversation ({practices, packages, profile}); the block is the few open good
 // practices of this part, between the point and the upkeep rule. Nothing to say, or nothing given: no section at all.
-function partSections(project, part, extra, practices) {
+function partSections(project, part, extra, practices, text) {
   const { arch } = project;
   const focus = practices ? practicesFocus({ ...practices, part, lang: arch.lang }) : '';
+  const skills = skillsFocus({ skills: project.skills, part, text, lang: arch.lang });
   const path = [project.name, layerOf(arch, part.id)?.name, part.name, ...extra.path].filter(Boolean).join(' › ');
   return [
     `Point on the architecture map: ${path}`,
     `Part of the architecture: ${part.name}${part.about ? ` (${part.about})` : ''}\nPart file: ${part.file}`,
     ...extra.sections,
     ...(focus ? [focus] : []),
+    ...(skills ? [skills] : []),
     upkeep(arch),
   ];
 }
 
 // node: {kind, partId?, layerId?, group?, code?, line?} → {sections, part} or {error, status}. draft: the flow workshop's text.
 // practices: {practices, packages, profile} read once by the hub; only the part, group and item kinds use it.
-export function contextOf(project, node, { draft = '', practices = null } = {}) {
+export function contextOf(project, node, { draft = '', practices = null, text = '' } = {}) {
   if (!node || typeof node !== 'object' || !KINDS.has(node.kind)) return fail(400, 'bad-node');
   if (node.kind === 'flow') return { sections: flowText(project, draft), part: null };
   if (node.kind === 'clash') return clashContext(project, node);
@@ -182,17 +185,17 @@ export function contextOf(project, node, { draft = '', practices = null } = {}) 
   }
   const part = arch.parts.find((p) => p.id === node.partId);
   if (!part) return fail(404, 'unknown-part');
-  if (node.kind === 'part') return { sections: partSections(project, part, { path: [], sections: [] }, practices), part };
+  if (node.kind === 'part') return { sections: partSections(project, part, { path: [], sections: [] }, practices, text), part };
   if (node.kind === 'group') {
     const group = part.groups.find((g) => g.name === node.group);
     if (!group) return fail(404, 'unknown-group');
     const open = group.items.filter((i) => i.status !== 'done').slice(0, LIST_MAX).map(itemLine);
-    return { sections: partSections(project, part, { path: [group.name], sections: [`Group: ${group.name || '(no group)'}${open.length ? `\n${open.join('\n')}` : ''}`] }, practices), part };
+    return { sections: partSections(project, part, { path: [group.name], sections: [`Group: ${group.name || '(no group)'}${open.length ? `\n${open.join('\n')}` : ''}`] }, practices, text), part };
   }
   const found = findItem(part, node);
   if (!found) return fail(404, 'unknown-item');
   const { group, item } = found;
   const facts = [item.status === 'doing' ? 'in progress' : item.status === 'done' ? 'done' : 'to do', item.who && `with: ${item.who}`, item.weight && `weight: ${item.weight}`, item.milestone && `step ${item.milestone}`].filter(Boolean);
   const lines = [`Item${item.code ? ` \`${item.code}\`` : ''}: ${item.title}`, `State: ${facts.join(' · ')}`, ...item.detail.map((d) => `- ${d}`)];
-  return { sections: partSections(project, part, { path: [group.name], sections: [lines.join('\n')] }, practices), part };
+  return { sections: partSections(project, part, { path: [group.name], sections: [lines.join('\n')] }, practices, text), part };
 }

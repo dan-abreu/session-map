@@ -623,8 +623,8 @@ test('a note that arrives while a delivery is resuming the closed orchestrator i
 
 test('an orchestrator waiting for the person\'s OK to spend is not woken by its inbox, not even once closed; the person\'s message wakes it', async () => {
   await withHub({}, async ({ hub, state, smDir }) => {
-    // No monthly limit set: the Autonomous way stops to ask before the big step.
-    const { sessionId: orchId, r } = await openOrchestrator(hub, state, 'Big step RUN:ask-reinforce:5');
+    // Past the default monthly limit: the Autonomous way stops to ask before the big step.
+    const { sessionId: orchId, r } = await openOrchestrator(hub, state, 'Big step RUN:ask-reinforce:50');
     await r.until((e) => e.type === 'turn-end');
     assert.equal(await hub.closeIdle(orchId), true);
     writeFileSync(join(smDir, 'orch-inbox.json'), JSON.stringify({ notes: { [orchId]: [{ at: '2026-10-11T10:00:00.000Z', text: '[session-map: activity au01 (sonnet) ended — finished, cost US$ 0.10. Summary: done]' }] } }));

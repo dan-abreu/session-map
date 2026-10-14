@@ -30,7 +30,7 @@ function lookProject(p) {
     activity: list(p.activity).map((a) => pick(a, ACTIVITY_KEYS)),
     chats: list(p.chats).map(lookChat),
     conversations: list(p.conversations).map(lookRow),
-    visitors: [], decisions: [], skills: [], foundation: null, ai: null,
+    visitors: [], decisions: [], skills: [], plugins: [], foundation: null, ai: null,
     cost: NO_COST, costByDay: [], costByModel: {}, costWhy: { older: 0, removed: 0 },
   };
 }

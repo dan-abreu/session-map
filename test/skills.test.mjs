@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listSkills } from '../server/sources/skills.mjs';
+import { listPlugins, listSkills } from '../server/sources/skills.mjs';
 
 function skill(base, name, fm) {
   const dir = join(base, name);
@@ -66,4 +66,19 @@ test('listSkills uses pluginList from claude plugin list --json when given', () 
 test('listSkills is empty for a bare setup', () => {
   const claude = mkdtempSync(join(tmpdir(), 'sm-sk-c-'));
   try { assert.deepEqual(listSkills(claude, claude, {}), []); } finally { cleanup(claude); }
+});
+
+
+test('listPlugins returns each installed plugin with a friendly name', () => {
+  const { claude, root } = fixture();
+  try {
+    const plugins = listPlugins(root, claude, { pluginList: [
+      { id: 'on-plugin@mk', scope: 'user', enabled: true, installPath: join(claude, 'plugins', 'cache', 'on') },
+      { id: 'off-plugin@mk', scope: 'user', enabled: false, installPath: join(claude, 'plugins', 'cache', 'off') },
+    ] });
+    assert.equal(plugins.length, 2);
+    assert.equal(plugins[0].name, 'on-plugin');
+    assert.equal(plugins[1].name, 'off-plugin');
+    assert.equal(plugins[1].enabled, false);
+  } finally { cleanup(claude, root); }
 });
