@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109, id110, id111
+- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112
 - This registry: id65, id66, id67
 - Economy, context and skills: id100, id101, id102, id103, id104
 
@@ -320,6 +320,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a balloon lists its skills with their weight; a workflow of ten agents shows the skill opened once, by the conductor; a long chat shows its chapters and its cost per turn going down after a chapter closes.
   - Where it went: `mm52`, `or32`, `pc28`.
   - Status: in progress: `or32` and `pc28` built on 2026-10-13; `mm52` being built.
+
+- [ ] **in progress:** The balloons and the items' status made by a mechanism of the program, not by an AI that can forget `id112`
+  - Asked: 2026-10-13 — "questões de balões criações não era para depender da IA, você pode errar isso deveria ser mecanismo do programa, eu nao sei falar os termos mas deveria ser um robo, um sistema alguma coisa assim, não simplesmente um arquivo .md"
+  - What it means: what is being worked on and what is built is read from the facts (live chats and agents, branches, commits), so the map is right even when an AI forgets to write the mark.
+  - How to confirm it is done: start an agent on an item without touching the plan file: its balloon shows "working now" within a minute; merge a feat commit naming an item: it shows "built, not ticked".
+  - Where it went: `sb13`.
+  - Status: in progress: `sb13` being built on 2026-10-13.
 
 ### This registry
 

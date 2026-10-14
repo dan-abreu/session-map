@@ -36,6 +36,11 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - [x] **Claude:** Place a chat by the item code it cites, then by files, then by the AI `sb01`
 - [x] **Claude:** Relate parts that share chats, branches or file links `sb02`
 - [x] **important:** Show why a chat was placed where it is `sb03`
+- [ ] **in progress · important:** The status of every item comes from a robot, not from an AI writing a file: working now, built on main, or as the plan says `sb13`
+  - Exact, no AI: an item is "working" when a chat or an agent active in the last 15 minutes names its code (in its brief, its card, its branch or the commits of its worktree); "built" when a feat or fix commit on main names it while the plan still shows it open. The balloons show it at once.
+  - The robot also writes the "in progress" mark into the plan line when the plan still says to do; it never ticks done by itself (a commit that names a code can be partial), it shows "built, not ticked" instead.
+  - On 2026-10-13 six items were being built while the map still showed them as to do: the AI had not written the mark.
+  - From `id112`.
 
 ### Cost
 
