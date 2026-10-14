@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: light dark;
   --bg: #edf1ef;
   --bg-2: #f8faf9;
@@ -282,7 +282,7 @@ button.pm-row:hover, button.pm-row:focus-visible { background: var(--bg-3); }
 [aria-checked="true"] > .pm-switch { background: var(--ink); box-shadow: none; }
 [aria-checked="true"] > .pm-switch::after { transform: translateX(12px); }
 
-/* The language as two choices, in Configurações. */
+/* The language as two choices, in ConfiguraÃ§Ãµes. */
 .lang { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-md); background: var(--bg-3); }
 .lang button {
   min-width: 34px; padding: 4px 8px; border: 0; border-radius: var(--r-sm); background: none;
@@ -320,7 +320,7 @@ button.pm-row:hover, button.pm-row:focus-visible { background: var(--bg-3); }
 .summary-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mh-help { display: contents; }
 
-/* Who works on the project now: "● 2 working", opening the live list (it was the Live button of the toolbar). */
+/* Who works on the project now: "â— 2 working", opening the live list (it was the Live button of the toolbar). */
 .mh-live {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   height: 26px; padding: 0 8px; margin-left: -2px;
@@ -328,7 +328,7 @@ button.pm-row:hover, button.pm-row:focus-visible { background: var(--bg-3); }
   font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; cursor: pointer;
   transition: background-color var(--dur-fast);
 }
-.mh-live::before { content: "·"; margin-right: 4px; color: var(--ink-2); opacity: 0.6; font-weight: 400; }
+.mh-live::before { content: "Â·"; margin-right: 4px; color: var(--ink-2); opacity: 0.6; font-weight: 400; }
 .mh-live:hover, .mh-live[aria-expanded="true"] { background: var(--active-fill); }
 .mh-live .live-n { min-width: 1ch; }
 .mh-live.is-zero { color: var(--ink-2); font-weight: 550; }
@@ -641,7 +641,7 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 /* ---------- point sheet: a box's information on top, its chat always under it (mm07) ---------- */
 
 /* The information takes at most --info-h of the sheet (the split line moves it) and scrolls inside; folded, it leaves
-   the sheet to the chat and comes back from the chat's ⋯, "About this part" (pc18). */
+   the sheet to the chat and comes back from the chat's â‹¯, "About this part" (pc18). */
 .point-info { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; max-height: var(--info-h, 46%); }
 .point-info[hidden], .point-split[hidden] { display: none; }
 .point-info[data-folded] { display: none; }
@@ -841,7 +841,7 @@ body.is-splitting { cursor: row-resize; user-select: none; }
 .wl-group:first-child { padding-top: 6px; }
 .wl-group h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
 .wl-group:first-child h3 { color: var(--waiting-ink); }
-.wl-group-n::before { content: "· "; }
+.wl-group-n::before { content: "Â· "; }
 .wl-scope[hidden] { display: none; }
 .waiting-counts {
   display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 10px 16px 8px 20px;
@@ -1251,9 +1251,9 @@ button.req-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 
 .sheet-resize:focus-visible { outline-offset: -2px; }
 body.is-resizing { cursor: col-resize; user-select: none; }
 body.is-resizing .sheet { animation: none; }
-/* The header is one thin line, as in Claude (pc18): the state dot, the title, the part as a quiet chip, then ⋯ and close. */
+/* The header is one thin line, as in Claude (pc18): the state dot, the title, the part as a quiet chip, then â‹¯ and close. */
 .chat-head { align-items: center; gap: 6px; padding: 6px 8px 6px 16px; }
-/* The title gives way last: with an even share it lost a fraction of a pixel beside the chip and showed "…" though it fit. */
+/* The title gives way last: with an even share it lost a fraction of a pixel beside the chip and showed "â€¦" though it fit. */
 .chat-head h2 {
   flex: 0 0.001 auto; min-width: 0; font-size: var(--fs-md); line-height: 1.4; font-weight: 650; letter-spacing: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1279,7 +1279,7 @@ body.is-resizing .sheet { animation: none; }
 .chat-head .icon-btn { width: 32px; height: 32px; margin: 0; }
 .chat-head .icon-btn[hidden] { display: none; }
 .chat-head .icon-btn[aria-expanded="true"] { background: var(--bg-3); color: var(--ink); }
-/* The ⋯ is the page's small menu (menu.js look): rows with an icon, the words and, for find, its keys. */
+/* The â‹¯ is the page's small menu (menu.js look): rows with an icon, the words and, for find, its keys. */
 .chat-more { position: relative; display: flex; }
 .chat-tools { display: flex; gap: 2px; }
 .chat-more-menu { top: calc(100% + 4px); z-index: 6; min-width: 240px; }
@@ -1307,20 +1307,20 @@ body.is-resizing .sheet { animation: none; }
 .chat-form textarea.is-scrolling { overflow-y: auto; }
 /* The keys, quiet, inside the box on its bar: always in the same place, whatever the focus or the text, so nothing moves
    under the pointer on the way to Send. One piece per key on a single line: when the sheet is narrow the last pieces
-   wrap out of sight whole, before the way it runs gives any room, so none is ever cut ("/ com…"); the whole list is the
+   wrap out of sight whole, before the way it runs gives any room, so none is ever cut ("/ comâ€¦"); the whole list is the
    tooltip. */
 .chat-hints {
   flex: 0 1000 auto; min-width: 0; height: 16px; margin-left: 4px; display: flex; flex-wrap: wrap; overflow: hidden;
   font-size: var(--fs-2xs); line-height: 16px; color: var(--ink-2); cursor: default;
 }
 .chat-hints > span { white-space: nowrap; }
-.chat-hints > span + span::before { content: "·"; margin: 0 4px; }
+.chat-hints > span + span::before { content: "Â·"; margin: 0 4px; }
 /* A touch screen has no keys to learn (Enter, Ctrl F): the box and the menus keep the room for the words. */
 @media (pointer: coarse) { .chat-hints, .pm-keys { display: none; } }
 .chat-bar { display: flex; align-items: center; gap: 6px; margin-left: -6px; }
 .chat-send { gap: 6px; }
 
-/* The one working line (pc18): "Trabalhando · lendo app.js", and Stop at its end. */
+/* The one working line (pc18): "Trabalhando Â· lendo app.js", and Stop at its end. */
 .chat-live {
   display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 6px 0 12px; border-radius: var(--r-md);
   background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-sm);
@@ -1342,7 +1342,7 @@ body.is-resizing .sheet { animation: none; }
 .chat-stop .btn-icon { width: 12px; height: 12px; }
 
 /* How the conversation runs: a compact button by Send, like Claude's model button, and the menu it opens above the box. */
-/* It keeps its whole width ("Manual · Sonnet"): the key hints beside it give the room. */
+/* It keeps its whole width ("Manual Â· Sonnet"): the key hints beside it give the room. */
 .chat-run { display: flex; flex: none; min-width: 0; margin-left: auto; --tone: var(--idle); }
 .run-toggle {
   display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; height: 32px; padding: 0 8px 0 10px;
@@ -1354,7 +1354,7 @@ body.is-resizing .sheet { animation: none; }
 .run-toggle.tone-reinforced, .run-toggle.tone-ultracode { --tone: var(--doing); }
 .run-toggle.tone-ask { --tone: var(--waiting); }
 .run-way { flex: none; font-weight: 600; color: var(--ink); }
-.run-way:has(+ .run-model)::after { content: "·"; margin-left: 6px; font-weight: 400; color: var(--ink-2); }
+.run-way:has(+ .run-model)::after { content: "Â·"; margin-left: 6px; font-weight: 400; color: var(--ink-2); }
 .run-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-caret {
   flex: none; width: 6px; height: 6px; margin: 0 2px 4px;
@@ -1423,7 +1423,7 @@ body.is-resizing .sheet { animation: none; }
 .run-warn .actions, .run-ask .actions { margin-top: 10px; }
 .run-ask { margin-top: 10px; }
 
-/* Configurações (pc19): the alerts dialog's look, with a head that holds the close button. */
+/* ConfiguraÃ§Ãµes (pc19): the alerts dialog's look, with a head that holds the close button. */
 .st-dialog { width: min(520px, calc(100% - 32px)); }
 .st-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .st-head h2 { margin: 0 0 4px; }
@@ -2117,7 +2117,7 @@ body.is-empty .convs { display: none; }
 .cv-list { --cv-head-h: 40px; flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 var(--sp-4); overscroll-behavior: contain; scrollbar-width: thin; }
 .cv-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
 
-/* Groups: a quiet title with its dot and "· N" (amber for Needs you, green for Working), the title staying on top while
+/* Groups: a quiet title with its dot and "Â· N" (amber for Needs you, green for Working), the title staying on top while
    its rows scroll. */
 .cv-group { --g: transparent; --g-ink: var(--ink-2); }
 .g-needs { --g: var(--waiting); --g-ink: var(--waiting-ink); }
@@ -2135,12 +2135,12 @@ body.is-empty .convs { display: none; }
 .g-working .cv-group-dot::after { content: ""; position: absolute; inset: -1px; border-radius: 50%; border: 2px solid var(--active); animation: live var(--dur-loop) var(--ease-out) infinite; }
 .cv-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-group-n { font-weight: 600; color: var(--ink-2); }
-.cv-group-n::before { content: "· " / ""; }
+.cv-group-n::before { content: "Â· " / ""; }
 .cv-more { margin: 6px 18px 0; }
 .cv-empty { margin: 18px 8px; color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.5; }
 
 /* A row: title and time; where it runs and its place; then one line by group (what is needed, the step, where else it
-   works). Cost and ⋯ wait in a box that takes the time's place on hover and on focus. */
+   works). Cost and â‹¯ wait in a box that takes the time's place on hover and on focus. */
 .cv-item { position: relative; }
 .cv-line { position: relative; margin: 0 8px; }
 .cv-row {
@@ -2225,7 +2225,7 @@ body.is-empty .convs { display: none; }
 .cv-archived[hidden] { display: none; }
 .cv-archived-chevron, .cv-board svg { flex: none; width: 14px; height: 14px; margin-left: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--dur-base) var(--ease-out); }
 .cv-archived[aria-expanded="true"] .cv-archived-chevron { transform: rotate(90deg); }
-.cv-archived-n::before { content: "· " / ""; }
+.cv-archived-n::before { content: "Â· " / ""; }
 .cv-archived-n { font-weight: 600; }
 .cv-board { display: none; }
 .cv-board svg { margin: 0 0 0 auto; }
@@ -2716,7 +2716,7 @@ button.cv-folder-btn:hover { background: color-mix(in oklch, var(--p) 10%, trans
 .chat-book-label { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 4px; }
 .chat-book-summary { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); display: grid; gap: 6px; }
 .chat-book-summary summary { cursor: pointer; font-size: var(--fs-sm); }
-.chat-book-summary ul { margin: 0; padding-left: 20px; display: grid; gap: 3px; font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.chat-book-summary ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
 .chat-book-index ol { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 2px; font-size: var(--fs-sm); }
 .chat-book-cap { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); }
 .chat-book-cap[open] { box-shadow: var(--shadow-xs); }
@@ -2753,7 +2753,7 @@ button.cv-folder-btn:hover { background: color-mix(in oklch, var(--p) 10%, trans
 .chat-log > li.is-hit-now, .steps-list > li.is-hit-now { box-shadow: 0 0 0 2px var(--waiting); }
 .chat-find .chat-find-close { flex: none; }
 
-/* A turn's steps folded into one line (pc18): "Fez 12 passos · leu 6 arquivos, mudou 3 ›", opening to the rows. */
+/* A turn's steps folded into one line (pc18): "Fez 12 passos Â· leu 6 arquivos, mudou 3 â€º", opening to the rows. */
 .msg-steps { font-size: var(--fs-sm); }
 .steps-fold > summary {
   display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; border-radius: var(--r-md);
@@ -3178,7 +3178,7 @@ mark.fs-hit.is-current { background: var(--lit-fill); box-shadow: 0 0 0 1px var(
 .chg-folder, .chg-from { font: var(--fs-xs)/1.4 var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
 .chg-lines { grid-area: lines; display: inline-flex; gap: 6px; font-size: var(--fs-xs); font-weight: 650; white-space: nowrap; }
 .chg-meta { grid-area: meta; display: flex; flex-wrap: wrap; gap: 0 var(--sp-2); min-width: 0; font-size: var(--fs-xs); color: var(--ink-2); }
-.chg-meta > span + span::before { content: "·"; margin-right: var(--sp-2); color: var(--ink-2); }
+.chg-meta > span + span::before { content: "Â·"; margin-right: var(--sp-2); color: var(--ink-2); }
 .chg-where { color: var(--ink); font-weight: 550; }
 .chg-who { min-width: 0; overflow-wrap: anywhere; }
 .chg-state { grid-area: state; justify-self: end; padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-2xs); font-weight: 650; white-space: nowrap; }
@@ -3212,7 +3212,7 @@ mark.fs-hit.is-current { background: var(--lit-fill); box-shadow: 0 0 0 1px var(
   .chg-kinds { flex-wrap: wrap; }
 }
 
-/* ---------- traceable teams of helpers (mm31): request → team → helpers → where ---------- */
+/* ---------- traceable teams of helpers (mm31): request â†’ team â†’ helpers â†’ where ---------- */
 
 .wf, .bx-agent, .chg-ask { --wf: oklch(var(--owner-l) var(--owner-c) var(--wf-h, 200)); }
 .wf-list { display: grid; gap: var(--sp-4); }
@@ -3381,7 +3381,7 @@ body:has(.pop-menu:not([hidden]), .pp-list:not([hidden])) .cut { display: none; 
 .stmt-date { display: inline-grid; gap: 2px; font-size: var(--fs-sm); color: var(--ink-2); }
 .stmt-status { display: grid; gap: 6px; color: var(--ink-2); }
 .stmt-crumbs ol { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 12px 0 0; padding: 0; font-size: var(--fs-sm); }
-.stmt-crumbs li + li::before { content: "›"; margin-right: 4px; color: var(--ink-2); }
+.stmt-crumbs li + li::before { content: "â€º"; margin-right: 4px; color: var(--ink-2); }
 .stmt-crumbs [aria-current] { font-weight: 600; }
 .stmt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 14px 0; }
 .stmt-kpi { display: grid; gap: 2px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); }
