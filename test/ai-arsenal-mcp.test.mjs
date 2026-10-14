@@ -118,10 +118,10 @@ test('it speaks MCP: initialize, ping, and -32601 for what it does not know', as
   }
 });
 
-test('it lists five tools, and the asking one warns that answers are data to verify', async () => {
+test('it lists six tools, and the asking one warns that answers are data to verify', async () => {
   await withMcp({}, async ({ mcp }) => {
     const { tools } = (await mcp.rpc('tools/list', {})).result;
-    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'pick_worker', 'report_result', 'restart_session_map']);
+    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'pick_worker', 'report_result', 'restart_session_map', 'skeleton']);
     const ask = tools.find((t) => t.name === 'ask_other_ai');
     assert.deepEqual(ask.inputSchema.required.sort(), ['kind', 'prompt', 'sensitivity']);
     assert.deepEqual(ask.inputSchema.properties.kind.enum, ['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning']);
@@ -268,6 +268,44 @@ test('in-page chats get the arsenal next to the permission server', () => {
   assert.deepEqual(servers.arsenal.env, { SM_DIR: 'C:/sm', SM_URL: 'http://127.0.0.1:4002' });
   const noUrl = chatMcpServers({ permissionUrl: 'u', secret: 's', smDir: 'C:/sm' });
   assert.deepEqual(noUrl.arsenal.env, { SM_DIR: 'C:/sm' });
+  // fd17: the folder the chat works in goes to the skeleton tool as SM_ROOT
+  const rooted = chatMcpServers({ permissionUrl: 'u', secret: 's', smDir: 'C:/sm', root: 'C:/proj' });
+  assert.deepEqual(rooted.arsenal.env, { SM_DIR: 'C:/sm', SM_ROOT: 'C:/proj' });
+});
+
+// fd17: the skeleton of a file, read under SM_ROOT only.
+test('skeleton: answers the signatures of a file of the project, with no body and no network', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'sm-skel-root-'));
+  writeFileSync(join(root, 'a.mjs'), "import { b } from './b.mjs';\nexport function go(x) {\n  const hidden = 'body text';\n  return process.env.MY_VAR + x;\n}\n");
+  writeFileSync(join(root, '.env'), 'SECRET=1\n');
+  try {
+    await withMcp({ env: { SM_ROOT: root }, serverDown: true }, async ({ mcp, call }) => {
+      const { tools } = (await mcp.rpc('tools/list', {})).result;
+      const tool = tools.find((t) => t.name === 'skeleton');
+      assert.equal(tool.description, 'The skeleton of a file (imports, exports, signatures with line numbers, env variables, no bodies). Read it first, then read only the lines you need.');
+      assert.deepEqual(tool.inputSchema.required, ['path']);
+      const ok = await call('skeleton', { path: 'a.mjs' });
+      assert.equal(ok.isError, false);
+      const text = textOf(ok);
+      assert.match(text, /2: export function go\(x\) \{/);
+      assert.match(text, /MY_VAR \(line 4\)/);
+      assert.ok(!text.includes('body text'));
+      for (const bad of ['.env', '../a.mjs', 'nope.mjs', 'a.txt', join(root, 'a.mjs'), '', 7]) {
+        const r = await call('skeleton', { path: bad });
+        assert.equal(r.isError, true, `refused: ${bad}`);
+        assert.ok(!textOf(r).includes('SECRET'));
+      }
+      assert.equal((await call('skeleton', {})).isError, true);
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('skeleton: without SM_ROOT it does not guess a folder', async () => {
+  await withMcp({ env: { SM_ROOT: '' } }, async ({ call }) => {
+    const r = await call('skeleton', { path: 'server/ai/arsenal-mcp.mjs' });
+    assert.equal(r.isError, true);
+    assert.match(textOf(r), /did not say which project/);
+  });
 });
 
 test('the project chat tells the conductor the arsenal exists and how to route', () => {

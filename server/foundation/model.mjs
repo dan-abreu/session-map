@@ -291,7 +291,8 @@ export function buildModel(facts, census, arch, overrides = {}, opts = {}) {
     }
     for (const f of ofKind('function')) {
       const parentId = componentOf.get(f.file);
-      if (!parentId) continue;
+      // a function nested in another (fd17) is for the skeleton of a file, not a node of the map
+      if (!parentId || f.attrs?.parent) continue;
       const prefix = `fn:${f.file}#`;
       const a = f.attrs ?? {};
       const attrs = {};

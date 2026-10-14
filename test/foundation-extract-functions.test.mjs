@@ -473,3 +473,56 @@ test('extract gives call sites as hints; linkCalls turns them into facts', () =>
   const calls = linkCalls(r.facts, r.hints, { imports: {} });
   assert.deepEqual(calls.map((c) => c.id), ['call:fn:src/a.js#a->fn:src/a.js#b']);
 });
+
+// fd17: web/chat.js keeps most functions inside one outer function; they are facts too, with their parent's name.
+test('functions nested inside another function are facts with their parent and line', () => {
+  const text = [
+    'export function initChat(box) {', // 1
+    '  const state = { open: false };', // 2
+    '  function render(items) {', // 3
+    '    return items.map((i) => i);', // 4
+    '  }', // 5
+    '  const onClick = async (e) => {', // 6
+    '    function deep() { return 1; }', // 7
+    '    return deep();', // 8
+    '  };', // 9
+    '  const seen = function (x) { return x; };', // 10
+    '  let n = 0;', // 11
+    '  const value = compute(box);', // 12
+    '  return { render, onClick, seen };', // 13
+    '}', // 14
+    'class Box {', // 15
+    '  open() {', // 16
+    '    const close = () => { this.x = 1; };', // 17
+    '    return close;', // 18
+    '  }', // 19
+    '}', // 20
+    'app.get("/", (req, res) => {', // 21
+    '  function lonely() {}', // 22
+    '});', // 23
+  ].join('\n');
+  const { facts } = run(text, 'src/a.js');
+  const nested = facts.filter((f) => f.kind === 'function' && f.attrs.parent);
+  assert.deepEqual(nested.map((f) => `${f.attrs.parent} > ${f.name.split('>').pop()}:${f.line}`).sort(), [
+    'Box.open > close:17', 'initChat > onClick:6', 'initChat > render:3', 'initChat > seen:10', 'initChat>onClick > deep:7',
+  ].sort());
+  assert.equal(fnOf(facts, 'fn:src/a.js#initChat>render').attrs.endLine, 5);
+  assert.equal(fnOf(facts, 'fn:src/a.js#initChat>render').attrs.exported, false);
+  // top-level facts are unchanged, and a nested function never becomes the caller or the target of a project call
+  assert.deepEqual(idsOf(facts, 'function').filter((id) => !id.includes('>')), ['fn:src/a.js#Box.open', 'fn:src/a.js#initChat']);
+  const calls = project([{ path: 'src/a.js', text }]).filter((f) => f.kind === 'call');
+  assert.ok(calls.every((c) => !c.id.includes('>')));
+});
+
+test('a nested function with the same name twice under one parent gets distinct ids', () => {
+  const text = 'function a() {\n  if (x) { function go() {} } else { function go() {} }\n}\n';
+  const { facts } = run(text, 'src/a.js');
+  const ids = facts.filter((f) => f.attrs?.parent === 'a').map((f) => f.id);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2);
+  // the same name three times on one line: the line alone does not tell them apart
+  const crowded = run('function outer() { { const inner = () => {}; } { const inner = () => {}; } { const inner = () => {}; } }', 'src/b.js').facts;
+  const crowdedIds = crowded.filter((f) => f.attrs?.parent === 'outer').map((f) => f.id);
+  assert.equal(crowdedIds.length, 3);
+  assert.equal(new Set(crowdedIds).size, 3);
+});

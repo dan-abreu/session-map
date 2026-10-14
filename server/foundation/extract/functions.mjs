@@ -4,6 +4,8 @@
 // only when its target is sure (same file, the own class, or a name imported from a resolved project file). When more
 // than one project function could be meant the call is AMBIGUOUS with the candidates; a library or global call
 // (console.log, fetch, print) is never a fact. Pure: the index hands the text and the resolved imports in.
+// A JS function written inside another named function (fd17) is a function fact too, id `fn:path#outer>inner`, with
+// attrs.parent = the outer's name; it is for the skeleton of a file only: not a map node, not a call target or caller.
 //
 //   extract({ path, type, text, masked })  -> { facts: function + export facts, hints: call sites (kind 'call-site') }
 //   importNames({ path, type, text, masked }) -> [{ name, imported, spec, line }]  (the index resolves spec -> file)
@@ -513,6 +515,61 @@ function jsDeclarations(ctx) {
   return { fns, exports, scopes };
 }
 
+// Functions written inside another named function's body (fd17): a `function name() {}` statement, or a const/let/var
+// assigned an arrow or a function expression. They are facts only (the skeleton of a file shows them under their
+// parent); they never join `fns`, so the call graph is the one it always was. The parent is the innermost named
+// function around them ("initChat", "Box.open", or "initChat>onClick" for a second level). One inside only an
+// anonymous callback or an IIFE has no named parent and is left out.
+function jsNested(ctx, fns) {
+  const { m, d } = ctx;
+  const found = [];
+  const FUNC_RE = /(?<![\w$.])(?:(async)\s+)?function\b\s*(\*)?\s*([A-Za-z_$][\w$]*)\s*(?:<[^(){};]*>\s*)?\(/g;
+  for (let hit; (hit = FUNC_RE.exec(m));) {
+    if (d[hit.index] === 0) continue;
+    // a statement, not a named function expression (`x = function name() {}`)
+    const p = prevNonWs(m, hit.index - 1);
+    if (p >= 0 && !'{};'.includes(m[p]) && !(/\n/.test(m.slice(p + 1, hit.index)) && !'=(,:?&|+-*/<>!['.includes(m[p]))) continue;
+    const open = hit.index + hit[0].length - 1;
+    const close = closeOf(m, open);
+    if (close < 0) continue;
+    const body = scanBody(m, close + 1, false);
+    if (body?.open === undefined) continue;
+    found.push({ name: hit[3], nameAt: m.lastIndexOf(hit[3], open), async: !!hit[1], open, close, body });
+  }
+  const VAR_RE = /(?<![\w$.])(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=(?![=>])/g;
+  for (let hit; (hit = VAR_RE.exec(m));) {
+    if (d[hit.index] === 0) continue;
+    const value = fnValue(m, hit.index + hit[0].length);
+    if (value) found.push({ name: hit[1], nameAt: hit.index + hit[0].indexOf(hit[1], 3), ...value });
+  }
+  if (!found.length) return [];
+  found.sort((a, b) => a.nameAt - b.nameAt);
+  const made = found.map((f) => makeFn(ctx, { scope: null, ...f }));
+  const label = (f) => (f.scope ? `${f.scope.name}.${f.name}` : f.name);
+  const all = [...fns, ...made];
+  // innermost first: the smallest body around the position
+  const around = (at, self) => all
+    .filter((f) => f !== self && f.bodyStart < at && at <= f.bodyEnd)
+    .sort((a, b) => (a.bodyEnd - a.bodyStart) - (b.bodyEnd - b.bodyStart))[0] ?? null;
+  const labels = new Map();
+  const out = [];
+  const taken = new Set();
+  // outer ones first, so a parent has its label before its children ask for it
+  for (const fn of made.sort((a, b) => a.bodyStart - b.bodyStart || b.bodyEnd - a.bodyEnd)) {
+    const parent = around(fn.nameAt, fn);
+    if (!parent) continue;
+    const parentLabel = labels.get(parent) ?? label(parent);
+    const base = `${parentLabel}>${fn.name}`;
+    // the same name twice under one parent: the line tells them apart, and a counter when they share a line too
+    let key = base;
+    for (let n = 2; taken.has(key); n++) key = n === 2 ? `${base}@${fn.line}` : `${base}@${fn.line}.${n - 1}`;
+    taken.add(key);
+    labels.set(fn, key);
+    out.push({ ...fn, parentLabel, key });
+  }
+  return out;
+}
+
 function dartDeclarations(ctx) {
   const { m, d } = ctx;
   const fns = [];
@@ -924,6 +981,15 @@ export function extract({ path, type, text, masked }) {
       attrs: { exported: !!fn.exported, async: fn.async, params: fn.params, endLine: fn.endLine }, refs: [],
     });
   }
+  if (lang === 'js') {
+    for (const fn of jsNested(ctx, fns)) {
+      const id = `fn:${path}#${fn.key}`;
+      facts.push({
+        id, kind: 'function', name: id.slice(3), file: path, line: fn.line, origin: 'EXTRACTED', extractor: VERSION,
+        attrs: { exported: false, async: fn.async, params: fn.params, endLine: fn.endLine, parent: fn.parentLabel }, refs: [],
+      });
+    }
+  }
   const seen = new Set();
   for (const e of exports.sort((a, b) => a.at - b.at)) {
     const id = `export:${path}#${e.name}`;
@@ -1028,7 +1094,8 @@ export function importNames({ path, type, text, masked }) {
 const langOfFile = (file) => EXT_LANG[file.split('.').pop()] ?? null;
 
 export function linkCalls(facts, hints, { imports = {} } = {}) {
-  const fns = facts.filter((f) => f.kind === 'function');
+  // a function nested in another (fd17) is not a call target: its id would read like a method
+  const fns = facts.filter((f) => f.kind === 'function' && !f.attrs?.parent);
   const top = new Map();
   const member = new Map();
   const byMethod = new Map();

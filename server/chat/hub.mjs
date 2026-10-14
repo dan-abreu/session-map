@@ -44,10 +44,11 @@ const KEY_RE = /^[0-9a-f]{32}$/;
 // The MCP servers of an in-page chat (--strict-mcp-config: only these): the permission prompt, and the arsenal that
 // asks the other AIs through session-map (or14). The arsenal reads the token from smDir itself: no secret in its env.
 // orchestrator: the project's orchestrator, whose sessionmap server also lists its tools (orchestra.mjs).
-export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessionId, orchestrator = false }) {
+// root: the folder the chat works in; the arsenal's skeleton tool (fd17) reads only under it (SM_ROOT, set here, never by the model).
+export function chatMcpServers({ permissionUrl, secret, smDir, arsenalUrl, sessionId, root, orchestrator = false }) {
   return {
     sessionmap: { command: process.execPath, args: [PERMISSION_MCP], env: { SM_PERMISSION_URL: permissionUrl, SM_PERMISSION_SECRET: secret, ...(orchestrator ? { SM_ORCHESTRATOR: '1' } : {}) } },
-    arsenal: { command: process.execPath, args: [ARSENAL_MCP], env: { SM_DIR: smDir, ...(arsenalUrl ? { SM_URL: arsenalUrl } : {}), ...(sessionId ? { SM_SESSION_ID: sessionId } : {}) } },
+    arsenal: { command: process.execPath, args: [ARSENAL_MCP], env: { SM_DIR: smDir, ...(root ? { SM_ROOT: root } : {}), ...(arsenalUrl ? { SM_URL: arsenalUrl } : {}), ...(sessionId ? { SM_SESSION_ID: sessionId } : {}) } },
   };
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -741,7 +742,7 @@ ${prompt}`;
     if (resume) resuming.add(resume);
     try {
       // By file, not by argument: a command line is readable by other users of the machine.
-      const config = { mcpServers: chatMcpServers({ permissionUrl: await relayUrl(), secret: chat.secret, smDir, arsenalUrl, sessionId: key, orchestrator }) };
+      const config = { mcpServers: chatMcpServers({ permissionUrl: await relayUrl(), secret: chat.secret, smDir, arsenalUrl, sessionId: key, root: cwd, orchestrator }) };
       mkdirSync(join(smDir, 'chat'), { recursive: true });
       writeFileSync(chat.configPath, JSON.stringify(config), { mode: 0o600 });
       chats.set(key, chat);

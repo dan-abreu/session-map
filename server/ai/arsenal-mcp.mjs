@@ -3,6 +3,7 @@
 // no rule of its own: it forwards to the session-map server (POST /api/ai/ask, GET /api/ai/others, POST /api/ai/recommend), which routes, caps,
 // redacts and refuses. SM_URL: the server (default http://127.0.0.1:4001); SM_DIR: session-map's folder, where the token
 // is (default <claude dir>/session-map). Whatever goes wrong is a plain answer to Claude, never a protocol error.
+// It also carries skeleton (fd17): the signatures of a project file, read locally under SM_ROOT.
 // It also carries restart_session_map (POST /api/restart, sv13): a restart session-map times itself, never a killed process.
 // Before the token or a prompt leaves, the server proves it knows the token (GET /api/ai/hello with a fresh nonce): when
 // session-map is not running, another program on the free port gets nothing.
@@ -15,6 +16,8 @@ import { createInterface } from 'node:readline';
 const BASE = (process.env.SM_URL || 'http://127.0.0.1:4001').replace(/\/+$/, '');
 const SM_DIR = process.env.SM_DIR || join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'session-map');
 const TOKEN_FILE = join(SM_DIR, 'token');
+// The folder this conversation works in (session-map's chats set it): the only root the skeleton tool reads under.
+const SM_ROOT = process.env.SM_ROOT || '';
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 // Which conversation this tool works for (session-map's chats set it); it only labels the activity log.
 const SESSION_ID = process.env.SM_SESSION_ID || '';
@@ -346,7 +349,32 @@ async function restart(args) {
   return result(`Restart scheduled.${first} session-map restarts as soon as none of its page conversations is in the middle of a turn (now ${now}), at the latest at ${String(j.deadline)}. ${next}`);
 }
 
-const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart };
+// The skeleton of a file (fd17): the same exact reader the census uses, no AI and no network. It reads only under SM_ROOT,
+// which session-map sets to the folder the chat works in; the model gives a path inside it and nothing else.
+const skeletonTool = {
+  name: 'skeleton',
+  description: 'The skeleton of a file (imports, exports, signatures with line numbers, env variables, no bodies). Read it first, then read only the lines you need.',
+  inputSchema: {
+    type: 'object',
+    properties: { path: { type: 'string', description: 'A JS, TS, Dart or PHP file, relative to the project this conversation works in.' } },
+    required: ['path'],
+  },
+};
+const NO_SKELETON = 'No skeleton for that path: it must be a JS, TS, Dart or PHP file inside the project, readable and not a secrets file (.env). Read the file itself instead.';
+
+async function skeletonOf(args) {
+  if (!SM_ROOT) return result('session-map did not say which project this conversation works in, so there is no skeleton here. Read the file itself instead.', true);
+  const path = args?.path;
+  if (typeof path !== 'string' || !path.trim()) return result('Give path: a file of the project, relative to its folder.', true);
+  let text = null;
+  try {
+    const { skeleton } = await import('../foundation/skeleton.mjs');
+    text = skeleton({ root: SM_ROOT, file: path.trim() });
+  } catch { /* a reader that fails is the same plain answer: read the file */ }
+  return text === null ? result(NO_SKELETON, true) : result(text);
+}
+
+const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart, [skeletonTool.name]: skeletonOf };
 
 createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg;
@@ -355,7 +383,7 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
   if (method === 'initialize') {
     send({ jsonrpc: '2.0', id, result: { protocolVersion: params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'session-map-arsenal', version: '1.0.0' } } });
   } else if (method === 'tools/list') {
-    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool, restartTool] } });
+    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool, restartTool, skeletonTool] } });
   } else if (method === 'tools/call') {
     const run = TOOLS[params?.name];
     if (!run) return send({ jsonrpc: '2.0', id, error: { code: -32602, message: `unknown tool: ${String(params?.name).slice(0, 60)}` } });
