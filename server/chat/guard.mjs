@@ -139,10 +139,11 @@ export function guardWorkflow(input, { read = readFileSync, limit = POLICY.limit
 
 // input: the hook's JSON from Claude Code. → the answer to print, or null to say nothing (the step goes on to the
 // permission check as before). A failed or slow snapshot never stops the step.
-export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env } = {}) {
+// mapEdit: hold map edits to the clerk only where its tools exist (a page chat); the --user copy runs everywhere else.
+export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env, mapEdit = true } = {}) {
   if (AGENT_TOOLS.has(input?.tool_name) || input?.tool_name === 'Skill') return guardAgent(input, brief ? { brief } : {});
   if (input?.tool_name === 'Workflow') return guardWorkflow(input);
-  if (MAP_EDIT_TOOLS.has(input?.tool_name)) return guardMapEdit(input, env ? { env } : {});
+  if (MAP_EDIT_TOOLS.has(input?.tool_name)) return mapEdit ? guardMapEdit(input, env ? { env } : {}) : null;
   const command = commandOf(String(input?.tool_name ?? ''), input?.tool_input);
   if (isForcePush(command)) return deny(NO_FORCE_PUSH);
   if (snapshotOn && isDestructive(command) && typeof input?.cwd === 'string') {

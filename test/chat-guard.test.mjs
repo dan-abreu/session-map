@@ -196,6 +196,8 @@ test('guardStep lets the other files through, and the map folder when the way ou
     const map = { tool_name: 'Write', tool_input: { file_path: join(root, 'docs', 'architecture', 'orders.md') }, cwd: root };
     assert.equal(await guardStep(map, { env: { SESSION_MAP_CLERK: 'off' } }), null, 'the way out');
     assert.notEqual(await guardStep(map, { env: { SESSION_MAP_CLERK: 'on' } }), null);
+    // or34: outside a page chat (the plugin or user-settings copy) the clerk tools may not exist yet, so the map stays writable.
+    assert.equal(await guardStep(map, { mapEdit: false, env: { SESSION_MAP_CLERK: 'on' } }), null, 'not where the clerk is missing');
     assert.equal(await guardStep({ tool_name: 'Edit', tool_input: {}, cwd: root }, { env: {} }), null);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
