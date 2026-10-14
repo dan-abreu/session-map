@@ -53,6 +53,18 @@ test('delivery: grouped toasts on the PC, the phone without content, and only wh
   assert.ok(!JSON.stringify(posts).includes('Secret') && !JSON.stringify(posts).includes('private'));
 });
 
+test('delivery: a function as baseUrl opens the address the person last used', async () => {
+  const calls = [];
+  let base = 'http://100.74.235.35:4001';
+  const deliver = createDelivery({ platform: 'win32', baseUrl: () => base, exec: (f, a, o, cb) => { calls.push(o.env.SM_TOAST_XML); cb(null); }, fetchFn: async () => ({ ok: true }) });
+  const prefs = { desktop: true, ntfy: { enabled: false, topic: null }, perProject: {}, lang: 'en' };
+  await deliver([finished('a')], prefs);
+  base = 'http://localhost:4001';
+  await deliver([finished('b')], prefs);
+  assert.match(calls[0], /launch="http:\/\/100\.74\.235\.35:4001\//);
+  assert.match(calls[1], /launch="http:\/\/localhost:4001\//);
+});
+
 test('delivery: switched off means silent, and a failing toast or post never throws', async () => {
   let n = 0;
   const off = createDelivery({ platform: 'win32', baseUrl: 'http://x', exec: () => { n++; }, fetchFn: async () => { n++; } });

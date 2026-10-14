@@ -58,6 +58,7 @@ function linkOf(baseUrl, group) {
 
 const systemLang = () => pickLang(null, Intl.DateTimeFormat().resolvedOptions().locale);
 
+// baseUrl: text, or a function giving the page address the person last used (so a click opens that same address).
 // → deliver(alerts, prefs): one toast per group of alerts the person wants, and the same on the phone when it is on.
 export function createDelivery({ platform = process.platform, exec = execFile, fetchFn = globalThis.fetch, baseUrl }) {
   const toast = (cmd) => new Promise((resolve) => {
@@ -79,7 +80,8 @@ export function createDelivery({ platform = process.platform, exec = execFile, f
     const t = translator(prefs.lang ?? systemLang());
     const jobs = [];
     for (const group of groupAlerts(alerts.filter((a) => wantsAlert(prefs, a)))) {
-      const cmd = prefs.desktop ? toastCommand(platform, { ...alertText(t, group), url: linkOf(baseUrl, group) }) : null;
+      const base = typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+      const cmd = prefs.desktop ? toastCommand(platform, { ...alertText(t, group), url: linkOf(base, group) }) : null;
       if (cmd) jobs.push(toast(cmd));
       if (prefs.ntfy?.enabled && prefs.ntfy.topic) jobs.push(phone(prefs.ntfy.topic, alertText(t, group, { content: false })));
     }

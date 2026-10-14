@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, sep } from 'node:path';
@@ -176,9 +176,23 @@ async function serveFile(res, path) {
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
-  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', deliver = createDelivery({ baseUrl }), helpers = {}, askAi = {},
-  lanUrl = null, restart = {}, newProjectExec, versions = {},
+  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', helpers = {}, askAi = {},
+  lanUrl = null, restart = {}, newProjectExec, versions = {}, deliver: deliverGiven,
 } = {}) {
+  // The address the person's own page last came from (a cookie request): a click on an alert opens that one, so after a
+  // restart the page does not come up on another address, where the cookie does not exist. Kept on disk across restarts.
+  const originFile = !demo && smDir ? join(smDir, 'page-origin.txt') : null;
+  const HOST_RE = /^[\w.-]+(:\d{1,5})?$|^\[[0-9a-f:]+\](:\d{1,5})?$/i;
+  let pageOrigin = null;
+  try { if (originFile) pageOrigin = readFileSync(originFile, 'utf8').trim() || null; } catch { pageOrigin = null; }
+  if (pageOrigin && !/^http:\/\/[^/\s]+$/.test(pageOrigin)) pageOrigin = null;
+  const deliver = deliverGiven ?? createDelivery({ baseUrl: () => pageOrigin ?? baseUrl });
+  const notePageOrigin = (req) => {
+    const host = req.headers.host;
+    if (!originFile || typeof host !== 'string' || !HOST_RE.test(host) || `http://${host}` === pageOrigin) return;
+    pageOrigin = `http://${host}`;
+    try { writeAtomic(originFile, `${pageOrigin}\n`); } catch (err) { log('warn', 'page-origin-write-failed', { error: err.message }); }
+  };
   let watcher = null;
   // The look-only key (sv04): null while the owner has none; read once here, then changed only by lookRoute.
   let lookKey = demo || !smDir ? null : loadLookKey(smDir);
@@ -907,6 +921,7 @@ export function createApp({
       ?? authorize(req, url, { token, look: lookKey, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
     if (auth.status !== 200) return send(res, auth.status, auth.status === 401 ? 'token required' : 'forbidden');
+    if (!auth.look && sameToken(cookieToken(req), token)) notePageOrigin(req);
     // The look-only key (sv04) reads the map and nothing else, by an allow-list: a route not on it is refused here,
     // before any of them runs. The mark tells the page to hide the chat and the buttons.
     if (auth.look) {
