@@ -219,7 +219,9 @@ function* walk(dir) {
 
 function projectName(folder, cwd) {
   if (/session-map-ai-runner/.test(folder)) return 'session-map (ajudantes automáticos)';
-  if (cwd) return basename(cwd.replace(/[\\/]+$/, '')) || cwd;
+  // The transcripts carry Windows paths whatever the machine: basename() only splits `\` on win32, so the name of
+  // `C:\dev\demo` came out whole on Linux. One spelling first, then the last segment on every platform.
+  if (cwd) return basename(cwd.replace(/[\\/]+$/, '').replaceAll('\\', '/')) || cwd;
   return folder;
 }
 
