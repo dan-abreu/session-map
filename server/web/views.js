@@ -143,7 +143,7 @@ export function chatButtons(chat) {
   return { open, close, archive: chat.archived ? 'unarchive' : 'archive', write, phone };
 }
 
-const EMPTY_LOG = { sessionId: null, running: false, ended: false, interrupted: false, mode: null, run: null, costUSD: null, items: [] };
+const EMPTY_LOG = { sessionId: null, running: false, ended: false, interrupted: false, mode: null, run: null, costUSD: null, check: null, items: [] };
 
 function closeStreaming(items) {
   const last = items.at(-1);
@@ -178,7 +178,7 @@ export function chatLog(log = EMPTY_LOG, evt) {
           : data.messages.map((m) => marked({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),
       };
     case 'local-send':
-      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true, ts, ...(data.images?.length ? { localImages: data.images } : {}) }] };
+      return { ...log, running: true, interrupted: false, check: null, items: [...closeStreaming(items), { type: 'user', text: data.text, local: true, ts, ...(data.images?.length ? { localImages: data.images } : {}) }] };
     case 'user': {
       // The server echoes every message it takes: the page's own send is already shown, one from elsewhere is not.
       const mine = items.findIndex((i) => i.type === 'user' && i.local && i.text === data.text);
@@ -186,7 +186,7 @@ export function chatLog(log = EMPTY_LOG, evt) {
         return { ...log, running: true, interrupted: false, items: items.map((i, n) => (n === mine ? { type: 'user', text: i.text, ts: i.ts ?? ts, ...(i.localImages ? { localImages: i.localImages } : {}) } : i)) };
       }
       // auto: an answer session-map gave for the person ("may reinforce on its own").
-      return { ...log, running: true, interrupted: false, items: [...closeStreaming(items), { type: 'user', text: data.text, ts, ...(data.auto ? { auto: data.auto } : {}) }] };
+      return { ...log, running: true, interrupted: false, check: null, items: [...closeStreaming(items), { type: 'user', text: data.text, ts, ...(data.auto ? { auto: data.auto } : {}) }] };
     }
     case 'thinking':
       return { ...log, items: [...closeStreaming(items), { type: 'thinking', text: data.text ?? '', ms: null, ts }] };
@@ -221,7 +221,7 @@ export function chatLog(log = EMPTY_LOG, evt) {
       }
       return { ...log, items: items.map((i) => (i.type === 'permission' && i.requestId === data.requestId ? { ...i, state: data.state } : i)) };
     case 'turn-end':
-      return { ...log, running: false, costUSD: Number.isFinite(data?.costUSD) ? data.costUSD : log.costUSD, items: closeStreaming(items) };
+      return { ...log, running: false, costUSD: Number.isFinite(data?.costUSD) ? data.costUSD : log.costUSD, check: data?.check ?? null, items: closeStreaming(items) };
     case 'error':
       return { ...log, running: false, items: [...closeStreaming(items), { type: 'error', error: data.error, ts }] };
     default:
@@ -241,6 +241,28 @@ export function chatState(log, { sessionId }) {
   if (last?.type === 'assistant') return { kind: 'finished', summary: summaryOf(last.text) };
   if (log.ended) return { kind: 'paused' };
   return { kind: log.items.length ? 'idle' : 'new' };
+}
+
+// The OK under a reply (or26), from the check the server made at the turn's end: what was checked, or what is missing,
+// and what the request cost. A turn that only talked shows its cost alone; no check shows nothing.
+export function checkLine(t, check, money) {
+  if (!check) return '';
+  const cost = Number.isFinite(check.costUSD) && check.costUSD > 0 ? money(check.costUSD) : null;
+  let parts;
+  if (check.missing?.length) {
+    const list = check.missing.map((reason) => t(`check.missing.${reason}`, { n: check.tests?.failed ?? 0 })).join(', ');
+    parts = [t('check.missing', { list })];
+  } else if (check.tests || check.ticked?.length || check.saved?.length) {
+    const passed = check.tests ? (Number.isFinite(check.tests.passed) ? t('check.testsPassed', { n: check.tests.passed }) : t('check.testsPassedNoCount')) : null;
+    parts = [t('check.ok'), passed, ...(check.ticked ?? []).map((code) => t('check.ticked', { code })), ...(check.saved ?? []).map((hash) => t('check.saved', { hash }))];
+  } else parts = [];
+  return [...parts, cost].filter(Boolean).join(' · ');
+}
+
+// The run line when the entry brain weighed the turn: "Sonnet · low — a chat" (run.brain.<why>); null when it did not.
+export function brainLine(t, { model, effort }, brain) {
+  if (!brain?.why) return null;
+  return t('run.brain.line', { model, effort: effort ?? t('run.modelDefault'), why: t(`run.brain.${brain.why}`) });
 }
 
 // What the chat header says about how the conversation runs. choice: the run picked (run.mjs shapes); info: the last

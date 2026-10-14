@@ -1392,6 +1392,7 @@ body.is-resizing .sheet { animation: none; }
 .run-seg button { padding: 0 8px; font-size: var(--fs-xs); }
 .run-advanced-now { margin: 6px 10px 2px; padding: 8px 10px; border-radius: var(--r-md); background: var(--doing-fill); color: var(--doing-ink); font-size: var(--fs-xs); line-height: 1.45; }
 .run-foot { display: grid; gap: 6px; margin-top: 6px; padding: 10px 10px 4px; border-top: 1px solid var(--line); }
+.turn-check { margin: var(--space-1, 4px) 0 0; font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .run-line { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .run-settings {
   justify-self: start; display: inline-flex; align-items: center; gap: 4px; margin: 0 -4px; padding: 2px 4px; border: 0; border-radius: var(--r-xs);

@@ -33,6 +33,8 @@ import { cutTeams, hasCutTeams, teamsNote } from './teams.mjs';
 import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
 import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
+import { gitState, tailEntries, turnCheck } from './turn-check.mjs';
+import { loadPrices } from '../cost.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
 import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
@@ -169,6 +171,7 @@ const isText = (v) => typeof v === 'string' && v.trim().length > 0 && v.length <
 // Who sent a start's message (sendTo's from): the agreed restart's note, or how it shows.
 const fromOf = (internal) => (internal.restart === true ? 'restart' : internal.auto);
 const now = () => new Date().toISOString();
+const safely = (fn) => { try { return fn(); } catch { return null; } };
 // What the page remembers of the point a chat was opened on: only the field its kind uses, which contextOf matched against the map.
 const NODE_FIELD = { layer: 'layerId', group: 'group', item: 'code' };
 const FENCE = '```';
@@ -211,11 +214,12 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // show; orchestra ({now, every, stopEvery, tickMs, namedMs}): the orchestrator's clock and timer (orchestra.mjs), for tests.
 // chatsMax: how many chats may run at once; tests make it larger.
 // projectBudget(projectId): that project's month against its budget (budget.mjs) from the newest finished state, or null.
+// turnInputs({chat, file, startedAt}): what the OK at the end of a request reads ({entries, gitAfter}), null for none; tests inject it.
 // askHaiku(text): the one cheap call that helps the entry brain with a long text it cannot read (runClaudeJSON's answer); tests inject it.
 export function createChatHub({
   smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
-  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null,
+  readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -460,9 +464,10 @@ export function createChatHub({
       const auto = endTurnRun(chat, evt.data.processCostUSD);
       clearTimeout(chat.idleTimer);
       armIdle(chat, idleMs);
-      if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now() });
+      const check = checkOf(chat);
+      if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now(), ...(check ? { check } : {}) });
       const { processCostUSD, ...data } = evt.data;
-      emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD });
+      emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD, ...(check ? { check } : {}) });
       emitRun(chat);
       const ended = { isError: Boolean(data.isError), reply: chat.lastText, auto: Boolean(auto), stopped: Boolean(chat.stopRequested) };
       alertTurnEnd(chat, data, chat.lastText, auto);
@@ -485,6 +490,25 @@ export function createChatHub({
       return onExit(chat, { code: null, signal: null });
     }
     return emit(chat, evt.type, evt.data);
+  }
+
+  // The OK at the end of a request (or26): read from the transcript and git, no AI; it never blocks the turn's end, never
+  // asks for more work, and a failure gives no check.
+  function checkOf(chat) {
+    const start = chat.turnStart;
+    chat.turnStart = null;
+    if (!start || chat.stopRequested) return null;
+    try {
+      const file = chat.sessionId ? transcriptOf(chat.sessionId) : null;
+      const read = turnInputs
+        ? turnInputs({ chat, file, startedAt: start.at })
+        : file ? { entries: tailEntries(file), gitAfter: gitState(chat.cwd, start.at) } : null;
+      if (!read) return null;
+      return turnCheck({ entries: read.entries, startedAt: start.at, gitBefore: start.before, gitAfter: read.gitAfter, prices: loadPrices() });
+    } catch (err) {
+      log('warn', 'turn-check-failed', { error: err.message });
+      return null;
+    }
   }
 
   // What the header shows: the way it runs, the model claude reported (the alias until it does), the level the maestro
@@ -761,6 +785,8 @@ ${prompt}`;
     chat.held = false;
     orchestra.sent(chat, from);
     chat.running = true;
+    // Where the plan files stood when the request began, for the OK at its end (or26).
+    chat.turnStart = { at: Date.now(), before: safely(() => gitState(chat.cwd)) };
     // On disk at once: a server that dies mid-turn leaves the mark the next one reads as "cut off" (page-chat pc06).
     // The first message is saved with the rest when claude announces the session.
     if (chat.sessionId && chat.announced) savePageChat(chat.sessionId, { running: true });

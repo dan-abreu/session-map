@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { foldReply, quickReplies } from './chatfold.js';
 import { modelName } from './live.js';
 import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } from './transcript.js';
-import { chatLog, chatState, composerSize, runWords, stepCounts, stepRuns } from './views.js';
+import { brainLine, chatLog, chatState, checkLine, composerSize, runWords, stepCounts, stepRuns } from './views.js';
 import { signalCard } from './blocks.js';
 import { errorSignal } from './signals.js';
 
@@ -265,6 +265,7 @@ export function createChat({
       folded.card ? chip('card', folded.card.title ? tt('fold.card', { title: folded.card.title }) : tt('fold.cardUntitled'), cardBody(folded.card)) : null,
       asks ? askCard(folded.run) : null,
       item.streaming ? null : tv.replyMeta({ ...item, text }),
+      isLast && !item.streaming && !log.running && log.check ? h('p', { class: 'turn-check num', 'data-run': 'check' }, checkLine(tt, log.check, money)) : null,
       quick.length ? quickView(quick) : null);
   }
 
@@ -480,7 +481,7 @@ export function createChat({
       path === 'advanced' ? h('p', { class: 'run-advanced-now' }, tt('run.advancedNow', { way: words.way })) : null,
       h('div', { class: 'run-foot' },
         words.tone === 'reinforced' || words.tone === 'ask' ? h('p', { class: `run-why tone-${words.tone}` }, words.why) : null,
-        h('p', { class: 'run-line num', 'data-run': 'line' }, [words.model, words.effort, cost !== null ? tt('run.lineCost', { cost: money(cost) }) : null].filter(Boolean).join(' · ')),
+        h('p', { class: 'run-line num', 'data-run': 'line' }, [brainLine(tt, words, log?.run?.brain) ?? [words.model, words.effort].filter(Boolean).join(' · '), cost !== null ? tt('run.lineCost', { cost: money(cost) }) : null].filter(Boolean).join(' · ')),
         openSettings ? h('button', {
           type: 'button', class: 'run-settings', 'data-run': 'settings', 'aria-haspopup': 'dialog',
           onclick: () => { setMenu(false); openSettings(binding, toggleEl); },
