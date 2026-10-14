@@ -657,3 +657,16 @@ test('every action of the ⋯ is also an icon in the header, with its name as to
   tools[2].attrs.onclick();
   assert.deepEqual(done, [['rename', S1]]);
 });
+
+test('each tab of the box information (summary, files…) is an icon in the header that opens it', async () => {
+  server({ [`GET /api/chat/history/${S1}`]: () => history(TURN) });
+  const done = [];
+  const infoTabs = () => ['summary', 'files'].map((id) => ({ id, label: `tab ${id}`, icon: 'file', run: () => done.push(id) }));
+  const { chat, part } = makeChat({ more: ACTIONS([]), infoTabs, icon: (name) => `icon:${name}` });
+  chat.open({ projectId: 'shop', title: 'Arrows', start: { sessionId: S1 } });
+  await settle();
+  const tools = part('tools').children;
+  assert.deepEqual(tools.slice(0, 2).map((b) => b.attrs['data-tool']), ['tab-summary', 'tab-files']);
+  tools[1].attrs.onclick();
+  assert.deepEqual(done, ['files']);
+});

@@ -2394,6 +2394,16 @@ function wire() {
     more: chatMore,
     // The box's information, folded away while the person talks, comes back from the ⋯ (pc18).
     about: () => (pointNode && infoFolded ? () => { setFolded(false, { byHand: true }); $('#pointFold').focus({ preventScroll: true }); } : null),
+    // Each tab of the box's information (summary, tasks, files…) is an icon of the header that opens it.
+    infoTabs: () => {
+      const node = pointNode && nodeById(tree, pointNode);
+      if (!node) return [];
+      const { tabs: all, labels } = detailsOf(node);
+      return (lookMode ? lookTabs(all) : all).map((tab) => ({
+        id: tab, label: labels?.[tab] ?? t(`ptab.${tab}`), icon: { summary: 'compass', tasks: 'check', chats: 'chat', changes: 'clock', files: 'file' }[tab] ?? 'compass',
+        run: () => { setFolded(false, { byHand: true }); setPointTab(tab); $(`#ptab-${tab}`)?.focus({ preventScroll: true }); },
+      }));
+    },
     openSettings: (binding, opener) => runSettings.open(binding, opener),
     onRunChange: () => runSettings?.refresh(),
     waitingOf: chatWaits,

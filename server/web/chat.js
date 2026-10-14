@@ -72,7 +72,7 @@ const browserStorage = () => {
 export function createChat({
   root, h, t, toast, errorText, onSession, onClose, storage = browserStorage(), savedKey = SAVED, relative = () => '',
   money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [], more = null,
-  about = null, openSettings = null, onRunChange = null, safety = 'chat.safety', waitingOf = null,
+  about = null, infoTabs = null, openSettings = null, onRunChange = null, safety = 'chat.safety', waitingOf = null,
   schedule = (fn, ms) => setTimeout(fn, ms), cancel = (id) => clearTimeout(id), readImage = readAsBase64, debounceMs = 150,
   frame = globalThis.requestAnimationFrame ? (fn) => globalThis.requestAnimationFrame(fn) : (fn) => fn(),
 }) {
@@ -1267,6 +1267,7 @@ export function createChat({
     const has = Boolean(log?.items?.length);
     const showAbout = about?.() ?? null;
     return [
+      (infoTabs?.() ?? []).map((x) => ({ id: `tab-${x.id}`, label: x.label, icon: x.icon, run: x.run })),
       [
         showAbout ? { id: 'about', label: tt('chat.about'), icon: 'book', run: showAbout } : null,
         id && findEl ? { id: 'book', label: tt('chat.book'), icon: 'book', run: openBook } : null,
