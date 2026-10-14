@@ -95,7 +95,9 @@ test('the default models are the current cheap ones, never a retired or only-for
   assert.deepEqual(PROVIDERS.gemini.pricesUSDPerMTok['gemini-3.1-flash-lite'], { in: 0.25, out: 1.5 });
   assert.deepEqual(PROVIDERS.gemini.pricesUSDPerMTok['gemini-3.5-flash-lite'], { in: 0.3, out: 2.5 });
   assert.deepEqual(PROVIDERS.gemini.pricesUSDPerMTok['gemini-3.8-flash'], { in: 0.75, out: 3.75 });
-  assert.deepEqual(PROVIDERS.deepseek.pricesUSDPerMTok['deepseek-v4-pro'], { in: 1.32, out: 3.96 });
+  // cacheHit: the context-cache price per million input tokens (peak), read from the official page on 2026-10-14.
+  assert.deepEqual(PROVIDERS.deepseek.pricesUSDPerMTok['deepseek-v4-pro'], { in: 1.32, out: 3.96, cacheHit: 0.044 });
+  assert.deepEqual(PROVIDERS.deepseek.pricesUSDPerMTok['deepseek-v4-flash'], { in: 0.3, out: 1.2, cacheHit: 0.006 });
   for (const id of ['gemini', 'deepseek', 'openai']) assert.equal(PROVIDERS[id].priceCheckedOn, '2026-10-10');
 });
 

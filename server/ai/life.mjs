@@ -41,10 +41,19 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     apiRun: ai.apiRun ?? runApiJSON,
     keyOf: ai.keyOf ?? ((provider) => getKey(smDir, provider)),
   });
-  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set(), whys: new Map(), whyWait: new Map(), whyInFlight: new Set(), maxCalls: cfg.maxCallsPerHour };
+  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set(), whys: new Map(), whyWait: new Map(), whyInFlight: new Set(), maxCalls: cfg.maxCallsPerHour, limits: { weekly: false, session: false } };
   lives.set(smDir, life);
   return life;
 }
+
+// The plan's limits, as collect reads them (sources/limits.mjs). While one is hit, no background AI call is made: a
+// closed door must not be knocked on every pass (it pollutes the ledger and spends the queue for nothing).
+export const setPlanLimits = (life, limits) => {
+  life.limits = limits ?? { weekly: false, session: false };
+};
+
+// A limit hit holds until its reset time; the map re-reads it every pass, so a paused background wakes by itself.
+const limitHit = (life) => Boolean(life.limits?.weekly?.hit || life.limits?.session?.hit);
 
 function track(life, job) {
   const p = job.catch((err) => log('warn', 'ai-job-failed', { error: err.message }));
@@ -74,6 +83,7 @@ export function aiPlacements(life, smDir, projectId) {
 
 // jobs: [{sessionId, digest}]. A conversation is asked again only when its digest or the list of parts changed.
 export function placeChanged(life, p, jobs) {
+  if (limitHit(life)) return;
   const seen = aiPlacements(life, p.smDir, p.projectId);
   const partIds = p.arch.parts.map((x) => x.id);
   // Sigilo por projeto: the digest leaves with the class the owner gave this project, 'client' when he gave none. Read
@@ -125,6 +135,7 @@ export function withRelationWhys(life, p, links) {
 // links come strongest first. A relation is asked again only when its reasons changed; a call that failed waits ten minutes.
 export function explainRelations(life, p, links, { now = Date.now } = {}) {
   if (!life.queue.enabled) return;
+  if (limitHit(life)) return;
   const seen = aiRelationWhys(life, p.smDir, p.projectId);
   // Placement is the map's main AI work: half of the hour's calls (and the ones already on their way) are kept for it.
   const budget = life.queue.callsLeft() - Math.floor((life.maxCalls ?? AI_DEFAULTS.maxCallsPerHour) / 2) - life.whyInFlight.size;

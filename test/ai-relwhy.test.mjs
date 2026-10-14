@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { WHY_SCHEMA, reasonsHash, relationWhyByAi, relationWhyPrompt } from '../server/ai/relwhy.mjs';
-import { aiRelationWhys, explainRelations, forgetLife, lifeOf, relationWhyFile, settleAi, withRelationWhys } from '../server/ai/life.mjs';
+import { aiRelationWhys, explainRelations, forgetLife, lifeOf, placeChanged, relationWhyFile, setPlanLimits, settleAi, withRelationWhys } from '../server/ai/life.mjs';
 
 const part = (id, name, about) => ({ id, name, file: `docs/architecture/${id}.md`, about, codePaths: [], groups: [], counts: {}, chatIds: [], workCellIds: [] });
 const ARCH = { source: 'worktree', dir: 'docs/architecture', lang: 'en', layers: [], parts: [part('storefront', 'Storefront', 'The public site.'), part('orders', 'Orders', 'Builds the basket.')] };
@@ -237,5 +237,33 @@ test('explainRelations still asks while the hour has room above that reserve', a
     explainRelations(life, P(smDir, BIG), three);
     await settleAi(smDir);
     assert.equal(calls.n, 2, 'four calls, two kept for placement');
+  });
+});
+
+test('a hit plan limit holds the background AI back: no call against a closed door, and the pause clears with the limit', async () => {
+  await withSm(async (smDir) => {
+    const calls = { n: 0 };
+    const life = lifeOf(smDir, {}, { bin: 'fake-claude', run: fakeRun(calls) });
+    setPlanLimits(life, { weekly: { hit: true, resetsAt: null, resetsText: null }, session: { hit: false, resetsAt: null, resetsText: null } });
+    explainRelations(life, P(smDir), [LINK]);
+    await settleAi(smDir);
+    assert.equal(calls.n, 0, 'the weekly limit is hit: nothing is asked');
+    assert.deepEqual(withRelationWhys(life, P(smDir), [LINK]), [LINK], 'the relation stays as it is');
+
+    setPlanLimits(life, { weekly: { hit: false, resetsAt: null, resetsText: null }, session: { hit: false, resetsAt: null, resetsText: null } });
+    explainRelations(life, P(smDir), [LINK]);
+    await settleAi(smDir);
+    assert.equal(calls.n, 1, 'the limit passed: the ask goes out again');
+  });
+});
+
+test('a hit session limit also holds placement back', async () => {
+  await withSm(async (smDir) => {
+    const calls = { n: 0 };
+    const life = lifeOf(smDir, {}, { bin: 'fake-claude', run: async () => { calls.n++; return { ok: true, value: { partId: 'orders' }, costUSD: 0.001 }; } });
+    setPlanLimits(life, { weekly: { hit: false, resetsAt: null, resetsText: null }, session: { hit: true, resetsAt: null, resetsText: null } });
+    placeChanged(life, P(smDir), [{ sessionId: 's1', digest: { title: 'x', prompts: ['a'], files: [], commits: [] } }]);
+    await settleAi(smDir);
+    assert.equal(calls.n, 0);
   });
 });

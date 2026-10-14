@@ -32,11 +32,13 @@ export const PROVIDERS = Object.freeze({
     defaultModel: 'deepseek-flash',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     privacyNote: 'Servers in China, and the policy does not rule out training on what is sent: never use it for personal or client data.',
-    // The peak-hour price: off-peak is half, so the daily cap errs on the safe side.
+    // The peak-hour price: off-peak is half, so the daily cap errs on the safe side. cacheHit: the context-cache price
+    // per million input tokens (peak), for the usage rows the DeepSeek Harness writes (checked 2026-10-14 on the
+    // official pricing page: flash $0.006, v4-pro $0.044). The legacy name deepseek-v4-flash is billed at the Flash price.
     pricesUSDPerMTok: {
-      'deepseek-flash': { in: 0.3, out: 1.2 },
-      'deepseek-v4-flash': { in: 0.3, out: 1.2 },
-      'deepseek-v4-pro': { in: 1.32, out: 3.96 },
+      'deepseek-flash': { in: 0.3, out: 1.2, cacheHit: 0.006 },
+      'deepseek-v4-flash': { in: 0.3, out: 1.2, cacheHit: 0.006 },
+      'deepseek-v4-pro': { in: 1.32, out: 3.96, cacheHit: 0.044 },
     },
     priceSource: 'https://api-docs.deepseek.com/quick_start/pricing',
     priceCheckedOn: CHECKED_ON,

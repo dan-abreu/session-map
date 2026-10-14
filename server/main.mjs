@@ -175,6 +175,15 @@ async function serveFile(res, path) {
 // the page's address on the network (--lan), which the look-only link carries. restart ({now, every, stopEvery, spawn,
 // exit, execPath, argv, env}): the agreed restart's clock, check, spawn and exit (restart.mjs), fakes in tests.
 // The demo never writes to the user's disk, so its token lives only in memory.
+
+// The links of the "listening" log line. The token is the page's password: whole on an interactive terminal (the person
+// copies it there), masked when the output is captured (stderr redirected to a log file). lan: the --lan address or null.
+export function listeningLinks(port, token, { lan = null, tty = Boolean(process.stderr.isTTY) } = {}) {
+  const links = { local: `http://127.0.0.1:${port}/?k=${tty ? token : '…'}` };
+  if (lan) links.lan = `http://${lan}:${port}/?k=${tty ? token : '…'}`;
+  return links;
+}
+
 export function createApp({
   dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
@@ -1017,9 +1026,10 @@ export function start(argv = process.argv.slice(2)) {
   const listening = new Promise((resolve) => app.once('listening', resolve));
   app.once('listening', () => {
     // The person's own terminal: the links carry the token, the only way a page gets the cookie it needs to write.
-    const links = { local: `http://127.0.0.1:${port}/?k=${token}` };
-    if (ip) links.lan = `http://${ip}:${port}/?k=${token}`;
-    log('info', 'listening', links);
+    // The token is a password: it is printed whole only to an interactive terminal (where the person copies it); a
+    // captured log (stderr redirected to a file) gets the links with the key masked. The /session-map:map skill hands
+    // the real links through scripts/links.mjs, so masking the server's own log line never hides them from the person.
+    log('info', 'listening', listeningLinks(port, token, { lan: ip }));
   });
   listenWithRetry(app, { port, host, retryMs: restarted ? LISTEN_RETRY_MS : 0 });
   if (!values.demo) {

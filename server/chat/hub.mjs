@@ -1213,7 +1213,9 @@ ${prompt}`;
 
   const endChat = (chat) => {
     chat.closing = true;
-    chat.driver.kill();
+    // A chat whose driver never launched (a spawn that threw before launch returned) has nothing to kill; close()
+    // must still finish for the others.
+    chat.driver?.kill();
     return chat.done;
   };
 
