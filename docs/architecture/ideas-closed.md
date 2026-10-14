@@ -410,3 +410,10 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - How to confirm it is done: the warning stops appearing in the open chats; a chat on this PC only summarizes near the model's whole window again.
   - Where it went: `pc31`.
   - Status: done (the cause was the 100k summary window applied to the whole PC; removed from the global settings on 2026-10-14).
+- [x] The most recent conversation went terribly; something in the program is broken `id118`
+  - Asked: 2026-10-14 — "veja a conversa mais recente, está pessimo tem alguma coisa quebrada no programa".
+  - What it means: read the last page chat (`466e9407`), find what broke and fix it in the program, not only in the settings of this PC.
+  - How to confirm it is done: a page chat no longer summarizes itself every two or three turns; the "Autocompact is thrashing" warning stops; the chats of the night show the measurement.
+  - Found: `pc31` removed the 100k window from the PC but left it in the page chats; a page chat starts at about 39k tokens and restarts at 42k to 79k after each summary, so at 100k it looped and Claude Code killed it. That chat died in the middle of the owner's third request (bring the orchestrator work of chat `7430d146`, `id116`/`or35`, and finish it), which is still not done.
+  - Where it went: `pc32`.
+  - Status: done (2026-10-14: `autoCompactWindow` removed from `guardSettings`; the third request of that chat is open with the owner).

@@ -155,10 +155,12 @@ export async function guardStep(input, { snapshotOn = false, snapshot = takeSnap
   return null;
 }
 
-// The value of claude's --settings: the guard on the shell steps and on agents and skills, and the book (pc28): Claude
-// Code's own summary runs at BOOK_WINDOW instead of near the model's whole window, each turn's end writes the chapters,
-// and right after a summary the chapter index goes back in. Forward slashes: the hook line runs in a shell.
-export const BOOK_WINDOW = 100_000; // the least Claude Code accepts (measured 2026-10-13: 135k of context became 31k)
+// The value of claude's --settings: the guard on the shell steps and on agents and skills, and the book (pc28): each
+// turn's end writes the chapters, and right after a summary the chapter index goes back in. Forward slashes: the hook
+// line runs in a shell. No autoCompactWindow here (pc32): a page chat starts at about 39k tokens and restarts at 42k to
+// 79k after each summary (system prompt, skill list, rules, map context, summary, re-attached files), so at the 100k
+// window (the least Claude Code accepts) it summarized every two or three turns and Claude Code killed it as thrashing;
+// measured 2026-10-14 in four chats, 33 summaries in one night. The summary runs near the model's whole window again.
 // What one chat lists of skills and plugins (pc29). Probed 2026-10-13: --settings enabledPlugins turns a plugin off for
 // that one session, and skillOverrides "name-only" shows a user skill by name without its description.
 // skills/plugins: the project's lists (listSkills, listPlugins + month); part/text: where the chat opens and what it asked.
@@ -191,7 +193,6 @@ export function guardSettings({ snapshot, focus = null }) {
   const command = `${node} "${slash(GUARD_HOOK)}"${snapshot ? ' --snapshot' : ''}`;
   const book = (flag) => [{ type: 'command', command: `${node} "${slash(BOOK_HOOK)}" ${flag}`, timeout: HOOK_TIMEOUT_S }];
   return JSON.stringify({
-    autoCompactWindow: BOOK_WINDOW,
     ...(focus && Object.keys(focus.skillOverrides ?? {}).length ? { skillOverrides: focus.skillOverrides } : {}),
     ...(focus && Object.keys(focus.enabledPlugins ?? {}).length ? { enabledPlugins: focus.enabledPlugins } : {}),
     hooks: {

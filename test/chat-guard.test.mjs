@@ -212,7 +212,7 @@ test('the hook as a process denies a map edit on stdout and says nothing for ano
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('guardSettings also holds agents and skills, and wires the book hooks and the compact window', () => {
+test('guardSettings also holds agents and skills, wires the book hooks and sets no compact window (pc32)', () => {
   const s = JSON.parse(guardSettings({ snapshot: false }));
   const second = s.hooks.PreToolUse[1];
   for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
@@ -223,5 +223,5 @@ test('guardSettings also holds agents and skills, and wires the book hooks and t
   assert.equal(s.hooks.SessionStart[0].matcher, 'compact');
   assert.ok(s.hooks.SessionStart[0].hooks[0].command.includes(bookCmd));
   assert.ok(s.hooks.SessionStart[0].hooks[0].command.endsWith('--compact'));
-  assert.equal(s.autoCompactWindow, 100000);
+  assert.equal(s.autoCompactWindow, undefined);
 });
