@@ -2,6 +2,10 @@
 // (a denial, or nothing) on stdout. --snapshot: the Autonomous way, which snapshots before a destructive step.
 import { guardStep } from './guard.mjs';
 
+// --user: the copy from the plugin or the user settings. A page chat already has these hooks through --settings (and
+// SESSION_MAP_PAGE_CHAT=1 in its env), so the second copy does nothing there.
+if (process.argv.includes('--user') && process.env.SESSION_MAP_PAGE_CHAT === '1') process.exit(0);
+
 let raw = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => { raw += chunk; });

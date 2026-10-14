@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickSkills } from '../foundation/skills-focus.mjs';
-import { KINDS, hasKind, levelFor } from '../ai/policy.mjs';
+import { KINDS, POLICY, hasKind, levelFor } from '../ai/policy.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 
 // The guard of every page chat (pc16): a PreToolUse hook Claude Code runs before its own permission check, in every
@@ -91,10 +91,57 @@ export function guardMapEdit(input, { env = process.env, exists = existsSync } =
   return MAP_FILE_RE.test(path) && exists(dirname(path)) ? deny(NO_MAP_EDIT) : null;
 }
 
+// A Workflow script is checked before it runs (or34): too many literal agent( calls, or a call asking for fable, opus,
+// effort max or xhigh without a sensitive kind tag ([architecture], [security], [money], [personal-data]) or "failed" in
+// its label or prompt. Agents built in loops or by variables cannot be counted before the run: they are not guessed at.
+const SENSITIVE_TAG_RE = /\[(?:architecture|security|money|personal-data)\]/i;
+const HIGH_LEVEL_RE = /\bmodel\s*:\s*['"`](?:fable|opus)['"`]|\beffort\s*:\s*['"`](?:max|xhigh)['"`]/i;
+export const tooManyAgents = (n, max) => `session-map: this workflow starts ${n} agents written out in the script; the policy allows ${max}. Split it or cut agents.`;
+export const NO_HIGH_LEVEL = 'session-map: an agent() asks for opus, fable, or effort xhigh/max without a sensitive tag ([architecture], [security], [money], [personal-data]) in its label or prompt, or a real failure ("failed"). Use the kind tag and let the policy pick the level.';
+
+// The text of the call that opens at text[open] === '(' up to its matching ')', skipping quoted text.
+function callText(text, open) {
+  let depth = 0;
+  let quote = '';
+  const braces = []; // a ${ } inside a template is code again; the quote to go back to is kept here
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = '';
+      else if (quote === '`' && c === '$' && text[i + 1] === '{') { braces.push(0); quote = ''; i++; }
+    } else if (c === '"' || c === "'" || c === '`') quote = c;
+    else if (c === '{' && braces.length) braces[braces.length - 1]++;
+    else if (c === '}' && braces.length) { if (braces[braces.length - 1]-- === 0) { braces.pop(); quote = '`'; } }
+    else if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return text.slice(open, i + 1);
+  }
+  return text.slice(open);
+}
+
+export function guardWorkflow(input, { read = readFileSync, limit = POLICY.limits.agentsPerWorkflow } = {}) {
+  const ti = input?.tool_input ?? {};
+  let script = typeof ti.script === 'string' ? ti.script : '';
+  if (!script && typeof ti.scriptPath === 'string') {
+    try { script = String(read(resolve(typeof input.cwd === 'string' ? input.cwd : '.', ti.scriptPath), 'utf8')); } catch { /* unreadable: nothing to check */ }
+  }
+  const calls = [];
+  for (const m of script.matchAll(/(?<![\w$.])agent\s*\(/g)) {
+    if (/function\s+$/.test(script.slice(Math.max(0, m.index - 12), m.index))) continue;
+    calls.push(callText(script, m.index + m[0].length - 1));
+  }
+  if (calls.length > limit) return deny(tooManyAgents(calls.length, limit));
+  for (const call of calls) {
+    if (HIGH_LEVEL_RE.test(call) && !SENSITIVE_TAG_RE.test(call) && !FAILED_RE.test(call)) return deny(NO_HIGH_LEVEL);
+  }
+  return null;
+}
+
 // input: the hook's JSON from Claude Code. → the answer to print, or null to say nothing (the step goes on to the
 // permission check as before). A failed or slow snapshot never stops the step.
 export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env } = {}) {
   if (AGENT_TOOLS.has(input?.tool_name) || input?.tool_name === 'Skill') return guardAgent(input, brief ? { brief } : {});
+  if (input?.tool_name === 'Workflow') return guardWorkflow(input);
   if (MAP_EDIT_TOOLS.has(input?.tool_name)) return guardMapEdit(input, env ? { env } : {});
   const command = commandOf(String(input?.tool_name ?? ''), input?.tool_input);
   if (isForcePush(command)) return deny(NO_FORCE_PUSH);
@@ -149,7 +196,7 @@ export function guardSettings({ snapshot, focus = null }) {
     hooks: {
       PreToolUse: [
         { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
-        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
+        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
       ],
       Stop: [{ hooks: book('--stop') }],
       SessionStart: [{ matcher: 'compact', hooks: book('--compact') }],

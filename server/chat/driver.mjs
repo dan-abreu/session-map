@@ -71,7 +71,7 @@ export function translate(msg, cwd = '') {
 // platform and run (execFile): how kill ends the process tree; tests inject fakes.
 export function startDriver({ bin, args, cwd, env, onEvent, spawner = spawn, platform = process.platform, run = execFile }) {
   const script = /\.(m?js|cjs)$/i.test(bin);
-  const child = spawner(script ? process.execPath : bin, script ? [bin, ...args] : args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawner(script ? process.execPath : bin, script ? [bin, ...args] : args, { cwd, env: { ...env, SESSION_MAP_PAGE_CHAT: '1' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let requests = 0;
   child.on('error', (err) => onEvent({ type: 'error', data: { error: 'spawn-failed', code: err.code ?? null } }));
   child.on('exit', (code, signal) => onEvent({ type: 'exit', data: { code, signal } }));

@@ -1,5 +1,28 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task|Skill|Edit|Write|MultiEdit|Workflow",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/chat/guard-hook.mjs\" --user", "timeout": 60 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/chat/book-hook.mjs\" --stop --user", "timeout": 60 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/chat/book-hook.mjs\" --compact --user", "timeout": 60 }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [

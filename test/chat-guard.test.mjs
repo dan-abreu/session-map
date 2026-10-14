@@ -213,7 +213,7 @@ test('the hook as a process denies a map edit on stdout and says nothing for ano
 test('guardSettings also holds agents and skills, and wires the book hooks and the compact window', () => {
   const s = JSON.parse(guardSettings({ snapshot: false }));
   const second = s.hooks.PreToolUse[1];
-  for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
+  for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
   assert.doesNotMatch('Read', new RegExp(`^(?:${second.matcher})$`));
   const bookCmd = BOOK_HOOK.replaceAll('\\', '/');
   assert.ok(s.hooks.Stop[0].hooks[0].command.includes(bookCmd));

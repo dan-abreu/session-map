@@ -9,6 +9,9 @@ import { claudeDir } from '../sources/claude.mjs';
 import { writeAtomic } from '../store.mjs';
 import { chapterText, chaptersOf, indexText, parseLines } from './book.mjs';
 
+// --user: the plugin or user-settings copy; a page chat (SESSION_MAP_PAGE_CHAT=1) already has the book through --settings.
+if (process.argv.includes('--user') && process.env.SESSION_MAP_PAGE_CHAT === '1') process.exit(0);
+
 const TIDY = fileURLToPath(new URL('./book-tidy.mjs', import.meta.url));
 const LOCK_FRESH_MS = 5 * 60_000;
 const SAFE_RE = /^[A-Za-z0-9-]+$/;
