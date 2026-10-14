@@ -6,7 +6,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GUARD_HOOK, guardSettings, guardStep } from '../server/chat/guard.mjs';
+import { BOOK_HOOK, GUARD_HOOK, NO_MODEL, NO_REASON, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
 import { SAFETY_REFS } from '../server/chat/safety.mjs';
 import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
@@ -122,4 +122,42 @@ test('every page chat starts with the guard in its settings; the Autonomous way 
     await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
+});
+
+test('guardAgent: an agent needs a model, Opus-class ones need a reason, a skill needs a brief that names it', async () => {
+  const agent = (ti) => ({ tool_name: 'Agent', tool_input: ti });
+  const why = (out) => out?.hookSpecificOutput.permissionDecisionReason;
+  assert.equal(why(guardAgent(agent({ description: 'x' }))), NO_MODEL);
+  assert.equal(guardAgent(agent({ model: 'sonnet', description: 'x' })), null);
+  assert.equal(why(guardAgent(agent({ model: 'opus', description: 'Revisar o código' }))), NO_REASON);
+  assert.equal(guardAgent(agent({ model: 'opus', description: 'Revisão de segurança do login' })), null);
+  assert.equal(guardAgent(agent({ model: 'haiku', effort: 'max', description: 'x' })).hookSpecificOutput.permissionDecision, 'deny');
+  assert.equal(why(await guardStep(agent({}))), NO_MODEL);
+
+  const skill = { tool_name: 'Skill', tool_input: { skill: 'superpowers:brainstorming' } };
+  assert.equal(guardAgent(skill), null, 'the chat itself may open skills');
+  const sub = { ...skill, agent_id: 'a1' };
+  assert.equal(guardAgent(sub, { brief: () => 'Use the skill superpowers:brainstorming' }), null);
+  assert.equal(why(guardAgent(sub, { brief: () => 'Just fix the typo' })), NO_SKILL);
+  assert.equal(guardAgent(sub, { brief: () => null }), null);
+});
+
+test('readBrief returns the first user line of the agent transcript', () => {
+  const read = () => `${JSON.stringify({ type: 'system' })}\n${JSON.stringify({ type: 'user', message: { content: 'Use the skill x' } })}\n`;
+  const input = { transcript_path: '/a/b.jsonl', session_id: 's', agent_id: 'a1' };
+  assert.equal(readBrief(input, { read }), 'Use the skill x');
+  assert.equal(readBrief(input, { read: () => { throw new Error('no'); } }), null);
+});
+
+test('guardSettings also holds agents and skills, and wires the book hooks and the compact window', () => {
+  const s = JSON.parse(guardSettings({ snapshot: false }));
+  const second = s.hooks.PreToolUse[1];
+  for (const name of ['Agent', 'Task', 'Skill']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
+  const bookCmd = BOOK_HOOK.replaceAll('\\', '/');
+  assert.ok(s.hooks.Stop[0].hooks[0].command.includes(bookCmd));
+  assert.ok(s.hooks.Stop[0].hooks[0].command.endsWith('--stop'));
+  assert.equal(s.hooks.SessionStart[0].matcher, 'compact');
+  assert.ok(s.hooks.SessionStart[0].hooks[0].command.includes(bookCmd));
+  assert.ok(s.hooks.SessionStart[0].hooks[0].command.endsWith('--compact'));
+  assert.equal(s.autoCompactWindow, 100000);
 });

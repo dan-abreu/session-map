@@ -31,6 +31,16 @@ export function claudeDir() {
   return process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
 }
 
+// The title the book gave the conversation (chat/book-tidy.mjs); it sits between a name the person typed and Claude's own.
+function bookTitleOf(sessionId) {
+  try {
+    if (!/^[A-Za-z0-9-]+$/.test(String(sessionId))) return null;
+    const smDir = process.env.SESSION_MAP_DIR || join(claudeDir(), 'session-map');
+    const t = JSON.parse(readFileSync(join(smDir, 'book', sessionId, 'tidy.json'), 'utf8')).title;
+    return typeof t === 'string' && t.trim() ? t.trim() : null;
+  } catch { return null; }
+}
+
 function readText(path) {
   try {
     return readFileSync(path, 'utf8');
@@ -358,6 +368,7 @@ function summarize(entries, sessionId) {
   let gitBranch = '';
   let entrypoint = '';
   let aiTitle = null;
+  let customTitle = null;
   let lastPromptLine = null;
   let lastAssistantText = '';
   let lastCardText = null;
@@ -392,6 +403,7 @@ function summarize(entries, sessionId) {
       endedAt = entry.timestamp;
     }
     if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') aiTitle = entry.aiTitle;
+    if (entry.type === 'custom-title' && typeof entry.customTitle === 'string' && entry.customTitle.trim()) customTitle = entry.customTitle.trim();
     if (entry.type === 'last-prompt' && typeof entry.lastPrompt === 'string') lastPromptLine = entry.lastPrompt;
 
     const prompt = humanPromptOf(entry);
@@ -458,7 +470,8 @@ function summarize(entries, sessionId) {
     gitBranch,
     entrypoint,
     aiTitle,
-    title: aiTitle ?? (userPrompts[0] ?? '').slice(0, TITLE_MAX),
+    customTitle,
+    title: customTitle ?? bookTitleOf(sessionId) ?? aiTitle ?? (userPrompts[0] ?? '').slice(0, TITLE_MAX),
     lastPrompt: lastPromptLine ?? userPrompts.at(-1) ?? '',
     userPrompts,
     fromPage,
@@ -524,11 +537,12 @@ function fullScan(path, st) {
   const edited = new Set();
   let lastCardText = null;
   let aiTitle = null;
+  let customTitle = null;
   const launches = {};
   let lastHuman = null;
   forEachLine(path, (line, i) => {
     const maybeHuman = line.includes('"type":"user"') && !line.includes('"tool_result"');
-    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"agentId"') &&!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"file_path"')) return;
+    if (!maybeHuman && !line.includes('"runId"') && !line.includes('"agentId"') &&!line.includes('"usage"') && !line.includes('session-map') && !line.includes('"ai-title"') && !line.includes('"custom-title"') && !line.includes('"file_path"')) return;
     let entry;
     try { entry = JSON.parse(line); } catch { return; }
     const prompt = maybeHuman ? humanPromptOf(entry) : null;
@@ -539,9 +553,10 @@ function fullScan(path, st) {
     if (row) addUsage(usageById, row);
     for (const card of cardsIn(entry)) lastCardText = card;
     if (entry.type === 'ai-title' && typeof entry.aiTitle === 'string') aiTitle = entry.aiTitle;
+    if (entry.type === 'custom-title' && typeof entry.customTitle === 'string' && entry.customTitle.trim()) customTitle = entry.customTitle.trim();
     for (const file of editsIn(entry)) edited.add(file);
   });
-  const value = { usage: [...usageById.values()], lastCardText, aiTitle, editedFiles: [...edited], launches };
+  const value = { usage: [...usageById.values()], lastCardText, aiTitle, customTitle, editedFiles: [...edited], launches };
   fullScanCache.set(path, { key, value });
   return value;
 }
@@ -564,9 +579,11 @@ export function readTranscript(path, { tailBytes = 2_000_000 } = {}) {
       summary.lastCardText ??= full.lastCardText;
       summary.startedAt = head.startedAt ?? summary.startedAt;
       summary.aiTitle ??= full.aiTitle;
-      summary.title = summary.aiTitle ?? head.title ?? summary.title;
+      summary.customTitle ??= full.customTitle;
+      summary.title = summary.customTitle ?? bookTitleOf(summary.sessionId) ?? summary.aiTitle ?? head.title ?? summary.title;
     }
     delete summary.aiTitle;
+    delete summary.customTitle;
     return summary;
   } catch (err) {
     if (err.code !== 'ENOENT') log('warn', 'read-failed', { path, code: err.code, error: err.message });
