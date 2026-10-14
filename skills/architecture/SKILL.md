@@ -44,6 +44,8 @@ In Portuguese the sections are `## Onde está no código` and `## O que falta`; 
 | You start it | Put `in progress` (`em andamento`) first in its bold prefix, or add `**in progress:**`. |
 | It is done | Tick it: `- [x]`. |
 
+**When the `map_*` tools are available** (`map_add_request`, `map_add_item`, `map_start_item`, `map_finish_item`, `map_add_part`, `map_add_link`), write the map only through them: you give the words (request, part, group, title, details) and the clerk writes the lines in order (next code, "From" and "Where it went" lines, index line, a new part's file, table row and flow node together). A direct Edit or Write of a file in the map folder is denied in those chats; if a tool refuses, fix the call instead of editing by hand.
+
 Change only that line; leave the rest of the file byte for byte. If the section has a line like "4 open items: ...", update its numbers. Cite the item code in your replies and in the board card: that is how the map hangs the conversation on the part.
 
 ## Architecture and Flow together

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BOOK_HOOK, GUARD_HOOK, NO_MODEL, NO_REASON, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
+import { BOOK_HOOK, GUARD_HOOK, NO_MAP_EDIT, NO_MODEL, NO_REASON, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
 import { SAFETY_REFS } from '../server/chat/safety.mjs';
 import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
@@ -154,10 +154,56 @@ test('readBrief returns the first user line of the agent transcript', () => {
   assert.equal(readBrief(input, { read: () => { throw new Error('no'); } }), null);
 });
 
+// am04: a page chat does not edit the map's files itself; the clerk (the map_* tools) writes them in a fixed order.
+function mapProject() {
+  const root = mkdtempSync(join(tmpdir(), 'sm-guard-map-'));
+  mkdirSync(join(root, 'docs', 'architecture'), { recursive: true });
+  writeFileSync(join(root, 'docs', 'architecture', 'orders.md'), '# Orders\n');
+  return root;
+}
+
+test('guardStep denies an Edit, Write or MultiEdit of a file in the map folder and points to the map_* tools', async () => {
+  const root = mapProject();
+  try {
+    for (const tool_name of ['Edit', 'Write', 'MultiEdit']) {
+      for (const file_path of [join(root, 'docs', 'architecture', 'orders.md'), 'docs/architecture/orders.md', join(root, 'docs', 'architecture', 'new-part.md'), join(root, 'docs', 'architecture', 'README.md').replaceAll('\\', '/')]) {
+        const out = await guardStep({ tool_name, tool_input: { file_path }, cwd: root }, { env: {} });
+        assert.equal(out.hookSpecificOutput.permissionDecision, 'deny', `${tool_name} ${file_path}`);
+        assert.equal(out.hookSpecificOutput.permissionDecisionReason, NO_MAP_EDIT);
+      }
+    }
+    assert.match(NO_MAP_EDIT, /^session-map: the map is written by its clerk; use the map_\* tools \(map_add_item, map_start_item, map_finish_item\.\.\.\)$/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('guardStep lets the other files through, and the map folder when the way out is on', async () => {
+  const root = mapProject();
+  try {
+    for (const file_path of [join(root, 'src', 'a.mjs'), 'docs/notes.md', join(root, 'docs', 'architecture', 'diagram.png'), join(root, 'docs', 'architecture', 'sub', 'deep.md'), join(root, 'docs', 'architecturex', 'a.md'), join(root, 'docs', 'arch', 'orders.md')]) {
+      assert.equal(await guardStep({ tool_name: 'Edit', tool_input: { file_path }, cwd: root }, { env: {} }), null, file_path);
+    }
+    const map = { tool_name: 'Write', tool_input: { file_path: join(root, 'docs', 'architecture', 'orders.md') }, cwd: root };
+    assert.equal(await guardStep(map, { env: { SESSION_MAP_CLERK: 'off' } }), null, 'the way out');
+    assert.notEqual(await guardStep(map, { env: { SESSION_MAP_CLERK: 'on' } }), null);
+    assert.equal(await guardStep({ tool_name: 'Edit', tool_input: {}, cwd: root }, { env: {} }), null);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('the hook as a process denies a map edit on stdout and says nothing for another file', async () => {
+  const root = mapProject();
+  try {
+    const denied = await runHook([], { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'docs/architecture/orders.md' }, cwd: root });
+    assert.equal(JSON.parse(denied.out).hookSpecificOutput.permissionDecision, 'deny');
+    const other = await runHook([], { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'src/a.mjs' }, cwd: root });
+    assert.equal(other.out, '');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('guardSettings also holds agents and skills, and wires the book hooks and the compact window', () => {
   const s = JSON.parse(guardSettings({ snapshot: false }));
   const second = s.hooks.PreToolUse[1];
-  for (const name of ['Agent', 'Task', 'Skill']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
+  for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
+  assert.doesNotMatch('Read', new RegExp(`^(?:${second.matcher})$`));
   const bookCmd = BOOK_HOOK.replaceAll('\\', '/');
   assert.ok(s.hooks.Stop[0].hooks[0].command.includes(bookCmd));
   assert.ok(s.hooks.Stop[0].hooks[0].command.endsWith('--stop'));

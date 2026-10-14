@@ -88,7 +88,7 @@ function parseItem(first, checked, subLines, line) {
 }
 
 // Locates the "O que falta" section and its items by line.
-function scanPart(text) {
+export function scanPart(text) {
   const lines = text.split('\n');
   const heads = headingsOf(lines);
   const fh = heads.find((h) => MISSING_HEADINGS[key(h.text)]);

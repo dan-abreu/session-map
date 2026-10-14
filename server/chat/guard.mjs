@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickSkills } from '../foundation/skills-focus.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
@@ -68,10 +68,27 @@ export function guardAgent(input, { brief = readBrief } = {}) {
   return null;
 }
 
+// The map is written by its clerk (am04): a page chat does not Edit, Write or MultiEdit a markdown file of the project's
+// map folder (docs/arquitetura, docs/architecture or docs/arch, the folders arch/detect.mjs looks in); the map_* tools
+// do it in a fixed order. Only page chats carry this hook, so the person's own edits and terminal chats are untouched.
+// SESSION_MAP_CLERK=off is the way out. The folder must exist: the first map of a project is written by hand, after the OK.
+export const NO_MAP_EDIT = 'session-map: the map is written by its clerk; use the map_* tools (map_add_item, map_start_item, map_finish_item...)';
+const MAP_EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
+const MAP_FILE_RE = /\/docs\/(?:arquitetura|architecture|arch)\/[^/]+\.md$/i;
+
+export function guardMapEdit(input, { env = process.env, exists = existsSync } = {}) {
+  if (!MAP_EDIT_TOOLS.has(input?.tool_name) || String(env.SESSION_MAP_CLERK ?? '').toLowerCase() === 'off') return null;
+  const target = input?.tool_input?.file_path;
+  if (typeof target !== 'string' || !target.trim()) return null;
+  const path = resolve(typeof input.cwd === 'string' ? input.cwd : '.', target).replace(/\\/g, '/');
+  return MAP_FILE_RE.test(path) && exists(dirname(path)) ? deny(NO_MAP_EDIT) : null;
+}
+
 // input: the hook's JSON from Claude Code. → the answer to print, or null to say nothing (the step goes on to the
 // permission check as before). A failed or slow snapshot never stops the step.
-export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief } = {}) {
+export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env } = {}) {
   if (AGENT_TOOLS.has(input?.tool_name) || input?.tool_name === 'Skill') return guardAgent(input, brief ? { brief } : {});
+  if (MAP_EDIT_TOOLS.has(input?.tool_name)) return guardMapEdit(input, env ? { env } : {});
   const command = commandOf(String(input?.tool_name ?? ''), input?.tool_input);
   if (isForcePush(command)) return deny(NO_FORCE_PUSH);
   if (snapshotOn && isDestructive(command) && typeof input?.cwd === 'string') {
@@ -125,7 +142,7 @@ export function guardSettings({ snapshot, focus = null }) {
     hooks: {
       PreToolUse: [
         { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
-        { matcher: 'Agent|Task|Skill', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
+        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
       ],
       Stop: [{ hooks: book('--stop') }],
       SessionStart: [{ matcher: 'compact', hooks: book('--compact') }],

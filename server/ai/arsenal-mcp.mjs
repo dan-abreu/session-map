@@ -5,6 +5,8 @@
 // is (default <claude dir>/session-map). Whatever goes wrong is a plain answer to Claude, never a protocol error.
 // It also carries skeleton (fd17): the signatures of a project file, read locally under SM_ROOT.
 // It also carries restart_session_map (POST /api/restart, sv13): a restart session-map times itself, never a killed process.
+// It also carries the map clerk (am04): map_add_request, map_add_item, map_start_item, map_finish_item, map_add_part and
+// map_add_link write the architecture folder under SM_ROOT in a fixed order (arch/clerk.mjs), locally.
 // Before the token or a prompt leaves, the server proves it knows the token (GET /api/ai/hello with a fresh nonce): when
 // session-map is not running, another program on the free port gets nothing.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -374,7 +376,79 @@ async function skeletonOf(args) {
   return text === null ? result(NO_SKELETON, true) : result(text);
 }
 
-const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart, [skeletonTool.name]: skeletonOf };
+// The map clerk (am04): the model gives the words, the clerk writes the architecture folder of SM_ROOT in a fixed order
+// (arch/clerk.mjs). Local like the skeleton: no server, no network. The folder is never an argument.
+const str = (description) => ({ type: 'string', description });
+const mapTools = [
+  {
+    name: 'map_add_request',
+    description: 'Writes a request of the person into the map\'s requests file (ideas.md or pedidos.md): the next code, in its group, with the five lines and the index line. Write the request first, then its items with map_add_item. Use this instead of editing the map by hand.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        words: str('The person\'s own words, as they said them.'), meaning: str('One or two plain sentences: what they want.'), confirm: str('How the person sees it is done.'),
+        group: str('The group (### heading) of the requests file; it is created when it does not exist.'), title: str('Optional: a short title for the request; by default the start of the words.'), date: str('Optional: "2026-10-13" or "2026-10-13 10:30"; by default now.'),
+      },
+      required: ['words', 'meaning', 'confirm', 'group'],
+    },
+  },
+  {
+    name: 'map_add_item',
+    description: 'Adds an item under "What\'s missing" of a part, in a group (created when missing), with the next code of the part\'s prefix and a "From <request>" line, and adds the code to the request\'s "Where it went" line. Refuses an item whose request does not exist, and a part that is not drawn in the flow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        part: str('The part\'s name (or file name).'), group: str('The group of the part; created when it does not exist.'), title: str('What to do, in one line.'), from: str('The code of the request this item comes from, such as id113.'),
+        details: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Optional: detail lines under the item.' }, prefix: str('Only for a part that has no codes yet: 1 to 4 letters for its codes.'),
+      },
+      required: ['part', 'group', 'title', 'from'],
+    },
+  },
+  {
+    name: 'map_start_item',
+    description: 'Puts the in-progress mark on an item\'s line (the way the plan writes it). Call it when you start the item.',
+    inputSchema: { type: 'object', properties: { code: str('The item\'s code, such as am04.') }, required: ['code'] },
+  },
+  {
+    name: 'map_finish_item',
+    description: 'Ticks an item ("- [x]"), drops its in-progress mark and writes the "Built on <date>: <note>" line under it. Refuses without a note. Call it only after the work is checked.',
+    inputSchema: { type: 'object', properties: { code: str('The item\'s code.'), note: str('What was built and where, in a sentence.'), date: str('Optional: "2026-10-13"; by default today.') }, required: ['code', 'note'] },
+  },
+  {
+    name: 'map_add_part',
+    description: 'Adds a part to the map in one change: its file with the usual sections, its row in the README table of parts and its node in the README\'s mermaid flow, inside a layer. Refuses a name or a prefix already in use.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        layer: str('The flow layer (subgraph) the part is drawn in: its id or title.'), name: str('The part\'s name: plain words.'), about: str('What the part is, in a sentence or two.'),
+        prefix: str('1 to 4 letters for the codes of its items; no other part may use them.'), newLayer: { type: 'boolean', description: 'Optional: true to make the layer when it does not exist.' },
+      },
+      required: ['layer', 'name', 'about', 'prefix'],
+    },
+  },
+  {
+    name: 'map_add_link',
+    description: 'Adds an arrow between two parts to the README\'s mermaid flow. Refuses a part that is unknown or not drawn in the flow, and an arrow that already exists.',
+    inputSchema: { type: 'object', properties: { from: str('The part the arrow leaves.'), to: str('The part the arrow reaches.'), label: str('Optional: a few words on the arrow.') }, required: ['from', 'to'] },
+  },
+];
+const CLERK_CALLS = { map_add_request: 'addRequest', map_add_item: 'addItem', map_start_item: 'startItem', map_finish_item: 'finishItem', map_add_part: 'addPart', map_add_link: 'addLink' };
+const NOT_WRITTEN = 'Nothing was written.';
+
+function mapTool(name) {
+  return async (args) => {
+    if (!SM_ROOT) return result(`session-map did not say which project this conversation works in, so there is no map to write here. ${NOT_WRITTEN}`, true);
+    let clerk;
+    try { clerk = await import('../arch/clerk.mjs'); } catch { return result(`The map clerk could not start. ${NOT_WRITTEN}`, true); }
+    // root last: whatever the model sends, only SM_ROOT is written.
+    const r = await clerk[CLERK_CALLS[name]]({ ...(args && typeof args === 'object' ? args : {}), root: SM_ROOT });
+    if (!r.ok) return result(`Refused: ${r.reason} ${NOT_WRITTEN}`, true);
+    const parts = [r.code ? `Code: ${r.code}.` : '', r.note ?? '', r.wrote?.length ? `Wrote ${r.wrote.map((w) => `${w.file}:${w.line} (${w.what})`).join('; ')}.` : ''].filter(Boolean);
+    return result(parts.join(' ') || 'Nothing to change.');
+  };
+}
+
+const TOOLS = { [askTool.name]: ask, [listTool.name]: list, [pickTool.name]: pick, [reportTool.name]: report, [restartTool.name]: restart, [skeletonTool.name]: skeletonOf, ...Object.fromEntries(mapTools.map((t) => [t.name, mapTool(t.name)])) };
 
 createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg;
@@ -383,7 +457,7 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
   if (method === 'initialize') {
     send({ jsonrpc: '2.0', id, result: { protocolVersion: params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'session-map-arsenal', version: '1.0.0' } } });
   } else if (method === 'tools/list') {
-    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool, restartTool, skeletonTool] } });
+    send({ jsonrpc: '2.0', id, result: { tools: [askTool, listTool, pickTool, reportTool, restartTool, skeletonTool, ...mapTools] } });
   } else if (method === 'tools/call') {
     const run = TOOLS[params?.name];
     if (!run) return send({ jsonrpc: '2.0', id, error: { code: -32602, message: `unknown tool: ${String(params?.name).slice(0, 60)}` } });

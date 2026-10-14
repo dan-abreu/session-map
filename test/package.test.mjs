@@ -56,6 +56,12 @@ test('architecture skill: where the map lives, the item format, the three moves,
   }
 });
 
+test('architecture skill: when the map_* tools exist, the map is written only through them (am04)', () => {
+  const body = read('skills/architecture/SKILL.md');
+  for (const tool of ['map_add_request', 'map_add_item', 'map_start_item', 'map_finish_item', 'map_add_part', 'map_add_link']) assert.ok(body.includes(`\`${tool}\``), tool);
+  assert.match(body, /write the map only through them/);
+});
+
 test('architecture skill: an item names a person only when it truly needs one; code work has no owner by default', () => {
   const body = read('skills/architecture/SKILL.md');
   assert.match(body, /by default[^.]*(no owner|nobody|Claude)/i);

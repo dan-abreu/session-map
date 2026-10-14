@@ -4,7 +4,7 @@ import { renameSync, statSync, unlinkSync, readFileSync, writeFileSync } from 'n
 import { isAbsolute, join } from 'node:path';
 import { parseBold } from './parse.mjs';
 
-const RECENT_MS = 5000; // a chat may be writing the file right now
+export const RECENT_MS = 5000; // a chat may be writing the file right now
 const PER_ITEM_MS = 3_600_000; // one mark per item per hour
 const WORDS = { en: 'in progress', pt: 'em andamento' };
 const OPEN_ITEM_RE = /^([-*+]\s+\[ \]\s+)(.*)$/;
@@ -32,7 +32,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const isBusy = (err) => err?.code === 'EBUSY' || err?.code === 'EPERM';
 
 // Writes the text next to the file and swaps it in, so a reader never sees half a file. One retry when the swap is busy.
-async function replaceFile(file, text, { rename, retryMs }) {
+export async function replaceFile(file, text, { rename, retryMs }) {
   const tmp = `${file}.${process.pid}.${++swaps}.tmp`;
   try {
     writeFileSync(tmp, text);

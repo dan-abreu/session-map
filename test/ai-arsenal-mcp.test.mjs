@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -118,10 +118,10 @@ test('it speaks MCP: initialize, ping, and -32601 for what it does not know', as
   }
 });
 
-test('it lists six tools, and the asking one warns that answers are data to verify', async () => {
+test('it lists its tools, and the asking one warns that answers are data to verify', async () => {
   await withMcp({}, async ({ mcp }) => {
     const { tools } = (await mcp.rpc('tools/list', {})).result;
-    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'pick_worker', 'report_result', 'restart_session_map', 'skeleton']);
+    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'map_add_item', 'map_add_link', 'map_add_part', 'map_add_request', 'map_finish_item', 'map_start_item', 'pick_worker', 'report_result', 'restart_session_map', 'skeleton']);
     const ask = tools.find((t) => t.name === 'ask_other_ai');
     assert.deepEqual(ask.inputSchema.required.sort(), ['kind', 'prompt', 'sensitivity']);
     assert.deepEqual(ask.inputSchema.properties.kind.enum, ['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning']);
@@ -303,6 +303,76 @@ test('skeleton: answers the signatures of a file of the project, with no body an
 test('skeleton: without SM_ROOT it does not guess a folder', async () => {
   await withMcp({ env: { SM_ROOT: '' } }, async ({ call }) => {
     const r = await call('skeleton', { path: 'server/ai/arsenal-mcp.mjs' });
+    assert.equal(r.isError, true);
+    assert.match(textOf(r), /did not say which project/);
+  });
+});
+
+// am04: the map clerk's six tools write the architecture folder under SM_ROOT and answer what they wrote or why they refused.
+function mapProject() {
+  const root = mkdtempSync(join(tmpdir(), 'sm-map-root-'));
+  const dir = join(root, 'docs', 'architecture');
+  mkdirSync(dir, { recursive: true });
+  const files = {
+    'README.md': '# Shop\n\n```mermaid\nflowchart LR\n    subgraph back["What it works out"]\n        OR[Orders]\n        ID[Ideas]\n    end\n```\n\n| Part | In one line |\n|---|---|\n| [Orders](orders.md) | Builds the basket. |\n| [Ideas](ideas.md) | Requests. |\n',
+    'ideas.md': '# Ideas\n\n## Index\n\n- Selling: id01\n\n## What\'s missing\n\n### Selling\n\n- [ ] First `id01`\n  - Asked: 2026-10-01 10:00 — "first"\n  - What it means: m.\n  - How to confirm it is done: c.\n  - Where it went: not yet an item.\n  - Status: new.\n',
+    'orders.md': '# Orders\n\nBuilds the basket.\n\n## What\'s missing\n\n### Basket\n\n- [ ] Save it `or01`\n',
+  };
+  for (const [name, text] of Object.entries(files)) {
+    writeFileSync(join(dir, name), text);
+    utimesSync(join(dir, name), new Date(2020, 0, 1), new Date(2020, 0, 1)); // old: the clerk leaves files changed in the last 5 s alone
+  }
+  return { root, dir, read: (name) => readFileSync(join(dir, name), 'utf8') };
+}
+
+test('map tools: they declare their arguments and write only under SM_ROOT, answering file and line', async () => {
+  const p = mapProject();
+  try {
+    await withMcp({ env: { SM_ROOT: p.root }, serverDown: true }, async ({ mcp, call }) => {
+      const { tools } = (await mcp.rpc('tools/list', {})).result;
+      const need = (name) => tools.find((t) => t.name === name).inputSchema.required;
+      assert.deepEqual(need('map_add_request'), ['words', 'meaning', 'confirm', 'group']);
+      assert.deepEqual(need('map_add_item'), ['part', 'group', 'title', 'from']);
+      assert.deepEqual(need('map_start_item'), ['code']);
+      assert.deepEqual(need('map_finish_item'), ['code', 'note']);
+      assert.deepEqual(need('map_add_part'), ['layer', 'name', 'about', 'prefix']);
+      assert.deepEqual(need('map_add_link'), ['from', 'to']);
+      assert.ok(!('root' in tools.find((t) => t.name === 'map_add_item').inputSchema.properties), 'the folder is not the model\'s to choose');
+
+      const req = await call('map_add_request', { words: 'second one', meaning: 'm2', confirm: 'c2', group: 'Selling', date: '2026-10-13 10:00' });
+      assert.equal(req.isError, false, textOf(req));
+      assert.match(textOf(req), /id02/);
+      assert.match(textOf(req), /docs\/architecture\/ideas\.md:\d+/);
+      const item = await call('map_add_item', { part: 'Orders', group: 'Basket', title: 'Show total', from: 'id02', details: ['Round it'], root: '/etc' });
+      assert.equal(item.isError, false, textOf(item));
+      assert.match(textOf(item), /or02/);
+      assert.match(p.read('orders.md'), /- \[ \] Show total `or02`\n  - From `id02`\.\n  - Round it\n/);
+      assert.match(p.read('ideas.md'), /Where it went: `or02`\./);
+      const start = await call('map_start_item', { code: 'or02' });
+      assert.match(textOf(start), /orders\.md:\d+/);
+      const none = await call('map_finish_item', { code: 'or02' });
+      assert.equal(none.isError, true);
+      assert.match(textOf(none), /note/);
+      assert.match(textOf(none), /Nothing was written/);
+      const fin = await call('map_finish_item', { code: 'or02', note: 'built in server/total.mjs', date: '2026-10-13' });
+      assert.equal(fin.isError, false, textOf(fin));
+      assert.match(p.read('orders.md'), /- \[x\] Show total `or02`\n  - From `id02`\.\n  - Round it\n  - Built on 2026-10-13: built in server\/total\.mjs\n/);
+      const part = await call('map_add_part', { layer: 'back', name: 'Returns', about: 'Takes parcels back.', prefix: 'rt' });
+      assert.equal(part.isError, false, textOf(part));
+      assert.match(p.read('README.md'), /RE\[Returns\]/);
+      const link = await call('map_add_link', { from: 'Orders', to: 'Returns', label: 'sends' });
+      assert.equal(link.isError, false, textOf(link));
+      assert.match(p.read('README.md'), /OR -->\|sends\| RE/);
+      const refused = await call('map_add_item', { part: 'Orders', group: 'Basket', title: 'x', from: 'id99' });
+      assert.equal(refused.isError, true);
+      assert.match(textOf(refused), /id99/);
+    });
+  } finally { rmSync(p.root, { recursive: true, force: true }); }
+});
+
+test('map tools: without SM_ROOT nothing is written', async () => {
+  await withMcp({ env: { SM_ROOT: '' } }, async ({ call }) => {
+    const r = await call('map_add_request', { words: 'w', meaning: 'm', confirm: 'c', group: 'g' });
     assert.equal(r.isError, true);
     assert.match(textOf(r), /did not say which project/);
   });
