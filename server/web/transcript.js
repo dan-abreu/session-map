@@ -164,7 +164,7 @@ export function createTranscript({ h, t, time, day, money, imageUrl, icon = null
     const tt = t();
     const step = item.step && STEP_KINDS.has(item.step.kind) ? item.step : { kind: 'tool', target: item.name };
     if (item.agent) {
-      const bits = [item.agent.kind, item.agent.model ? modelName(item.agent.model) : null, Number.isFinite(item.agent.steps) ? tt('chat.helperSteps', { n: item.agent.steps }) : null].filter(Boolean);
+      const bits = [item.agent.kind, item.agent.model ? modelName(item.agent.model) : null, item.agent.effort ?? null, Number.isFinite(item.agent.steps) ? tt('chat.helperSteps', { n: item.agent.steps }) : null].filter(Boolean);
       return [tt('chat.helper', { what: item.agent.description || step.target }), bits.length ? h('span', { class: 'step-sub' }, bits.join(' · ')) : null];
     }
     return [item.result === null ? tt(`live.step.${step.kind}`, { target: step.target }) : tt(`step.done.${step.kind}`, { target: step.target })];

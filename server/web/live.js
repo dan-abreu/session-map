@@ -141,7 +141,7 @@ export function createLivePanel(ctx) {
       h('span', { class: 'lv-wf-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${Math.round((w.done / Math.max(1, w.started)) * 100)}%` })),
       w.running.length ? h('ul', { class: 'lv-wf-agents', 'aria-label': tt('live.agentsRunning') }, w.running.map((a) => h('li', {},
         h('span', { class: 'lv-agent-label' }, a.label || tt('live.agentUnnamed')),
-        a.model ? h('span', { class: 'lv-agent-model' }, modelName(a.model)) : null))) : null)));
+        a.model ? h('span', { class: 'lv-agent-model' }, modelName(a.model) + (a.effort ? ` · ${a.effort}` : '')) : null))) : null)));
   }
 
   function card(entry) {

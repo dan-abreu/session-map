@@ -683,13 +683,15 @@ export function readHelperWork(sessionDir) {
   return { commits, editedFiles: [...edited], last, skillRuns };
 }
 
-// The model a workflow agent runs on, from its meta file ('opus', 'sonnet'...); none when it inherits the conversation's.
-function agentModel(dir, agentId) {
+// The model and effort an agent runs on, from its meta file ('sonnet', 'medium'...); null when it inherits the
+// conversation's. Both, so the page never shows the conversation's level for an agent that runs on another one.
+function agentRun(dir, agentId) {
   try {
     const meta = JSON.parse(readText(join(dir, `agent-${agentId}.meta.json`)));
-    return typeof meta?.model === 'string' && meta.model ? meta.model : null;
+    const pick = (v) => (typeof v === 'string' && v ? v : null);
+    return { model: pick(meta?.model), effort: pick(meta?.effort) };
   } catch {
-    return null;
+    return { model: null, effort: null };
   }
 }
 
@@ -744,7 +746,7 @@ export function readWorkflows(sessionDir) {
       const work = agentWork(join(dir, `agent-${a.id}.jsonl`));
       return {
         ...a,
-        model: agentModel(dir, a.id),
+        ...agentRun(dir, a.id),
         activeAt: new Date(work?.at ?? mtimeMs).toISOString(),
         step: work?.step ?? null,
         lastFile: work?.lastFile ?? null,

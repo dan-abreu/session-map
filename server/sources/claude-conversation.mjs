@@ -298,7 +298,7 @@ function createBuilder({ cwd, prices, keep = null }) {
           const item = { type: 'tool', id: b.id, name: b.name, ts, ...toolDetails(b.name, b.input, cwd), result: null, isError: false };
           if (AGENT_TOOLS.has(b.name)) {
             item.agent = {
-              id: null, kind: b.input?.subagent_type ?? null, description: b.input?.description ?? '', model: b.input?.model ?? null, status: null, steps: null,
+              id: null, kind: b.input?.subagent_type ?? null, description: b.input?.description ?? '', model: b.input?.model ?? null, effort: b.input?.effort ?? null, status: null, steps: null,
               prompt: maskCut(b.input?.prompt ?? '', INPUT_MAX).text,
             };
           }

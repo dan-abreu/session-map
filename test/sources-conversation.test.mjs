@@ -197,12 +197,12 @@ test('readConversation shows thinking, slash commands and pasted images', () => 
 test('readConversation links a helper agent to its own transcript, which reads the same way', () => {
   withTranscript([
     human(0, 'Look around'),
-    assistant(1, 'm1', [{ type: 'tool_use', id: 't1', name: 'Agent', input: { description: 'Find the routes', subagent_type: 'Explore', model: 'haiku', prompt: 'Find them' } }]),
+    assistant(1, 'm1', [{ type: 'tool_use', id: 't1', name: 'Agent', input: { description: 'Find the routes', subagent_type: 'Explore', model: 'haiku', effort: 'low', prompt: 'Find them' } }]),
     result(2, 't1', [{ type: 'text', text: 'Found 3 routes' }], { status: 'completed', agentId: 'a1b2c3', agentType: 'Explore', totalToolUseCount: 4 }),
   ], (path, dir) => {
     const { items } = readConversation(path, { prices: PRICES });
     const tool = items.find((i) => i.type === 'tool');
-    assert.deepEqual(tool.agent, { id: 'a1b2c3', kind: 'Explore', description: 'Find the routes', model: 'haiku', status: 'completed', steps: 4, prompt: 'Find them' });
+    assert.deepEqual(tool.agent, { id: 'a1b2c3', kind: 'Explore', description: 'Find the routes', model: 'haiku', effort: 'low', status: 'completed', steps: 4, prompt: 'Find them' }, 'the agent level, not the conversation level');
     assert.equal(helperPath(path, 'a1b2c3'), join(dir, S, 'subagents', 'agent-a1b2c3.jsonl'));
     assert.equal(helperPath(path, 'w9'), join(dir, S, 'subagents', 'workflows', 'wf_1', 'agent-w9.jsonl'), 'a workflow helper');
     assert.equal(helperPath(path, '../a1b2c3'), null);
