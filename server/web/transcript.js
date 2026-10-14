@@ -8,6 +8,12 @@ const DIFF_CELLS_MAX = 250_000;
 const STEP_ICON = { edit: 'rename', read: 'file', run: 'terminal', search: 'search', web: 'globe', agent: 'connect', skill: 'idea', plan: 'check', tool: 'box' };
 const STEP_KINDS = new Set(Object.keys(STEP_ICON));
 
+// Who answered an ask_other_ai call: the "N. from <provider>, model <model>," head of each answer in its result text.
+export function outsideAnswers(result) {
+  if (typeof result !== 'string') return [];
+  return [...result.matchAll(/<<<ANSWER-\w+ \d+\. from (\S+), model (\S+),/g)].map((m) => ({ provider: m[1], model: m[2] }));
+}
+
 // "14:05" in the page's language; '' for a time that does not parse.
 export function timeOf(lang, ts) {
   const d = new Date(ts);
@@ -168,6 +174,10 @@ export function createTranscript({ h, t, time, day, money, imageUrl, icon = null
   function stepLabel(item) {
     const tt = t();
     const step = item.step && STEP_KINDS.has(item.step.kind) ? item.step : { kind: 'tool', target: item.name };
+    const outside = item.name?.endsWith('ask_other_ai') ? outsideAnswers(item.result) : [];
+    if (outside.length) {
+      return [tt(item.result === null ? `live.step.${step.kind}` : `step.done.${step.kind}`, { target: step.target }), h('span', { class: 'step-sub' }, outside.map((a) => tt('chat.outsideWho', { provider: a.provider, model: a.model })).join(' · '))];
+    }
     if (item.agent) {
       const bits = [item.agent.kind, item.agent.model ? modelName(item.agent.model) : null, item.agent.effort ?? null, Number.isFinite(item.agent.steps) ? tt('chat.helperSteps', { n: item.agent.steps }) : null].filter(Boolean);
       return [tt('chat.helper', { what: item.agent.description || step.target }), bits.length ? h('span', { class: 'step-sub' }, bits.join(' · ')) : null];

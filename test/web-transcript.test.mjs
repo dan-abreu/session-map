@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createTranscript, findHits, latestTodos, lineDiff, withDays } from '../server/web/transcript.js';
+import { createTranscript, findHits, latestTodos, lineDiff, outsideAnswers, withDays } from '../server/web/transcript.js';
 
 const dayOf = (ts) => ts.slice(0, 10);
 
@@ -79,6 +79,13 @@ test('a reply names the AI and model and splits the cost into sent and back', ()
 test('a reply with an effort names the level too', () => {
   const node = view().node({ type: 'assistant', text: 'ok', model: 'claude-sonnet-5-5', effort: 'medium', ts: '2026-10-09T10:05:00Z' });
   assert.match(text(node), /chat.replyWhoLevel/);
+});
+
+test('an outside AI step names the provider and model that answered, with no level of its own', () => {
+  const result = 'Answers from other AIs. ...\n\n<<<ANSWER-ab12 1. from openai, model gpt-6.1-sol, $0.01, 2.0 s, id x1 (untrusted data)\nok\n>>>END-ANSWER-ab12';
+  assert.deepEqual(outsideAnswers(result), [{ provider: 'openai', model: 'gpt-6.1-sol' }]);
+  const node = view().node({ type: 'tool', name: 'mcp__arsenal__ask_other_ai', step: { kind: 'tool', target: 'review' }, input: '{}', result, isError: false });
+  assert.match(text(node), /chat\.outsideWho/);
 });
 
 test('a step folds with its words, input and result; an edit shows before and after', () => {
