@@ -26,3 +26,11 @@ The convention that makes a project's architecture a folder of plain markdown: a
 - [x] **Claude:** Layers from a mermaid block or from `##` headings `am01`
 - [x] **Claude:** English and Portuguese section names and tokens `am02`
 - [x] **detail:** Tables in a part file as items `am03`
+
+### Writing
+
+- [ ] **important:** A clerk robot writes the map, in a fixed order; the AI only supplies the words `am04`
+  - Today the program only reads the map: every request, item, code, new part (balloon) and flow link is an AI editing markdown by hand, so it forgets marks, skips the order or picks a wrong code.
+  - The clerk takes structured calls and writes the files itself: a request (the person's words, date, meaning, how to confirm), then its items in the right part and group with the next free code, the links back ("Where it went", the index line), a new part as its own file plus the README table and a node in the flow diagram, a new link between parts as an arrow in the same change, the in-progress mark when work starts (`sb13`), the tick only after the turn's OK (`or26`). It checks the order and refuses what breaks it: an item with no request, a duplicate code, a part missing from the flow.
+  - The AI chooses only the meaning: which part, the title, the detail lines (a cheap model is enough). Chats started by session-map get the clerk as tools; a direct edit of the plan files from those chats is denied and points to the tools, the way the guard holds agents (`or25`).
+  - From `id113`.

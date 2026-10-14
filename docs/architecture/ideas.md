@@ -14,7 +14,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Clarity and polish: id56
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86
-- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112
+- What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113
 - This registry: id65, id66, id67
 - Economy, context and skills: id100, id101, id102, id103, id104
 
@@ -327,6 +327,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: start an agent on an item without touching the plan file: its balloon shows "working now" within a minute; merge a feat commit naming an item: it shows "built, not ticked".
   - Where it went: `sb13`.
   - Status: in progress: `sb13` being built on 2026-10-13.
+
+- [ ] The balloons, the files and the flow are made by a robot in a correct order, whatever is created `id113`
+  - Asked: 2026-10-13 — "mesma coisa para os balões e arquivos, tem que ser um robo, não importa se cria novos balões, também serve para o fluxo e nao importa o que é criado, mas tem que seguir uma ordem correta"
+  - What it means: nothing on the map is hand-written by an AI any more: a robot writes requests, items, codes, new parts and flow links in a fixed order and refuses what breaks it; the AI only says what the words mean.
+  - How to confirm it is done: ask for something new in a chat: the request, its item with the next code, the part and the flow change appear in that order without the AI editing a file; an AI that tries to edit a plan file by hand is stopped and pointed to the robot.
+  - Where it went: `am04` (with `sb13`, `or26`).
+  - Status: accepted; built after `sb13` and the skeleton tool are joined, since it shares their files.
 
 ### This registry
 
