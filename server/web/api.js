@@ -113,6 +113,7 @@ export const api = {
   settingsMode: () => call('GET', '/api/settings/permission-mode'),
   setSettingsMode: (mode) => call('POST', '/api/settings/permission-mode', { mode }),
   undoSettingsMode: () => call('DELETE', '/api/settings/permission-mode'),
+  setPlugin: (id, enabled) => call('POST', '/api/settings/plugin', { id, enabled }),
   flowExport: (projectId) => call('GET', `/api/arch/${seg(projectId)}/mermaid`),
   flowModel: (projectId) => call('GET', `/api/arch/${seg(projectId)}/model`),
   flowPart: (projectId, partId, onlyLive = false) => call('GET', `/api/arch/${seg(projectId)}/model/part/${seg(partId)}${onlyLive ? '?only=live' : ''}`),

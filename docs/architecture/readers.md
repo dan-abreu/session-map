@@ -39,11 +39,12 @@ Each reader answers one question and fails soft: a missing file or a failing `gi
 - [x] **Claude:** Discover: repositories of skills and plugins from GitHub `rd08`
   - Sorted by stars, with what each is for, type and category, an "installed" mark and an install that always asks first. Released in v0.1.0.
 
-- [ ] **in progress · important:** A skill list is an always-on token tax: show which skills are on and turn the unused ones off, so the list stays small `rd09`
+- [x] **important:** A skill list is an always-on token tax: show which skills are on and turn the unused ones off, so the list stays small `rd09`
   - Every installed skill's name and description sits in every context, every turn, every agent; with hundreds installed that costs more than the skills themselves. The page shows the count and a one-press off, and the conductor prefers the few skills it really needs.
   - From `id100`.
   - Built so far (2026-10-13): a Plugins tab per project lists each plugin, on or off, with its skill count (`listPlugins` in `server/sources/skills.mjs`). Missing: the one-press off.
   - Also on 2026-10-13 (mm52): each plugin shows its repository, on or off, skill count, listing weight and the weight of its SKILL.md files, and opened this week. Still open for rd09: the one-press off and the conductor preferring few skills; mm52 does not cover those.
+  - Built on 2026-10-13: the Plugins tab has a Turn off / Turn on button per plugin (`switchPlugin` in `server/web/app.js`, `api.setPlugin`), after a confirm saying it applies to new chats; `POST /api/settings/plugin` (`pluginRoute` in `server/main.mjs`) calls `setUserPlugin` in `server/chat/mode.mjs`, which reads `~/.claude/settings.json`, changes only `enabledPlugins[id]`, keeps the layout and every other key, and writes atomically. The few-skills part is `pc29`.
 ### Sources
 
 - [ ] **with the owner:** Import the claude.ai history `rd04`

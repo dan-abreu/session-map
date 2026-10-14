@@ -65,6 +65,16 @@ export function setUserMode(dir, mode) {
   return { ok: true, mode, previous: current.data.permissions?.defaultMode ?? null };
 }
 
+// The plugin switch (rd09): only enabledPlugins[id] changes, every other key stays as it was. id looks like name@market.
+export function setUserPlugin(dir, id, enabled) {
+  if (typeof id !== 'string' || !/^[\w.-]+@[\w.-]+$/.test(id) || typeof enabled !== 'boolean') return { ok: false, error: 'bad-plugin' };
+  const file = join(dir, SETTINGS);
+  const current = readSettings(file);
+  if (!current || (current.data.enabledPlugins !== undefined && !isObject(current.data.enabledPlugins))) return { ok: false, error: 'settings-unreadable' };
+  writeSettings(file, { ...current.data, enabledPlugins: { ...current.data.enabledPlugins, [id]: enabled } }, current.text);
+  return { ok: true, id, enabled };
+}
+
 // Only defaultMode goes back: whatever else changed in the file since stays.
 export function undoUserMode(dir) {
   const backup = join(dir, BACKUP);

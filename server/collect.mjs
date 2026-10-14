@@ -39,7 +39,7 @@ import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
 import { listSkills, listPlugins } from './sources/skills.mjs';
-import { skillUseOf, weekByPlugin } from './sources/skill-use.mjs';
+import { MONTH_MS, skillUseOf, weekByPlugin } from './sources/skill-use.mjs';
 import { readJsonFile } from './store.mjs';
 import { expectedRun, parseRun } from './chat/run.mjs';
 import { queueView, readWeekUse } from './chat/priority.mjs';
@@ -489,7 +489,9 @@ async function buildProject(ctx, { root, items }) {
   const skillSizes = new Map();
   for (const k of skillList) skillSizes.set(k.plugin ? `${k.plugin}:${k.name}` : k.name, k.fullBytes);
   for (const k of skillList) if (k.plugin && !skillSizes.has(k.name)) skillSizes.set(k.name, k.fullBytes);
-  const weekPlugins = weekByPlugin(items.flatMap((i) => [...(i.summary.skillCalls ?? []), ...(i.helperSkills ?? []).flatMap((r) => r.calls)]), skillSizes, now.getTime());
+  const skillCalls = items.flatMap((i) => [...(i.summary.skillCalls ?? []), ...(i.helperSkills ?? []).flatMap((r) => r.calls)]);
+  const weekPlugins = weekByPlugin(skillCalls, skillSizes, now.getTime());
+  const monthPlugins = weekByPlugin(skillCalls, skillSizes, now.getTime(), MONTH_MS);
   const chats = placed.filter((x) => x.shown).map((x) => {
     const s = x.item.summary;
     const live = liveById.get(s.sessionId) ?? null;
@@ -611,7 +613,7 @@ async function buildProject(ctx, { root, items }) {
         ...waitingItems(arch, projectId),
       ],
       skills: skillList,
-      plugins: pluginList.map((pl) => ({ ...pl, week: weekPlugins.get(pl.name) ?? { count: 0, bytes: 0 } })),
+      plugins: pluginList.map((pl) => ({ ...pl, week: weekPlugins.get(pl.name) ?? { count: 0, bytes: 0 }, month: monthPlugins.get(pl.name) ?? { count: 0, bytes: 0 } })),
       cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
       costByDay: dailyCost(allRows, prices),
       costByModel: modelDaily(allRows, prices),

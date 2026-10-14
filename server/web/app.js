@@ -828,6 +828,17 @@ async function runAction(body, okText) {
   return true;
 }
 
+// The one-click plugin switch (rd09): it changes the user's settings.json for every Claude, so it asks first and says
+// it applies to chats opened after it (a running chat keeps the plugins it started with).
+async function switchPlugin(pl) {
+  const turnOn = !pl.enabled;
+  if (!(await confirmAction(t(turnOn ? 'plugins.onConfirm' : 'plugins.offConfirm', { plugin: pl.name }), turnOn ? t('plugins.turnOn') : t('plugins.turnOff'), { focus: 'cancel' }))) return;
+  const res = await api.setPlugin(pl.id, turnOn);
+  if (!res.ok) return toast(t('plugins.switchFailed'));
+  toast(t(turnOn ? 'plugins.nowOn' : 'plugins.nowOff', { plugin: pl.name }));
+  poll();
+}
+
 // Delete (mm43) takes a conversation out of session-map only: the server never touches Claude Code's own file for it. Always asks first.
 async function deleteConversation(row) {
   if (row.status === 'busy') return toast(errorText('busy'));
@@ -1877,6 +1888,7 @@ function renderProjectPanel() {
         h('p', { class: 'skill-desc' }, [t.count('plugins.skills', pl.skillCount ?? skills.length), pl.from ? t('plugins.from', { from: pl.from }) : null].filter(Boolean).join(' · ')),
         h('p', { class: 'skill-desc' }, t('plugins.weight', { size: bytesText(pl.listingBytes) }), ' · ', t('plugins.skillsFull', { size: bytesText(pl.skillBytes) })),
         h('p', { class: 'skill-desc' }, t(`plugins.week.${pl.week?.count === 1 ? 'one' : 'other'}`, { n: pl.week?.count ?? 0, size: bytesText(pl.week?.bytes) })),
+        pl.id ? h('div', { class: 'actions secondary' }, button(pl.enabled ? t('plugins.turnOff') : t('plugins.turnOn'), () => switchPlugin(pl))) : null,
         pl.installPath ? h('div', { class: 'skill-cmd' }, h('code', {}, pl.installPath)) : null);
     })) : h('p', { class: 'muted' }, t('plugins.none'));
   } else if (projectTab === 'skills') {

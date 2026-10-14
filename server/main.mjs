@@ -31,7 +31,7 @@ import { continueProjectMonth, monthOf, setProjectBudget } from './budget.mjs';
 import { githubStatus, newProject, suggestParent } from './newproject.mjs';
 import { projectIdOf } from './paths.mjs';
 import { createChatHub } from './chat/hub.mjs';
-import { setUserMode, undoUserMode, userModeState } from './chat/mode.mjs';
+import { setUserMode, setUserPlugin, undoUserMode, userModeState } from './chat/mode.mjs';
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
 import { collect, topLevelOf } from './collect.mjs';
 import { fileOwners } from './arch/fileowners.mjs';
@@ -67,7 +67,7 @@ const BODY_MAX = 64 * 1024;
 // A chat message may carry pasted images (ten of about 3.7 MB each, 5 MB once in base64).
 const CHAT_BODY_MAX = 56 * 1024 * 1024;
 const FILE_ERRORS = { 'bad-path': 400, sensitive: 403, 'not-found': 404, 'too-large': 413, binary: 415 };
-const MODE_ERRORS = { 'bad-mode': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
+const MODE_ERRORS = { 'bad-mode': 400, 'bad-plugin': 400, 'nothing-to-undo': 404, 'settings-unreadable': 409 };
 const LIMIT_ERRORS = { 'bad-limit': 400, 'config-unreadable': 409 };
 const NOTIFY_ERRORS = { 'bad-notify': 400, 'config-unreadable': 409 };
 const BACKGROUND_ERRORS = { 'bad-background': 400, 'config-unreadable': 409 };
@@ -422,6 +422,18 @@ export function createApp({
     const result = setReinforcedLimit(smDir, usd);
     const status = result.ok ? 200 : LIMIT_ERRORS[result.error];
     logAction(smDir, { action: 'reinforced-limit', usd: typeof usd === 'number' ? usd : null }, status);
+    return send(res, status, result);
+  }
+
+  // The one-click plugin switch (rd09): enabledPlugins in the user's settings.json; it reaches chats opened after it.
+  async function pluginRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    const result = setUserPlugin(dir, body?.id, body?.enabled);
+    const status = result.ok ? 200 : MODE_ERRORS[result.error] ?? 400;
+    logAction(smDir, { action: 'plugin-switch', plugin: body?.id }, status);
     return send(res, status, result);
   }
 
@@ -861,6 +873,7 @@ export function createApp({
     }
     if (parts[1] === 'api' && (parts[2] === 'foundation' || (parts[2] === 'library' && parts.length === 3))) return foundationRoute(req, res, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
+    if (path === '/api/settings/plugin') return pluginRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);

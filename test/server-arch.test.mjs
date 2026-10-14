@@ -95,6 +95,20 @@ test('the permission mode for every Claude on this PC: read, set, refuse a bypas
   });
 });
 
+test('the plugin switch writes enabledPlugins in the user settings, keeps the rest, needs the token and the header, and is logged', async () => {
+  await withServer(async ({ call, write, dir, smDir }) => {
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus', enabledPlugins: { 'a@m': true, 'b@m': true } }, null, 2));
+    const path = '/api/settings/plugin';
+    assert.equal((await call('POST', path, { body: { id: 'a@m', enabled: false } })).status, 403, 'no header, no origin');
+    assert.equal((await call('POST', path, { headers: { ...write, cookie: '' }, body: { id: 'a@m', enabled: false } })).status, 401);
+    assert.equal((await call('POST', path, { headers: write, body: { id: 'a@m', enabled: 'no' } })).status, 400);
+    assert.equal((await call('POST', path, { headers: write, body: { id: 'a@m', enabled: false } })).status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8')), { model: 'opus', enabledPlugins: { 'a@m': false, 'b@m': true } });
+    const logged = readFileSync(join(smDir, 'actions.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(logged.map((l) => [l.action, l.plugin, l.status]), [['plugin-switch', 'a@m', 400], ['plugin-switch', 'a@m', 200]]);
+  });
+});
+
 test('the demo never touches the settings nor starts a map', async () => {
   await withServer(async ({ call }) => {
     assert.equal((await call('GET', '/api/settings/permission-mode')).status, 403);

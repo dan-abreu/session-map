@@ -31,13 +31,12 @@ function byteSafe(text, max) {
   return chars.length ? chars.join('').trimEnd() + '\u2026' : '';
 }
 
-// input: { skills: [{name, description, command, enabled}], part: {name, about}, text: the person's request,
-//   lang, limit = 3, maxBytes = 400 } -> text, or '' when nothing fits.
-export function skillsFocus({ skills = [], part = null, text = '', lang = 'en', limit = 3, maxBytes = 400 } = {}) {
+// The scoring alone: the enabled skills that fit, best first. skillsFocus and the per-chat skill settings share it.
+export function pickSkills({ skills = [], part = null, text = '' } = {}) {
   const on = (Array.isArray(skills) ? skills : []).filter((k) => k && k.enabled !== false && typeof k.command === 'string' && k.name);
-  if (!on.length) return '';
+  if (!on.length) return [];
   const want = words([part?.name ?? '', part?.about ?? '', text].join(' '));
-  if (!want.size) return '';
+  if (!want.size) return [];
   const scored = on.map((k) => {
     const own = words(k.name);
     const sw = words(k.name + ' ' + (k.description ?? ''));
@@ -47,12 +46,20 @@ export function skillsFocus({ skills = [], part = null, text = '', lang = 'en', 
     return { k, hits, strong };
   }).filter((x) => x.hits >= 2 || x.strong); // one short common word is chance, not fit
   scored.sort((a, b) => (b.hits - a.hits) || (a.k.name < b.k.name ? -1 : a.k.name > b.k.name ? 1 : 0));
+  return scored.map((x) => x.k);
+}
+
+// input: { skills: [{name, description, command, enabled}], part: {name, about}, text: the person's request,
+//   lang, limit = 3, maxBytes = 400 } -> text, or '' when nothing fits.
+export function skillsFocus({ skills = [], part = null, text = '', lang = 'en', limit = 3, maxBytes = 400 } = {}) {
+  const scored = pickSkills({ skills, part, text });
+  if (!scored.length) return '';
   const tongue = langOf(lang);
   const head = WORDS[tongue].head;
   const cap = Math.max(0, Math.min(Number.isInteger(limit) ? limit : 3, 6));
   const lines = [];
   let used = bytes(head);
-  for (const { k } of scored) {
+  for (const k of scored) {
     if (lines.length >= cap) break;
     const line = '- ' + k.command + (k.description ? ': ' + k.description : '');
     if (hasCode(line)) continue;

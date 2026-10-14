@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pickSkills } from '../foundation/skills-focus.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 
 // The guard of every page chat (pc16): a PreToolUse hook Claude Code runs before its own permission check, in every
@@ -86,13 +87,41 @@ export async function guardStep(input, { snapshotOn = false, snapshot = takeSnap
 // Code's own summary runs at BOOK_WINDOW instead of near the model's whole window, each turn's end writes the chapters,
 // and right after a summary the chapter index goes back in. Forward slashes: the hook line runs in a shell.
 export const BOOK_WINDOW = 100_000; // the least Claude Code accepts (measured 2026-10-13: 135k of context became 31k)
-export function guardSettings({ snapshot }) {
+// What one chat lists of skills and plugins (pc29). Probed 2026-10-13: --settings enabledPlugins turns a plugin off for
+// that one session, and skillOverrides "name-only" shows a user skill by name without its description.
+// skills/plugins: the project's lists (listSkills, listPlugins + month); part/text: where the chat opens and what it asked.
+// → { skillOverrides, enabledPlugins }. Picked user/project skills "on", the other ones name-only (the index); a plugin
+// goes off only when it is on, not session-map, unused by the project for 30 days (month.count === 0, known), not
+// named in the request and holding none of the picked skills.
+export function chatSkillSettings({ skills = [], plugins = [], part = null, text = '' } = {}) {
+  const picked = pickSkills({ skills, part, text });
+  const pickedNames = new Set(picked.map((k) => k.command));
+  const skillOverrides = {};
+  for (const k of skills) {
+    if (!k?.name || (k.origin !== 'user' && k.origin !== 'project') || k.enabled === false) continue;
+    skillOverrides[k.name] = pickedNames.has(k.command) ? 'on' : 'name-only';
+  }
+  const said = fold(`${text} ${part?.name ?? ''}`);
+  const holding = new Set(picked.map((k) => k.plugin).filter(Boolean));
+  const enabledPlugins = {};
+  for (const p of plugins) {
+    if (!p?.id || !p.name || p.enabled !== true || p.name === 'session-map' || holding.has(p.name)) continue;
+    if (!Number.isInteger(p.month?.count) || p.month.count > 0) continue;
+    if (new RegExp(`(?<![a-z0-9_-])${fold(p.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9_-])`).test(said)) continue;
+    enabledPlugins[p.id] = false;
+  }
+  return { skillOverrides, enabledPlugins };
+}
+
+export function guardSettings({ snapshot, focus = null }) {
   const slash = (p) => p.replace(/\\/g, '/');
   const node = `"${slash(process.execPath)}"`;
   const command = `${node} "${slash(GUARD_HOOK)}"${snapshot ? ' --snapshot' : ''}`;
   const book = (flag) => [{ type: 'command', command: `${node} "${slash(BOOK_HOOK)}" ${flag}`, timeout: HOOK_TIMEOUT_S }];
   return JSON.stringify({
     autoCompactWindow: BOOK_WINDOW,
+    ...(focus && Object.keys(focus.skillOverrides ?? {}).length ? { skillOverrides: focus.skillOverrides } : {}),
+    ...(focus && Object.keys(focus.enabledPlugins ?? {}).length ? { enabledPlugins: focus.enabledPlugins } : {}),
     hooks: {
       PreToolUse: [
         { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },

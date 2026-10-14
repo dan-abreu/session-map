@@ -25,11 +25,12 @@ export function skillUseOf({ own = [], runs = [], sizes = new Map() }) {
 }
 
 // What each plugin's skills were opened for in the last week: Map plugin -> {count, bytes}.
-export function weekByPlugin(calls, sizes, nowMs) {
+export const MONTH_MS = 30 * 24 * 3600 * 1000;
+export function weekByPlugin(calls, sizes, nowMs, windowMs = WEEK_MS) {
   const out = new Map();
   for (const c of calls) {
     const at = Date.parse(c.ts);
-    if (!c.name.includes(':') || !(at >= nowMs - WEEK_MS)) continue;
+    if (!c.name.includes(':') || !(at >= nowMs - windowMs)) continue;
     const plugin = c.name.split(':')[0];
     const hit = out.get(plugin) ?? { count: 0, bytes: 0 };
     hit.count += 1;

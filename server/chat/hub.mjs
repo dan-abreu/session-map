@@ -28,7 +28,7 @@ import {
   isWeighed, settingsRun, withRunNote, withWeighed,
 } from './run.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
-import { guardSettings } from './guard.mjs';
+import { chatSkillSettings, guardSettings } from './guard.mjs';
 import { cutTeams, hasCutTeams, teamsNote } from './teams.mjs';
 import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
 import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
@@ -682,7 +682,7 @@ export function createChatHub({
     const tail = [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n');
     return startDriver({
       bin: chat.bin,
-      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail), settings: guardSettings({ snapshot: run.kind === 'autonomous' }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
       cwd: chat.cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
@@ -840,6 +840,7 @@ ${prompt}`;
     };
     let cwd;
     let prompt = body.text;
+    let skillFocus = null; // pc29: set when the chat opens on a point; a resumed one lists everything as before
     let resume = null;
     let cutTold = null;
     let saved = null;
@@ -892,6 +893,7 @@ ${prompt}`;
       const practices = FOCUS_KINDS.includes(node?.kind) ? focusInputs(smDir, project.id) : null;
       const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen, practices, text: body.text });
       if (context.error) return reply(context.status, { error: context.error });
+      skillFocus = chatSkillSettings({ skills: project.skills, plugins: project.plugins, part: context.part, text: body.text });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
@@ -934,6 +936,7 @@ ${prompt}`;
       configPath: join(smDir, 'chat', `${key}.json`), flow,
       run, processRun: run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
       reinforcing: false, autoAnswered: false,
+      skillFocus,
       bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false, swapExit: null, swapTimer: null, moveMark: false,
     };
     if (turn) rememberPlan(chat, turn);
