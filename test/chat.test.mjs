@@ -1359,12 +1359,14 @@ async function idleChat(dir, env, fn, idleMs = 400, hubOpts = {}) {
 
 test('an idle chat with no helper activity still closes after idleMs', async () => {
   await withClaudeDir(async ({ dir, env }) => {
+    // The idle time runs from the end of the turn; on a slow machine the test starts looking some time after it, so the idle time is
+    // long enough that what passed before the look cannot swallow the 300 ms it checks.
     await idleChat(dir, env, async ({ r, ended }) => {
       const since = Date.now();
       await ended();
       assert.ok(Date.now() - since >= 300, 'not before the idle time');
       assert.equal(r.count((e) => e.type === 'error'), 0);
-    });
+    }, 1500);
   });
 });
 
