@@ -82,7 +82,7 @@ test('end to end: the book program, the proof, the route, the runner and another
   const answer = { title: 'Login e cabeçalho', subjectChanged: false, chapters: [{ n: 1, title: 'Corrigir o login', summary: 'login corrigido' }] };
   const asked = [];
   const apiRun = async (prompt, o) => { asked.push(`${o.provider}:${o.model}:${o.effort}`); return { ok: true, value: answer, costUSD: 0.0004 }; };
-  const app = createApp({ dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state, helpers: { backend }, ai: { apiRun, keyOf: async () => 'sk-fake' } });
+  const app = createApp({ dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state, helpers: { backend }, ai: { bin: 'claude', apiRun, keyOf: async () => 'sk-fake' } });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const line = (type, role, text) => JSON.stringify({ type, message: { role, content: text } });
   const transcript = join(work, 't.jsonl');

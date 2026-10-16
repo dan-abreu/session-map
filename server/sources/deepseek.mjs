@@ -5,7 +5,9 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { zstdDecompressSync } from 'node:zlib';
+import * as zlib from 'node:zlib';
+// zstd arrived in Node 22.15: a namespace import, because a named one stops the whole program from loading on Node 20.
+const zstdDecompressSync = zlib.zstdDecompressSync;
 import { log } from '../log.mjs';
 import { costOf as providersCostOf, providerOf } from '../ai/providers.mjs';
 import { costOf, windowed } from '../cost.mjs';

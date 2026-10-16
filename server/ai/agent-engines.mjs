@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve, sep } from 'node:path';
+import { join, win32 } from 'node:path';
 
 // Which engines can run a specialist today (id151, or62): each company's official agent, detected on the machine —
 // plain data for the Cérebro. claude: the Agent tool, held by the guard's hooks. codex (OpenAI) and gemini (Google):
@@ -41,8 +41,9 @@ export function findDsh({ where = whereOf, read = (p) => readFileSync(p, 'utf8')
   if (platform !== 'win32') return { command: launcher, args: [], env: {} };
   let text;
   try { text = read(launcher); } catch { return null; }
-  const base = dirname(launcher) + sep;
-  const sub = (s) => (s.includes('%~dp0') ? resolve(s.replaceAll('%~dp0', base)) : s);
+  // A Windows launcher is read with Windows paths whatever machine reads it (the tests do on any system).
+  const base = win32.dirname(launcher) + win32.sep;
+  const sub = (s) => (s.includes('%~dp0') ? win32.resolve(s.replaceAll('%~dp0', base)) : s);
   const line = text.split(/\r?\n/).find((l) => /^\s*"[^"]*%~dp0[^"]*\.exe"/i.test(l));
   const m = line?.match(/^\s*"([^"]+\.exe)"\s*(.*?)\s*%\*\s*$/i);
   if (!m) return null;
