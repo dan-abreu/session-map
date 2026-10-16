@@ -82,6 +82,9 @@ export const PROGRAM_STYLE = [
   '.pp-key.pp-dialog,.pp-key.pp-summary{border-color:var(--waiting);color:var(--waiting)}',
   '.pp-key.pp-hit{box-shadow:0 0 0 2px var(--ink)}',
   '.pp-said{margin:0;padding:0;list-style:none;font-size:12px}',
-  '.pp-said li{border-left:3px solid var(--line);padding:1px 0 1px 8px;margin:3px 0;color:var(--ink)}',
-  '.pp-said li.pp-message{border-left-style:dashed;color:var(--ink-2);font-style:italic}',
+  // the marker is the same grey line the plan draws for a text (a dashed one for a message), not a rule down the side
+  '.pp-said li{display:flex;gap:8px;align-items:baseline;margin:4px 0;color:var(--ink)}',
+  '.pp-said li::before{content:"";flex:none;width:10px;height:0;border-top:2px solid var(--ink-2);opacity:.45;transform:translateY(-3px)}',
+  '.pp-said li.pp-message{color:var(--ink-2);font-style:italic}',
+  '.pp-said li.pp-message::before{border-top-style:dashed}',
 ].join('\n');
