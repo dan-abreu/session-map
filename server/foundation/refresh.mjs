@@ -65,6 +65,22 @@ export function refreshFoundation(project, smDir, { steps = [readStep(), ...bloc
   return round.running;
 }
 
+// The sweep of the projects being worked on: one after the other, each in a try of its own. A project whose round fails (a folder
+// that is gone, a git that does not answer) is logged under its own id and the next project is still looked at: what is wrong
+// in one is never a reason for another not to be read. → [{ id, result } | { id, error }], in the order given.
+export async function sweepProjects(projects, smDir, refresh = refreshFoundation) {
+  const done = [];
+  for (const project of projects) {
+    try {
+      done.push({ id: project.id, result: await refresh(project, smDir) });
+    } catch (err) {
+      log('warn', 'foundation-refresh-failed', { projectId: project.id, error: err.message });
+      done.push({ id: project.id, error: err.message });
+    }
+  }
+  return done;
+}
+
 // For POST refresh: answers at once whether a round started; the round goes on in the background.
 export function startRefresh(project, smDir, opts = {}) {
   const reason = refusal(`${smDir}|${project.id}`, (opts.now ?? Date.now)());

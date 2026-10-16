@@ -44,7 +44,7 @@ import { fileOwners } from './arch/fileowners.mjs';
 import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { readRemoved } from './hidden.mjs';
 import { createFoundationRoute } from './foundation/http/index.mjs';
-import { refreshFoundation } from './foundation/refresh.mjs';
+import { sweepProjects } from './foundation/refresh.mjs';
 import { linksOf } from './imports.mjs';
 import { configureLog, log, PROJECT_ID_RE, readLog, readProjectLog, recordProject } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
@@ -1086,7 +1086,7 @@ export function createApp({
     sweeping ??= (async () => {
       try {
         // Only where the person works now, or where they asked for it: a project nobody touches is left alone.
-        for (const project of sweepable((await quickState()).projects)) await refreshFoundation(project, smDir);
+        await sweepProjects(sweepable((await quickState()).projects), smDir);
       } catch (err) {
         log('warn', 'foundation-sweep-failed', { error: err.message });
       }

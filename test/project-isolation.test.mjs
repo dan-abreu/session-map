@@ -7,7 +7,8 @@ import { join, relative, resolve } from 'node:path';
 import { parseArch } from '../server/arch/parse.mjs';
 import { applyRequestStatus, requestStatusOp } from '../server/arch/requestops.mjs';
 import { applyOp, writeCare } from '../server/foundation/care.mjs';
-import { refreshFoundation } from '../server/foundation/refresh.mjs';
+import { refreshFoundation, sweepProjects } from '../server/foundation/refresh.mjs';
+import { readFd } from '../server/foundation/store.mjs';
 import { copyFixtureRepo, removeFixtureRepo } from './fixtures/repo-copy.mjs';
 
 // Each project is its own world. session-map reads a project's folder and writes in two places only: its own folder of state,
@@ -121,4 +122,57 @@ test('a registry the map points at outside the project folder is never read or w
     rmSync(base, { recursive: true, force: true });
     rmSync(smDir, { recursive: true, force: true });
   }
+});
+
+// "Tudo em dia?" looks at one project at a time. What it says about a project is the same whether the others exist or not, and it cites
+// only that project's own files.
+test('the lines of a project are the same with another project around, and cite only its own files', async () => {
+  const a = copyFixtureRepo('acme-shop');
+  const b = copyFixtureRepo('acme-delivery');
+  const alone = mkdtempSync(join(tmpdir(), 'sm-isolation-alone-'));
+  const together = mkdtempSync(join(tmpdir(), 'sm-isolation-together-'));
+  const lines = (smDir, id) => readFd(smDir, id, 'uptodate.json', null).lines.map((l) => [l.id, l.state, l.reason ?? null, JSON.stringify(l.detail ?? null)]);
+  const cited = (smDir, id) => {
+    const out = new Set();
+    const walk = (node) => {
+      if (Array.isArray(node)) node.forEach(walk);
+      else if (node && typeof node === 'object') { if (typeof node.file === 'string') out.add(node.file); Object.values(node).forEach(walk); }
+    };
+    walk(readFd(smDir, id, 'uptodate.json', null).lines);
+    return out;
+  };
+  try {
+    const project = (id, root) => ({ id, name: id, root });
+    await refreshFoundation(project('shop-aaaaaa', a), alone, { now: () => 1_000_000 });
+    // The other project is read first, and again after, in the same state folder.
+    await refreshFoundation(project('delivery-bbbbbb', b), together, { now: () => 1_000_000 });
+    await refreshFoundation(project('shop-aaaaaa', a), together, { now: () => 2_000_000 });
+    await refreshFoundation(project('delivery-bbbbbb', b), together, { now: () => 3_000_000 });
+    assert.deepEqual(lines(together, 'shop-aaaaaa'), lines(alone, 'shop-aaaaaa'), 'what is said of one project does not depend on the other');
+    for (const [id, root] of [['shop-aaaaaa', a], ['delivery-bbbbbb', b]]) {
+      const stray = [...cited(together, id)].filter((file) => file && file !== '.git' && !statExists(join(root, file)));
+      assert.deepEqual(stray, [], `${id} cites only files of its own folder`);
+    }
+    assert.ok(![...cited(together, 'shop-aaaaaa')].some((file) => /delivery|backend\/app/.test(file) && !statExists(join(a, file))), 'nothing of the other project shows in this one');
+  } finally {
+    rmSync(alone, { recursive: true, force: true });
+    rmSync(together, { recursive: true, force: true });
+    removeFixtureRepo(a);
+    removeFixtureRepo(b);
+  }
+});
+
+const statExists = (path) => { try { statSync(path); return true; } catch { return false; } };
+
+test('the sweep reads each project in a try of its own: one that fails does not stop the next', async () => {
+  const seen = [];
+  const refresh = async (project) => {
+    seen.push(project.id);
+    if (project.id === 'broken-222222') throw new Error('a folder that is gone');
+    return { ran: true, steps: [] };
+  };
+  const done = await sweepProjects([{ id: 'first-111111' }, { id: 'broken-222222' }, { id: 'third-333333' }], '/state', refresh);
+  assert.deepEqual(seen, ['first-111111', 'broken-222222', 'third-333333'], 'the project after the broken one is still read');
+  assert.deepEqual(done.map((d) => [d.id, d.error ?? 'ok']), [['first-111111', 'ok'], ['broken-222222', 'a folder that is gone'], ['third-333333', 'ok']]);
+  assert.deepEqual(await sweepProjects([], '/state', refresh), []);
 });
