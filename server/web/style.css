@@ -1158,7 +1158,7 @@ button.req-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 
 .req-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--idle); }
 .req-dot.s-doing { border-color: var(--doing); background: var(--doing); }
 .req-dot.s-done { border-color: var(--active); background: var(--active); }
-.req-dot.s-missing { border-style: dashed; }
+.req-dot.s-missing, .req-dot.s-later { border-style: dashed; }
 .req-none { margin: 0; padding: 8px 10px; border-radius: var(--r-md); background: var(--clash-fill); color: var(--clash-ink); font-size: var(--fs-sm); font-weight: 600; }
 .req-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: var(--fs-xs); }
 .req-outcome { font-weight: 650; color: var(--active-ink); }

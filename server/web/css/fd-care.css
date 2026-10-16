@@ -1,1 +1,4 @@
 /* Styles of block B3 (up to date, findings, care mode). Only the tokens of style.css. */
+@import "fd-care-uptodate.css";
+@import "fd-care-findings.css";
+@import "fd-care-mode.css";

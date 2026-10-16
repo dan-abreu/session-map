@@ -11,7 +11,7 @@ import { fdPath, readFd, writeFd } from './store.mjs';
 import { runUptodate } from './uptodate.mjs';
 import { versionsOf } from './versions.mjs';
 
-// The blocks after the reading step (fd20): each one reads what the reading step saved and writes its own file under
+// The blocks after the reading step (fd24): each one reads what the reading step saved and writes its own file under
 // brain/<id>/foundation/, in the order of the index: model -> versions -> profile, practices and compass -> health ->
 // "Tudo em dia?".
 // The refresh round runs them after `read` (refresh.mjs), and the summary the page draws reads their files (summary.mjs).

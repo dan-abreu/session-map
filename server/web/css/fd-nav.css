@@ -30,8 +30,9 @@
 .nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* Full mode on a narrower computer: every area is on the bar, so only the open one keeps its name (the others have it in their
-   tooltip and for a reader), and the row never runs over the amber count. */
-@media (min-width: 720px) and (max-width: 1359px) {
+   tooltip and for a reader), and the row never runs over the amber count. Thirteen areas with their names need about 1630 px
+   (measured in the browser smoke, scripts/smoke-browser.mjs); it was 1360 px when eleven were on the bar. */
+@media (min-width: 720px) and (max-width: 1639px) {
   body.is-tech .navbar:not(.is-bottom) > .nav-group > .nav-tab:not([aria-current="page"]) > .nav-label {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }

@@ -71,3 +71,14 @@ test('the page says it in both languages', () => {
   assert.equal(translator('en').count('point.laterItems', 3), '3 for later');
   assert.equal(translator('pt-BR').count('point.laterItems', 1), '1 para depois');
 });
+
+test('every place the page turns an item status into a text has a text for the parked state (found by the browser smoke)', () => {
+  const en = translator('en');
+  const pt = translator('pt-BR');
+  for (const key of ['item.status.later', 'requests.act.later', 'point.laterItems.other']) {
+    assert.notEqual(en(key), key, `${key} has an English text`);
+    assert.notEqual(pt(key), key, `${key} has a Portuguese text`);
+  }
+  // The Requests tab writes `requests.act.<status>` for each item a request became, whatever its status is.
+  for (const status of ['todo', 'doing', 'done', 'later']) assert.notEqual(en(`requests.act.${status}`), `requests.act.${status}`, status);
+});

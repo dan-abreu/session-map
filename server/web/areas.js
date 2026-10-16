@@ -6,13 +6,18 @@ import { buildingState } from './empty.js';
 import { createHomeView } from './homeview.js';
 import { createBrainView } from './brainview.js';
 import { createLogsView } from './logsview.js';
+import { createHealthArea, createIdeasArea, createLibraryArea, createRouteArea } from './foundationareas.js';
 
 // Views made here from their own ctx (ctx[id]); the page's older views (map, flow, convs...) arrive ready in ctx.own.
-// Route (B5), Health (B6 part B), Ideas (B5) and Library (B5) join this table when they arrive.
+// Route, Health, Ideas and Library (blocks B3 to B6) are hung here by foundationareas.js (fd22): the Foundation's screens.
 const MADE = {
   home: (c) => createHomeView(c),
   brain: (c) => createBrainView(c),
   logs: (c) => createLogsView(c),
+  health: (c) => createHealthArea(c),
+  route: (c) => createRouteArea(c),
+  ideas: (c) => createIdeasArea(c),
+  library: (c) => createLibraryArea(c),
 };
 
 export const sectionOf = (id) => `view-${id}`;

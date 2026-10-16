@@ -4,7 +4,7 @@ What it is, for an engineer who never saw this codebase: session-map is a week o
 
 ## Definition of done (each line is a command or a screen, not an opinion)
 
-1. **Everything built is switched on.** Every module of `server/` is reached by the server, the command line, a hook or the page — or is a script on purpose, or is parked with a reason. Proof: the reachability script of the comb lists no unwired module outside the parked ones (`fd21` decides the last block).
+1. **Everything built is switched on.** Every module of `server/` is reached by the server, the command line, a hook or the page — or is a script on purpose, or is parked with a reason. Proof: the reachability script of the comb lists no unwired module outside the parked ones (`fd25` decides the last block).
 2. **The checklist of the program speaks for itself.** "Tudo em dia?" on this repository has no warning left unexplained: each warning is fixed or accepted in the map with a reason; unverified lines say why (`not-applicable`, `no-token`), never `no-data` because a step never ran. Proof: `uptodate.json` of this project.
 3. **Nothing open without a reason.** Open tasks are only the ones in this plan; every other item is done, dropped or parked (`later`); requests with every item ticked are closed (`requestsOf().unconfirmed` is 0). Proof: the Requests tab.
 4. **The suite is green on a clean export of the commit** (not only in the working tree), and `node scripts/release-gate.mjs --publish` passes.
@@ -13,7 +13,7 @@ What it is, for an engineer who never saw this codebase: session-map is a week o
 
 ## Tasks
 
-### Task 1: the Foundation round runs every block (`fd20`)
+### Task 1: the Foundation round runs every block (`fd24`)
 Files: `server/foundation/blocks.mjs`, `refresh.mjs`, `summary.mjs`. Test: `node --test test/foundation-blocks.test.mjs`.
 Status: done 2026-10-16 — verified on the running server: `project.foundation` carries `uptodate`, `health` and `version`.
 
@@ -21,13 +21,13 @@ Status: done 2026-10-16 — verified on the running server: `project.foundation`
 Files: `server/ai/providers.mjs`, `server/ai/prices-watch.mjs`. Test: `node --test test/ai-prices-watch.test.mjs test/ai-providers.test.mjs`.
 Status: done 2026-10-16.
 
-### Task 3: one model (`fd21`)
+### Task 3: one model (`fd25`)
 The Foundation's model block (routes empty, `views.mjs`, `enrich.mjs`, `evidence-check.mjs`) and the Flow's model (`arch/flowmodel.mjs`) are two. Decide with the owner: the Flow reads the Foundation's `model.json`, or the block is dropped. Files: `server/foundation/http/model.mjs`, `server/arch/flowmodel.mjs`. Test: `node --test test/foundation-model.test.mjs test/arch-flowmodel-fixtures.test.mjs`.
 Status: waits for the owner.
 
-### Task 4: the Versions screen is mounted
-Files: `server/web/versionsview.js`, `server/web/home.js`. Test: `node --test test/web-versionsview.test.mjs test/web-home.test.mjs`.
-Status: not started.
+### Task 4: the Foundation's screens are mounted (`fd26`), Versions included
+Files: `server/web/foundationareas.js`, `server/web/areas.js`, `server/web/app.js`. Test: `node --test test/foundation-areas.test.mjs test/web-versionsview.test.mjs test/web-home.test.mjs`, then `node scripts/smoke-browser.mjs --compare` on the running page.
+Status: done 2026-10-16 — ten views on four areas; every area and sub-page draws with real data and no complaint in a real browser.
 
 ### Task 5: the Requests tab reviews (`mm27`)
 Keep / Later / Discard for each request, and "can close" computed from the items. Files: `server/web/requestsview.js`, `server/web/requests.js`. Test: `node --test test/web-requests.test.mjs`.

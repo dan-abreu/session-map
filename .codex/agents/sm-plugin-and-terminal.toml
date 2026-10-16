@@ -24,7 +24,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Needs Node 20 or newer and nothing from npm.
 - The hook never blocks the end of a chat.
 
-Proof: 10 test files cover your part (server/disciplines/ponytail/tests/hooks-windows.test.js, server/disciplines/ponytail/tests/hooks.test.js, server/disciplines/ponytail/tests/package.test.js, test/agent-usage.test.mjs, test/cli.test.mjs, test/config.test.mjs, test/demo-state.test.mjs, test/package.test.mjs, test/readme-shots.test.mjs, test/release-gate.test.mjs).
+Proof: 11 test files cover your part (server/disciplines/ponytail/tests/hooks-windows.test.js, server/disciplines/ponytail/tests/hooks.test.js, server/disciplines/ponytail/tests/package.test.js, test/agent-usage.test.mjs, test/cli.test.mjs, test/config.test.mjs, test/demo-state.test.mjs, test/package.test.mjs, test/readme-shots.test.mjs, test/release-gate.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

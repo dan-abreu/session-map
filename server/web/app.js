@@ -1059,6 +1059,18 @@ function openProjectChat() {
   renderMap();
 }
 
+// A Foundation screen asks something of the project's chat ("Research this guide", "help me with this practice"): the project's
+// chat opens on the map with the request already written, and nothing is sent until the person presses Send.
+function askInProjectChat(text) {
+  openProjectChat();
+  const input = $('#chatInput');
+  if (input && text) {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus({ preventScroll: true });
+  }
+}
+
 // The project's orchestrator (or01): its one conversation, driven again if it was closed; with none yet, an empty chat that
 // starts it with the person's first message (nothing is spent before).
 async function openOrchestrator() {
@@ -2627,6 +2639,16 @@ function wire() {
     prefs: { archived: () => showArchived, setArchived },
     range: () => activeRange(), rangeButton: () => rangePicker.button(),
   });
+  // The Foundation's screens (fd22): Route, Health, Ideas and Library share one context; each view takes what it needs.
+  const foundationCtx = {
+    h, icon, t: (key, vars) => t(key, vars), tr: () => t, project: () => project, tech: () => tech, lang: () => lang,
+    errorText, toast, dialog: $('#careDialog'),
+    careMode: () => project?.foundation?.care ?? null,
+    openFile: (file, line) => files.open(file, null, line ? { line } : undefined),
+    openChat: ({ text } = {}) => askInProjectChat(text),
+    openFindings: () => goArea('health', 'findings'),
+    onMode: () => poll(),
+  };
   areas = createAreas({
     h, icon, t: () => t,
     own: {
@@ -2650,6 +2672,7 @@ function wire() {
       toast, errorText,
     },
     brain: { h, t: (key, vars) => t(key, vars), lang: () => lang, api, toast },
+    health: foundationCtx, route: foundationCtx, ideas: foundationCtx, library: foundationCtx,
     // The Logs tab (id159): the program's diary in plain words, from the routes of sv19 and wa11.
     logs: {
       h, icon, t: (key, vars) => t(key, vars), lang: () => lang, api, errorText, fmt: { relative },

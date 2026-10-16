@@ -9,7 +9,7 @@ import { foundationSummary } from '../server/foundation/summary.mjs';
 import { fdPath } from '../server/foundation/store.mjs';
 import { copyFixtureRepo, removeFixtureRepo } from './fixtures/repo-copy.mjs';
 
-// The blocks after the reading step (fd20): the round writes every file the page and "Tudo em dia?" read, in order, and the
+// The blocks after the reading step (fd24): the round writes every file the page and "Tudo em dia?" read, in order, and the
 // summary of the page is drawn from them. Before this, the round only read: nothing ran the other blocks.
 
 const ID = 'acme-shop-8324f1';

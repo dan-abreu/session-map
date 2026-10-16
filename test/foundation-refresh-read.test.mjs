@@ -236,7 +236,7 @@ test('the home folder and a disk root are not a project to count: the step fails
   }
 });
 
-test('the default round runs the reading first, then the blocks (fd20)', async () => {
+test('the default round runs the reading first, then the blocks (fd24)', async () => {
   const smDir = mkdtempSync(join(tmpdir(), 'sm-fdreadround-'));
   try {
     const out = await refreshFoundation({ id: 'acme-lib-000001', name: 'acme-lib', root: join(tmpdir(), 'sm-nope') }, smDir);

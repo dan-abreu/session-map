@@ -263,8 +263,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-09 16:29 — "mas nesse teu tudo em dia o que voce está colocando?, tudo mesmo?"
   - What it means: an official checklist of eight groups, each line marked confirmed, warning or not verified, proving what was checked.
   - How to confirm it is done: see `fd07`.
-  - Where it went: `fd07`, `fd20`.
-  - Status: done on 2026-10-16 (`fd20`: the refresh round now runs the blocks, so the checklist is filled for every project it reads; a real round on this repository gives 5 confirmed, about 20 warnings and the rest not verified, each with its reason).
+  - Where it went: `fd07`, `fd24`.
+  - Status: done on 2026-10-16 (`fd24`: the refresh round now runs the blocks, so the checklist is filled for every project it reads; a real round on this repository gives 5 confirmed, about 20 warnings and the rest not verified, each with its reason).
 - [x] Everything a professional repository needs, and versions in sight `id64`
   - Asked: 2026-10-09 16:30 — "tudo o que um repositorio profissional precisa, eu nao sou profissional, além disso eu nao sei as versoes dos programas que estou trabalhando nao esta bem aparente, não foque em apenas em algo que eu digo, pegue a ideia por completo"; 2026-10-09 16:31 — "mas voce pesquisou para falar isso pra mim é só isso mesmo?"
   - What it means: a repository health score from a researched checklist of 91 items in 8 categories; the version of each project's code (and of what runs live, when configured) always in sight; a Projects home page with all of it.

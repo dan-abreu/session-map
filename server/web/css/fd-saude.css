@@ -1,1 +1,3 @@
 /* Styles of block B6 (saude). Only the tokens of style.css. */
+.fd-subtabs { margin: 0 0 14px; flex-wrap: wrap; }
+.fd-subbody { min-width: 0; }
