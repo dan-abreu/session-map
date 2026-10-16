@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { censusOf } from '../server/foundation/census.mjs';
 import { countRepo, dependencyDirsOf, kindOfFile } from '../server/sources/count.mjs';
 
-// A folder named "vendor" is not always a library. In a delivery app (the owner's surigo) it is where the vendors' screens live:
+// A folder named "vendor" is not always a library. In a delivery app (the owner's project B) it is where the vendors' screens live:
 // 459 files of a whole app, and the views and translations a framework lets the project override. The name alone dropped them
 // from the Foundation, the sizes and the Flow as "other people's code". Now the project's own files say which vendor folder
 // holds installed libraries (the marks of Composer and Go), and the rest is the project's.

@@ -670,7 +670,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `or66`.
   - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: new.
 - [x] **important:** The whole program works, with everything that was built switched on `id156`
-  - Asked: 2026-10-15 17:12 — "o que o surigo tem haver com isso? session-map é uma coisa nao vai mexer em coisa errada. Segundo quero fazer o programa funcionar, parece que ta um programa com varias partes, mas estão desligadas, preciso do programa funcional com tudo o que foi criado"
+  - Asked: 2026-10-15 17:12 — "o que o [outro projeto] tem haver com isso? session-map é uma coisa nao vai mexer em coisa errada. Segundo quero fazer o programa funcionar, parece que ta um programa com varias partes, mas estão desligadas, preciso do programa funcional com tudo o que foi criado"
   - Asked: 2026-10-15 17:55 — "eu criei os agentes abaixo, mas ficou bagunçado com os agentes de cima, está bem confuso isso"
   - Asked: 2026-10-15 18:18 — "eu queria repaginar essa area do cerebro, mas de acordo com o que existe realmente no sistema, para eu nao ficar confuso, que tem na tela mas não roda no sistema, e tem muita informação, quero algo clean"
   - Asked: 2026-10-15 18:30 — "livros (titulos e resumos) só tem o claude"
