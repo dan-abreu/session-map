@@ -21,9 +21,11 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Testes quebrados no working tree (14/10/2026)
 
-- [ ] **Claude:** `test/web-design.test.mjs` falha (4 asserções, "the type scale has seven steps") — os tokens de design da página mudaram no trabalho não commitado `mm54`
+- [x] **Claude:** `test/web-design.test.mjs` falha (4 asserções, "the type scale has seven steps") — os tokens de design da página mudaram no trabalho não commitado `mm54`
+  - Closed on 2026-10-15: the suite passes again (checked: the test file runs green).
 - [x] **Claude:** `test/web-point.test.mjs` falha (1 asserção, "aihelpers.js: undefined" — todo script da página precisa parsear) `mm55`
-- [ ] **Claude:** `test/web-ai-activity.test.mjs` falha (1 asserção, "the page shows what the server kept") `mm56`
+- [x] **Claude:** `test/web-ai-activity.test.mjs` falha (1 asserção, "the page shows what the server kept") `mm56`
+  - Closed on 2026-10-15: the suite passes again (checked: the test file runs green).
 
 ### Requests and the repository
 

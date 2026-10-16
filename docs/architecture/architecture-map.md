@@ -23,7 +23,8 @@ The convention that makes a project's architecture a folder of plain markdown: a
 
 ### Testes quebrados no working tree (14/10/2026)
 
-- [ ] **Claude:** `test/arch-flowmodel-cache.test.mjs` falha (2 asserções, "the first build reads the code, keeps the model in session-map storage") `am05`
+- [x] **Claude:** `test/arch-flowmodel-cache.test.mjs` falha (2 asserções, "the first build reads the code, keeps the model in session-map storage") `am05`
+  - Closed on 2026-10-15: the suite passes again (checked: the test file runs green).
 
 ### Reading
 

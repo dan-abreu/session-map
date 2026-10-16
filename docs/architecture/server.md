@@ -32,7 +32,8 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 - [x] **Claude:** `test/files.test.mjs` falha (1 asserção, "safeResolve refuses a link that leads out of the root") `sv23`
 - [x] **Claude:** `test/user-hooks.test.mjs` falha (1 asserção, "--user skips at once with SESSION_MAP_PAGE_CHAT=1") — os ganchos mudaram no trabalho não commitado `sv20`
-- [ ] **Claude:** `test/server-flowmodel.test.mjs` falha (1 asserção, "the model is read on this PC without the key") `sv21`
+- [x] **Claude:** `test/server-flowmodel.test.mjs` falha (1 asserção, "the model is read on this PC without the key") `sv21`
+  - Closed on 2026-10-15: the suite passes again (checked: the test file runs green).
 - [x] **Claude:** `test/readme-shots.test.mjs` falha (1 asserção, "without Chrome the script says so and exits 2") `sv22`
 
 ### Safety
