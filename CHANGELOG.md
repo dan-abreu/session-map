@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+The economy engine closes its last loops, the map's own bills stop leaking, and the page chat gets its professional
+selector and its tabs.
+
+- The page chat, repaginated (pc34): one clean header — the title renames on a click, the search in the conversation,
+  ⋯, minimize (docks the chat as a slim bar at the bottom) and close — and a tab bar under it (Chat · Resumo ·
+  Mudanças · Arquivos · Livro da conversa · Terminal) where each tab opens whole instead of overlapping the chat.
+- The state line above the box never goes dark: "Esperando você" with the reason, "Cortada" with Continue, "Finalizado"
+  with the summary (pc25).
+- Actions on every message: copy, edit and send again, run the last turn again (pc21).
+- The selector by Send shows every way (Agente · Planejar · Perguntar · Orquestrar · Ultracode · Igual ao meu Claude)
+  with the model and the reasoning chips always in sight (pc20); Configurações keeps the limit and the permissions.
+- The cost of the conversation as a quiet chip by Send, search and pin in the list of a point, and export in the ⋯
+  (pc22, pc23).
+- The alerts and the relations list step left of the open chat instead of covering it.
+- DeepSeek conversations now show their cost on the map and in the list, estimated at DeepSeek's own API prices (the
+  peak rates of the official page, cache reads at the cache price); a conversation whose model is not in the table
+  shows no cost rather than a wrong one. The statement stays Claude-only: each engine keeps its own books.
+- The background AI stops while the plan's weekly or 5-hour limit is hit: no more calls against a closed door, and the
+  pause clears by itself when the limit passes.
+- The map's key no longer lands in a captured log: the links print whole only to an interactive terminal, masked when
+  the output is redirected to a file.
+- Fixed: closing the server no longer trips over a chat whose driver never launched.
+- The Foundation's reading round now runs every block (model, versions, guide, health, "Tudo em dia?"), and its ten
+  screens are on the page: Health (Saúde, Em dia?, Versões, Achados, Cuidado), Route (Rota, Perfil, Boas práticas),
+  Ideas and Library (fd24, fd26). Before, the blocks were built and tested but nothing called them.
+- A repository can name the folders that hold other people's code (`vendored` in `.claude/session-map.json`): the census
+  counts them as libraries, like `node_modules`, and the health checks stop judging them as the project's own (fd27).
+- The Requests tab reviews one request at a time: Keep, Later, Discard (with a reason) and Close (when everything it
+  became is done). A decision changes only that request's status line, through the project's care mode, and can be undone (mm27).
+- An item can be parked on purpose with `**later:**`: it stays in the file with its reason and is left out of every
+  count of open work (am06).
+- Two smoke tests read the running program, so a change names what it took away: `scripts/smoke.mjs` (the page and its 37
+  reads) and `scripts/smoke-browser.mjs` (every area, sub-page and the review, in a real browser) (mm62).
+- The idle server costs about half the CPU (the owners of a month of changes, the saves and the skills are no longer worked
+  out again at every look), and a conversation of hundreds of megabytes opens on its newest part instead of an error (sv19, pc38).
+- `node scripts/measure-project.mjs <folder>` prints what the Foundation reads of a real project, read only; `node
+  scripts/cache-share.mjs` prints how much of an agent's first turn comes from the prompt cache (fd29, sv17).
+- The repository carries its own health: SUPPORT, CODEOWNERS, an `.editorconfig`, `.env.example` with
+  `docs/configuration.md`, CodeQL, pinned actions with a read-only token, five decision records (`docs/adr/`) and a glossary (fd28).
+- Fixed: the OpenAI price page answers again, and a page that fails is not asked at every look.
+
 ## 0.3.0
 
 Claude now conducts a whole team: the other AIs work under it, a chat can finish a request on its own, and the

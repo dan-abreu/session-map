@@ -27,7 +27,7 @@ The live map of the project with each AI conversation attached to the part it is
 
 ## Capabilities and Constraints
 
-- Map of the project (layers, parts, groups, items, progress, files), conversation list, Now strip, page chat with Claude (Autonomous, Automatic and Manual ways), the orchestrator per project, alerts, Home, Foundation reports, the Flow drawing, outside AIs (the arsenal).
+- Map of the project (layers, parts, groups, items, progress, files), conversation list, Now strip, page chat with Claude (the brain's Conversa: weighed per message, routed by the Cérebro), the orchestrator per project, the Cérebro tab, alerts, Home, Foundation reports, the Flow drawing, outside AIs (the arsenal).
 - No runtime dependencies and nothing to install beyond Node; no build step for the page.
 - English and Brazilian Portuguese; plain words by default, technical words behind a switch.
 - Works in light and dark themes.
