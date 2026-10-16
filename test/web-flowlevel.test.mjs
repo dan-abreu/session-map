@@ -4,7 +4,7 @@ import { parseArch } from '../server/arch/parse.mjs';
 import { planImport } from '../server/arch/flow.mjs';
 import { assembleModel } from '../server/arch/flowmodel.mjs';
 import { parseFlow } from '../server/web/flow.js';
-import { HUB_MIN, VIEW_MARKER, edgeLabel, exportTextFor, factRows, innerNotes, isViewText, layerName, layerOrder, level1Flow, level2Flow, nodeName, originWord, ownName, pageLang, textLang } from '../server/web/flowlevel.js';
+import { HUB_MIN, VIEW_MARKER, edgeLabel, exportTextFor, factRows, innerNotes, isViewText, layerName, layerOrder, level1Flow, level2Flow, neighbourhood, nodeName, originWord, ownName, pageLang, textLang } from '../server/web/flowlevel.js';
 import { translator } from '../server/web/i18n.js';
 
 const DIR = 'docs/architecture';
@@ -374,4 +374,19 @@ test('the language of a short sentence, by its little words', () => {
   assert.equal(textLang(''), null);
   assert.equal(ownName({ id: 'part:x', name: 'Mind map page' }, pt), '“Mind map page”');
   assert.equal(ownName({ id: 'actor:browser', nameKey: 'flow.l1.actor.browser', name: 'x' }, pt), pt('flow.l1.actor.browser'));
+});
+
+test('resting on a box lights its own arrows and the boxes at their other ends, and nothing else', () => {
+  const edges = [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }, { from: 'D', to: 'A' }, { from: 'C', to: 'D' }];
+  const on = neighbourhood(edges, 'A');
+  assert.deepEqual([...on.edges].sort(), [0, 2], 'the arrows that start or end at A');
+  assert.deepEqual([...on.nodes].sort(), ['A', 'B', 'D'], 'A and the boxes they reach, never C');
+  assert.deepEqual([...neighbourhood(edges, 'C').edges].sort(), [1, 3]);
+});
+
+test('a box with no arrow lights only itself, and a box that is not there lights its name alone', () => {
+  const alone = neighbourhood([{ from: 'A', to: 'B' }], 'Z');
+  assert.equal(alone.edges.size, 0);
+  assert.deepEqual([...alone.nodes], ['Z']);
+  assert.equal(neighbourhood([], 'A').edges.size, 0);
 });

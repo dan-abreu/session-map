@@ -1932,6 +1932,9 @@ body.is-resizing .sheet { animation: none; }
 .fl-grid path.fl-on-path { stroke: var(--ink); stroke-width: 2.4px; }
 .fl-grid g.edgeLabel.fl-on-path .fl-label-bg { stroke: color-mix(in srgb, var(--ink) 45%, transparent); stroke-width: 1px; }
 .fl-grid g.edgeLabel.fl-on-path .fl-label-text { fill: var(--ink); font-weight: 650; }
+.fl-grid.fl-hovering .fl-dim { opacity: 0.3; }
+.fl-grid.fl-hovering path.fl-dim { opacity: 0.08; }
+.fl-grid.fl-hovering g.edgeLabel.fl-dim .fl-label-text { opacity: 0.18; }
 .fl-grid.fl-stepping path.fl-on-path:not(.fl-step-on) { opacity: 0.35; }
 .fl-grid.fl-stepping g.edgeLabel.fl-on-path:not(.fl-step-on) .fl-label-text { opacity: 0.45; }
 .fl-grid path.fl-step-on { stroke: var(--focus); stroke-width: 3.2px; }

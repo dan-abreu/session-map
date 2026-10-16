@@ -286,6 +286,21 @@ export function level1Flow(model, { journey = null, showHidden = false, tt = eng
   return { flow, meta, text: `${VIEW_MARKER}\n${printFlow(flow)}`, drawText: `${VIEW_MARKER}\n${printFlow(drawFlow)}`, scene: sceneOf(flow, drawEdges, meta, classOf) };
 }
 
+// What lights up when the pointer rests on one box of the general view: the arrows that start or end at it and the boxes at
+// their other ends (the same shape as a journey's meta, so the page paints it the same way). A tangle of arrows can then
+// be read one box at a time. edges: flow.edges (from and to are draw ids); id: the box's draw id.
+export function neighbourhood(edges, id) {
+  const nodes = new Set([id]);
+  const lit = new Set();
+  edges.forEach((e, i) => {
+    if (e.from !== id && e.to !== id) return;
+    lit.add(i);
+    nodes.add(e.from);
+    nodes.add(e.to);
+  });
+  return { nodes, edges: lit };
+}
+
 // What the page lays out itself (flowgrid.js): the bands top to bottom (who uses it; each layer of parts in story
 // order; boxes with no layer; this computer and the internet side by side at the bottom) and the arrows as laid out.
 function sceneOf(flow, drawEdges, meta, classOf) {

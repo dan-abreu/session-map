@@ -6,7 +6,7 @@ import { createChat } from './chat.js';
 import { addBox, addLayer, connect, matchParts, moveToLayer, parseFlow, printFlow, removeNode, rename } from './flow.js';
 import { drawioOf, exportFileName, isAutoDraft, markdownOf, plantumlDeploymentOf, plantumlOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
 import { drawGrid, gridLayout, pageMeasure } from './flowgrid.js';
-import { boxTitle, exportTextFor, factRows, innerNotes, journeyChoices, journeyFlow, journeyName, journeySteps, layerName, legendKeys, legendWords, level1Flow, level2Flow, levelNote, nodeName } from './flowlevel.js';
+import { boxTitle, exportTextFor, factRows, innerNotes, journeyChoices, journeyFlow, journeyName, journeySteps, layerName, legendKeys, legendWords, level1Flow, level2Flow, levelNote, neighbourhood, nodeName } from './flowlevel.js';
 import { DRAG_THRESHOLD, clampZoom, dragScroll, dragStarted, anchoredScroll, svgLeftIn, wheelFactor } from './flowpan.js';
 import { createResizer } from './resize.js';
 import { nodeById } from './tree.js';
@@ -551,6 +551,14 @@ export function createFlowView(ctx) {
     return true;
   }
   canvas.addEventListener('click', (e) => { if (e.detail < 2) actOn(e.target); });
+  canvas.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch') return;
+    const box = e.target.closest?.('g.node');
+    if (box) focusBox(box.dataset.id); else unfocusBox();
+  });
+  canvas.addEventListener('pointerleave', unfocusBox);
+  canvas.addEventListener('focusin', (e) => { const box = e.target.closest?.('g.node'); if (box) focusBox(box.dataset.id); });
+  canvas.addEventListener('focusout', unfocusBox);
   canvas.addEventListener('dblclick', (e) => {
     const partId = insideOf(e.target.closest?.('g.node[data-part-id]'));
     if (!partId) return;
@@ -837,8 +845,13 @@ export function createFlowView(ctx) {
   // the mermaid fallback the arrows carry no index, so nothing is dimmed there.
   function markJourney(svg, meta) {
     const on = meta?.journey ?? null;
-    for (const el of svg.querySelectorAll('.fl-dim, .fl-on-path, .fl-step-on')) el.classList.remove('fl-dim', 'fl-on-path', 'fl-step-on');
+    svg.classList.remove('fl-hovering');
+    paintPath(svg, on);
     svg.classList.toggle('fl-has-journey', Boolean(on));
+  }
+
+  function paintPath(svg, on) {
+    for (const el of svg.querySelectorAll('.fl-dim, .fl-on-path, .fl-step-on')) el.classList.remove('fl-dim', 'fl-on-path', 'fl-step-on');
     if (!on || !svg.querySelector('path[data-edge]')) return;
     for (const g of svg.querySelectorAll('g.node')) g.classList.add(on.nodes.has(g.dataset.flowNode ?? g.dataset.id) ? 'fl-on-path' : 'fl-dim');
     for (const path of svg.querySelectorAll('path[data-edge]')) path.classList.add(on.edges.has(Number(path.dataset.edge)) ? 'fl-on-path' : 'fl-dim');
@@ -846,6 +859,20 @@ export function createFlowView(ctx) {
       const lit = g.dataset.edges.split(' ').some((i) => on.edges.has(Number(i)));
       g.classList.add(lit ? 'fl-on-path' : 'fl-dim');
     }
+  }
+
+  // Resting on a box of the general view (or tabbing to it) lights its own arrows and the boxes they reach and sets the rest
+  // back, the way a journey does, so the tangle can be read one box at a time; leaving restores the drawing. Not while a
+  // journey is on it, nor inside a part, nor on the mermaid fallback (its arrows carry no index).
+  function focusBox(id) {
+    const svg = canvas.querySelector('svg');
+    if (!svg || !id || !l1 || inner || drawnLevel !== '1' || lastMeta?.journey || !svg.querySelector('path[data-edge]')) return;
+    paintPath(svg, neighbourhood(l1.flow.edges, id));
+    svg.classList.add('fl-hovering');
+  }
+  function unfocusBox() {
+    const svg = canvas.querySelector('svg');
+    if (svg?.classList.contains('fl-hovering')) markJourney(svg, lastMeta);
   }
 
   // One step pointed at in the list: its arrow, its label and its two boxes light up on the drawing.

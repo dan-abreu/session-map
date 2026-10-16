@@ -97,6 +97,9 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
   - A small task is only an item in the architecture and shows in the Flow as a signal, with no box.
   - Invariant tests: no part without a box, no box without a part (except actors and outside services). Also see `pt04` and `wa10`.
 
+- [x] **The overview read one box at a time** `fl19`
+  - From `id160`. Measured on 2026-10-16 on this project: 31 labelled arrows crossing the bands of the general view, unreadable as a whole. Resting the pointer on a box (or tabbing to it) now lights its own arrows, their words and the boxes at their other ends, and sets the rest well back; leaving restores the drawing. It uses the journey's own painting (`neighbourhood` in `server/web/flowlevel.js`, `focusBox` in `server/web/flowview.js`), never while a journey is on the drawing, inside a part, on a touch screen or on the mermaid fallback. Proof: `test/web-flowlevel.test.mjs` (2), and seen live on this project: the Server box lit 9 arrows and 10 boxes and set 26 arrows back.
+
 ### Any format
 
 - [x] **Export in more formats** `fl13`

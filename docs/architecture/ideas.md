@@ -699,9 +699,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `mm61`.
   - Status: done on 2026-10-16 (`mm61`: the tab reads the program's log and the projects' records; checked on a separate copy of the program with the real log, on a computer and on a phone width).
 - [x] The Flow's "The program" level drawn as a real picture of the page, not a pile of words `id160`
-  - Asked: 2026-10-16 — "quero melhorar fluxo > o programa ta mal feito"
+  - Asked: 2026-10-16 — "quero melhorar fluxo > o programa ta mal feito"; then — "melhora" (after the list of what was still weak: the buttons only as text, no real floor plan, the overview untouched)
   - What it means: measured on 2026-10-16 with the running program: the level was a text tree of 14 areas where 18 labels were not words at all ("span", "div", "script", "
 ", ".") and 72 parts had no label; the Fluxo area listed "sm.flowLevel", "§§§" and error messages as if they were screens, the Flow's own level buttons were missing (they are written in index.html, which the census never read), the Logs area was empty, the lede said "13 areas" for 14, and opened without the key the level said "Lendo o programa…" for ever (the route answered 401 while every other read of the page is open on this PC). It had no test.
   - How to confirm it is done: the level draws one room per area (with a room for what every area shares), each with its sections, buttons as chips and texts one click away, a search that finds any word, the real counts on top and the pieces with no words of their own counted but never named; it opens with no key; no label of it is junk and every one is a real text of the page.
-  - Where it went: `mm65`.
-  - Status: done on 2026-10-16 (`mm65`).
+  - Where it went: `mm65` (the words and the route), `mm66` (the floor plan), `fl19` (the overview read one box at a time).
+  - Status: done on 2026-10-16 (`mm65`, `mm66`, `fl19`).

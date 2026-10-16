@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { AREA_FILES, SHARED, censusOfMarkup, censusOfText, countsOf, uiTree } from '../server/census.mjs';
 import { createCensusRoutes } from '../server/censusroute.mjs';
 import { roomsOf } from '../server/web/programview.js';
+import { blockWidth, planOf, spanOf } from '../server/web/programplan.js';
 import { LANGS, translator } from '../server/web/i18n.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -167,4 +168,51 @@ test('the census is for this PC only: another host, the demo and anything but a 
   assert.equal((await ask('/api/census/ui', { demo: true })).status, 403);
   assert.equal((await ask('/api/census/ui', { method: 'POST' })).status, 404);
   assert.equal((await ask('/api/census/other')).status, 404);
+});
+
+// ---- the floor plan (id160, mm66) ----
+
+test('a room takes more of the plan the more boxes it holds', () => {
+  assert.deepEqual([0, 1, 3, 4, 8, 9, 16, 17, 46].map(spanOf), [4, 4, 4, 6, 6, 8, 8, 12, 12]);
+});
+
+test('a block is as wide as the word on it, never thinner than a click or wider than a button', () => {
+  assert.equal(blockWidth(''), 22);
+  assert.equal(blockWidth('Go'), 22);
+  assert.ok(blockWidth('Mostrar todas as conversas de novo') > blockWidth('Salvar'));
+  assert.equal(blockWidth('x'.repeat(300)), 92);
+  assert.equal(blockWidth(undefined), 22);
+});
+
+const ROOMS = [
+  { id: 'a', name: 'Alpha', files: [], counts: { sections: 1, unnamed: 20 }, sections: [{ title: 'Open the door', file: 'a.js', parts: [{ type: 'button', text: 'Go' }, { type: 'summary', text: 'Close the window' }], texts: Array.from({ length: 9 }, (_, i) => ({ type: 'text', text: `line ${i}` })), messages: [{ type: 'message', text: 'Nothing here' }] }] },
+  { id: 'b', name: 'Beta', files: [], counts: { sections: 0 }, sections: [] },
+];
+
+test('the plan draws each room with its boxes: a block per button, up to four lines for the texts, a dashed bar for the messages', () => {
+  const [a, b] = planOf(ROOMS);
+  assert.equal(a.span, 4);
+  assert.equal(a.panels.length, 1);
+  assert.deepEqual(a.panels[0].blocks.map((x) => [x.type, x.text]), [['button', 'Go'], ['summary', 'Close the window']]);
+  assert.equal(a.panels[0].lines, 4, 'nine texts draw four lines');
+  assert.equal(a.panels[0].texts, 9, 'and the count stays whole');
+  assert.equal(a.panels[0].messages, 1);
+  assert.equal(b.building, true, 'a room with nothing yet is still on the plan');
+  assert.equal(a.building, false);
+});
+
+test('pieces with no words of their own are drawn as hatched blocks, at most twelve, with the whole count kept', () => {
+  const [a, b] = planOf(ROOMS);
+  assert.equal(a.unnamed, 12);
+  assert.equal(a.unnamedAll, 20);
+  assert.equal(b.unnamed, 0);
+});
+
+test('what the person looks for lights up its block and its text, and nothing lights up with no search', () => {
+  const none = planOf(ROOMS)[0].panels[0];
+  assert.ok(none.blocks.every((x) => !x.hit));
+  assert.equal(none.hitText, false);
+  const found = planOf(ROOMS, ' WINDOW ')[0].panels[0];
+  assert.deepEqual(found.blocks.map((x) => x.hit), [false, true]);
+  assert.equal(planOf(ROOMS, 'line 3')[0].panels[0].hitText, true);
 });
