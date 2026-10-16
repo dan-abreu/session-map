@@ -2650,6 +2650,11 @@ function wire() {
       toast, errorText,
     },
     brain: { h, t: (key, vars) => t(key, vars), lang: () => lang, api, toast },
+    // The Logs tab (id159): the program's diary in plain words, from the routes of sv19 and wa11.
+    logs: {
+      h, icon, t: (key, vars) => t(key, vars), lang: () => lang, api, errorText, fmt: { relative },
+      projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name })), project: () => project,
+    },
   });
   navbar.setReady(areas.ready());
   $('#view-home').addEventListener('click', (e) => { homeRow = e.target.closest?.('[data-id]')?.dataset.id ?? null; }, true);

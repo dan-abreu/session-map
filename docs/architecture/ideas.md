@@ -692,3 +692,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `or68`.
   - Result of the first A/B (2026-10-15, $2.04): the card helps on all four AIs (+0.09 to +0.17 of the localization score); details in `or68`.
   - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress.
+- [x] A "Logs" tab in the map that a layperson can read, in plain language `id159`
+  - Asked: 2026-10-16 — "eu sou leigo então meu entendimento seria fazer logs em outra aba, mas voce pode ser setico e não querer fazer você tem essa autoridade, por eu ser leigo preciso realmente de um direcinomento profissional"
+  - What it means: Measured on 2026-10-16: the program's log had 95 lines in two days, 81 of them routine (listening, restarting, action) and 14 warnings of only two kinds (OpenAI price lookup http-403 ×10, DeepSeek answer cut ×4). A tab that shows the raw lines would bury those two problems. So the tab shows problems first, grouped and said in plain words ("falhou 10 vezes, a última há 3 h"), then a quiet list of what the program did, per project, and the raw lines only on a click for whoever wants them.
+  - How to confirm it is done: the tab opens; the two recurring warnings above show as two grouped rows in plain Portuguese with count and last time; picking a project shows its record (`logs/projects/<id>.jsonl`); the raw JSON line opens on a click; no secret appears; the page tests pass.
+  - Where it went: `mm61`.
+  - Status: done on 2026-10-16 (`mm61`: the tab reads the program's log and the projects' records; checked on a separate copy of the program with the real log, on a computer and on a phone width).

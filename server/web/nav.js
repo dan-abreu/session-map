@@ -17,6 +17,7 @@ export const AREAS = [
   { id: 'brain', scope: 'project', icon: 'spark', bar: false },
   { id: 'library', scope: 'global', icon: 'book', bar: false },
   { id: 'discover', scope: 'global', icon: 'puzzle', bar: false },
+  { id: 'logs', scope: 'global', icon: 'terminal', bar: false },
 ];
 
 // The phone's bottom bar: the areas of the top bar and the "More" sheet.

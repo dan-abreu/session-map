@@ -1,0 +1,70 @@
+/* Styles of the Logs tab (id159, mm61). Only the tokens of style.css.
+   Problems first: one hairline row per group that opens into its reason and its technical lines. The routine and the
+   project's record are quieter lists under it. No hover is needed: every row is a native <details>. */
+.lg-view { max-width: 56rem; }
+
+.lg-since { margin: 0 0 var(--sp-5); font-size: var(--fs-sm); color: var(--ink-2); }
+.lg-hint { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--ink-2); max-width: 68ch; }
+
+.lg-sec { margin: 0 0 var(--sp-8); }
+.lg-sec h3 { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.01em; }
+.lg-sec-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 var(--sp-2); border-radius: var(--r-pill); background: var(--bg-3); color: var(--ink-2); font-size: var(--fs-xs); font-weight: 650; }
+.lg-sec .dv-field { margin: 0 0 var(--sp-3); }
+
+.lg-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; border-top: 1px solid var(--line); }
+.lg-group, .lg-line { border-bottom: 1px solid var(--line); }
+
+.lg-fold > summary {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-3); padding: var(--sp-3) var(--sp-1);
+  list-style: none; cursor: pointer; border-radius: var(--r-sm); font-size: var(--fs-md);
+}
+.lg-fold > summary::-webkit-details-marker { display: none; }
+.lg-fold > summary::after {
+  content: ""; flex: none; align-self: center; width: 6px; height: 6px; margin-left: auto;
+  border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: rotate(45deg) translateY(-2px);
+}
+.lg-fold[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.lg-fold > summary:hover { background: var(--bg-2); }
+.lg-fold > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.lg-level { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 2px var(--sp-2); border-radius: var(--r-pill); font-size: var(--fs-xs); font-weight: 650; }
+.lg-level.is-warn { background: var(--waiting-fill); color: var(--waiting-ink); }
+.lg-level.is-error { background: var(--clash-fill); color: var(--clash-ink); }
+
+.lg-title { flex: 1 1 18rem; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.lg-count { font-weight: 650; }
+.lg-when { font-size: var(--fs-sm); color: var(--ink-2); }
+
+.lg-body { padding: 0 var(--sp-1) var(--sp-4); }
+.lg-why { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
+.lg-state { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); font-weight: 650; }
+.lg-state.is-now { color: var(--waiting-ink); }
+.lg-state.is-quiet { color: var(--ink-2); font-weight: 400; }
+.lg-meta { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--ink-2); }
+.lg-rawhead { margin: 0 0 var(--sp-1); font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.lg-raw {
+  margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3); overflow-x: auto; border-radius: var(--r-md);
+  background: var(--bg-2); border: 1px solid var(--line); color: var(--ink); font-size: var(--fs-xs); line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.lg-routine { margin: 0 0 var(--sp-8); border-top: 1px solid var(--line); }
+.lg-routine > summary {
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-1); list-style: none; cursor: pointer;
+  border-radius: var(--r-sm); font-size: var(--fs-lg); font-weight: 650;
+}
+.lg-routine > summary::-webkit-details-marker { display: none; }
+.lg-routine > summary::after {
+  content: ""; margin-left: auto; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2);
+  transform: rotate(45deg) translateY(-2px);
+}
+.lg-routine[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.lg-routine > summary:hover { background: var(--bg-2); }
+.lg-routine > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.lg-fold-line > summary { padding: var(--sp-2) var(--sp-1); font-size: var(--fs-sm); }
+.lg-time { flex: none; min-width: 9rem; color: var(--ink-2); }
+.lg-name { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.lg-said { flex: 1 1 100%; color: var(--ink-2); overflow-wrap: anywhere; }
+
+.lg-more-btn { margin: 0 0 var(--sp-3); }

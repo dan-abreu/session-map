@@ -139,6 +139,9 @@ export const api = {
   aiUsage: () => call('GET', '/api/ai/usage'),
   setAiKey: (provider, key) => call('POST', '/api/settings/ai-helpers', { provider, key }),
   setAiHelper: (body) => call('POST', '/api/settings/ai-helpers', body),
+  // The program's own diary (sv19) and a project's record (wa11): newest lines first, behind the key.
+  logs: (query) => call('GET', `/api/logs?${new URLSearchParams(Object.entries(query ?? {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
+  projectLog: (projectId, query) => call('GET', `/api/logs/projects/${seg(projectId)}?${new URLSearchParams(Object.entries(query ?? {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
   brain: () => call('GET', '/api/ai/brain'),
   setBrain: (body) => call('PATCH', '/api/ai/brain', body),
   brainConfig: (body) => call('POST', '/api/ai/brain/configure', body),

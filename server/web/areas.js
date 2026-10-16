@@ -5,12 +5,14 @@ import { AREAS } from './nav.js';
 import { buildingState } from './empty.js';
 import { createHomeView } from './homeview.js';
 import { createBrainView } from './brainview.js';
+import { createLogsView } from './logsview.js';
 
 // Views made here from their own ctx (ctx[id]); the page's older views (map, flow, convs...) arrive ready in ctx.own.
 // Route (B5), Health (B6 part B), Ideas (B5) and Library (B5) join this table when they arrive.
 const MADE = {
   home: (c) => createHomeView(c),
   brain: (c) => createBrainView(c),
+  logs: (c) => createLogsView(c),
 };
 
 export const sectionOf = (id) => `view-${id}`;
