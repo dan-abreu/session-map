@@ -32,8 +32,11 @@ test('dependabot watches the GitHub actions, and the workflow uses current actio
   assert.match(read('.github/dependabot.yml'), /package-ecosystem: "?github-actions"?/);
   const ci = read('.github/workflows/test.yml');
   assert.doesNotMatch(ci, /@v[1-4]\b/, 'actions on the Node 20 runtime are deprecated');
-  assert.match(ci, /actions\/checkout@v5/);
-  assert.match(ci, /actions\/setup-node@v5/);
+  // An action is pinned to the commit of a release, with the tag in a comment: a moved tag cannot change what runs.
+  for (const action of ['actions/checkout', 'actions/setup-node']) {
+    assert.match(ci, new RegExp(`${action}@(v5\\b|[0-9a-f]{40} # v5\\b)`), `${action} is at version 5, by tag or by its commit with the tag in a comment`);
+  }
+  assert.match(ci, /permissions:\n\s+contents: read/, 'the token of the suite can only read');
 });
 
 test('package.json carries the repository metadata', () => {

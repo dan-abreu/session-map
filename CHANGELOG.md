@@ -36,7 +36,7 @@ selector and its tabs.
 - Two smoke tests read the running program, so a change names what it took away: `scripts/smoke.mjs` (the page and its 37
   reads) and `scripts/smoke-browser.mjs` (every area, sub-page and the review, in a real browser) (mm62).
 - The idle server costs about half the CPU (the owners of a month of changes, the saves and the skills are no longer worked
-  out again at every look), and a conversation of hundreds of megabytes opens on its newest part instead of an error (sv19, pc38).
+  out again at every look), and a conversation of hundreds of megabytes opens on its newest part instead of an error (sv25, pc38).
 - `node scripts/measure-project.mjs <folder>` prints what the Foundation reads of a real project, read only; `node
   scripts/cache-share.mjs` prints how much of an agent's first turn comes from the prompt cache (fd29, sv17).
 - The repository carries its own health: SUPPORT, CODEOWNERS, an `.editorconfig`, `.env.example` with
