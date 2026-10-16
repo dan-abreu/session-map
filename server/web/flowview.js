@@ -6,10 +6,11 @@ import { createChat } from './chat.js';
 import { addBox, addLayer, connect, matchParts, moveToLayer, parseFlow, printFlow, removeNode, rename } from './flow.js';
 import { drawioOf, exportFileName, isAutoDraft, markdownOf, plantumlDeploymentOf, plantumlOf, saveBlob, standaloneSvg, svgToPng } from './flowexport.js';
 import { drawGrid, gridLayout, pageMeasure } from './flowgrid.js';
-import { boxTitle, exportTextFor, factRows, innerNotes, journeyChoices, journeyFlow, journeyName, journeySteps, legendKeys, legendWords, level1Flow, level2Flow, levelNote, nodeName } from './flowlevel.js';
+import { boxTitle, exportTextFor, factRows, innerNotes, journeyChoices, journeyFlow, journeyName, journeySteps, layerName, legendKeys, legendWords, level1Flow, level2Flow, levelNote, nodeName } from './flowlevel.js';
 import { DRAG_THRESHOLD, clampZoom, dragScroll, dragStarted, anchoredScroll, svgLeftIn, wheelFactor } from './flowpan.js';
 import { createResizer } from './resize.js';
 import { nodeById } from './tree.js';
+import { createProgramView } from './programview.js';
 
 const HISTORY_MAX = 100;
 const SAVE_MS = 500;
@@ -22,9 +23,9 @@ const MODEL_WAIT_MS = 1500;
 const MODEL_WAIT_MAX = 20;
 
 // The tab opens on the general view; the person's last choice is kept on this browser.
-export const levelOf = (saved) => (saved === 'parts' || saved === 'journeys' ? saved : '1');
-// The levels drawn from the single model (the general view and the journeys); the Parts level draws the README.
-export const usesModel = (level) => level === '1' || level === 'journeys';
+export const levelOf = (saved) => (['parts', 'journeys', 'functions', 'program'].includes(saved) ? saved : '1');
+// The levels drawn from the single model (the general view, the journeys and the functions census); the Parts level draws the README.
+export const usesModel = (level) => level === '1' || level === 'journeys' || level === 'functions';
 
 // ---- the view inside a part (flow.md fl09) ----
 
@@ -32,7 +33,7 @@ export const usesModel = (level) => level === '1' || level === 'journeys';
 export function crumbsOf(inner, partName, tt) {
   if (!inner) return [];
   const from = levelOf(inner.from);
-  const key = { parts: 'flow.level.parts', journeys: 'flow.level.journeys' }[from] ?? 'flow.level.one';
+  const key = { parts: 'flow.level.parts', journeys: 'flow.level.journeys', functions: 'flow.level.functions' }[from] ?? 'flow.level.one';
   return [{ label: tt(key), level: from }, { label: partName || inner.partId, level: null }];
 }
 
@@ -272,8 +273,8 @@ function safeSet(key, value) {
 }
 
 // ctx: h, t (translator getter), toast, errorText, relative, project(), tree(), live() (the lit node ids), phone
-// (matchMedia), confirm, onOpenPart(partId), onApplied() (files were written), openSettings(binding, opener) and
-// onRunChange() (Configurações, pc19), waitingOf(sessionId) (the pill's rule, for the chat's dot).
+// (matchMedia), confirm, onOpenPart(partId), onApplied() (files were written), openSettings(binding, opener),
+// waitingOf(sessionId) (the pill's rule, for the chat's dot).
 export function createFlowView(ctx) {
   const { h, toast, errorText } = ctx;
   const t = () => ctx.t();
@@ -287,6 +288,9 @@ export function createFlowView(ctx) {
   const savedEl = $('#flowSaved');
   const dialog = document.getElementById('flowDialog');
   const chatToggle = $('#flowChatToggle');
+  // The "The program" level (id130, mm57): the interface census the engine serves, drawn in this tab.
+  const programView = createProgramView({ h, t, api });
+  function renderProgram() { programView.render($('#flowProgram')); }
 
   let mode = 'view';
   let visible = false;
@@ -315,6 +319,11 @@ export function createFlowView(ctx) {
   // journey picked then is kept by its id until the model settles).
   let route = '';
   let routeFor = null;
+  // The Functions level's own pickers (fl17): which owner to show, whether the whole census (docs and tests too) joins
+  // the functions, and the words typed in the search.
+  let fnOwner = '';
+  let fnQuery = '';
+  let fnAll = false;
   let modelBuilding = false;
   let showHidden = false;
   let l1 = null;
@@ -341,7 +350,7 @@ export function createFlowView(ctx) {
 
   const chat = createChat({
     root: $('#flowChat'), h, t, toast, errorText, relative: ctx.relative, money: ctx.money, savedKey: null,
-    openSettings: ctx.openSettings, onRunChange: ctx.onRunChange, safety: 'flow.chatSafety', waitingOf: ctx.waitingOf,
+    openSettings: ctx.openSettings, safety: 'flow.chatSafety', waitingOf: ctx.waitingOf,
     lang: ctx.lang, icon: ctx.icon, commands: ctx.commands,
     onDraft: (text) => {
       if (!hist || text === hist.now) return;
@@ -375,9 +384,11 @@ export function createFlowView(ctx) {
     root.dataset.mode = mode;
     syncPan();
     if (mode !== 'view' || inner || level !== 'journeys' || arch.source === 'none') $('#flowJourneys').hidden = true;
+    $('#flowFunctions').hidden = !(mode === 'view' && level === 'functions' && !inner && arch.source !== 'none');
+    $('#flowProgram').hidden = !(mode === 'view' && level === 'program' && !inner);
     $('#flowTools').hidden = mode !== 'workshop';
     const none = arch.source === 'none';
-    const nothing = mode === 'view' && (none || !currentText());
+    const nothing = mode === 'view' && (none || !currentText() || level === 'functions');
     $('#flowCopy').disabled = nothing;
     $('#flowExportBtn').setAttribute('aria-disabled', String(nothing));
     if (nothing) $('#flowExport').open = false;
@@ -469,6 +480,15 @@ export function createFlowView(ctx) {
         if (info.quote) words.push(tt('flow.l2.quote', { text: info.quote }));
         if (info.changedFiles) words.push(t().count('flow.l2.changed', info.changedFiles));
         if (info.unsaved) words.push(t().count('flow.l2.unsaved', info.unsaved));
+        // Who is responsible (fl16/fl17): the chip on the box, the words in the hover.
+        if (info.owner) {
+          words.push(tt('flow.owner.title', { owner: tt(`flow.owner.${info.owner}`), reasons: (info.ownerReasons ?? []).join(', ') }));
+          // The chip sits top-left: the flags (unsaved) keep the top-right corner.
+          const box = g.getBBox();
+          const chip = svgEl('text', { class: `fl-owner fl-owner-${info.owner}`, x: box.x + 3, y: box.y + 3 });
+          chip.textContent = tt(`flow.owner.short.${info.owner}`);
+          g.append(chip);
+        }
         const title = svgEl('title', {});
         title.textContent = words.join(' · ');
         g.prepend(title);
@@ -549,7 +569,7 @@ export function createFlowView(ctx) {
 
   function renderLegend() {
     const tt = t();
-    const keys = mode === 'workshop' ? [] : legendKeys(inner ? '2' : drawnLevel === 'journeys' && level === 'journeys' ? 'journeys' : level === '1' && flowModel && !failedNote ? '1' : 'parts', { journey: level === '1' && Boolean(journey) });
+    const keys = mode === 'workshop' ? [] : legendKeys(inner ? '2' : drawnLevel === 'journeys' && level === 'journeys' ? 'journeys' : level === '1' && flowModel && !failedNote ? '1' : level === 'functions' ? 'functions' : 'parts', { journey: level === '1' && Boolean(journey) });
     legend.replaceChildren(...keys.map((k) => h('li', { class: `lg lg-${k}` }, h('span', { class: 'lg-mark', 'aria-hidden': 'true' }), legendWords(k, tt))));
     legend.hidden = !keys.length;
     // The legend floats over the bottom of the area: the drawing keeps that much room below it, so its last band can
@@ -902,6 +922,93 @@ export function createFlowView(ctx) {
         h('h4', { class: 'fl-j-subtitle' }, tt('flow.j.steps', { name: journeyName(flowModel, j, tt) })), ol, toMap));
   }
 
+  // The Functions level (fl16/fl17): every function of the program, grouped by the part that owns it, with what it is
+  // for (its own opening comment), where it comes from and who is responsible — all mechanical facts of the census.
+  function renderFunctions() {
+    const tt = t();
+    canvas.hidden = true;
+    $('#flowZoom').hidden = true;
+    const panel = $('#flowFunctions');
+    panel.hidden = false;
+    const files = flowModel?.files ?? [];
+    // A "function" is code the program runs; docs, tests and assets are listed only when the person asks for everything,
+    // and never count as orphans.
+    const isFn = (f) => f.role === 'code' || f.role === 'hooks';
+    const visible = fnAll ? files : files.filter(isFn);
+    const counts = { ai: 0, bot: 0, script: 0, orphan: 0 };
+    for (const f of visible) {
+      if (f.owner === 'ai' || f.owner === 'bot' || f.owner === 'script') counts[f.owner]++;
+      if (!(f.partIds ?? []).length && isFn(f)) counts.orphan++;
+    }
+    const layers = new Map((flowModel?.layers ?? []).map((l) => [l.id, l]));
+    const head = h('header', { class: 'fl-j-head' },
+      h('h3', { id: 'flowFunctionsTitle', class: 'fl-j-title' }, tt('flow.fn.list')),
+      h('p', { class: 'fl-j-lede' }, tt('flow.fn.lede')),
+      modelBuilding ? h('p', { class: 'fl-j-note', role: 'status' }, tt('flow.j.building')) : '');
+    const chip = (value, key, n, on, action) => h('button', {
+      type: 'button', class: `fl-fn-chip${on ? ' is-on' : ''}`, 'aria-pressed': String(on), onclick: action,
+    }, tt(key), h('span', { class: 'fl-fn-count num', 'aria-hidden': 'true' }, String(n)));
+    const chips = h('div', { class: 'fl-fn-chips', role: 'group', 'data-i18n-aria': 'flow.fn.owners' },
+      chip('', 'flow.fn.all', visible.length, fnOwner === '', () => { fnOwner = ''; renderFunctions(); }),
+      chip('ai', 'flow.owner.ai', counts.ai, fnOwner === 'ai', () => { fnOwner = fnOwner === 'ai' ? '' : 'ai'; renderFunctions(); }),
+      chip('bot', 'flow.owner.bot', counts.bot, fnOwner === 'bot', () => { fnOwner = fnOwner === 'bot' ? '' : 'bot'; renderFunctions(); }),
+      chip('script', 'flow.owner.script', counts.script, fnOwner === 'script', () => { fnOwner = fnOwner === 'script' ? '' : 'script'; renderFunctions(); }),
+      chip('orphan', 'flow.fn.orphan', counts.orphan, fnOwner === 'orphan', () => { fnOwner = fnOwner === 'orphan' ? '' : 'orphan'; renderFunctions(); }),
+      chip('everything', 'flow.fn.everything', files.length - files.filter(isFn).length, fnAll, () => { fnAll = !fnAll; renderFunctions(); }));
+    const search = h('input', {
+      type: 'search', class: 'fl-fn-search', 'data-i18n-aria': 'flow.fn.search', placeholder: tt('flow.fn.search'), value: fnQuery,
+      oninput: (e) => { fnQuery = e.target.value; renderFunctions(); },
+    });
+    const partsById = new Map(project().arch.parts.map((p) => [p.id, p]));
+    const q = fnQuery.trim().toLowerCase();
+    const shown = visible.filter((f) => {
+      if (fnOwner === 'orphan' ? (f.partIds ?? []).length || !isFn(f) : fnOwner && f.owner !== fnOwner) return false;
+      if (!q) return true;
+      const partName = (f.partIds ?? []).map((id) => partsById.get(id)?.name ?? id).join(' ');
+      return `${f.path} ${f.purpose} ${f.about ?? ''} ${partName}`.toLowerCase().includes(q);
+    });
+    // Grouped by layer, then by part; a function no part claims goes under "No box" at the foot.
+    const byLayer = new Map();
+    for (const f of shown) {
+      const layer = f.layer ?? 'orphan';
+      if (!byLayer.has(layer)) byLayer.set(layer, new Map());
+      const parts = byLayer.get(layer);
+      const key = (f.partIds ?? [])[0] ?? 'orphan';
+      if (!parts.has(key)) parts.set(key, []);
+      parts.get(key).push(f);
+    }
+    const rows = [];
+    const layerIds = [...byLayer.keys()].sort((a, b) => (a === 'orphan' ? 1 : 0) - (b === 'orphan' ? 1 : 0) || a.localeCompare(b));
+    for (const layerId of layerIds) {
+      const layer = layers.get(layerId);
+      const layerTitle = layerId === 'orphan' ? null : h('h4', { class: 'fl-fn-layername' }, layerName(layer, tt));
+      const partBlocks = [];
+      for (const [partId, list] of [...byLayer.get(layerId).entries()].sort((a, b) => (a[0] === 'orphan' ? 1 : 0) - (b[0] === 'orphan' ? 1 : 0) || a[0].localeCompare(b[0]))) {
+        const part = partsById.get(partId);
+        partBlocks.push(h('div', { class: 'fl-fn-part' },
+          part ? h('button', { type: 'button', class: 'fl-fn-partname', onclick: () => { ctx.onOpenPart(part.id); } },
+            part.name, h('span', { class: 'fl-fn-partcount num' }, String(list.length)))
+            : h('h4', { class: 'fl-fn-partname is-orphan' }, tt('flow.fn.orphanTitle'), h('span', { class: 'fl-fn-partcount num' }, String(list.length))),
+          ...list.map((f) => {
+            const owner = ['ai', 'bot', 'script'].includes(f.owner) ? f.owner : 'script';
+            const how = f.about || f.how;
+            return h('div', { class: 'fl-fn-row', title: (f.reasons ?? []).join(', ') },
+              h('span', { class: `fl-fn-badge fl-owner-${owner}` }, tt(`flow.owner.short.${owner}`)),
+              h('div', { class: 'fl-fn-body' },
+                h('div', { class: 'fl-fn-line' },
+                  h('code', { class: 'fl-fn-path' }, f.path),
+                  !(f.partIds ?? []).length && isFn(f) ? h('span', { class: 'fl-fn-orphan', 'data-i18n': 'flow.fn.orphanMark' }, tt('flow.fn.orphanMark')) : null),
+                f.purpose ? h('span', { class: 'fl-fn-purpose' }, f.purpose) : null,
+                how ? h('span', { class: 'fl-fn-about' }, tt('flow.fn.how', { text: how })) : null));
+          })));
+      }
+      rows.push(h('div', { class: 'fl-fn-layer' }, layerTitle, ...partBlocks));
+    }
+    panel.replaceChildren(head, chips, search,
+      shown.length ? h('div', { class: 'fl-fn-list' }, rows) : h('p', { class: 'fl-j-none' }, tt('flow.fn.none')));
+    renderHead();
+  }
+
   function pickRoute(id, { focus = false } = {}) {
     if (id === route) return;
     route = id;
@@ -1045,6 +1152,15 @@ export function createFlowView(ctx) {
     if (mode !== 'view') return;
     renderHead();
     renderLegend();
+    canvas.hidden = false;
+    $('#flowZoom').hidden = false;
+    if (level === 'program') {
+      canvas.hidden = true;
+      $('#flowZoom').hidden = true;
+      $('#flowCopy').disabled = true;
+      legend.hidden = true;
+      return renderProgram();
+    }
     const p = project();
     if (p.arch.source === 'none') {
       canvas.replaceChildren(emptyState());
@@ -1071,6 +1187,7 @@ export function createFlowView(ctx) {
         // While the model is still being worked out a journey may be missing for a moment: the pick is kept by its id.
         if (journey && !ids.includes(journey) && !modelBuilding) journey = '';
         if (level === 'journeys') return renderRoute(ids);
+        if (level === 'functions') return renderFunctions();
         l1 = level1Flow(flowModel, { journey: journey || null, showHidden, tt: t() });
         drawnLevel = '1';
         renderLegend();

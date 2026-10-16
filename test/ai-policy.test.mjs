@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { EFFORTS, KINDS, MODELS, PAGE_FILE, POLICY, hasKind, levelFor, nextRung, phaseLevel, policyPage, rungsOfModel, validatePolicy } from '../server/ai/policy.mjs';
+import { EFFORTS, KINDS, MODELS, PAGE_FILE, POLICY, chatLevel, hasKind, levelFor, nextRung, policyPage, rungsOfModel, validatePolicy } from '../server/ai/policy.mjs';
 import { weigh } from '../server/ai/brain.mjs';
 import { recommend } from '../server/ai/conductor.mjs';
 
@@ -27,7 +27,7 @@ test('an unknown model or effort, a max rung, a missing reason or a fable with n
   bad((p) => { p.tasks.code.effort = 'turbo'; }, /unknown effort "turbo"/);
   bad((p) => { p.ladder[1].effort = 'max'; }, /max is never automatic/);
   bad((p) => { delete p.tasks.code.evidence; }, /no evidence/);
-  bad((p) => { p.phases.talk.model = 'x'; }, /phase talk has an unknown model/);
+  bad((p) => { p.phases.talk.model = 'sonnet'; }, /phase talk names a level/);
   bad((p) => { delete p.phases.build; }, /phase build/);
   bad((p) => { p.ladder.reverse(); }, /does not climb|fable needs/);
   bad((p) => { p.ladder = p.ladder.filter((r) => r.model !== 'opus'); }, /fable needs an opus rung/);
@@ -63,20 +63,15 @@ test('ladder helpers: the next rung and the rungs of a model', () => {
   assert.deepEqual(rungsOfModel('haiku').length, 1);
 });
 
-test('phaseLevel: sensitive plan or build is Opus, size never raises, talk stays cheap', () => {
-  assert.deepEqual(phaseLevel('trivial', 'small', false), { model: 'haiku', effort: 'low' });
-  assert.deepEqual(phaseLevel('talk', 'small', true), { model: 'sonnet', effort: 'low' });
-  assert.deepEqual(phaseLevel('plan', 'large', false), { model: 'sonnet', effort: 'medium' });
-  assert.deepEqual(phaseLevel('build', 'large', false), { model: 'sonnet', effort: 'medium' });
-  assert.deepEqual(phaseLevel('build', 'medium', true), { model: 'opus', effort: 'high' });
-  assert.deepEqual(phaseLevel('plan', 'small', true), { model: 'opus', effort: 'high' });
+test('chatLevel: the chat keeps one level, whatever the phase, size or subject (or35)', () => {
+  assert.deepEqual(chatLevel(), { model: POLICY.chat.model, effort: POLICY.chat.effort });
+  assert.deepEqual(chatLevel(), { model: 'opus', effort: 'high' });
 });
 
 test('the brain and recommend() read the policy, not a table of their own', () => {
   for (const [text, size] of [['pode construir', 'large'], ['corrige o bug do pagamento', 'small']]) {
     const w = weigh({ text, measured: { ok: true, kind: 'code', size, confidence: 'high' } });
-    const want = phaseLevel(w.phase, size, w.why === 'money');
-    assert.deepEqual({ model: w.model, effort: w.effort }, want, text);
+    assert.deepEqual({ model: w.model, effort: w.effort }, chatLevel(), text);
   }
   const rec = (args) => recommend({ ...args, others: { keys: {} }, stats: [] });
   for (const kind of ['search', 'bulk', 'code', 'security', 'money']) {

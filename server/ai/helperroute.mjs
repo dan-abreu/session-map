@@ -8,6 +8,7 @@ import { DEFAULT_PROJECT_CLASS, PROJECT_CLASSES, mergeProjectClasses, othersConf
 import { estimateCostUSD, providerOf, publicCatalog, runApiJSON } from './providers.mjs';
 import { bulkModelOf } from './router.mjs';
 import { versionView } from './versions.mjs';
+import { ENGINE_FUNCTIONS, enginesOf, mergeEngines } from './engine.mjs';
 
 // What the "Other AIs" dialog reads and writes (or14): the keys, a switch per provider and ONE daily cap for all of
 // them together. Which AI does which task is the router's decision (router.mjs), never the owner's.
@@ -52,6 +53,9 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
       projectClass: projectClasses(config.ai), projectClassDefault: DEFAULT_PROJECT_CLASS, projectClasses: [...PROJECT_CLASSES],
       pathRule: process.platform === 'win32' ? 'windows' : 'posix',
       versions: versionView(smDir),
+      // The per-function engine choice (id123): which AI runs the map's own brain and background work, or 'auto'.
+      engines: enginesOf(config.ai),
+      engineOptions: ['auto', ...keys.map((k) => k.provider)],
     };
   };
 
@@ -72,11 +76,12 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
   // patch: {provider, key} saves a key; {provider, on} switches one AI on or off (on also gives a paused one another
   // chance); {dailyUSD} is the one cap for all; {enabled} switches every outside AI on or off at once;
   // {projectClass: {root: 'client'|'internal'|'public'|null}} sets how private each known project is (null: back to the
-  // default, client). All or nothing: one unknown root or class refuses the whole request.
+  // default, client); {engines: {brain?, background?}} picks which engine runs each map function ('auto' or a provider).
+  // All or nothing: one unknown root or class refuses the whole request.
   async function save(patch) {
     if (!isObject(patch)) return fail(400, 'bad-helpers');
-    const { key, on, enabled, dailyUSD, projectClass } = patch;
-    if (key === undefined && on === undefined && enabled === undefined && dailyUSD === undefined && projectClass === undefined) return fail(400, 'bad-helpers');
+    const { key, on, enabled, dailyUSD, projectClass, engines } = patch;
+    if (key === undefined && on === undefined && enabled === undefined && dailyUSD === undefined && projectClass === undefined && engines === undefined) return fail(400, 'bad-helpers');
     if (key !== undefined && (typeof key !== 'string' || !providerOf(patch.provider))) return fail(400, providerOf(patch.provider) ? 'invalid-key' : 'unknown-provider');
     if (on !== undefined) {
       if (!providerOf(patch.provider)) return fail(400, 'unknown-provider');
@@ -84,6 +89,13 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
     }
     if (enabled !== undefined && typeof enabled !== 'boolean') return fail(400, 'bad-helpers');
     if (dailyUSD !== undefined && !(typeof dailyUSD === 'number' && Number.isFinite(dailyUSD) && dailyUSD >= 0 && dailyUSD <= DAILY_MAX_USD)) return fail(400, 'bad-helpers');
+    if (engines !== undefined) {
+      if (!isObject(engines)) return fail(400, 'bad-helpers');
+      for (const [fn, v] of Object.entries(engines)) {
+        if (!ENGINE_FUNCTIONS.includes(fn)) return fail(400, 'bad-helpers');
+        if (v !== 'auto' && v !== 'claude' && !providerOf(v)) return fail(400, 'bad-helpers');
+      }
+    }
 
     let classChange;
     if (projectClass !== undefined) {
@@ -98,8 +110,9 @@ export function createHelperRoutes({ smDir, ai = {}, backend, apiRun = runApiJSO
       const saved = await setKey(smDir, patch.provider, key, lockOpt);
       if (!saved.ok) return fail(saved.error === 'encrypt-failed' ? 500 : 400, saved.error);
     }
+    if (engines !== undefined) config.ai = mergeEngines(config.ai, engines);
     let resume = null;
-    if (on !== undefined || enabled !== undefined || dailyUSD !== undefined || classChange) {
+    if (on !== undefined || enabled !== undefined || dailyUSD !== undefined || classChange || engines !== undefined) {
       const before = othersSettings(config.ai, keyIds());
       const change = {};
       if (enabled !== undefined) change.enabled = enabled;

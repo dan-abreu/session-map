@@ -5,9 +5,12 @@ const CATEGORIES = ['design', 'security', 'testing', 'code', 'writing', 'data', 
 const SORTS = ['stars', 'updated', 'name'];
 const DEBOUNCE_MS = 250;
 
-// The Discover tab: a catalog of skills and plugins from GitHub, with a confirmation step before anything is installed.
-// ctx: h (element helper), t (translator getter), lang, project ({id, name} or null), toast.
-export function createDiscover({ root, h, t, lang, project, toast, icon }) {
+// The Discover tab: a catalog of skills and plugins from GitHub, with a confirmation step before anything is installed,
+// and the airplane mode (id136): one switch that turns every installed skill and plugin off for the chats that open
+// next — the program's own plugin never falls.
+// ctx: h (element helper), t (translator getter), lang, project ({id, name, plugins, skills} or null), toast, api,
+// skillsAirplane (the global kill-switch) and skillsOff (the per-skill list).
+export function createDiscover({ root, h, t, lang, project, toast, icon, api, skillsAirplane = () => false, skillsOff = () => [] }) {
   const q = (sel) => root.querySelector(sel);
   const dialog = q('#installDialog');
   let loaded = false;
@@ -26,7 +29,60 @@ export function createDiscover({ root, h, t, lang, project, toast, icon }) {
     fill(q('#discoverSort'), SORTS, (v) => t()(`discover.sort.${v}`));
     fill(q('#discoverType'), TYPES, (v) => t()(`type.${v}`), t()('discover.type.all'));
     fill(q('#discoverCategory'), CATEGORIES, (v) => t()(`category.${v}`), t()('discover.category.all'));
+    drawInstalled();
     if (lastResponse) render(lastResponse);
+  }
+
+  // The installed panel (id136/id138): the kill-switch on top, then the installed skills and the installed plugins,
+  // each group with its professional name. The catalog sits below, under its own heading.
+  function drawInstalled() {
+    const tt = t();
+    const box = q('#discoverAirplane');
+    if (!box) return; // the panel's element is not there: nothing to draw
+    const off = skillsAirplane();
+    const proj = project();
+    const skills = proj?.skills ?? [];
+    const plugs = (proj?.plugins ?? []).filter((p) => p?.id && p?.name);
+    const offList = new Set((skillsOff() ?? []).map((x) => String(x).toLowerCase()));
+    const flipBtn = h('button', { type: 'button', class: `btn${off ? ' is-off' : ''}` }, tt(off ? 'discover.airplaneOff' : 'discover.airplaneOn'));
+    flipBtn.addEventListener('click', async () => {
+      flipBtn.disabled = true;
+      const res = await api.setSkillsAirplane(!off);
+      flipBtn.disabled = false;
+      if (res && !res.error) drawInstalled();
+      else toast(t()('discover.airplaneFailed'));
+    });
+    const skillRows = skills.length
+      ? skills.map((s) => {
+          const isOff = offList.has(String(s.name).toLowerCase()) || offList.has(String(s.command).toLowerCase());
+          return h('li', { class: 'dv-row' },
+            h('span', { class: 'dv-name' }, s.name),
+            h('span', { class: 'dv-meta' }, s.command),
+            h('span', { class: `pill ${isOff ? 'tone-idle' : 'tone-active'}` }, tt(isOff ? 'discover.off' : 'discover.on')),
+            h('button', { type: 'button', class: 'btn small-btn', onclick: async () => { await api.setSkill(s.command, isOff); drawInstalled(); } },
+              tt(isOff ? 'plugins.turnOn' : 'plugins.turnOff')));
+        })
+      : [h('li', { class: 'empty' }, tt('discover.noneInstalled'))];
+    const plugRows = plugs.length
+      ? plugs.map((p) => h('li', { class: 'dv-row' },
+          h('span', { class: 'dv-name' }, p.name),
+          h('span', { class: `pill ${p.enabled ? 'tone-active' : 'tone-idle'}` }, tt(p.enabled ? 'discover.on' : 'discover.off')),
+          h('button', { type: 'button', class: 'btn small-btn', onclick: async () => { await api.setPlugin(p.id, !p.enabled); drawInstalled(); } },
+            tt(p.enabled ? 'plugins.turnOff' : 'plugins.turnOn'))))
+      : [h('li', { class: 'empty' }, tt('discover.noneInstalled'))];
+    box.replaceChildren(
+      h('div', { class: 'dv-card' },
+        h('div', { class: 'dv-head' },
+          h('span', { class: 'dv-name' }, tt('discover.airplane')),
+          h('span', { class: `pill ${off ? 'tone-waiting' : 'tone-active'}` }, tt(off ? 'discover.on' : 'discover.off')),
+          flipBtn),
+        h('p', { class: 'dv-desc' }, tt('discover.airplaneHint'))),
+      h('div', { class: 'dv-card' },
+        h('h3', { class: 'dv-lede' }, tt('discover.installedSkills')),
+        h('ul', { class: 'dv-list' }, ...skillRows)),
+      h('div', { class: 'dv-card' },
+        h('h3', { class: 'dv-lede' }, tt('discover.installedPlugins')),
+        h('ul', { class: 'dv-list' }, ...plugRows)));
   }
 
   const stamp = (iso) => new Intl.DateTimeFormat(lang(), { day: 'numeric', month: 'short', year: 'numeric' }).format(Date.parse(iso));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { turnCheck } from '../server/chat/turn-check.mjs';
+import { contextTokens, turnCheck } from '../server/chat/turn-check.mjs';
 import { loadPrices } from '../server/cost.mjs';
 
 // The OK at the end of a request (or26): read from the turn's transcript and git, no AI.
@@ -78,7 +78,7 @@ test('a plan edit in the turn ticks without git plan texts', () => {
 
 test('a turn that only talked has nothing missing, only a cost', () => {
   const check = turnCheck({ ...base, entries: [reply(1, [{ type: 'text', text: 'oi' }])] });
-  assert.deepEqual(check, { tests: null, ticked: [], saved: [], costUSD: check.costUSD, missing: [] });
+  assert.deepEqual(check, { tests: null, roles: [], ticked: [], saved: [], costUSD: check.costUSD, missing: [] });
   assert.ok(check.costUSD > 0);
 });
 
@@ -101,4 +101,43 @@ test('jest counts tests not suites, a skipped test named "failed" is no failure,
 
 test('markdown edits are no code change', () => {
   assert.deepEqual(turnCheck({ ...base, entries: [edit(1, 'README.md')] }).missing, []);
+});
+
+// The roles that worked (or58): each agent's kind maps to the catalog's role, and each one is charged its proof.
+const agentCall = (s, description, id = `a${++n}`) => call(s, 'Agent', { description, prompt: 'p' }, id);
+
+test('the roles that worked are read from the agent calls, mapped to the catalog', () => {
+  const check = turnCheck({
+    ...base,
+    entries: [agentCall(1, '[code] fix the header').entry, agentCall(2, '[review] check the diff').entry, reply(9, [{ type: 'text', text: 'done' }])],
+  });
+  assert.deepEqual(check.roles, ['coder', 'reviewer']);
+});
+
+test('a planner that worked without a plan on paper leaves role-plan', () => {
+  const withPlan = turnCheck({ ...base, entries: [agentCall(1, '[plan] the build').entry, edit(2, 'docs/superpowers/plans/2026-10-15-x.md'), reply(9, [{ type: 'text', text: 'done' }])] });
+  assert.ok(!withPlan.missing.includes('role-plan'), 'the plan doc was edited');
+  assert.deepEqual(withPlan.roles, ['planner']);
+  const without = turnCheck({ ...base, entries: [agentCall(1, '[plan] the build').entry, reply(9, [{ type: 'text', text: 'done' }])] });
+  assert.ok(without.missing.includes('role-plan'), 'no plan doc, no exit');
+});
+
+test('a coder that worked and changed code still owes its tests: the roles do not soften the old gates', () => {
+  const check = turnCheck({ ...base, entries: [agentCall(1, '[code] fix the header').entry, edit(2, 'C:/p/server/a.mjs'), reply(9, [{ type: 'text', text: 'done' }])] });
+  assert.deepEqual(check.roles, ['coder']);
+  assert.ok(check.missing.includes('no-tests'));
+});
+
+test('the memory a conversation carries is the prompt side of its last reply, none when no reply reported any (pc37)', () => {
+  const sized = (s, u, extra = {}) => ({ ...reply(s, [{ type: 'text', text: 'x' }]), ...extra, message: { id: `s${s}`, model: 'claude-sonnet-5-5', usage: u, content: [] } });
+  const entries = [
+    sized(1, { input_tokens: 10, cache_creation_input_tokens: 4000, cache_read_input_tokens: 30000, output_tokens: 5 }),
+    sized(2, { input_tokens: 20, cache_creation_input_tokens: 1000, cache_read_input_tokens: 41000, output_tokens: 5 }),
+    sized(3, { input_tokens: 999999, output_tokens: 1 }, { isSidechain: true }),
+    result(4, 'x', 'ok'),
+  ];
+  assert.equal(contextTokens(entries), 42020);
+  assert.equal(contextTokens([]), null);
+  assert.equal(contextTokens([result(1, 'x', 'ok')]), null);
+  assert.equal(contextTokens(undefined), null);
 });

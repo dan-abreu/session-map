@@ -48,10 +48,14 @@ function chat() {
   const MODEL_IDS = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5' };
   const model = MODEL_IDS[flag('--model')] ?? flag('--model') ?? 'claude-opus-5-5';
   let turns = 0;
+  // FAKE_USAGE: the replies carry the usage claude writes (the memory chip reads it); without it they carry none.
+  const withUsage = (entry) => (process.env.FAKE_USAGE && entry.type === 'assistant'
+    ? { ...entry, message: { ...entry.message, model, usage: { input_tokens: 100, cache_creation_input_tokens: 2000, cache_read_input_tokens: 28000, output_tokens: 20 } } }
+    : entry);
   const transcript = (entry) => {
     if (!process.env.FAKE_TRANSCRIPTS) return;
     mkdirSync(process.env.FAKE_TRANSCRIPTS, { recursive: true });
-    appendFileSync(join(process.env.FAKE_TRANSCRIPTS, `${sessionId}.jsonl`), `${JSON.stringify({ ...entry, sessionId, cwd: process.cwd(), timestamp: new Date().toISOString() })}
+    appendFileSync(join(process.env.FAKE_TRANSCRIPTS, `${sessionId}.jsonl`), `${JSON.stringify({ ...withUsage(entry), sessionId, cwd: process.cwd(), timestamp: new Date().toISOString() })}
 `);
   };
   let turn = Promise.resolve();

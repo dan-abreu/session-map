@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../actions.mjs';
 import { exportMermaid, readDraft, writeDraft } from '../arch/flow.mjs';
 import { cleanEnv, findClaude, runClaudeJSON } from '../ai/runner.mjs';
-import { HAIKU_SCHEMA, haikuOf, haikuPrompt, levelRank, phaseNote, wantsHaiku, weigh } from '../ai/brain.mjs';
+import { HAIKU_SCHEMA, haikuOf, haikuPrompt, phaseNote, wantsHaiku, weigh } from '../ai/brain.mjs';
 import { sameToken } from '../auth.mjs';
 import { recordLineage } from '../brain/lineage.mjs';
 import { log } from '../log.mjs';
@@ -17,6 +17,8 @@ import { bootTime, claudeDir, listLiveSessions, readTranscript } from '../source
 import { pageTurnCut } from '../collect.mjs';
 import { readRemoved } from '../hidden.mjs';
 import { helperPath, maskSecrets, readConversation, readImage, toolDetails, versionOf } from '../sources/claude-conversation.mjs';
+import { isAnySessionId, readConversation as readDshConversation } from '../sources/deepseek.mjs';
+import { writeDshBook } from './book-dsh.mjs';
 import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
 import { FOCUS_KINDS, focusInputs } from '../foundation/practices-focus.mjs';
@@ -25,8 +27,8 @@ import { firstPrompt, personsWords } from './prompt.mjs';
 import { createTidier, wantsTidy, withOriginal } from './tidy-words.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
 import {
-  DEFAULT_RUN, addReinforcedSpend, budgetLine, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
-  isWeighed, settingsRun, withRunNote, withWeighed,
+  DEFAULT_RUN, EFFORTS, addReinforcedSpend, budgetLine, expectedRun, mayReinforce, parseRun, readRunBlock, reinforcedLimit, reinforcedSpend, runArgs,
+  isWeighed, withRunNote, withWeighed,
 } from './run.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 import { chatSkillSettings, guardSettings } from './guard.mjs';
@@ -34,13 +36,19 @@ import { cutTeams, hasCutTeams, teamsNote } from './teams.mjs';
 import { ORCH_TOOL_NAMES } from './orch-tools.mjs';
 import { ORCH_KIND, createOrchestra } from './orchestra.mjs';
 import { readJsonFile, writeAtomic } from '../store.mjs';
-import { gitState, tailEntries, turnCheck } from './turn-check.mjs';
+import { contextTokens, gitState, tailEntries, turnCheck } from './turn-check.mjs';
+import { MAX_CONTEXT } from '../waste.mjs';
 import { loadPrices } from '../cost.mjs';
 import { conductorTail } from '../ai/conductor.mjs';
 import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
 import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
+import { functionsOf } from '../ai/brainpanel.mjs';
+import { weighOutside } from '../ai/brain-other.mjs';
+import { cerebroNote } from '../ai/cerebro-note.mjs';
+import { chatLevel } from '../ai/policy.mjs';
+import { ROLE_LINE_RE, roleById } from '../ai/agents.mjs';
 
 const PERMISSION_MCP = fileURLToPath(new URL('./permission-mcp.mjs', import.meta.url));
 const ARSENAL_MCP = fileURLToPath(new URL('../ai/arsenal-mcp.mjs', import.meta.url));
@@ -131,16 +139,15 @@ const AUTO_REINFORCE = 'OK, you may reinforce. (Answered by session-map: the per
 // auto mode did not allow alone is left for the person's final list instead of stopping the conversation.
 const DECIDE_YOURSELF = 'Autonomous way: decide yourself, take the option you would recommend, note it under \'Decisions I took\' and go on.';
 const DEFERRED = 'Autonomous way: the person is not asked mid-task. Do not retry this action; reach the goal another way if there is a safe one, otherwise leave it and list it at the end under \'Left for you\' with the exact command or step.';
-// The ways whose ask to reinforce session-map may answer within the monthly limit: Automatic when the person allows it,
-// Autonomous always.
-const SELF_REINFORCE_KINDS = new Set(['auto', 'autonomous']);
+// The ways whose ask to reinforce session-map may answer within the monthly limit: Autonomous always.
+const SELF_REINFORCE_KINDS = new Set(['autonomous']);
 // By the way the live process started with (its prompt and permission mode), not one picked mid-turn for the next process.
 const isAutonomous = (chat) => chat.processRun.kind === 'autonomous';
 // The instructions a conversation already carries: the system prompt of its first turn, or the last note sent.
-const instructionsOf = (run) => (run.kind === 'fixed' || run.kind === 'settings' ? 'plain' : run.kind);
+const instructionsOf = (run) => (run.kind === 'autonomous' ? 'autonomous' : 'plain');
 const round6 = (usd) => Math.round(usd * 1e6) / 1e6;
 
-// ---- the entry brain (or31/or29): each message of the person is weighed before it runs ----
+// ---- the entry brain (or31/or35): each message of the person is weighed before it runs, to know its phase ----
 // The one cheap Haiku call for a long text the rules cannot read runs in a folder of its own under the OS temp dir, with no tools.
 const BRAIN_DIR = join(tmpdir(), 'session-map-brain');
 const HAIKU_TIMEOUT_MS = 20_000;
@@ -148,17 +155,9 @@ const HAIKU_MAX = 2;
 // What a conversation planned, kept so a bare "pode construir" later builds at the plan's size.
 const PLANNED = new Set(['medium', 'large']);
 const BIGGER = { medium: 1, large: 2 };
-// The level the conversation moves to. Up at once; down only when the talk gets small (talk or trivial), never mid-turn
-// (the caller only gives an idle chat's message). Otherwise the level stays and only the phase of the turn changes.
-function settle(prev, next) {
-  const same = prev && levelRank(next.model, next.effort) < levelRank(prev.model, prev.effort) && next.phase !== 'talk' && next.phase !== 'trivial';
-  return same ? { ...next, model: prev.model, effort: prev.effort, why: prev.why } : next;
-}
-// The run as the process runs it: the person's choice with the brain's level on top.
+// The run as the process runs it: the person's choice with the chat's level on top (or35: one level, never moved by the brain).
 const runOf = (chat) => withWeighed(chat.run, chat.weighed);
 const flagsOf = (run) => JSON.stringify(runArgs(run));
-// A process that was told to end for a change of level is killed after this, so the message that asked for it does not wait for ever.
-const SWAP_KILL_MS = 8000;
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 // → the images of a message, [] when it has none, null when they are not images we pass on.
@@ -183,8 +182,8 @@ const nodeTag = (node) => {
 };
 
 // The conductor prompt's tail, built at each process start: who is ready today, the cap left, what the bench measured, and
-// for Autonomous what the month still allows for reinforced work. Only the conductor modes get it; a failure leaves it out.
-const CONDUCTORS = new Set(['auto', 'maestro', 'autonomous']);
+// what the month still allows for reinforced work. Only Autonomous gets it; a failure leaves it out.
+const CONDUCTORS = new Set(['autonomous']);
 // project: the line of the chat's project monthly budget (or07), or ''.
 export function tailFor(run, smDir, facts, project = '') {
   if (!CONDUCTORS.has(run?.kind)) return '';
@@ -192,14 +191,13 @@ export function tailFor(run, smDir, facts, project = '') {
   try { others = typeof facts === 'function' ? facts() : null; } catch { others = null; }
   let tail = '';
   try { tail = conductorTail({ others, stats: loadStats(smDir) }); } catch { tail = ''; }
-  if (run.kind !== 'autonomous') return [tail, project].filter(Boolean).join('\n');
   let budget = '';
   try { budget = budgetLine({ limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir) }); } catch { budget = ''; }
   return [tail, budget, project].filter(Boolean).join('\n');
 }
 
 // An Autonomous chat always runs in Claude Code's own auto mode, whatever the header or the PC picked: its classifier
-// decides, never session-map. Any other way runs in the chat's own mode.
+// decides, never session-map. Any other run (the talk chat) runs in the chat's own mode.
 const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'auto' : pickMode(choice, fromSettings));
 
 // Chats the page drives through the user's own claude CLI. bin: undefined looks it up at start, null means not installed.
@@ -218,10 +216,12 @@ const modeFor = (run, choice, fromSettings) => (run.kind === 'autonomous' ? 'aut
 // turnInputs({chat, file, startedAt}): what the OK at the end of a request reads ({entries, gitAfter}), null for none; tests inject it.
 // tidyText(text): the cheap rewrite of the person's message (tidy-words.mjs; null: the real one, only when bin is not set); tests inject it.
 // askHaiku(text): the one cheap call that helps the entry brain with a long text it cannot read (runClaudeJSON's answer); tests inject it.
+// weighOther(prompt, opts): that call on the AI the Cérebro's brain row names, when it is another company's (brain-other.mjs).
 export function createChatHub({
-  smDir, dir = claudeDir(), bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
+  smDir, dir = claudeDir(), dshDir = null, bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
   readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null, tidyText = null,
+  weighOther = weighOutside,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -409,19 +409,8 @@ export function createChatHub({
   }
 
   function onDriverEvent(chat, evt) {
-    // The process the entry brain is replacing has gone: the new one takes its place (swapDriver).
-    if (evt.type === 'exit' && chat.swapExit) {
-      const next = chat.swapExit;
-      chat.swapExit = null;
-      if (!chat.closing) return next();
-    }
     if (evt.type === 'session') {
-      if (chat.moveMark) {
-        chat.moveMark = false;
-        if (chat.turns.length) chat.turns[chat.turns.length - 1].at = now();
-      }
-      // The CLI repeats init every turn: only the first one is news, or a mode the header changed since, or the model of a
-      // process the entry brain swapped in.
+      // The CLI repeats init every turn: only the first one is news, or a mode or a model the header changed since.
       if (chat.announced) {
         if (evt.data.mode && evt.data.mode !== chat.reported) {
           chat.reported = evt.data.mode;
@@ -467,6 +456,7 @@ export function createChatHub({
       clearTimeout(chat.idleTimer);
       armIdle(chat, idleMs);
       const check = checkOf(chat);
+      chat.contextTokens = memoryOf(chat) ?? chat.contextTokens;
       if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now(), ...(check ? { check } : {}) });
       const { processCostUSD, ...data } = evt.data;
       emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD, ...(check ? { check } : {}) });
@@ -513,13 +503,25 @@ export function createChatHub({
     }
   }
 
+  // The memory the conversation carries (pc37): the prompt side of its last reply, read from the transcript's tail when a
+  // turn ends. A conversation of another engine, or a failed read, gives nothing and the chip stays as it was.
+  function memoryOf(chat) {
+    try {
+      const file = chat.sessionId ? transcriptOf(chat.sessionId) : null;
+      return file && !file.endsWith('.zstd') ? contextTokens(tailEntries(file, 1_000_000)) : null;
+    } catch {
+      return null;
+    }
+  }
+
   // What the header shows: the way it runs, the model claude reported (the alias until it does), the level the maestro
-  // works at and why, and what the conversation has cost.
+  // works at and why, what the conversation has cost and how much memory it carries.
   function emitRun(chat) {
-    const expected = expectedRun(runOf(chat), settingsRun(chat.root, dir));
+    const expected = expectedRun(runOf(chat));
     emit(chat, 'run', {
-      run: chat.run, model: chat.model ?? expected.model, effort: expected.effort, ultracode: expected.ultracode,
+      run: chat.run, model: chat.model ?? expected?.model ?? null, effort: expected?.effort ?? null, ultracode: expected?.ultracode ?? false,
       level: chat.level?.level ?? null, why: chat.level?.why ?? null, estimateUSD: chat.level?.estimateUSD ?? null, costUSD: chat.costUSD,
+      context: chat.contextTokens > 0 ? { tokens: chat.contextTokens, max: MAX_CONTEXT } : null,
       // The entry brain's weight of the turn ("Sonnet · low: conversa"): its phase and the key of its reason (run.brain.<why>).
       brain: chat.weighed ? { phase: chat.weighed.phase, why: chat.weighed.why } : null,
     });
@@ -541,8 +543,7 @@ export function createChatHub({
     }
     // One answer of session-map's per message of the person: a second ask in a row waits for the person's OK.
     if (!SELF_REINFORCE_KINDS.has(chat.run.kind) || block?.level !== 'ask-reinforce' || chat.restart || chat.autoAnswered) return false;
-    const selfReinforce = isAutonomous(chat) || chat.run.selfReinforce;
-    return mayReinforce({ selfReinforce, limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
+    return mayReinforce({ selfReinforce: isAutonomous(chat), limitUSD: reinforcedLimit(smDir), spentUSD: reinforcedSpend(smDir), estimateUSD: block.estimateUSD });
   }
 
   // The workshop's reply ends with the whole draft in a mermaid fence: that block becomes the shared draft.
@@ -657,19 +658,67 @@ export function createChatHub({
     if (driven && (driven.running || driven.weighing || driven.restart)) return null;
     haikuBusy += 1;
     try {
+      if (askHaiku) return haikuOf(await askHaiku(text));
+      const level = brainCallLevelOf();
+      // The Cérebro names another company's AI for the brain (id154): the weighing goes there first, in the daily cap.
+      if (level.outside) {
+        const config = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
+        const res = await weighOther(haikuPrompt(text), { smDir, config, choice: level.outside, schemaHint: HAIKU_SCHEMA, timeoutMs: HAIKU_TIMEOUT_MS }).catch(() => null);
+        if (res) return haikuOf(res);
+      }
       const claude = bin !== undefined ? bin : findClaude();
-      if (!askHaiku && !claude) return null;
-      const res = askHaiku ? await askHaiku(text) : await runClaudeJSON(haikuPrompt(text), { model: 'haiku', cwd: BRAIN_DIR, schemaHint: HAIKU_SCHEMA, bin: claude, env, timeoutMs: HAIKU_TIMEOUT_MS });
+      if (!claude) return null;
+      const res = await runClaudeJSON(haikuPrompt(text), { model: level.model, ...(level.effort ? { effort: level.effort } : {}), cwd: BRAIN_DIR, schemaHint: HAIKU_SCHEMA, bin: claude, env, timeoutMs: HAIKU_TIMEOUT_MS });
       return haikuOf(res);
     } catch { return null; } finally { haikuBusy -= 1; }
   }
 
   const wantsHaikuFor = (text) => wantsHaiku({ text, measured: sizeRequest({ text }) });
-  const weighText = (text, { haiku = null, prev = null, planned = null } = {}) => settle(prev, weigh({ text, measured: sizeRequest({ text }), haiku, planned }));
+  // The part of a Cérebro row a Claude call may take (id154): its model and level only when the row is Claude's (or names
+  // no AI) and the model is a Claude one; another company's model never reaches the Claude CLI, even with no AI named.
+  const CLAUDE_MODEL_RE = /^(?:haiku|sonnet|opus|fable|claude-[a-z0-9.-]+)$/;
+  const claudeSide = (choice) => {
+    if (!choice || (choice.provider && choice.provider !== 'auto' && choice.provider !== 'claude')) return {};
+    return {
+      ...(typeof choice.model === 'string' && CLAUDE_MODEL_RE.test(choice.model) ? { model: choice.model } : {}),
+      ...(EFFORTS.includes(choice.effort) ? { effort: choice.effort } : {}),
+    };
+  };
+  // The entry brain's one cheap call rides the Cérebro's "brain" row (id146): the owner's model and level for it, Haiku
+  // at no named level when none. A row on another company's AI (id154) goes there first (outside), with Haiku behind it:
+  // its model never reaches the Claude call.
+  const brainCallLevelOf = () => {
+    try {
+      const choice = functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).brain ?? null;
+      if (choice?.provider && choice.provider !== 'auto' && choice.provider !== 'claude') return { model: 'haiku', effort: null, outside: choice };
+      const own = claudeSide(choice);
+      return { model: own.model ?? 'haiku', effort: own.effort ?? null };
+    } catch { return { model: 'haiku', effort: null }; }
+  };
+  // The talk chat's level (id146): the owner's choice for the Conversa row in the Cérebro (ai.others.functions.chat,
+  // validated by the same script that saves it), else the policy's chat row. The one place the person changes it is the
+  // Cérebro tab; the bench of or35, once it runs, proposes the policy's default with the owner's OK.
+  const chatLevelOf = () => {
+    try {
+      const choice = claudeSide(functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).chat);
+      return { model: choice.model ?? chatLevel().model, effort: choice.effort ?? chatLevel().effort };
+    } catch {
+      return chatLevel();
+    }
+  };
+  // The weight rides on the effective level: the phase shapes the turn, the level is the Cérebro's.
+  const weighText = (text, { haiku = null, planned = null } = {}) => ({ ...weigh({ text, measured: sizeRequest({ text }), haiku, planned }), ...chatLevelOf() });
 
   // ---- the person's message, tidied (id111) ----
 
-  const tidier = createTidier({ run: (prompt, o) => runClaudeJSON(prompt, { ...o, bin: findClaude(), env }) });
+  // The tidy ride the Cérebro's "gather" row (the text kind, id146): the owner's choice for it, else the cheap default.
+  const tidyLevelOf = () => {
+    try {
+      const choice = claudeSide(functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).gather);
+      return { model: choice.model ?? null, effort: choice.effort ?? null };
+    } catch { return { model: null, effort: null }; }
+  };
+  const tidier = createTidier({ run: (prompt, o) => runClaudeJSON(prompt, { ...o, ...(tidyLevelOf().model ? { model: tidyLevelOf().model } : {}), ...(tidyLevelOf().effort ? { effort: tidyLevelOf().effort } : {}), bin: findClaude(), env }) });
   // On by default; the file <state>/tidy-words.off turns it off. With a fake claude (tests) it only runs when injected.
   const tidyOn = () => (tidyText !== null || bin === undefined) && !existsSync(join(smDir, 'tidy-words.off'));
   // → the prompt the working AI gets: the tidied request with the person's own words at its end, or the message as it is.
@@ -689,6 +738,11 @@ export function createChatHub({
     if (chat.sessionId) savePageChat(chat.sessionId, { planned });
   }
 
+  // The Cérebro table the talk chat is told (id156): the rows the owner put on another AI, read at each launch.
+  const cerebroNoteOf = () => {
+    try { return cerebroNote({ ai: readJsonFile(join(smDir, 'config.json'), {})?.ai }); } catch { return ''; }
+  };
+
   // The process runs flags (model, effort, prompt) it cannot change: the idle one is ended and a new one resumes the same
   // conversation under the same key, so the page keeps its stream. The message that asked for the move waits for it.
   function launch(chat, resume) {
@@ -696,60 +750,24 @@ export function createChatHub({
     const tail = [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n');
     return startDriver({
       bin: chat.bin,
-      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail, run.kind === 'talk' ? cerebroNoteOf() : ''), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
       cwd: chat.cwd, env: cleanEnv(env),
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
   }
 
-  function swapDriver(chat) {
-    const old = chat.driver;
-    const held = { message: null, stopped: false };
-    chat.swapExit = () => {
-      clearTimeout(chat.swapTimer);
-      // The old process's cost joins the base; the new one counts from zero, and reports its own model.
-      chat.baseCostUSD = chat.costUSD;
-      chat.processCostUSD = 0;
-      chat.model = null;
-      chat.processRun = chat.run;
-      chat.driver = launch(chat, chat.sessionId);
-      if (held.stopped) return onDriverEvent(chat, { type: 'turn-end', data: { isError: false } });
-      if (held.message) {
-        // The transcript stamps the message when the new process reads it, seconds after it started: the turn's mark moves
-        // to the process's first line (onDriverEvent), or the next turn's message would be read as this one (pc13).
-        chat.moveMark = true;
-        chat.driver.send(...held.message);
-      }
-      return undefined;
-    };
-    chat.driver = {
-      send: (prompt, images) => { held.message = [prompt, images]; },
-      interrupt: () => { held.message = null; held.stopped = true; },
-      setMode: () => {},
-      end: () => old.end(),
-      kill: () => old.kill(),
-    };
-    // A process that does not leave on its own is killed: the person's message is waiting.
-    chat.swapTimer = setTimeout(() => old.kill(), SWAP_KILL_MS);
-    chat.swapTimer.unref?.();
-    old.end();
-  }
-
-  // Put the turn's level on the chat: the same flags only change the header; others swap the process.
+  // Put the turn's phase on the chat (or35). The level is the process's and stays: the brain never swaps the process, so the
+  // prompt cache lives on and the model is the one the person sees. Only changeRun (the person's choice) changes it.
   function applyTurn(chat, turn) {
-    const differs = flagsOf(withWeighed(chat.run, turn)) !== flagsOf(runOf(chat));
-    // A process that never announced its session cannot be resumed: it keeps its level.
-    const moves = differs && Boolean(chat.sessionId && chat.announced);
     const prev = chat.weighed;
-    chat.weighed = differs && !moves && prev ? { ...turn, model: prev.model, effort: prev.effort, why: prev.why } : turn;
+    chat.weighed = prev ? { ...turn, model: prev.model, effort: prev.effort } : turn;
     rememberPlan(chat, turn);
-    if (moves) swapDriver(chat);
     emitRun(chat);
   }
 
   // The message of the person into an idle live chat. In the run the brain weighs, the message is weighed first (Haiku once
-  // when the rules are unsure and the text is long), the chat moves to the level it asks for and the turn opens with its
-  // phase note. Any other message goes as it is. -> null when sent, or a Promise of null | a busy reply while Haiku was asked.
+  // when the rules are unsure and the text is long) and the turn opens with its phase note; the level never moves (or35).
+  // Any other message goes as it is. -> null when sent, or a Promise of null | a busy reply while Haiku was asked.
   // haiku: given when the caller asked already (null: it failed or was not needed).
   function deliver(chat, { text, prompt = text, images = [], auto, from = auto, quiet = false, haiku }) {
     if (quiet || auto !== undefined || !isWeighed(chat.run)) {
@@ -757,7 +775,7 @@ export function createChatHub({
       return null;
     }
     const go = (h) => {
-      const turn = weighText(text, { haiku: h, prev: chat.weighed, planned: chat.planned });
+      const turn = weighText(text, { haiku: h, planned: chat.planned });
       applyTurn(chat, turn);
       sendTo(chat, text, phaseNote(turn.phase, prompt), auto, images, from);
     };
@@ -846,8 +864,8 @@ ${prompt}`;
     const asking = mine ? await tidiedPrompt(body.text) : body.text;
     const fromSettings = settingsMode(project.root, dir);
 
-    // The entry brain weighs the first message of a process (a fresh one has nothing to lose by starting low or high); the
-    // phase note goes right before the person's words, after the context block.
+    // The entry brain weighs the first message of a process for its phase; the phase note goes right before the person's
+    // words, after the context block. The level is the policy's chat level (or35).
     let turn = null;
     const planned = () => (PLANNED.has(saved?.planned) ? saved.planned : null);
     const weighFirst = (run) => {
@@ -893,7 +911,7 @@ ${prompt}`;
       // Its process is gone: a team it ran in the background died with it. Claude reads which and how to resume it, after
       // the message; the page shows the message alone.
       cutTold = idle ? null : internal.teams ?? cutTeamsOf(resume);
-      prompt = weighFirst(asked ?? parseRun(saved?.run) ?? { kind: 'settings' });
+      prompt = weighFirst(asked ?? parseRun(saved?.run) ?? DEFAULT_RUN);
       if (cutTold) prompt = `${prompt}\n\n${teamsNote(cutTold)}`;
       if (saved?.node?.kind === 'flow') flow = { seen: null, reply: '' };
       // The point it was opened on comes back with it: a resumed orchestrator is still the project's orchestrator.
@@ -909,7 +927,10 @@ ${prompt}`;
       const practices = FOCUS_KINDS.includes(node?.kind) ? focusInputs(smDir, project.id) : null;
       const context = node === undefined ? { sections: [], part: null } : contextOf(project, node, { draft: flow?.seen, practices, text: body.text });
       if (context.error) return reply(context.status, { error: context.error });
-      skillFocus = chatSkillSettings({ skills: project.skills, plugins: project.plugins, part: context.part, text: body.text });
+      // The airplane mode (id136): the owner's one switch in Discover turns every skill and plugin off; the program's
+      // own plugin never falls. The focus picks the rest as usual when the mode is off.
+      const userConfig = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
+      skillFocus = chatSkillSettings({ skills: project.skills, plugins: project.plugins, part: context.part, text: body.text, skillsOn: userConfig?.skills?.airplane !== true, skillsOff: userConfig?.skills?.off ?? [] });
       const workCell = workCellId !== undefined ? find(project, 'workCell', workCellId) : null;
       if (workCellId !== undefined && !workCell) return reply(404, { error: 'unknown-front' });
       const board = (project.skills ?? []).some((s) => s.command === '/session-map:board' && s.enabled);
@@ -932,8 +953,11 @@ ${prompt}`;
     }
     const orchestrator = place.node?.kind === ORCH_KIND;
     const choice = body.mode ?? saved?.mode ?? 'settings';
-    // A conversation that ran before without session-map's flags (elsewhere, or before they existed) keeps running that way.
-    const run = asked ?? parseRun(saved?.run) ?? (resume ? { kind: 'settings' } : DEFAULT_RUN);
+    // A conversation that ran before (or one a legacy way was saved for) keeps running the brain's way: talk at the
+    // Cérebro's level for the Conversa row (the policy's chat row when the owner chose none), weighed per message.
+    const run = asked ?? parseRun(saved?.run) ?? DEFAULT_RUN;
+    // A talk chat with no weighed turn yet (an idle resume) still launches on the Cérebro's level.
+    if (!turn && run.kind === 'talk') turn = { phase: null, why: null, ...chatLevelOf() };
     const mode = modeFor(run, choice, fromSettings);
     const prompted = resume ? saved?.prompted ?? 'plain' : instructionsOf(run);
     const listed = resume ? (project.conversations ?? []).find((c) => c.sessionId === resume) ?? find(project, 'chat', resume) : null;
@@ -953,7 +977,7 @@ ${prompt}`;
       run, processRun: run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
       reinforcing: false, autoAnswered: false,
       skillFocus,
-      bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false, swapExit: null, swapTimer: null, moveMark: false,
+      bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false,
     };
     if (turn) rememberPlan(chat, turn);
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
@@ -989,7 +1013,7 @@ ${prompt}`;
 
   // Model and effort are flags of the process: a change that touches them ends it (now, or after the running turn) and
   // the next message resumes the conversation with the new ones. "May reinforce on its own" alone needs no restart.
-  // weighed: the entry brain's level for the new run (the same one by default); only a weighed run keeps one.
+  // weighed: the chat's level for the new run (the same one by default); only a weighed run keeps one.
   function changeRun(chat, run, weighed = chat.weighed) {
     const level = isWeighed(run) ? weighed : null;
     const restart = flagsOf(withWeighed(run, level)) !== flagsOf(runOf(chat));
@@ -1007,21 +1031,12 @@ ${prompt}`;
     }
   }
 
-  function setRun(key, body) {
-    const chat = chatOf(key);
-    if (!chat) return reply(404, { error: 'unknown-chat' });
-    if (chat.ended) return reply(409, { error: 'ended' });
-    const run = parseRun(body?.run);
-    if (!run) return reply(400, { error: 'bad-run' });
-    changeRun(chat, run);
-    return reply(200, { run });
-  }
-
   const reinforceState = () => ({ limitUSD: reinforcedLimit(smDir), spentUSD: round6(reinforcedSpend(smDir)) });
 
   // The page conversations of a part (of one of its items with code), of a kind of point (idea, create-arch, project) or of
   // a branch, the one used last first, with the key of those still running. An archived one is left out of every one of
-  // these lists, as it leaves the map and the conversation list; "Show archived" there brings it back.
+  // these lists, as it leaves the map and the conversation list; "Show archived" there brings it back. The pinned ones
+  // (pc23) sit on top.
   function listChats(query, state) {
     const project = state.projects.find((p) => p.id === query?.projectId);
     if (!project) return reply(404, { error: 'unknown-project' });
@@ -1030,33 +1045,63 @@ ${prompt}`;
     const belongs = (c) => c.projectId === project.id && onPoint(c);
     const rowOf = (sessionId) => (project.conversations ?? []).find((r) => r.sessionId === sessionId);
     const removed = readRemoved(smDir);
+    const pinnedList = readJsonFile(join(smDir, 'pinned.json'), []);
+    const pinned = new Set(Array.isArray(pinnedList) ? pinnedList : []);
     const chats = Object.entries(readPageChats()).filter(([sessionId, c]) => belongs(c) && !rowOf(sessionId)?.archived && !removed.has(sessionId)).map(([sessionId, c]) => {
       const driven = drivenNow(sessionId);
       const cost = driven?.costUSD ?? rowOf(sessionId)?.costUSD;
       return {
         sessionId, title: c.title ?? '', startedAt: c.startedAt ?? null, updatedAt: c.updatedAt ?? c.startedAt ?? null,
-        mode: c.mode ?? 'settings', run: parseRun(c.run) ?? { kind: 'settings' }, chatKey: driven?.key ?? null, running: Boolean(driven?.running),
-        interrupted: cutOff(sessionId, c, state), costUSD: Number.isFinite(cost) ? cost : null,
+        mode: c.mode ?? 'settings', chatKey: driven?.key ?? null, running: Boolean(driven?.running),
+        interrupted: cutOff(sessionId, c, state), costUSD: Number.isFinite(cost) ? cost : null, pinned: pinned.has(sessionId),
       };
-    }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
-    return reply(200, { chats, settings: settingsMode(project.root, dir), mine: settingsRun(project.root, dir), reinforce: reinforceState() });
+    }).sort((a, b) => Number(pinned.has(b.sessionId)) - Number(pinned.has(a.sessionId)) || String(b.updatedAt).localeCompare(String(a.updatedAt)) || String(b.startedAt).localeCompare(String(a.startedAt)));
+    return reply(200, { chats, settings: settingsMode(project.root, dir), reinforce: reinforceState() });
   }
 
   // claude keeps each conversation as projects/<folder>/<sessionId>.jsonl; the id is a checked UUID.
+  // The DeepSeek Harness keeps each as sessions/<project>/<sessionId>/session.vN.jsonl.zstd (deepseek.mjs picks the
+  // newest generation); the returned path's suffix tells the reader which engine wrote it.
   function transcriptOf(sessionId) {
     let folders = [];
-    try { folders = readdirSync(join(dir, 'projects')); } catch { return null; }
+    try { folders = readdirSync(join(dir, 'projects')); } catch { /* no claude folder */ }
     for (const folder of folders) {
       const file = join(dir, 'projects', folder, `${sessionId}.jsonl`);
       if (existsSync(file)) return file;
     }
+    if (dshDir && typeof sessionId === 'string') {
+      const sessionsRoot = join(dshDir, 'sessions');
+      let projects = [];
+      try { projects = readdirSync(sessionsRoot); } catch { /* no dsh folder */ }
+      for (const project of projects) {
+        const file = deepseekLogOf(join(sessionsRoot, project, sessionId));
+        if (file && existsSync(file)) return file;
+      }
+    }
     return null;
+  }
+
+  // The newest generation of a DSH session directory, or null (server/sources/deepseek.mjs keeps the same rule for collect).
+  function deepseekLogOf(sessionDir) {
+    const v4 = join(sessionDir, 'session.v4.jsonl.zstd');
+    if (existsSync(v4)) return v4;
+    let best = null;
+    let bestN = -1;
+    let entries = [];
+    try { entries = readdirSync(sessionDir); } catch { /* not a session */ }
+    for (const name of entries) {
+      const m = /^session(?:\.v(\d+))?\.jsonl\.zstd$/.exec(name);
+      if (!m) continue;
+      const n = m[1] === undefined ? 0 : Number(m[1]);
+      if (n > bestN) { bestN = n; best = join(sessionDir, name); }
+    }
+    return best;
   }
 
   // Where a conversation the page may show is written: a page conversation, or one of the list (VS Code, a terminal), whose
   // transcript Claude Code may already have deleted (the archive keeps a copy). null: not one the page knows.
   function sourceOf(sessionId, state) {
-    if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return null;
+    if (!isAnySessionId(sessionId)) return null;
     // One removed from session-map (mm43) shows nowhere: not its history, its images or its helpers.
     if (readRemoved(smDir).has(sessionId)) return null;
     const page = readPageChats()[sessionId];
@@ -1075,21 +1120,27 @@ ${prompt}`;
   function itemsOf(src, since, keep = () => true, { before, from } = {}) {
     const version = src.file ? versionOf(src.file) : '0';
     if (since && since === version) return { same: true, version };
-    const read = src.file ? readConversation(src.file, { cwd: src.cwd }) : { items: [], version };
+    const isDsh = src.file && src.file.endsWith('.zstd');
+    const read = src.file ? (isDsh ? readDshConversation(src.file, { cwd: src.cwd }) : readConversation(src.file, { cwd: src.cwd })) : { items: [], version };
+    // The book for a DeepSeek conversation (id123): the same chapters a Claude hook would write, made here with no AI
+    // and no hook. It never fails the read it rides on.
+    if (isDsh && read.items.length) {
+      try { writeDshBook({ smDir, sessionId: basename(dirname(src.file)), items: read.items }); } catch { /* the book is never worth the read */ }
+    }
     const all = read.items.filter(keep);
     const total = all.length;
     const end = isIndex(before) ? Math.min(before, total) : total;
     const start = end === total && isIndex(from) && from > 0 && from <= total ? resendStart(all, from) : pageStart(all, end);
     // The read is shared with the next ask: new objects, never edits to its items.
     const items = all.slice(start, end).map((i) => (i.type === 'user' ? { ...i, text: personsWords(i.text) } : i));
-    return { items, start, total, version: read.version };
+    return { items, start, total, version: read.version, ...(read.contextTokens > 0 ? { context: { tokens: read.contextTokens, max: MAX_CONTEXT } } : {}) };
   }
 
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still
   // holds as events (those arrive by subscribing, after fromEventId), with the first prompt as the person wrote it.
   // The page reads items only: the transcript is read once, never a second time for plain messages (pc15).
   function history(sessionId, state, { since, before, from } = {}) {
-    if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) return reply(400, { error: 'bad-session' });
+    if (!isAnySessionId(sessionId)) return reply(400, { error: 'bad-session' });
     if (readRemoved(smDir).has(sessionId)) return reply(404, { error: 'unknown-session' });
     const page = readPageChats()[sessionId];
     if (!page) return listedHistory(sessionId, state, since, { before, from });
@@ -1103,7 +1154,7 @@ ${prompt}`;
     return reply(200, {
       sessionId, title: page.title ?? '', mode: page.mode ?? 'settings', settings: settingsMode(folder, dir), ...rich, chatKey: driven?.key ?? null,
       fromEventId, running: Boolean(driven?.running),
-      run: driven?.run ?? parseRun(page.run) ?? { kind: 'settings' }, mine: settingsRun(folder, dir), reinforce: reinforceState(),
+      reinforce: reinforceState(),
       costUSD: driven?.costUSD ?? (Number(row?.costUSD) || 0), interrupted: cutOff(sessionId, page, state), live: false,
     });
   }
@@ -1118,7 +1169,7 @@ ${prompt}`;
     if (rich.same) return reply(200, rich);
     return reply(200, {
       sessionId, title: src.row.title ?? '', mode: 'settings', settings: settingsMode(src.project.root, dir), ...rich, chatKey: null, readOnly: true,
-      run: { kind: 'settings' }, mine: settingsRun(src.project.root, dir), reinforce: reinforceState(), costUSD: Number(src.row.costUSD) || 0,
+      reinforce: reinforceState(), costUSD: Number(src.row.costUSD) || 0,
       live: Boolean(src.row.live),
     });
   }
@@ -1126,16 +1177,33 @@ ${prompt}`;
   // An image pasted into a conversation or returned by one of its steps; null when there is none.
   function image(sessionId, n, state) {
     const src = sourceOf(sessionId, state);
-    return src?.file ? readImage(src.file, n) : null;
+    if (!src?.file || src.file.endsWith('.zstd')) return null;
+    return readImage(src.file, n);
   }
 
   // A helper agent's own conversation, opened from the step that started it.
   function helper(sessionId, agentId, state) {
     const src = sourceOf(sessionId, state);
-    const file = src?.file ? helperPath(src.file, agentId) : null;
+    if (!src?.file || src.file.endsWith('.zstd')) return reply(404, { error: 'unknown-helper' });
+    const file = helperPath(src.file, agentId);
     if (!file) return reply(404, { error: 'unknown-helper' });
     const { items, version } = readConversation(file, { cwd: src.cwd });
-    return reply(200, { items, version });
+    // The specialist's role line (id148, or55) opens the brief; the page shows it as a badge, never as raw text.
+    let role = null;
+    const shown = items.map((item) => {
+      if (!role && item?.type === 'user' && typeof item.text === 'string') {
+        const m = ROLE_LINE_RE.exec(item.text);
+        if (m) {
+          const r = roleById(m[1]);
+          role = r ? { id: r.id, label: r.label, labelPt: r.labelPt } : { id: m[1], label: m[1], labelPt: m[1] };
+          const cut = item.text.replace(/^session-map-role:[^\n]*\n?/, '');
+          if (cut.trim()) return { ...item, text: cut };
+          return { ...item, text: item.text };
+        }
+      }
+      return item;
+    });
+    return reply(200, { items: shown, version, ...(role ? { role } : {}) });
   }
 
   const chatOf = (key) => (typeof key === 'string' && KEY_RE.test(key) ? chats.get(key) ?? null : null);
@@ -1269,7 +1337,7 @@ ${prompt}`;
   });
 
   return {
-    start, send, permission, mode, run: setRun, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
+    start, send, permission, mode, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
     drivingIds,
     // The project root of the chat with that key (or07): its outside AI calls count in that project's budget.
     rootOf: (key) => chatOf(key)?.root ?? null,

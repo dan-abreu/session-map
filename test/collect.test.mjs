@@ -372,7 +372,7 @@ test('with ai.enabled false collect stays on the rules and never calls claude', 
   }
 });
 
-test('a relation gets the AI\'s plain-words reason in the background, once, and none when the AI is off (mm32)', async () => {
+test('a relation gets its plain-words reason from the motor, at once, with no call — also with the AI off (sb16)', async () => {
   const dir = tmp();
   const smDir = tmp();
   const root = repo(join(tmp(), 'garden'), { arch: true });
@@ -380,24 +380,21 @@ test('a relation gets the AI\'s plain-words reason in the background, once, and 
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: true, maxCallsPerHour: 30 } }));
     writeChat(dir, { id: B, cwd: root, title: 'Invoices', prompts: ['work on `bi01` now'], edits: ['src/shop/cart.ts'], mtimeAgo: 10 * 60_000 });
     const asked = [];
-    const run = async (prompt) => {
-      asked.push(prompt);
-      return /why two parts|tied together/.test(prompt) ? { ok: true, value: { why: 'Invoices also touch the cart.' }, costUSD: 0.001 } : { ok: true, value: { partId: null }, costUSD: 0.001 };
-    };
+    const run = async (prompt) => { asked.push(prompt); return { ok: true, value: { partId: null }, costUSD: 0.001 }; };
     const ai = { bin: 'fake-claude', run };
     const first = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects[0];
     assert.equal(first.arch.links.length, 1);
-    assert.equal(first.arch.links[0].why, undefined, 'the sentence comes in the background');
+    assert.equal(first.arch.links[0].why, 'The conversation "Invoices" worked on both.', 'the motor writes the sentence at once');
     await settleAi(smDir);
+    assert.equal(asked.length, 0, 'no AI call for a sentence');
     const [p] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
     await settleAi(smDir);
-    assert.equal(p.arch.links[0].why, 'Invoices also touch the cart.');
-    assert.equal(asked.filter((x) => /tied together/.test(x)).length, 1, 'nothing changed, nothing asked again');
+    assert.equal(p.arch.links[0].why, 'The conversation "Invoices" worked on both.', 'nothing changed, nothing asked again');
 
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { enabled: false } }));
     forgetLife(smDir);
     const [off] = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai })).projects;
-    assert.equal(off.arch.links[0].why, undefined, 'the AI off: the relation stays as it was');
+    assert.equal(off.arch.links[0].why, 'The conversation "Invoices" worked on both.', 'a motor works with the AI off');
   } finally {
     forgetLife(smDir);
     cleanup(dir, smDir, join(root, '..'));
@@ -724,8 +721,9 @@ test('conversation rows carry their mother as recorded and their kind of point; 
     assert.deepEqual([by[B].node.kind, by[B].parentId, by[B].itemCode], ['item', A, 'bi01']);
     assert.equal(by[C].parentId, B, 'from lineage.json');
     assert.equal(by[E].parentId, A, 'a page chat older than the window keeps it too');
-    // The model session-map runs a page chat on (Autonomous with none named: Opus); none for the others.
-    assert.deepEqual([by[A].runModel, by[B].runModel, by[C].runModel, by[E].runModel], [null, 'sonnet', null, 'haiku']);
+    // The model session-map runs a page chat on (Autonomous with a named one: it shows); none for the rest and for
+    // legacy saved ways the brain replaced (id146).
+    assert.deepEqual([by[A].runModel, by[B].runModel, by[C].runModel, by[E].runModel], [null, 'sonnet', null, null]);
     assert.equal(p.tidy, false, '"Organize on its own" is off until the owner turns it on in the project');
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ projects: { [normalizePath(root)]: { tidy: true } } }));
     assert.equal((await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects[0].tidy, true);

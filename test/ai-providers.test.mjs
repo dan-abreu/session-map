@@ -84,6 +84,23 @@ test('runApiJSON prices the tokens when the provider reports no cost, and sends 
   assert.equal(calls[0].body.usage, undefined);
 });
 
+test('the cache hits each provider reports ride in the meta, in each provider\'s own field (or49)', async () => {
+  const deep = fakeFetch(reply(chat('{"partId": null}', { prompt_tokens: 5000, completion_tokens: 40, prompt_cache_hit_tokens: 4800 })));
+  const d = await runApiJSON('x', { provider: 'deepseek', model: 'deepseek-flash', key: KEY, fetchFn: deep.fetchFn });
+  assert.equal(d.ok, true);
+  assert.equal(d.tokensCacheHit, 4800);
+  const open = fakeFetch(reply(chat('{"partId": null}', { prompt_tokens: 5000, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 4700 } })));
+  const o = await runApiJSON('x', { provider: 'openai', model: 'gpt-6-luna', key: KEY, fetchFn: open.fetchFn });
+  assert.equal(o.tokensCacheHit, 4700);
+});
+
+test('no cache-hit fields means no tokensCacheHit in the meta: the old shape holds (or49)', async () => {
+  const { fetchFn } = fakeFetch(reply(chat('{"partId": null}', { prompt_tokens: 1200, completion_tokens: 30 })));
+  const res = await runApiJSON('x', { provider: 'openrouter', key: KEY, fetchFn });
+  assert.equal(res.ok, true);
+  assert.equal('tokensCacheHit' in res, false);
+});
+
 test('the default models are the current cheap ones, never a retired or only-for-past-users name', () => {
   assert.equal(PROVIDERS.gemini.defaultModel, 'gemini-3.1-flash-lite');
   assert.equal(PROVIDERS.deepseek.defaultModel, 'deepseek-flash');

@@ -28,6 +28,7 @@ class El {
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, stopPropagation() {}, ...evt }); }
   replaceChildren(...cs) { this.children = cs; }
+  append(...cs) { this.children.push(...cs); }
   setAttribute(k, v) { this.attrs[k] = v; }
   removeAttribute(k) { delete this.attrs[k]; }
   setSelectionRange(a, b) { this.selectionStart = a; this.selectionEnd = b; }
@@ -42,7 +43,7 @@ const walk = (el, out = []) => {
 };
 const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c === 'string')).join(' ');
 
-const ROLES = ['log', 'form', 'input', 'send', 'stop', 'title', 'context', 'status', 'mode', 'list', 'note', 'pcmode', 'close', 'where', 'run', 'runpanel',
+const ROLES = ['log', 'form', 'input', 'send', 'stop', 'title', 'context', 'status', 'mode', 'list', 'note', 'pcmode', 'close', 'where', 'brain', 'cost', 'memory',
   'find', 'tasks', 'attach', 'filepick', 'pending', 'suggest'];
 function sheet() {
   const parts = new Map(ROLES.map((r) => [r, new El()]));
@@ -158,9 +159,35 @@ test('a conversation still running in VS Code is mirrored: new steps appear, and
   assert.match(text(part('log')), /One more thing/);
   assert.ok(part('log').children.includes(stepBefore), 'a step that did not change keeps its node, so a step the person opened stays open');
   assert.equal(timers.length, 2, 'it ended: no more asking');
-  walk(part('run')).find((e) => e.attrs['data-run'] === 'toggle').attrs.onclick();
-  assert.match(text(part('runpanel')), /US\$ 0\.75/, 'the total in the menu follows');
+  assert.equal(part('cost').textContent, 'US$ 0.75', 'the quiet chip follows the total');
+  assert.equal(part('cost').hidden, false);
   assert.doesNotMatch(text(part('status')), /chat.mirrorShort/);
+  chat.close();
+});
+
+test('the memory chip follows the history and the mirror: "48k / 200k", amber from 70 %, hidden without a number (pc37)', async () => {
+  let answer = { ...HISTORY, readOnly: true, live: true, context: { tokens: 48_200, max: 200_000 } };
+  server({ [`GET /api/chat/history/${S1}`]: () => answer });
+  const { chat, part, timers } = makeChat();
+  openOld(chat);
+  await settle();
+  assert.equal(part('memory').hidden, false);
+  assert.equal(part('memory').textContent, '48k / 200k');
+  assert.equal(part('memory').dataset.tone, 'ok');
+  assert.equal(part('memory').title, 'chat.memoryChip(48k,200k,24)');
+  answer = { ...HISTORY, readOnly: true, live: false, version: 'v2', items: [...ITEMS, { type: 'assistant', text: 'More.', ts: '2026-10-09T09:06:00.000Z' }], context: { tokens: 150_000, max: 200_000 } };
+  await timers[0].fn();
+  assert.equal(part('memory').textContent, '150k / 200k');
+  assert.equal(part('memory').dataset.tone, 'warn');
+  chat.close();
+});
+
+test('a conversation with no memory number shows no chip (another engine)', async () => {
+  server({ [`GET /api/chat/history/${S1}`]: () => HISTORY });
+  const { chat, part } = makeChat();
+  openOld(chat);
+  await settle();
+  assert.equal(part('memory').hidden, true);
   chat.close();
 });
 
@@ -173,7 +200,7 @@ test('closing the sheet stops the mirror', async () => {
   assert.equal(timers[0].cancelled, true);
 });
 
-test('pasted images go with the message, at most four', async () => {
+test('pasted images go with the message and the tray empties when they are sent', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [] }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part, toasts } = makeChat({ readImage: async (file) => ({ media: file.type, data: 'AAAA' }) });
   chat.open({ projectId: 'shop', title: 'New', start: { node: { kind: 'part', partId: 'cart' } } });
@@ -315,7 +342,7 @@ test('a history that comes back after the sheet closed draws nothing, asks for n
   chat.close();
   await settle();
   await settle();
-  assert.equal(calls.length, 1, 'a hidden log reads as scrolled to the top: it must not page through the whole conversation');
+  assert.equal(calls.filter((c) => c.path.startsWith('/api/chat/history/')).length, 1, 'a hidden log reads as scrolled to the top: it must not page through the whole conversation');
   assert.equal(timers.length, 0, 'no mirror after the close');
   assert.doesNotMatch(text(part('log')), /checkout/);
 });

@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Agent|Task|Skill|Edit|Write|MultiEdit|Workflow",
+        "matcher": "Agent|Task|Skill|Edit|Write|MultiEdit|Workflow|Read",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/chat/guard-hook.mjs\" --user", "timeout": 60 }
         ]

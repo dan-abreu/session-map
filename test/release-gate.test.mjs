@@ -66,7 +66,7 @@ test('a copy of the real repository passes --check and --publish with a fresh ma
 });
 
 test('the checks have the documented ids', () => {
-  assert.deepEqual(CHECK_IDS, ['versions', 'changelog', 'features', 'links', 'shots', 'invention', 'shots-date', 'ticked', 'tests']);
+  assert.deepEqual(CHECK_IDS, ['versions', 'changelog', 'features', 'links', 'shots', 'invention', 'shots-date', 'ticked', 'agent-files', 'tests']);
 });
 
 test('versions: changing the version in package.json only fails, and says which files disagree', async () => {

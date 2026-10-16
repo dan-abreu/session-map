@@ -278,6 +278,33 @@ export function partSections(text) {
   return { how, where };
 }
 
+const RULES_HEADINGS = { regrasquenaopodemquebrar: 'pt', regrasquenaodevemquebrar: 'pt', rulesthatmustnotbreak: 'en' };
+
+// The lines of a part's "Rules that must not break": each top-level bullet or numbered item as plain text (markdown left
+// as written). What follows it up to a blank line (a wrapped line, a nested bullet) is joined to it; a code fence is not a
+// rule. The specialist agents carry them as the part's invariants (or68).
+export function partRules(text) {
+  const lines = String(text ?? '').split('\n');
+  const heads = headingsOf(lines);
+  const h = heads.find((x) => RULES_HEADINGS[key(x.text)]);
+  if (!h) return [];
+  const next = heads.find((x) => x.idx > h.idx && x.level <= h.level);
+  const rules = [];
+  let open = false;
+  let fence = false;
+  for (let i = h.idx + 1; i < (next ? next.idx : lines.length); i++) {
+    const l = lines[i].replace(/\r$/, '');
+    if (FENCE_RE.test(l)) { fence = !fence; open = false; continue; }
+    if (fence) continue;
+    if (!l.trim()) { open = false; continue; }
+    const item = /^(?:[-*+]|\d+[.)])\s+(.*)$/.exec(l);
+    if (item) { rules.push(item[1].trim()); open = true; } else if (open) {
+      rules[rules.length - 1] += ` ${l.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, '')}`;
+    }
+  }
+  return rules;
+}
+
 function parsePart(dir, name, text) {
   const { lines, heads, regions, section } = scanPart(text);
   const h1 = heads.find((h) => h.level === 1);

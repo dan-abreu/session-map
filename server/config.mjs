@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { log } from './log.mjs';
 import { normalizePath } from './paths.mjs';
 
-const GLOBAL_KEYS = ['budget', 'currency', 'prices'];
+const GLOBAL_KEYS = ['budget', 'currency', 'prices', 'terms', 'skills'];
 
 function readJson(path) {
   let text;
@@ -23,7 +23,8 @@ function readJson(path) {
 }
 
 // Precedence, lowest to highest: <root>/.claude/session-map.json, then the user's per-project entry.
-// budget/currency/prices are machine-wide, so they only come from the user's file.
+// budget/currency/prices/terms are machine-wide, so they only come from the user's file. terms: 'technical' (the
+// default, id126) or 'simple' — the page's vocabulary mode, held by the engine, never read from a document by an AI.
 export function loadConfig(root, smDir) {
   const project = readJson(join(root, '.claude', 'session-map.json'));
   const user = readJson(join(smDir, 'config.json'));

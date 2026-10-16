@@ -151,7 +151,7 @@ export function createHomeView(ctx) {
     ];
   }
 
-  // ----- the monthly limit for big (reinforced) work (mm46): the same value the run menu by Send sets -----
+  // ----- the monthly limit for big (reinforced) work (mm46): the same value Configurações sets -----
 
   const canLimit = () => !value(ctx.demo) && Boolean(ctx.limit);
   const currency = () => ({ label: 'US$', rate: 1, ...value(ctx.currency) });

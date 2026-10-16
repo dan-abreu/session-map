@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,8 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
 
-// The entry brain in the hub (or31/or29): each message of the person is weighed before it runs, and the chat starts or moves
-// to the model and effort that weight asks for. Up at once, down only when the talk gets small, never mid-turn.
+// The entry brain in the hub (or31/or35, id146): every message of the person is weighed before it runs, for its phase.
+// The level is the policy's chat row and never moves on its own; the phase only shapes the turn (its directive) and the
+// run line the page shows.
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-claude.mjs', import.meta.url));
 const flagOf = (argv, name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -67,74 +68,61 @@ const open = async (hub, state, text, extra = {}) => {
 };
 const echoOf = (r, n) => r.events.filter((e) => e.type === 'text' && !e.data.partial)[n - 1].data.text;
 
-test('a talk message starts on Sonnet at low, the prompt names it, and the run event says why', async () => {
+test('a talk message starts on the policy\'s chat level, and the run event says the phase and why', async () => {
   await withBrain({}, async ({ hub, state, argv, level }) => {
     const { r } = await open(hub, state, 'o que acha de usar Ollama?');
     await nthTurnEnd(r, 1);
-    assert.equal(level(), 'sonnet/low');
-    assert.match(flagOf(argv(), '--append-system-prompt'), /on Sonnet at low effort/);
+    assert.equal(level(), 'opus/high');
+    assert.equal(flagOf(argv(), '--append-system-prompt').includes('session-map-run'), false, 'the stance alone, never a conductor prompt');
     const run = r.events.find((e) => e.type === 'run').data;
-    assert.deepEqual(run.run, { kind: 'autonomous' }, 'the run the person chose is kept');
+    assert.deepEqual(run.run, { kind: 'talk' }, 'the brain\'s talk is the default');
     assert.deepEqual(run.brain, { phase: 'talk', why: 'talk' });
-    assert.equal(run.effort, 'low');
-    assert.equal(run.model, 'claude-sonnet-5-5');
+    assert.equal(run.effort, 'high');
+    assert.equal(run.model, 'claude-opus-5-5');
     assert.ok(!echoOf(r, 1).includes('phase of this turn'), 'talk carries no directive');
   });
 });
 
-test('the level follows the talk: up at once, down when it gets small, and the page keeps its stream', async () => {
+test('the level is the policy\'s and never moves: the phases only shape each turn\'s directive, the same process runs', async () => {
   await withBrain({}, async ({ hub, state, log, level }) => {
     const { key, r } = await open(hub, state, 'o que acha de usar Ollama?');
     await nthTurnEnd(r, 1);
-    assert.equal(level(), 'sonnet/low');
+    assert.equal(level(), 'opus/high');
 
-    // A large plan moves up to Sonnet at medium (the bench, or30) and carries the plan directive; the person's words are shown as written.
+    // A large plan carries the plan directive; the level stays (or35).
     rmSync(log);
     assert.equal(hub.send(key, { text: 'vamos planejar o sistema novo de login do zero' }).status, 200);
     await nthTurnEnd(r, 2);
-    assert.equal(level(), 'sonnet/medium');
+    assert.equal(existsSync(log), false, 'the level never moves: the same process');
     assert.match(echoOf(r, 2), /Plan phase: organize the idea/);
     assert.match(echoOf(r, 2), /Write no code until the person approves/);
     assert.deepEqual(r.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['o que acha de usar Ollama?', 'vamos planejar o sistema novo de login do zero']);
     assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0, 'same key, same stream');
     assert.deepEqual(r.events.filter((e) => e.type === 'run').at(-1).data.brain, { phase: 'plan', why: 'plan-big' });
 
-    // "pode construir" after a large plan builds at the plan's size: Sonnet at medium still (high only after a failure, or33), so the same process, with the build directive.
-    rmSync(log);
+    // "pode construir" after a large plan builds at the plan's size, with the build directive.
     assert.equal(hub.send(key, { text: 'pode construir' }).status, 200);
     await nthTurnEnd(r, 3);
-    assert.equal(existsSync(log), false, 'plan and build share a level: the same process');
     assert.match(echoOf(r, 3), /Build phase: follow the approved plan/);
-    // The same level keeps the same process.
-    assert.equal(hub.send(key, { text: 'pode seguir' }).status, 200);
-    await nthTurnEnd(r, 4);
-    assert.equal(existsSync(log), false, 'the same level keeps the same process');
 
-    // "obrigado" moves down to Haiku at low.
+    // A greeting carries no directive; a sensitive build is weighed as such; the level still never moves.
     assert.equal(hub.send(key, { text: 'obrigado' }).status, 200);
-    await nthTurnEnd(r, 5);
-    assert.equal(level(), 'haiku/low');
-    assert.doesNotMatch(echoOf(r, 5), /phase of this turn/);
-
-    // A sensitive build moves up to Opus at high; a small build after it does not move down.
+    await nthTurnEnd(r, 4);
+    assert.doesNotMatch(echoOf(r, 4), /phase of this turn/);
     assert.equal(hub.send(key, { text: 'corrige o bug do pagamento' }).status, 200);
-    await nthTurnEnd(r, 6);
-    assert.equal(level(), 'opus/high');
-    rmSync(log);
-    assert.equal(hub.send(key, { text: 'corrige o título cortado em header.js' }).status, 200);
-    await nthTurnEnd(r, 7);
-    assert.equal(existsSync(log), false, 'a build does not step down from Opus');
+    await nthTurnEnd(r, 5);
+    assert.deepEqual(r.events.filter((e) => e.type === 'run').at(-1).data.brain, { phase: 'build', why: 'money' });
     assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0);
-    // The cost of the processes before the swaps counts on.
-    assert.ok(r.events.filter((e) => e.type === 'turn-end').at(-1).data.costUSD >= 0.007 - 1e-9);
+    // The cost of the process counts on.
+    assert.ok(r.events.filter((e) => e.type === 'turn-end').at(-1).data.costUSD >= 0.005 - 1e-9);
   });
 });
 
-test('a turn in progress is never switched: the next message waits for its end', async () => {
+test('a turn in progress never starts another: the next message waits for its end', async () => {
   await withBrain({}, async ({ hub, state, log, level }) => {
     const { key, r } = await open(hub, state, 'SLOW o que acha disso?');
     await r.until((e) => e.type === 'text' && e.data.partial);
-    assert.equal(level(), 'sonnet/low');
+    assert.equal(level(), 'opus/high');
     rmSync(log);
     assert.deepEqual(hub.send(key, { text: 'corrige o bug do pagamento' }), { status: 409, body: { ok: false, error: 'busy' } });
     const again = await hub.start({ projectId: 'demo', sessionId: r.events.find((e) => e.type === 'session').data.sessionId, text: 'corrige o bug do pagamento' }, state);
@@ -146,11 +134,11 @@ test('a turn in progress is never switched: the next message waits for its end',
     await nthTurnEnd(r, 1);
     assert.equal(hub.send(key, { text: 'corrige o bug do pagamento' }).status, 200);
     await nthTurnEnd(r, 2);
-    assert.equal(level(), 'opus/high');
+    assert.equal(existsSync(log), false, 'the level never moved: the same process, no new flags');
   });
 });
 
-test('Haiku settles a long text the rules cannot read: the higher level wins, a failed call never blocks, a short text never asks', async () => {
+test('Haiku settles a long text the rules cannot read: the higher phase wins, a failed call never blocks, a short text never asks', async () => {
   const LONG = `Hoje o time conversou bastante sobre o jeito da pessoa escrever mensagens longas, cheias de contexto. ${'Eu queria registrar o que foi dito. '.repeat(6)}`;
   const asked = [];
   let reply = { ok: true, value: { phase: 'build', size: 'large', sensitive: true } };
@@ -158,14 +146,15 @@ test('Haiku settles a long text the rules cannot read: the higher level wins, a 
     const first = await open(hub, state, LONG);
     await nthTurnEnd(first.r, 1);
     assert.equal(asked.length, 1);
-    assert.equal(level(), 'opus/high', 'Haiku said sensitive build; the rules said talk; the higher wins');
+    assert.equal(level(), 'opus/high', 'the level is the policy\'s whatever the phase');
+    assert.equal(first.r.events.find((e) => e.type === 'run').data.brain.phase, 'build', 'Haiku said build; the rules said talk; the higher wins');
     await hub.close();
 
     reply = new Error('boom');
     const second = await open(hub, state, LONG);
     await nthTurnEnd(second.r, 1);
     assert.equal(asked.length, 2);
-    assert.equal(level(), 'sonnet/low', 'the rules decide alone');
+    assert.equal(second.r.events.find((e) => e.type === 'run').data.brain.phase, 'talk', 'the rules decide alone');
 
     reply = { ok: false, error: 'timeout' };
     const third = await open(hub, state, 'corrige o bug do pagamento');
@@ -186,17 +175,55 @@ test('Haiku is not asked for a request the chat limit would refuse', async () =>
   });
 });
 
-test('only the Autonomous and Automatic runs without a named model are weighed', async () => {
+test('only the runs without a named model are weighed', async () => {
   await withBrain({}, async ({ hub, state, level }) => {
     const named = await open(hub, state, 'oi', { run: { kind: 'autonomous', model: 'opus', effort: 'high' } });
     await nthTurnEnd(named.r, 1);
     assert.equal(level(), 'opus/high', 'a named model is kept');
     assert.equal(named.r.events.find((e) => e.type === 'run').data.brain, null);
-    const fixed = await open(hub, state, 'oi', { run: { kind: 'fixed', model: 'sonnet', effort: 'medium' } });
-    await nthTurnEnd(fixed.r, 1);
-    assert.equal(level(), 'sonnet/medium');
-    const auto = await open(hub, state, 'oi', { run: { kind: 'auto', selfReinforce: false } });
-    await nthTurnEnd(auto.r, 1);
-    assert.equal(level(), 'haiku/low', 'Automatic is weighed too');
+    const talk = await open(hub, state, 'oi', { run: { kind: 'talk' } });
+    await nthTurnEnd(talk.r, 1);
+    assert.equal(level(), 'opus/high', 'the talk runs at the policy\'s chat level');
+    assert.equal(talk.r.events.find((e) => e.type === 'run').data.brain.phase, 'trivial', 'talk is weighed too');
+  });
+});
+
+test('the Conversa row of the Cérebro sets the talk level; the policy\'s chat row is the default (id146)', async () => {
+  await withBrain({}, async ({ hub, state, smDir, level }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { chat: { model: 'sonnet', effort: 'low' } } } } }));
+    const { r } = await open(hub, state, 'o que acha de usar Ollama?');
+    await nthTurnEnd(r, 1);
+    assert.equal(level(), 'sonnet/low', 'the owner\'s choice in the Cérebro runs');
+    const run = r.events.find((e) => e.type === 'run').data;
+    assert.equal(run.effort, 'low');
+    assert.deepEqual(run.brain, { phase: 'talk', why: 'talk' }, 'the phase still comes from the entry brain');
+    await hub.close();
+  });
+});
+
+test('the Cérebro\'s brain row on another company\'s AI (id154): the weighing goes there; its model never reaches Claude; a failure falls back', async () => {
+  const LONG = `Hoje o time conversou bastante sobre o jeito da pessoa escrever mensagens longas, cheias de contexto. ${'Eu queria registrar o que foi dito. '.repeat(6)}`;
+  const sent = [];
+  let reply = { ok: true, value: { phase: 'build', size: 'large', sensitive: false } };
+  const weighOther = async (prompt, o) => { sent.push(o.choice); return reply; };
+  await withBrain({ weighOther }, async ({ hub, state, smDir, level }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { brain: { provider: 'deepseek', model: 'deepseek-v4-pro' }, chat: { provider: 'deepseek', model: 'deepseek-v4-pro' } } } } }));
+    const first = await open(hub, state, LONG);
+    await nthTurnEnd(first.r, 1);
+    assert.deepEqual(sent, [{ provider: 'deepseek', model: 'deepseek-v4-pro' }], 'the row\'s AI weighs the message');
+    assert.equal(first.r.events.find((e) => e.type === 'run').data.brain.phase, 'build');
+    assert.equal(level(), 'opus/high', 'a chat row on another AI never sends its model to the Claude CLI');
+    await hub.close();
+
+    reply = null;
+    const second = await open(hub, state, LONG);
+    await nthTurnEnd(second.r, 1);
+    assert.equal(sent.length, 2, 'asked again; nothing came back, so the Claude call (the fake) took over');
+    await hub.close();
+
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { chat: { model: 'deepseek-v4-pro' } } } } }));
+    const third = await open(hub, state, 'oi');
+    await nthTurnEnd(third.r, 1);
+    assert.equal(level(), 'opus/high', 'a model of another company with no AI named never reaches the Claude CLI');
   });
 });

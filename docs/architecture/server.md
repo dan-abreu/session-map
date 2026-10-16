@@ -14,13 +14,26 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - `server/files.mjs`
 - `server/launch.mjs`
 - `server/log.mjs`
+- `server/lookstate.mjs`
+- `server/newproject.mjs`
+- `server/restart.mjs`
 
 ## Rules that must not break
 
 - No token, no write, no read from outside the machine.
 - Files are served read-only, text only, never `.git` and never `.env`.
+- The token never lands in a captured log: the "listening" line prints the links whole only to an interactive terminal
+  (where the person copies them); a log file gets the key masked (`listeningLinks` in `server/main.mjs`). The
+  `/session-map:map` skill hands the real links through `scripts/links.mjs`, so nothing the person needs is hidden.
 
 ## What's missing
+
+### Testes quebrados no working tree (14/10/2026)
+
+- [x] **Claude:** `test/files.test.mjs` falha (1 asserção, "safeResolve refuses a link that leads out of the root") `sv23`
+- [x] **Claude:** `test/user-hooks.test.mjs` falha (1 asserção, "--user skips at once with SESSION_MAP_PAGE_CHAT=1") — os ganchos mudaram no trabalho não commitado `sv20`
+- [ ] **Claude:** `test/server-flowmodel.test.mjs` falha (1 asserção, "the model is read on this PC without the key") `sv21`
+- [x] **Claude:** `test/readme-shots.test.mjs` falha (1 asserção, "without Chrome the script says so and exits 2") `sv22`
 
 ### Safety
 
@@ -65,6 +78,18 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
   - From `id95`. `POST /api/projects/new` creates the folder (a safe name, inside a folder that exists, never over one that exists) and remembers it in the person's `config.json`; the map lists it until its first conversation makes it a project like the others.
 - [x] A new project can also get its GitHub repository: private by default, with a first save sent `sv15`
   - From `id96`. Through the `gh` login already on the computer: checked before the folder is made (logged in, the name free on GitHub), then `git init`, a README, the first save and `gh repo create --source --push`. Nothing goes to GitHub unless the person chose it.
+
+### The second engine
+
+- [x] **DeepSeek:** The DeepSeek Harness joins Claude Code when its folder exists `sv18`
+  - From `id119`. `node server/main.mjs` turns DeepSeek on by itself when `~/.dsh` exists and Node can read its zstd logs (22.15+); `--dsh-dir <folder>` points at another folder, and a log line says why it stayed off otherwise. The `open` action of a DeepSeek conversation opens the app through its registered `dsh://open` protocol (starting the app when it is not running); the place, delete, archive and history routes accept the `session-<uuid>` ids of both engines, always checked against the same rules.
+
+### The professional log
+
+- [x] **Claude:** One professional, machine-readable log of everything the program does, for other AIs `sv19`
+  - From `id125`. `server/log.mjs` writes every event as one JSON line to `smDir/logs/session-map-YYYY-MM-DD.jsonl` (one file per local day, pruned after 30 days), next to the stderr line it writes today; the schema (v1: `v`, `ts`, `level`, `event` and the event's fields) is documented in `logs/schema.json`. Before the file write, fields named like secrets are dropped and string values are masked (`ai/redact.mjs`), so the page token never lands in a file; a failed write is reported on stderr and never stops the server. The action log's lines join the same file.
+  - `GET /api/logs` (the key, like the Changes) reads the newest lines, filtered by `?since=`, `?level=`, `?event=` and `?limit=`; `GET /api/logs/projects/<id>` reads one project's record (`wa11`).
+  - Built on main on 2026-10-14 (the file sink turns on with the next restart of session-map, never in `--demo`); 10 log tests and 4 route tests green.
 
 ### Later (ideas, not committed)
 

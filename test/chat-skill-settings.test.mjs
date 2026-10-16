@@ -16,26 +16,26 @@ const SKILLS = [
 ];
 const plugin = (name, month, extra = {}) => ({ id: `${name}@m`, name, enabled: true, month: { count: month }, ...extra });
 
-test('chatSkillSettings: the picked user and project skills are on, the rest name-only', () => {
+test('chatSkillSettings: every on user and project skill is on automatically — no call needed (id140)', () => {
   const s = chatSkillSettings({ skills: SKILLS, plugins: [], text: 'grill me about this plan' });
   assert.equal(s.skillOverrides.grilling, 'on');
-  assert.equal(s.skillOverrides['brag-slim'], 'name-only');
-  assert.equal(s.skillOverrides.dataviz, 'name-only');
+  assert.equal(s.skillOverrides['brag-slim'], 'on', 'on means automatic, not picked');
+  assert.equal(s.skillOverrides.dataviz, 'on');
   assert.equal(s.skillOverrides.brainstorming, undefined, 'a plugin skill is not a user skill');
 });
 
-test('chatSkillSettings: nothing fits, every user skill is name-only', () => {
+test('chatSkillSettings: even with nothing fitting, the on skills still run', () => {
   const s = chatSkillSettings({ skills: SKILLS, plugins: [], text: 'zzz' });
-  assert.deepEqual(Object.values(s.skillOverrides), ['name-only', 'name-only', 'name-only']);
+  assert.deepEqual(Object.values(s.skillOverrides), ['on', 'on', 'on']);
 });
 
-test('chatSkillSettings: a plugin is off only when enabled, unused for 30 days, not session-map, not named, no picked skill', () => {
+test('chatSkillSettings: the owner\'s switch is the only thing that turns a plugin off', () => {
   const plugins = [
     plugin('unused', 0), plugin('used', 2), plugin('session-map', 0), plugin('named-one', 0), plugin('superpowers', 0),
     plugin('already-off', 0, { enabled: false }),
   ];
   const s = chatSkillSettings({ skills: SKILLS, plugins, text: 'use named-one and brainstorming for the design' });
-  assert.deepEqual(s.enabledPlugins, { 'unused@m': false });
+  assert.deepEqual(s.enabledPlugins, {}, 'the engine no longer guesses; the switch decides');
 });
 
 test('chatSkillSettings: no plugin data means no plugin is turned off', () => {
@@ -46,7 +46,7 @@ test('guardSettings carries the focus next to the guard, and stays as before wit
   const focus = chatSkillSettings({ skills: SKILLS, plugins: [plugin('unused', 0)], text: 'grill me about this plan' });
   const s = JSON.parse(guardSettings({ snapshot: false, focus }));
   assert.equal(s.skillOverrides.grilling, 'on');
-  assert.deepEqual(s.enabledPlugins, { 'unused@m': false });
+  assert.equal(s.enabledPlugins, undefined, 'nothing to disable: the key stays out');
   assert.ok(s.hooks.PreToolUse);
   const plain = JSON.parse(guardSettings({ snapshot: false }));
   assert.equal(plain.skillOverrides, undefined);

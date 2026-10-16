@@ -11,8 +11,9 @@ const FEED_MAX = 100;
 const FIRST_LOOK_MS = 5_000;
 
 // readState() → the state; deliver(alerts, prefs); prefs() → notifyPrefs; skip() → the sessionIds the page drives (it
-// pushes their changes itself); startup(state) → alerts the first look brings (chats a restart cut off).
-export function createWatcher({ readState, deliver, prefs, skip, startup = () => [] }) {
+// pushes their changes itself); startup(state) → alerts the first look brings (chats a restart cut off); onEvents
+// (optional) receives the enriched alerts so the projects' records (wa11) can keep them.
+export function createWatcher({ readState, deliver, prefs, skip, startup = () => [], onEvents = null }) {
   // A new boot numbers from 1 again: the page tells by the boot id that its last id means nothing here.
   const boot = randomBytes(6).toString('hex');
   const feed = [];
@@ -28,6 +29,9 @@ export function createWatcher({ readState, deliver, prefs, skip, startup = () =>
     const alerts = events.map((e) => ({ ...e, id: ++lastId, ts }));
     feed.push(...alerts);
     feed.splice(0, Math.max(0, feed.length - FEED_MAX));
+    if (onEvents) {
+      try { onEvents(alerts); } catch (err) { log('warn', 'watch-record-failed', { error: err.message }); }
+    }
     Promise.resolve(deliver(alerts, prefs())).catch((err) => log('warn', 'alert-delivery-failed', { error: err.message }));
   }
 

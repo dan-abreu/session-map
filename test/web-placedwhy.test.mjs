@@ -14,6 +14,8 @@ test('placedWhy: an item code, a file, the map, the AI and the owner each give t
   assert.equal(why({ rule: 'files', files: ['server/chat/hub.mjs'] }), 'Here because it edited server/chat/hub.mjs');
   assert.equal(why({ rule: 'page' }), 'Here because it was opened from this part of the map');
   assert.equal(why({ rule: 'ai' }), 'Here because the AI read the chat and picked this part');
+  assert.equal(why({ rule: 'keyword', words: ['basket', 'orders'] }), 'Here because its words name this part: basket and orders');
+  assert.equal(why({ rule: 'keyword' }), 'Here because its words name this part');
   assert.equal(why({ rule: 'owner' }), 'Here because you put it here');
   assert.equal(why({ rule: 'owner', none: true }), 'You took it off the parts', 'moved to no part: not "you put it here"');
   assert.equal(why({ rule: 'project' }), 'It belongs to the whole project, not to one part');
@@ -30,6 +32,7 @@ test('placedWhy: a reason without its evidence, or an old server without a reaso
 test('placedWhy speaks Brazilian Portuguese too', () => {
   assert.equal(placedWhy({ partWhy: { rule: 'code', codes: ['mm27'] } }, pt, join), 'Está aqui porque citou mm27');
   assert.equal(placedWhy({ partWhy: { rule: 'files', files: ['a.js'] } }, pt, join), 'Está aqui porque editou a.js');
+  assert.equal(placedWhy({ partWhy: { rule: 'keyword', words: ['basket'] } }, pt, join), 'Está aqui porque suas palavras citam esta parte: basket');
   assert.equal(placedWhy({ partWhy: { rule: 'owner', none: true } }, pt, join), 'Você tirou esta conversa das partes');
 });
 

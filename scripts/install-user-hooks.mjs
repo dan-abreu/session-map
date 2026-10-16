@@ -16,7 +16,7 @@ export function wantedHooks(repo = REPO, node = process.execPath) {
   const slash = (p) => p.replace(/\\/g, '/');
   const run = (script, flags) => [{ type: 'command', command: `"${slash(node)}" "${slash(join(repo, 'server', 'chat', script))}" ${flags}`, timeout: TIMEOUT_S }];
   return {
-    PreToolUse: { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow', hooks: run('guard-hook.mjs', '--user') },
+    PreToolUse: { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow|Read', hooks: run('guard-hook.mjs', '--user') },
     Stop: { hooks: run('book-hook.mjs', '--stop --user') },
     SessionStart: { matcher: 'compact', hooks: run('book-hook.mjs', '--compact --user') },
   };

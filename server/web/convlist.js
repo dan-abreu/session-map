@@ -12,6 +12,7 @@ const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toL
 const newest = (a, b) => String(b.row.updatedAt ?? '').localeCompare(String(a.row.updatedAt ?? ''));
 
 function originOfChat(c) {
+  if (c.engine === 'deepseek') return 'deepseek';
   if (c.entrypoint === 'claude-vscode') return 'vscode';
   if (c.entrypoint === 'claude-desktop') return 'desktop';
   return String(c.entrypoint ?? '').startsWith('sdk') ? 'sdk' : 'terminal';
@@ -272,7 +273,7 @@ export function conversationCounts(project, tree, { showArchived = false } = {})
 // ---- the column ---------------------------------------------------------------------------------
 
 // Every origin has its own drawn icon and word, so a row never leaves "where does this run?" open.
-const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto' };
+const ORIGIN_ICON = { map: 'map', vscode: 'code', desktop: 'desktop', terminal: 'terminal', remote: 'phone', claudeai: 'globe', sdk: 'auto', deepseek: 'spark' };
 export const originIcon = (origin) => ORIGIN_ICON[origin] ?? 'terminal';
 const STEP_KINDS = new Set(['edit', 'read', 'run', 'search', 'web', 'agent', 'team', 'skill', 'plan', 'ask', 'think', 'tool']);
 // The groups that show how many they hold (Recent is the quiet rest), and the one that pages its rows.

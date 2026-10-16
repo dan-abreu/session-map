@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   CONDUCTOR_KINDS, SIZES, ConductorBlocked, assertWorker, conductorTail, outsideState, recommend, recordDecision,
 } from '../server/ai/conductor.mjs';
-import { DEFAULT_RUN, MODELS, expectedRun, parseRun, runArgs, runPrompt } from '../server/chat/run.mjs';
+import { MODELS, expectedRun, parseRun, runArgs, runPrompt } from '../server/chat/run.mjs';
 import { STANCE } from '../server/ai/stance.mjs';
 
 // The conductor (or04/or11/or14): Claude picks the level and the worker; this recommends from measured data, with the
@@ -181,6 +181,20 @@ test('stats come from smDir when none are passed', () => {
   }
 });
 
+test('the review row of the Cérebro rides the Claude reviewer; the policy\'s review row is the default (id146)', () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-conductor-choice-'));
+  try {
+    const onlyOpenai = OTHERS({ providers: [OTHERS().providers[0]] });
+    const stats = [{ kind: 'bulk', contestant: 'openai:gpt-6-luna', accuracy: 0.99, costPerCorrectUSD: 0.0001, n: 50 }];
+    const base = recommend({ kind: 'bulk', size: 'medium', sensitivity: 'public', others: onlyOpenai, stats, smDir });
+    assert.equal(base.worker.provider, 'openai', 'bulk goes outside');
+    assert.deepEqual([base.reviewer.provider, base.reviewer.model, base.reviewer.effort], ['claude', 'sonnet', 'medium'], 'the policy\'s review row');
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { review: { model: 'opus', effort: 'high' } } } } }));
+    const chosen = recommend({ kind: 'bulk', size: 'medium', sensitivity: 'public', others: onlyOpenai, stats, smDir });
+    assert.deepEqual([chosen.reviewer.provider, chosen.reviewer.model, chosen.reviewer.effort], ['claude', 'opus', 'high'], 'the owner\'s choice');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
 test('the reviewer is always from another family than the worker', () => {
   const r = rec({ kind: 'code', size: 'medium', others: OFF });
   assert.equal(id(r.worker), 'claude:sonnet');
@@ -199,19 +213,15 @@ test('the reviewer is always from another family than the worker', () => {
   assert.equal(draft.reviewer.provider, 'claude');
 });
 
-test('hard block: client or unknown data never reaches the DeepSeek family, by any road', () => {
+test('open to every AI: the data class keeps no one from the work, DeepSeek included (the owner opened it on 2026-10-15)', () => {
   for (const sensitivity of ['client', 'internal', undefined, 'whatever']) {
-    for (const kind of ['bulk', 'code', 'review', 'read', 'reasoning']) {
-      const r = rec({ kind, size: 'medium', sensitivity });
-      for (const w of everyone(r)) {
-        assert.ok(w.provider !== 'deepseek' && !String(w.model).includes('deepseek'), `${kind}/${sensitivity}: ${id(w)}`);
-      }
-    }
+    const r = rec({ kind: 'code', size: 'medium', sensitivity });
+    assert.equal(r.blocked.some((b) => b.why === 'sensitivity'), false, `${sensitivity}`);
   }
-  assert.throws(() => assertWorker({ provider: 'deepseek', model: 'deepseek-flash' }, { sensitivity: 'client', others: OTHERS() }), (e) => e instanceof ConductorBlocked && e.code === 'blocked-sensitivity');
-  assert.throws(() => assertWorker({ provider: 'deepseek', model: 'deepseek-flash' }, { sensitivity: undefined, others: OTHERS() }), (e) => e.code === 'blocked-sensitivity');
-  assert.throws(() => assertWorker({ provider: 'openrouter', model: 'deepseek/deepseek-v4.1-flash' }, { sensitivity: 'internal', others: OTHERS() }), (e) => e.code === 'blocked-sensitivity');
-  assert.doesNotThrow(() => assertWorker({ provider: 'deepseek', model: 'deepseek-flash' }, { sensitivity: 'public', others: OTHERS() }));
+  for (const sensitivity of ['client', 'internal', undefined, 'public']) {
+    assert.doesNotThrow(() => assertWorker({ provider: 'deepseek', model: 'deepseek-flash' }, { sensitivity, others: OTHERS() }), String(sensitivity));
+    assert.doesNotThrow(() => assertWorker({ provider: 'gemini', model: 'gemini-3.1-flash-lite' }, { sensitivity, others: OTHERS() }), String(sensitivity));
+  }
   assert.doesNotThrow(() => assertWorker({ provider: 'claude', model: 'opus' }, { sensitivity: 'client', others: OFF }));
 });
 
@@ -237,7 +247,7 @@ test('hard block: nothing goes outside when the cap is reached or the others are
 test('the reason names the worker and says why; blocked candidates are listed with their reason', () => {
   const r = rec({ kind: 'bulk', size: 'medium', sensitivity: 'client' });
   assert.ok(Array.isArray(r.blocked));
-  assert.ok(r.blocked.some((b) => b.provider === 'deepseek' && b.why === 'sensitivity'));
+  assert.equal(r.blocked.some((b) => b.why === 'sensitivity'), false, 'the data class blocks no one');
   assert.match(r.why, /Haiku|haiku/);
 });
 
@@ -267,15 +277,17 @@ test('the tail reads plainly when nothing is measured, the others are off, or th
 
 // ---- the conductor prompt and Fable in the fixed mode ----
 
-test('Fable is a model of the fixed mode, by its alias', () => {
+test('Fable is a model of the orchestrator\'s Autonomous, by its alias', () => {
   assert.ok(MODELS.includes('fable'));
-  assert.deepEqual(parseRun({ kind: 'fixed', model: 'fable', effort: 'max' }), { kind: 'fixed', model: 'fable', effort: 'max' });
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'fable', effort: 'high' }), ['--model', 'fable', '--effort', 'high', '--append-system-prompt', STANCE]);
-  assert.deepEqual(expectedRun({ kind: 'fixed', model: 'fable', effort: 'high' }, null), { model: 'fable', effort: 'high', ultracode: false });
+  assert.deepEqual(parseRun({ kind: 'autonomous', model: 'fable', effort: 'max' }), { kind: 'autonomous', model: 'fable', effort: 'max' });
+  const args = runArgs({ kind: 'autonomous', model: 'fable', effort: 'high' });
+  assert.equal(args[args.indexOf('--model') + 1], 'fable');
+  assert.equal(args[args.indexOf('--effort') + 1], 'high');
+  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'fable', effort: 'high' }), { model: 'fable', effort: 'high', ultracode: false });
 });
 
 test('the conductor prompt knows the one arsenal: four Claude models, the outside AIs, the rules, and stays compact', () => {
-  for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
+  for (const run of [{ kind: 'autonomous' }]) {
     const p = runPrompt(run);
     assert.ok(Buffer.byteLength(p, 'utf8') < 4096, `${run.kind}: ${Buffer.byteLength(p, 'utf8')} bytes`);
     assert.match(p, /fable/i, `${run.kind}: fable`);
@@ -286,34 +298,35 @@ test('the conductor prompt knows the one arsenal: four Claude models, the outsid
     assert.match(p, /pick_worker/);
     assert.match(p, /list_other_ais/);
     assert.match(p, /another family/i);
-    assert.match(p, /DeepSeek[^.]*public/);
+    assert.match(p, /DeepSeek included/);
     assert.match(p, /tests/i);
     assert.match(p, /quality first/i);
     assert.match(p, /session-map-run/);
     assert.match(p, /"why": "a short reason[^"]*(\d+) words/);
   }
-  assert.match(runPrompt(DEFAULT_RUN), /ask-reinforce/);
-  assert.doesNotMatch(runPrompt({ kind: 'maestro' }), /ask-reinforce/);
+  assert.match(runPrompt({ kind: 'autonomous' }), /ask-reinforce/);
 });
 
-test('runArgs adds the day\'s tail after the conductor prompt, and only to the conductor modes', () => {
+test('runArgs adds the day\'s tail only to the Autonomous conductor, the stance to the talk chat', () => {
   const tail = 'Today: openai ready.';
-  const p = runArgs(DEFAULT_RUN, tail)[runArgs(DEFAULT_RUN, tail).indexOf('--append-system-prompt') + 1];
-  assert.ok(p.startsWith(runPrompt(DEFAULT_RUN)));
+  const args = runArgs({ kind: 'autonomous' }, tail);
+  const p = args[args.indexOf('--append-system-prompt') + 1];
+  assert.ok(p.startsWith(runPrompt({ kind: 'autonomous' })));
   assert.ok(p.endsWith(tail));
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'opus', effort: 'low' }, tail), ['--model', 'opus', '--effort', 'low', '--append-system-prompt', STANCE], 'the stance, never the conductor tail');
-  assert.deepEqual(runArgs(DEFAULT_RUN), runArgs(DEFAULT_RUN, ''), 'no tail, the plain prompt');
+  const talk = runArgs({ kind: 'talk' }, tail);
+  assert.equal(talk[talk.indexOf('--append-system-prompt') + 1], STANCE, 'the stance, never the conductor tail');
+  assert.deepEqual(runArgs({ kind: 'autonomous' }), runArgs({ kind: 'autonomous' }, ''), 'no tail, the plain prompt');
 });
 
 // ---- review fixes: each test below failed before its fix ----
 
-test('hard block: an OpenRouter worker with no model is judged by the model the call would use, DeepSeek', () => {
+test('an OpenRouter worker with no model is judged by the model the call would use, and passes for any class', () => {
   const others = OTHERS({ providers: [{ id: 'openrouter', hasKey: true, on: true }] });
   for (const model of [undefined, null, '']) {
-    assert.throws(() => assertWorker({ provider: 'openrouter', model }, { sensitivity: 'client', others }), (e) => e.code === 'blocked-sensitivity', String(model));
-    assert.throws(() => assertWorker({ provider: 'openrouter', model }, { sensitivity: 'internal', others }), (e) => e.code === 'blocked-sensitivity', String(model));
+    for (const sensitivity of ['client', 'internal', 'public']) {
+      assert.doesNotThrow(() => assertWorker({ provider: 'openrouter', model }, { sensitivity, others }), `${model}/${sensitivity}`);
+    }
   }
-  assert.doesNotThrow(() => assertWorker({ provider: 'openrouter' }, { sensitivity: 'public', others }));
 });
 
 test('the decision log keeps plain worker names only: a key-shaped failedBefore never reaches it', () => {
@@ -419,7 +432,7 @@ test('the tail gives every measured kind its lines, the best Claude level and th
 });
 
 test('the prompt says large applies to every Fable case, its last word comes after the review, and how to skip a failed AI', () => {
-  for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
+  for (const run of [{ kind: 'autonomous' }]) {
     const p = runPrompt(run);
     assert.match(p, /fable[^\n]*only when Opus already failed/i, 'the same rule as recommend() (or31)');
     assert.match(p, /fable[^\n]*large critical delivery[^\n]*last word after the other family/i);
@@ -431,7 +444,7 @@ test('the prompt says large applies to every Fable case, its last word comes aft
 // or23/id105: a week of transcripts showed 54% of the agents on Opus high, Haiku in 4%, a skill opened by 59% of the
 // agents and one workflow of 194 agents. The prompt now routes down by default and hands each agent a narrow brief.
 test('the prompt routes down by default, briefs each agent narrowly, reviews once per delivery and caps a workflow', () => {
-  for (const run of [DEFAULT_RUN, { kind: 'maestro' }]) {
+  for (const run of [{ kind: 'autonomous' }]) {
     const p = runPrompt(run);
     assert.doesNotMatch(p, /^- (?:haiku|sonnet|opus|fable),/m, 'the levels live in the policy, not in the prompt (or33)');
     assert.match(p, /brief[^\n]*exact files and lines[^\n]*when to stop/i);
@@ -462,4 +475,34 @@ test('the tail carries one short line of version warnings only when something is
   assert.ok(line[0].length <= 420, `${line[0].length} chars`);
   assert.ok(!/Ignore previous/.test(tail));
   assert.ok(tail.length < 1500, `${tail.length} chars`);
+});
+
+test('the Cérebro drives the work (id155): the row of the kind names who works, even on large or critical work', () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-cerebro-'));
+  const choose = (functions) => writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions } } }));
+  try {
+    choose({ risk: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'high' } });
+    for (const kind of ['reasoning', 'security', 'architecture']) {
+      const r = rec({ kind, size: 'large', critical: true, smDir });
+      assert.equal(id(r.worker), 'deepseek:deepseek-v4-pro', kind);
+      assert.match(r.why, /the Cérebro puts risk on deepseek/);
+      assert.ok(r.reviewer && r.reviewer.provider !== 'deepseek', 'another family still reviews');
+    }
+    assert.equal(rec({ kind: 'code', size: 'small', smDir }).worker.provider, 'claude', 'a row without a choice keeps the policy');
+
+    choose({ code: { provider: 'openai' } });
+    assert.equal(id(rec({ kind: 'code', size: 'large', critical: true, smDir }).worker), 'openai:gpt-6-luna', 'no model named: the provider\'s own');
+    assert.equal(rec({ kind: 'code', size: 'small', smDir, others: OFF }).worker.provider, 'claude', 'the others off: the hard gate holds');
+    assert.equal(rec({ kind: 'code', size: 'small', smDir, failedBefore: ['openai:gpt-6-luna'] }).worker.provider, 'claude', 'a failed choice is not asked again');
+
+    choose({ code: { provider: 'claude', model: 'opus', effort: 'xhigh' } });
+    const own = rec({ kind: 'code', size: 'small', smDir });
+    assert.deepEqual([own.worker.provider, own.worker.model, own.worker.effort], ['claude', 'opus', 'xhigh']);
+    assert.equal(rec({ kind: 'code', size: 'small', smDir, failedBefore: ['claude:opus'] }).worker.model === 'opus', false, 'a failed level is never forced back');
+
+    choose({ review: { effort: 'high' } });
+    const level = rec({ kind: 'review', size: 'small', smDir, author: 'openai' });
+    assert.equal(level.worker.provider, 'claude');
+    assert.equal(level.worker.effort, 'high', 'a row with only a level sets Claude\'s level in its place');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
 });

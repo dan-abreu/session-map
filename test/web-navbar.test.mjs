@@ -149,7 +149,7 @@ test('More opens a menu with the seven hidden areas, in table order; picking one
   const menu = s.root.querySelector('.nav-menu');
   assert.equal(menu.attrs.role, 'menu');
   const items = menu.querySelectorAll('button');
-  assert.deepEqual(items.map((b) => b.attrs.id), ['flow', 'requests', 'changes', 'health', 'costs', 'library', 'discover'].map((id) => `tab-${id}`));
+  assert.deepEqual(items.map((b) => b.attrs.id), ['flow', 'requests', 'changes', 'health', 'costs', 'brain', 'library', 'discover'].map((id) => `tab-${id}`));
   assert.ok(items.every((b) => b.attrs.role === 'menuitem'));
   assert.equal(focused(), items[0], 'the focus goes to the first item');
   items[3].handlers.click({});

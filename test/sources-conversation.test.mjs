@@ -62,6 +62,21 @@ test('readConversation puts the cost of each reply on its last message, and the 
   });
 });
 
+test('readConversation reports the memory the last reply carried: input, cache written and cache read (pc37)', () => {
+  withTranscript([
+    human(0, 'First'),
+    assistant(1, 'm1', [{ type: 'text', text: 'a' }], { input_tokens: 10, cache_creation_input_tokens: 5000, cache_read_input_tokens: 20000, output_tokens: 100 }),
+    human(2, 'Second'),
+    assistant(3, 'm2', [{ type: 'text', text: 'b' }], { input_tokens: 20, cache_creation: { ephemeral_5m_input_tokens: 1000, ephemeral_1h_input_tokens: 2000 }, cache_read_input_tokens: 40000, output_tokens: 50 }),
+    { ...assistant(4, 'side', [{ type: 'text', text: 'helper' }], { input_tokens: 900000, output_tokens: 1 }), isSidechain: true },
+  ], (path) => {
+    assert.equal(readConversation(path, { prices: PRICES }).contextTokens, 43020, 'the last reply of the chat itself; a helper line is not the chat');
+  });
+  withTranscript([human(0, 'Only a question')], (path) => {
+    assert.equal(readConversation(path, { prices: PRICES }).contextTokens, null, 'no reply, no number');
+  });
+});
+
 test('readConversation folds a tool step with its input, its result and the kind of step', () => {
   withTranscript([
     human(0, 'Run the tests'),

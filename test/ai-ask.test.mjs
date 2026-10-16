@@ -8,6 +8,7 @@ import { AiQueue } from '../server/ai/runner.mjs';
 import { emptyHelperState, recordReview } from '../server/ai/review.mjs';
 import { forgetLife } from '../server/ai/life.mjs';
 import { STANCE } from '../server/ai/stance.mjs';
+import { REVIEW_SCHEMA } from '../server/ai/contract.mjs';
 
 const NOON = new Date(2026, 9, 9, 12, 0, 0).getTime();
 const tmp = () => mkdtempSync(join(tmpdir(), 'sm-ask-'));
@@ -68,19 +69,20 @@ test('nothing leaves when the owner switched the other AIs off', async () => {
   } finally { s.done(); }
 });
 
-test('a review of Claude\'s work goes as plain text to another family, and the answer says who, which model, cost and time', async () => {
+test('a review of Claude\'s work goes to another family in the review shape (id142), and the answer says who, which model, cost and time', async () => {
   const s = setup();
   try {
     const got = await s.ask({ kind: 'review', sensitivity: 'internal', prompt: 'Review this diff' });
     assert.equal(got.ok, true);
     assert.equal(got.answers.length, 1);
     const [a] = got.answers;
-    assert.deepEqual({ ...a, ms: 0 }, { provider: 'openai', model: 'gpt-6.1-sol', text: 'openai says fine', costUSD: 0.002, ms: 0 });
+    assert.deepEqual({ ...a, ms: 0 }, { provider: 'openai', model: 'gpt-6.1-sol', value: { verdict: 'ok' }, costUSD: 0.001, ms: 0 });
     assert.ok(Number.isFinite(a.ms) && a.ms >= 0);
     assert.equal(s.f.calls[0].prompt, `${STANCE}\n\nReview this diff`, 'a review takes a stance on the facts (or27)');
     assert.equal(s.f.calls[0].key, 'sk-openai-SECRET0123456789');
     assert.equal(s.f.calls[0].maxTokens, ASK_MAX_OUT_TOKENS);
-    assert.equal(s.queue.outsideSpentToday(), 0.002, 'booked in the same day\'s spend as the map\'s own work');
+    assert.equal(s.f.calls[0].schemaHint, REVIEW_SCHEMA, 'a review asks for the findings shape unless the caller gave one');
+    assert.equal(s.queue.outsideSpentToday(), 0.001, 'booked in the same day\'s spend as the map\'s own work');
     assert.equal(JSON.stringify(got).includes('SECRET'), false, 'never the key');
     assert.ok(got.skipped.some((x) => x.provider === 'deepseek' && x.why === 'no-key'));
   } finally { s.done(); }
@@ -96,18 +98,16 @@ test('an answer to a JSON shape comes back as a value', async () => {
   } finally { s.done(); }
 });
 
-test('client and internal data never go to DeepSeek; public data may', async () => {
+test('any data class may go to DeepSeek: client, internal and public alike', async () => {
   const s = setup({ settings: { keys: ['deepseek'] } });
   try {
-    for (const sensitivity of ['client', 'internal']) {
-      const got = await s.ask({ kind: 'code', sensitivity, prompt: 'write it' });
-      assert.equal(got.ok, false);
-      assert.equal(got.error, 'no-ai-available');
-      assert.ok(got.skipped.some((x) => x.provider === 'deepseek' && x.why === 'sensitivity'), sensitivity);
+    for (const sensitivity of ['client', 'internal', 'public']) {
+      const got = await s.ask({ kind: 'code', sensitivity, prompt: `write it ${sensitivity}` });
+      assert.equal(got.ok, true, sensitivity);
+      assert.deepEqual(got.answers.map((a) => [a.provider, a.model]), [['deepseek', 'deepseek-v4-pro']], sensitivity);
+      assert.ok(!got.skipped.some((x) => x.why === 'sensitivity'), sensitivity);
     }
-    assert.equal(s.f.calls.length, 0);
-    const pub = await s.ask({ kind: 'code', sensitivity: 'public', prompt: 'write it' });
-    assert.deepEqual(pub.answers.map((a) => [a.provider, a.model]), [['deepseek', 'deepseek-v4-pro']]);
+    assert.equal(s.f.calls.length, 3);
   } finally { s.done(); }
 });
 
@@ -123,7 +123,7 @@ test('fanout asks several AIs at once, each a different one, for a second opinio
 });
 
 test('a failed AI is reported by a short code, and the next one in line takes its place', async () => {
-  const s = setup({ fakes: { text: (prompt, o) => (o.provider === 'openai' ? { ok: false, error: 'http-500', provider: 'openai' } : { ok: true, text: 'fine', costUSD: 0.001 }) } });
+  const s = setup({ fakes: { json: (prompt, o) => (o.provider === 'openai' ? { ok: false, error: 'http-500', provider: 'openai' } : { ok: true, value: { verdict: 'fine' }, costUSD: 0.001 }) } });
   try {
     const got = await s.ask({ kind: 'review', sensitivity: 'internal', prompt: 'p' });
     assert.deepEqual(got.answers.map((a) => a.provider), ['gemini']);
@@ -218,7 +218,7 @@ test('an ask that times out after leaving is booked against the cap at its estim
 });
 
 test('an ask whose call threw is booked at its estimate: nobody knows whether it left', async () => {
-  const s = setup({ settings: { keys: ['openai'] }, fakes: { text: () => { throw new Error('boom'); } } });
+  const s = setup({ settings: { keys: ['openai'] }, fakes: { json: () => { throw new Error('boom'); } } });
   try {
     const got = await s.ask({ kind: 'review', sensitivity: 'internal', prompt: 'x'.repeat(1000) });
     assert.equal(got.ok, false);
@@ -227,7 +227,7 @@ test('an ask whose call threw is booked at its estimate: nobody knows whether it
 });
 
 test('exclude leaves out the AIs that already failed this work, so the next in line answers, as pick_worker said', async () => {
-  const s = setup({ settings: { keys: ['gemini', 'openai', 'deepseek'] } });
+  const s = setup({ settings: { keys: ['gemini', 'openai'] } });
   try {
     const got = await s.ask({ kind: 'review', sensitivity: 'internal', prompt: 'p', exclude: ['openai:gpt-6.1-sol'] });
     assert.equal(got.ok, true);

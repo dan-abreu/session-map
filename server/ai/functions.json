@@ -1,0 +1,94 @@
+{
+  "_note": "The one registry of every function of session-map that uses AI (id124, or39). The Cérebro tab draws its routing table from here; the policy kinds (policy.json) give each row its default model and effort. kinds: the task kinds of server/ai/policy.json; engine: brain|chat|background (the per-function engine choice, engine.mjs) or null for a function not wired yet.",
+  "functions": [
+    {
+      "id": "brain", "order": 1, "engine": "brain",
+      "en": { "label": "Entry brain", "does": "Weighs each message and names the phase (talk, plan, build)" },
+      "pt": { "label": "Cérebro de entrada", "does": "Pesa cada mensagem e diz a fase (conversa, plano, construção)" },
+      "note": {
+        "en": "The free rules read each message first; this AI is asked only when they are unsure and the message is long (about 2 of 13 of the owner's real messages). It sets the phase of the turn, never the model.",
+        "pt": "As regras grátis leem cada mensagem primeiro; esta IA só é chamada quando elas ficam em dúvida e a mensagem é longa (cerca de 2 em 13 das mensagens reais do dono). Ela define a fase do turno, nunca o modelo."
+      }
+    },
+    {
+      "id": "chat", "order": 2, "engine": "chat",
+      "en": { "label": "Conversation", "does": "Receives the person and answers; never switches models on its own" },
+      "pt": { "label": "Conversa", "does": "Recebe a pessoa e responde; nunca troca de modelo sozinha" }
+    },
+    {
+      "id": "plan", "order": 3, "kinds": ["plan"],
+      "en": { "label": "Planning", "does": "Breaks the request into tasks, each with its model and level" },
+      "pt": { "label": "Planejamento", "does": "Divide o pedido em tarefas, cada uma com seu modelo e nível" }
+    },
+    {
+      "id": "gather", "order": 4, "kinds": ["search", "read", "bulk", "text", "commit"],
+      "en": { "label": "Search, read and bulk", "does": "Find, list, label and summarize at volume" },
+      "pt": { "label": "Busca, leitura e lote", "does": "Achar, listar, rotular e resumir em volume" }
+    },
+    {
+      "id": "docs", "order": 5, "kinds": ["docs"],
+      "en": { "label": "Documentation", "does": "Writes what the code already says" },
+      "pt": { "label": "Documentação", "does": "Escreve o que o código já diz" }
+    },
+    {
+      "id": "code", "order": 6, "kinds": ["code", "test"],
+      "en": { "label": "Code and tests", "does": "Writes code against the existing tests" },
+      "pt": { "label": "Código e teste", "does": "Escreve código contra os testes existentes" }
+    },
+    {
+      "id": "screen", "order": 7, "kinds": ["screen"],
+      "en": { "label": "Screens", "does": "Interface code with good taste" },
+      "pt": { "label": "Telas", "does": "Código de interface com bom gosto" }
+    },
+    {
+      "id": "debug", "order": 8, "kinds": ["debug"],
+      "en": { "label": "Debugging", "does": "Finds a defect with a test in hand" },
+      "pt": { "label": "Depuração", "does": "Acha um defeito com o teste na mão" }
+    },
+    {
+      "id": "review", "order": 9, "kinds": ["review"],
+      "en": { "label": "Review", "does": "Checks the delivery before it is accepted; another family when Claude wrote it" },
+      "pt": { "label": "Revisão", "does": "Confere a entrega antes de aceitar; outra família quando o Claude escreveu" }
+    },
+    {
+      "id": "opinion", "order": 10, "kinds": ["review"], "otherFamily": true,
+      "en": { "label": "Checker", "does": "Checks a dubious bulk answer, with an AI of another family" },
+      "pt": { "label": "Conferência", "does": "Confere uma resposta em lote duvidosa, com uma IA de outra família" }
+    },
+    {
+      "id": "risk", "order": 11, "kinds": ["architecture", "security", "money", "personal-data"],
+      "en": { "label": "Architecture, security, money and data", "does": "High risk: a mistake costs a lot" },
+      "pt": { "label": "Arquitetura, segurança, dinheiro e dados", "does": "Risco alto: o erro sai caro" }
+    },
+    {
+      "id": "background", "order": 12, "engine": "background",
+      "en": { "label": "Map's bulk work", "does": "Labels, summaries and tidies in the background" },
+      "pt": { "label": "Braçal do mapa", "does": "Rótulos, resumos e arrumações de fundo" }
+    },
+    {
+      "id": "book", "order": 13, "engine": "background",
+      "en": { "label": "Book (titles and summaries)", "does": "Titles and summaries for the closed chapters" },
+      "pt": { "label": "Livro (títulos e resumos)", "does": "Dá título e resumo aos capítulos fechados" }
+    },
+    {
+      "id": "web", "order": 14, "engine": null,
+      "en": { "label": "Web search", "does": "Searches and reads pages for the work" },
+      "pt": { "label": "Busca na web", "does": "Pesquisa e lê páginas para o trabalho" }
+    },
+    {
+      "id": "agents", "order": 15, "kinds": ["code"],
+      "en": { "label": "Work agents", "does": "Each agent runs at the level of the function it executes, held by the engine's guard" },
+      "pt": { "label": "Agentes de trabalho", "does": "Cada agente roda no nível da função que executa, seguro pela guarda do motor" },
+      "note": { "en": "One rule for every Claude helper, over each helper's own choice; a helper put on another AI is handed the work by the chat (run_other_ai), which edits files where that AI has an engine for it.", "pt": "Uma regra para todo ajudante Claude, por cima da escolha de cada um; um ajudante posto em outra IA recebe o trabalho do chat (run_other_ai), que edita arquivos onde essa IA tem motor para isso." }
+    },
+    {
+      "id": "team", "order": 16, "engine": null,
+      "en": { "label": "Teams (workflows)", "does": "The conductor's team of agents: one per task, at most 10 per workflow" },
+      "pt": { "label": "Equipes (fluxos de trabalho)", "does": "A equipe de agentes do maestro: um por tarefa, no máximo 10 por fluxo" },
+      "note": {
+        "en": "The engine holds the 10-agent cap; each agent of the team follows the row of the kind it executes. This row has no call of its own (id146).",
+        "pt": "O motor segura o teto de 10 agentes; cada agente da equipe segue a linha do tipo que executa. Esta linha não tem chamada própria (id146)."
+      }
+    }
+  ]
+}

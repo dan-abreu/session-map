@@ -42,8 +42,8 @@ export const DEFAULT_TABLE = Object.freeze({
     row('claude', 'haiku', 'research 2026-10-10: best bulk sorter'),
     row('openai', 'gpt-6-luna', 'research 2026-10-10: cheap bulk labels', { note: 'it guesses instead of saying "I do not know": its answers are always checked' }),
     row('gemini', 'gemini-3.1-flash-lite', `research 2026-10-10: cheap and fast; ${PAID_GEMINI}`),
-    row('deepseek', 'deepseek-flash', 'research 2026-10-10: cheapest; public data only'),
-    row('openrouter', 'deepseek/deepseek-v4.1-flash', 'backup through OpenRouter; public data only while the model is DeepSeek'),
+    row('deepseek', 'deepseek-flash', 'research 2026-10-10: cheapest'),
+    row('openrouter', 'deepseek/deepseek-v4.1-flash', 'backup through OpenRouter'),
   ]),
   // Claude conducts, so a review is first for what Claude wrote: another family. route() moves Opus to the front
   // when another AI wrote it.
@@ -97,15 +97,6 @@ function authorFamily(author) {
   return a.toLowerCase();
 }
 
-// DeepSeek keeps what it is sent in China and may train on it: public data only. A direct Gemini key may be a free-tier
-// one, whose data Google may use (nothing here can tell): never client data. An unknown class is the strictest.
-function allowedFor(sensitivity, family, provider) {
-  const s = SENSITIVITIES.includes(sensitivity) ? sensitivity : 'client';
-  if (family === 'deepseek') return s === 'public';
-  if (provider === 'gemini') return s !== 'client';
-  return true;
-}
-
 const knownProvider = (p) => p === 'claude' || Boolean(providerOf(p));
 
 function parseContestant(id) {
@@ -121,7 +112,7 @@ const pct = (x) => `${Math.round(x * 100)}%`;
 // -> {candidates: [{provider, model, family, why, note?, maxPromptChars?, measured?}], skipped: [{provider, model, why}]}
 // available: provider ids usable right now (key, switched on, not paused, under the cap), 'claude' included or not.
 // stats: loadStats() entries. models: {provider: model} the owner pinned, for bulk work only.
-export function explainRoute({ kind, sensitivity, author, available = [], stats = [], models = {} } = {}) {
+export function explainRoute({ kind, author, available = [], stats = [], models = {} } = {}) {
   const k = routeKindOf(kind);
   if (!k) return { candidates: [], skipped: [] };
   const avail = new Set(available);
@@ -149,7 +140,6 @@ export function explainRoute({ kind, sensitivity, author, available = [], stats 
     seen.add(id);
     const family = familyOf(r.provider, model);
     if (!avail.has(r.provider)) { skipped.push({ provider: r.provider, model, why: 'not-available' }); continue; }
-    if (!allowedFor(sensitivity, family, r.provider)) { skipped.push({ provider: r.provider, model, why: 'sensitivity' }); continue; }
     if (k === 'review' && family === writer) { skipped.push({ provider: r.provider, model, why: 'same-family' }); continue; }
     const m = measured.get(id);
     const c = { provider: r.provider, model, family, why: model === r.model ? r.why : `${r.why}; model pinned by the owner` };

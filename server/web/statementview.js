@@ -349,7 +349,18 @@ export function createStatement({ h, t, lang, errorText }) {
 
   function periodView(tt) {
     const grand = period.total.usd + (period.outside?.usd ?? 0);
-    return [kpis(tt, grand), dayBars(tt), wasteView(tt), costTree(tt, grand), journalTable(tt)].filter(Boolean);
+    return [kpis(tt, grand), dayBars(tt), wasteView(tt), specialistsView(tt), costTree(tt, grand), journalTable(tt)].filter(Boolean);
+  }
+
+  // The spend per specialist (or60): each trained role, summed across the period's conversations.
+  function specialistsView(tt) {
+    const list = period.specialists ?? [];
+    if (!list.length) return null;
+    const name = (s) => (lang() === 'pt-BR' ? s.labelPt : s.label);
+    return [h('h4', {}, tt('stmt.specialists')), h('p', { class: 'stmt-sub' }, tt('stmt.specialistsHint')),
+      table([tt('stmt.col.who'), tt('stmt.col.replies'), tt('stmt.col.cost')],
+        list.map((s) => [name(s), num(s.replies), usd(s.usd)]),
+        [h('strong', {}, tt('stmt.col.total')), num(list.reduce((a, s) => a + s.replies, 0)), h('strong', {}, usd(list.reduce((a, s) => a + s.usd, 0)))])];
   }
 
   // ----- one chat opened: who worked, files, kinds of work, days -----

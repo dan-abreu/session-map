@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, sep } from 'node:path';
@@ -11,10 +11,16 @@ import { createDelivery, toastCommand } from './alerts/deliver.mjs';
 import { notifyPrefs, setNotifyPrefs } from './alerts/prefs.mjs';
 import { createWatcher } from './alerts/watcher.mjs';
 import { createAskRoutes, hasHeaderToken, headerAuth } from './ai/askroute.mjs';
+import { createRunRoutes } from './ai/runroute.mjs';
+import { createBookRoutes } from './ai/bookroute.mjs';
 import { createHelperRoutes } from './ai/helperroute.mjs';
+import { createBrainRoutes } from './ai/brainroute.mjs';
+import { createCensusRoutes } from './censusroute.mjs';
 import { getKey } from './ai/keys.mjs';
 import { othersSettings } from './ai/others.mjs';
 import { createVersionWatch } from './ai/versions.mjs';
+import { createPricesWatch } from './ai/prices-watch.mjs';
+import { refreshBalances } from './ai/balance-watch.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
 import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, searchIndex } from './archive.mjs';
@@ -41,9 +47,10 @@ import { readRemoved } from './hidden.mjs';
 import { createFoundationRoute } from './foundation/http/index.mjs';
 import { refreshFoundation } from './foundation/refresh.mjs';
 import { linksOf } from './imports.mjs';
-import { log } from './log.mjs';
+import { configureLog, log, PROJECT_ID_RE, readLog, readProjectLog, recordProject } from './log.mjs';
 import { fetchCatalog, filterCatalog, markInstalled } from './sources/catalog.mjs';
 import { claudeDir } from './sources/claude.mjs';
+import { dshDir as defaultDshDir, isAnySessionId, zstdAvailable } from './sources/deepseek.mjs';
 import { countRepo } from './sources/count.mjs';
 import { setPlacement } from './placements.mjs';
 import { addCard, moveCard, readCards, removeCard } from './cards.mjs';
@@ -185,9 +192,9 @@ export function listeningLinks(port, token, { lan = null, tty = Boolean(process.
 }
 
 export function createApp({
-  dir = claudeDir(), smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
+  dir = claudeDir(), dshDir = null, smDir, demo = false, token = demo ? randomBytes(32).toString('hex') : loadToken(smDir),
   collectFn = collect, ai, addressOf = (req) => req.socket.remoteAddress, chat: chatHub,
-  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', helpers = {}, askAi = {},
+  catalog = {}, stateTtlMs = STATE_TTL_MS, baseUrl = 'http://127.0.0.1:4001', helpers = {}, askAi = {}, runAi = {},
   lanUrl = null, restart = {}, newProjectExec, versions = {}, deliver: deliverGiven,
 } = {}) {
   // The address the person's own page last came from (a cookie request): a click on an alert opens that one, so after a
@@ -209,7 +216,7 @@ export function createApp({
   let lookKey = demo || !smDir ? null : loadLookKey(smDir);
   // readState/changed: the orchestrator's tools read the newest state and drop it after an archive or a rename (or17).
   const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({
-    smDir, dir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
+    smDir, dir, dshDir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
     // The project's month against its own budget (or07), from the newest finished state: a chat start never waits a collect.
     projectBudget: (projectId) => newest?.projects?.find((p) => p.id === projectId)?.budget ?? null,
   });
@@ -226,7 +233,7 @@ export function createApp({
     if (!cached || (cached.done && Date.now() - cached.at >= stateTtlMs)) {
       const promise = demo
         ? readFile(DEMO_STATE, 'utf8').then(JSON.parse)
-        : Promise.resolve(collectFn({ dir, smDir, driving: chat?.drivingIds?.() ?? new Set(), ...(ai ? { ai } : {}) }));
+        : Promise.resolve(collectFn({ dir, smDir, dshDir, driving: chat?.drivingIds?.() ?? new Set(), ...(ai ? { ai } : {}) }));
       const entry = { at: Date.now(), promise, done: false };
       cached = entry;
       promise.then((s) => {
@@ -267,6 +274,17 @@ export function createApp({
     readState: state, deliver, prefs: prefsNow,
     skip: () => chat?.drivenIds?.() ?? new Set(),
     startup: (s) => (chat?.interrupted?.(s) ?? []).filter((a) => !resumed.has(a.sessionId)),
+    // The projects' records (wa11): every event with a project lands in that project's machine-readable log, so
+    // another AI can read what happened there even when the AI that did it forgot to say.
+    onEvents: (alerts) => {
+      for (const a of alerts) {
+        if (!a.projectId) continue; // the plan-limit alert belongs to no project
+        recordProject(smDir, a.projectId, a.kind, {
+          projectName: a.projectName, sessionId: a.sessionId, title: a.title, origin: a.origin,
+          reason: a.reason, summary: a.summary, pct: a.pct, usedUSD: a.usedUSD, limitUSD: a.limitUSD,
+        });
+      }
+    },
   });
 
   const projectOf = async (projectId) => {
@@ -334,7 +352,7 @@ export function createApp({
       req.on('close', unsubscribe);
       return undefined;
     }
-    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
+    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req, verb === 'send' ? CHAT_BODY_MAX : BODY_MAX);
     const result = await (verb === 'stop' ? chat.stop(key) : chat[verb](key, body));
     return send(res, result.status, result.body);
@@ -363,7 +381,7 @@ export function createApp({
 
   // The owner moves a conversation to another project or part, or renames it (mm21). Writes need the token (authorize).
   async function placeRoute(req, res, sessionId) {
-    if (!UUID_RE.test(sessionId)) throw new HttpError(400, 'bad-session');
+    if (!isAnySessionId(sessionId)) throw new HttpError(400, 'bad-session');
     if (demo) throw new HttpError(403, 'demo');
     const body = await readBody(req);
     const ok = body && typeof body === 'object' && !Array.isArray(body)
@@ -455,6 +473,37 @@ export function createApp({
     const status = result.ok ? 200 : LIMIT_ERRORS[result.error];
     logAction(smDir, { action: 'reinforced-limit', usd: typeof usd === 'number' ? usd : null }, status);
     return send(res, status, result);
+  }
+
+  // One skill's switch (id139): skills.off in the user's config.json, honored by the guard for chats opened after it.
+  async function skillRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'PATCH') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    const skill = String(body?.skill ?? '').trim();
+    if (!skill || typeof body?.on !== 'boolean') throw new HttpError(400, 'bad-skill');
+    const config = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
+    const off = new Set(Array.isArray(config.skills?.off) ? config.skills.off : []);
+    if (body.on) off.delete(skill); else off.add(skill);
+    const next = { ...config, skills: { ...(config.skills ?? {}), off: [...off].sort() } };
+    writeAtomic(join(smDir, 'config.json'), JSON.stringify(next, null, 2));
+    logAction(smDir, { action: 'skill-switch', skill, on: body.on }, 200);
+    return send(res, 200, { ok: true, skill, on: body.on });
+  }
+
+  // The skills' airplane switch (id136): skills.airplane in the user's config.json; it reaches chats opened after it.
+  async function skillsAirplaneRoute(req, res) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'PATCH') throw new HttpError(404, 'not-found');
+    const body = await readBody(req);
+    if (typeof body?.on !== 'boolean') throw new HttpError(400, 'bad-on');
+    const config = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
+    const next = { ...config, skills: { ...(config.skills ?? {}), airplane: body.on } };
+    writeAtomic(join(smDir, 'config.json'), JSON.stringify(next, null, 2));
+    logAction(smDir, { action: 'skills-airplane', on: body.on }, 200);
+    return send(res, 200, { ok: true, on: body.on });
   }
 
   // The one-click plugin switch (rd09): enabledPlugins in the user's settings.json; it reaches chats opened after it.
@@ -594,7 +643,19 @@ export function createApp({
     pinned: () => othersSettings((readJsonFile(join(smDir, 'config.json'), {}) ?? {}).ai, []).models,
   });
   const checkVersions = (options) => versionWatch.run(options);
-  const askRoutes = createAskRoutes({ smDir, demo, token, ai, checkVersions: versionWatch ? checkVersions : undefined, rootOf: (key) => chat?.rootOf?.(key) ?? null, ...helpers, ...askAi });
+  // The price pages watch (or51), same cadence as the versions': a look 30 s after the start, then every hour, the
+  // once-a-day rule per page deciding whether a request is really made. No keys: the pages are public.
+  const priceWatch = demo || !smDir ? null : createPricesWatch({
+    smDir, onAlerts: (alerts) => watcher?.push(alerts),
+  });
+  const checkPrices = (options) => priceWatch.run(options);
+  const askRoutes = createAskRoutes({ smDir, demo, token, ai, checkVersions: versionWatch ? checkVersions : undefined, checkPrices: priceWatch ? checkPrices : undefined, rootOf: (key) => chat?.rootOf?.(key) ?? null, ...helpers, ...askAi });
+  // The other engines' trigger (or63): the same roles on the other AIs' CLIs, in isolated copies.
+  const runRoutes = createRunRoutes({ smDir, demo, token, backend: helpers.backend, ...runAi });
+  // The book's titles and summaries on the AI the Cérebro's book row names (id156): asked by the book's own program.
+  const bookRoutes = createBookRoutes({ smDir, demo, token, ai, ...(askAi.bookQueue ? { queue: askAi.bookQueue } : {}) });
+  const brainRoutes = demo || !smDir ? null : createBrainRoutes({ smDir, demo, token });
+  const censusRoutes = demo || !smDir ? null : createCensusRoutes({ demo, token });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -677,6 +738,30 @@ export function createApp({
     }
     const rows = wanted.flatMap((p) => changesOf(s, p.id).map((r) => ({ ...r, projectId: p.id })));
     return send(res, 200, { ok: true, rows: rows.sort((a, b) => b.ts.localeCompare(a.ts)) });
+  }
+
+  // The professional log (sv19) and the projects' records (wa11): file paths, actions and titles, as sensitive as the
+  // Changes, so even a local read needs the key.
+  async function logsRoute(req, res, parts, url) {
+    if (demo || !smDir) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (req.method !== 'GET') throw new HttpError(404, 'not-found');
+    const limit = Number.parseInt(url.searchParams.get('limit') ?? '200', 10) || 200;
+    if (parts.length === 3) {
+      const rows = readLog(smDir, {
+        since: url.searchParams.get('since'),
+        level: url.searchParams.get('level'),
+        event: url.searchParams.get('event'),
+        limit,
+      });
+      return send(res, 200, { ok: true, rows });
+    }
+    if (parts.length === 5 && parts[3] === 'projects') {
+      if (!PROJECT_ID_RE.test(parts[4])) throw new HttpError(400, 'bad-project');
+      const rows = readProjectLog(smDir, parts[4], { since: url.searchParams.get('since'), limit });
+      return send(res, 200, { ok: true, rows });
+    }
+    throw new HttpError(404, 'not-found');
   }
 
   // The Flow tab (plano-v02 § v0.2.1): export, the import preview and apply, and the workshop draft. The demo answers from
@@ -849,13 +934,13 @@ export function createApp({
       return cardsRoute(req, res, parts);
     }
     if (req.method === 'DELETE' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
-      if (!UUID_RE.test(parts[3])) throw new HttpError(400, 'bad-session');
+      if (!isAnySessionId(parts[3])) throw new HttpError(400, 'bad-session');
       if (demo || !deleteArchived(smDir, parts[3])) throw new HttpError(404, 'unknown-session');
       return send(res, 200, { ok: true });
     }
     if (req.method === 'GET' && parts[1] === 'api' && parts[2] === 'conversation' && parts.length === 4) {
       const id = parts[3];
-      if (!UUID_RE.test(id)) throw new HttpError(400, 'bad-session');
+      if (!isAnySessionId(id)) throw new HttpError(400, 'bad-session');
       if (demo) throw new HttpError(404, 'unknown-session');
       // With every step's input and output (files it read, commands it ran) it is as sensitive as the chat: token only.
       if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
@@ -897,6 +982,7 @@ export function createApp({
     }
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'files' || parts[2] === 'file') && parts.length === 4) return filesRoute(req, res, parts, url);
     if (req.method === 'GET' && parts[1] === 'api' && (parts[2] === 'changes' || (parts[2] === 'change' && parts[3] !== '*')) && parts.length === 4) return changesRoute(req, res, parts, url);
+    if (parts[1] === 'api' && parts[2] === 'logs' && (parts.length === 3 || parts.length === 5)) return logsRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'chat') return chatRoute(req, res, parts, url);
     if (parts[1] === 'api' && parts[2] === 'arch' && parts.length >= 5) {
       // A second lock behind the gate: the look-only key reads the Flow's model, never the draft or the export.
@@ -906,6 +992,8 @@ export function createApp({
     if (parts[1] === 'api' && (parts[2] === 'foundation' || (parts[2] === 'library' && parts.length === 3))) return foundationRoute(req, res, url);
     if (path === '/api/settings/permission-mode') return settingsRoute(req, res);
     if (path === '/api/settings/plugin') return pluginRoute(req, res);
+    if (path === '/api/settings/skills-airplane') return skillsAirplaneRoute(req, res);
+    if (path === '/api/settings/skill') return skillRoute(req, res);
     if (path === '/api/settings/reinforced-limit') return limitRoute(req, res);
     if (path === '/api/settings/project-background') return backgroundRoute(req, res);
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
@@ -917,6 +1005,22 @@ export function createApp({
     if (path === '/api/restart') return restartRoute(req, res);
     if (askRoutes.handles(path)) {
       const r = await askRoutes.handle(req, url, addressOf(req));
+      return send(res, r.status, r.body, r.headers);
+    }
+    if (runRoutes.handles(path)) {
+      const r = await runRoutes.handle(req, url, addressOf(req));
+      return send(res, r.status, r.body, r.headers);
+    }
+    if (bookRoutes.handles(path)) {
+      const r = await bookRoutes.handle(req, url, addressOf(req));
+      return send(res, r.status, r.body, r.headers);
+    }
+    if (brainRoutes?.handles(path)) {
+      const r = await brainRoutes.handle(req, url, addressOf(req));
+      return send(res, r.status, r.body, r.headers);
+    }
+    if (censusRoutes?.handles(path)) {
+      const r = await censusRoutes.handle(req, url, addressOf(req));
       return send(res, r.status, r.body, r.headers);
     }
     if (req.method === 'GET' && !path.startsWith('/api/')) return serveFile(res, path);
@@ -935,6 +1039,8 @@ export function createApp({
       return send(res, 400, 'bad request');
     }
     const auth = askRoutes.authorizeHeader(req, url, addressOf(req))
+      ?? runRoutes.authorizeHeader(req, url, addressOf(req))
+      ?? bookRoutes.authorizeHeader(req, url, addressOf(req))
       ?? (url.pathname === '/api/restart' ? headerAuth(req, addressOf(req), token) : null)
       ?? authorize(req, url, { token, look: lookKey, address: addressOf(req) });
     if (auth.status === 302) return send(res, 302, '', { location: auth.location, 'set-cookie': auth.cookie });
@@ -995,6 +1101,17 @@ export function createApp({
     const look = () => checkVersions().catch((err) => log('warn', 'ai-versions-failed', { error: err.message }));
     setTimeout(look, VERSIONS_FIRST_MS).unref();
     setInterval(look, VERSIONS_EVERY_MS).unref();
+    // The balances of the providers that publish one (id156): so the pre-flight before a call has a number to check.
+    if (!demo && smDir) {
+      const lookBalances = () => refreshBalances({ smDir }).catch((err) => log('warn', 'ai-balance-failed', { error: String(err?.name ?? 'error').slice(0, 30) }));
+      setTimeout(lookBalances, VERSIONS_FIRST_MS).unref();
+      setInterval(lookBalances, 10 * 60_000).unref();
+    }
+    if (priceWatch) {
+      const lookPrices = () => checkPrices().catch((err) => log('warn', 'ai-prices-failed', { error: err.message }));
+      setTimeout(lookPrices, VERSIONS_FIRST_MS).unref();
+      setInterval(lookPrices, VERSIONS_EVERY_MS).unref();
+    }
   };
   server.on('close', () => watcher?.stop());
   return server;
@@ -1010,14 +1127,25 @@ function lanAddress() {
 export function start(argv = process.argv.slice(2)) {
   const { values } = parseArgs({
     args: argv,
-    options: { port: { type: 'string', default: '4001' }, lan: { type: 'boolean', default: false }, demo: { type: 'boolean', default: false }, dir: { type: 'string' } },
+    options: {
+      port: { type: 'string', default: '4001' }, lan: { type: 'boolean', default: false }, demo: { type: 'boolean', default: false }, dir: { type: 'string' },
+      'dsh-dir': { type: 'string' },
+    },
   });
   const port = Number.parseInt(values.port, 10);
   const dir = values.dir ?? claudeDir();
   const smDir = join(claudeDir(), 'session-map');
+  // The professional log (sv19): everything the program does lands in one machine-readable file per day, so other
+  // AIs can read the records. The demo serves invented data and never touches the disk.
+  if (!values.demo) configureLog({ dir: smDir });
+  // The DeepSeek Harness joins Claude Code when its folder exists and this Node can read its zstd logs (Node >= 22.15).
+  const givenDsh = values['dsh-dir'];
+  const foundDsh = defaultDshDir();
+  const dshDir = typeof givenDsh === 'string' ? givenDsh : (zstdAvailable() && existsSync(foundDsh) ? foundDsh : null);
+  if (typeof givenDsh !== 'string' && !dshDir && !values.demo) log('info', 'deepseek-off', { reason: zstdAvailable() ? 'no-folder' : 'no-zstd' });
   const token = values.demo ? randomBytes(32).toString('hex') : loadToken(smDir);
   const ip = values.lan && lanAddress();
-  const app = createApp({ dir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}`, lanUrl: ip ? `http://${ip}:${port}` : null });
+  const app = createApp({ dir, dshDir, smDir, demo: values.demo, token, baseUrl: `http://127.0.0.1:${port}`, lanUrl: ip ? `http://${ip}:${port}` : null });
   const host = values.lan ? '0.0.0.0' : '127.0.0.1';
   // A copy started by the agreed restart (sv13) waits a moment for the old process to free the port. The mark is
   // dropped at once, so no claude this server starts inherits it.

@@ -2,9 +2,9 @@
 // every automatic rule and teaches the AI placer. One small file: {sessionId: {root?, partId?, title?}}.
 import { join } from 'node:path';
 import { readJsonFile, writeAtomic } from './store.mjs';
+import { isAnySessionId } from './sources/deepseek.mjs';
 
 export const TITLE_MAX = 120;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const fileOf = (smDir) => join(smDir, 'placements.json');
 
@@ -22,7 +22,7 @@ export function readPlacements(smDir) {
   const out = {};
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return out;
   for (const [id, entry] of Object.entries(stored)) {
-    const ok = UUID_RE.test(id) && clean(entry);
+    const ok = isAnySessionId(id) && clean(entry);
     if (ok) out[id] = ok;
   }
   return out;

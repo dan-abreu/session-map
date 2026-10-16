@@ -21,10 +21,12 @@ import { ownersAllOf } from './attach.mjs';
 import { programOnly } from './flow.mjs';
 import { ACTORS, CATALOG_VERSION, actorOfApp, catalogOfLabel, linkLabelKey, serviceById, serviceOf } from './flowcatalog.mjs';
 import { detectJourneys } from './flowjourneys.mjs';
+import { classifyFile } from './flowowner.mjs';
 import { EXTRACTORS, VERSION as SCANNER, scanFile, scanHooks, scanManifest, scanPackageJson } from './flowscan.mjs';
 import { MERMAID_FENCE_RE, slug } from './parse.mjs';
+import { maskSecrets } from '../sources/claude-conversation.mjs';
 
-export const MODEL_VERSION = 1;
+export const MODEL_VERSION = 2;
 export const LIMITS = { nodes: 200, edges: 600, evidence: 5, label: 60 };
 
 const sha16 = (data) => createHash('sha256').update(data).digest('hex').slice(0, 16);
@@ -423,6 +425,24 @@ const HOSTING = new Set(['vercel.json', 'netlify.toml', 'fly.toml', 'render.yaml
 const run = promisify(execFile);
 const pause = () => new Promise((resolve) => setImmediate(resolve));
 const looksBinary = (buf) => buf.subarray(0, 8000).includes(0);
+// What the census needs from the head of a code file, kept in its cached scan so a second build reads no file again:
+// the opening comment (the file's own words) and whether it sets a timer.
+const headFacts = (text) => {
+  const head = text.slice(0, 12_000);
+  const lines = head.slice(0, 8000).split('\n');
+  let end = 0;
+  let inBlock = false;
+  while (end < lines.length) {
+    const l = lines[end].trim();
+    if (inBlock) { end++; if (l.includes('*/')) inBlock = false; continue; }
+    if (end === 0 && l.startsWith('#!')) { end++; continue; }
+    if (!l && end < 1) { end++; continue; }
+    if (l.startsWith('//')) { end++; continue; }
+    if (l.startsWith('/*')) { end++; if (!l.includes('*/')) inBlock = true; continue; }
+    break;
+  }
+  return { lead: lines.slice(0, end).join('\n').slice(0, 3000), loop: /setInterval\s*\(/.test(head) };
+};
 
 export const modelCachePath = (smDir, projectId) => join(brainDir(smDir, projectId), 'flow-model.json');
 export const readModelCache = (smDir, projectId) => readJsonFile(modelCachePath(smDir, projectId), null);
@@ -608,7 +628,7 @@ export async function buildFlowModel({
   for (const { path } of code) {
     const ws = workspaceOf(path, workspaces);
     const workspace = ws ? { dir: ws.dir, name: ws.name, ...(ws.deps ? { deps: ws.deps } : {}) } : undefined;
-    await read(path, (text) => scanFile({ path, type: codeTypeOf(path), text, workspace, files: allPaths }), ws ? `${ws.dir}:${ws.sha}` : '');
+    await read(path, (text) => ({ ...scanFile({ path, type: codeTypeOf(path), text, workspace, files: allPaths }), ...headFacts(text) }), ws ? `${ws.dir}:${ws.sha}` : '');
   }
 
   // Ownership: every part holding a file's deepest path (a shared folder belongs to all its parts).
@@ -639,6 +659,66 @@ export async function buildFlowModel({
   const manifests = Object.entries(scans).filter(([, s]) => s.manifest?.deps).map(([path, s]) => ({ path, deps: s.manifest.deps }));
   const shas = new Map(Object.entries(rows).map(([p, r]) => [p, r.sha]));
   const trace = side ? new Map() : null;
+
+  // Who is responsible for each function (fl16): the AI, a bot or a plain script, from the scan's own facts. The head
+  // facts (opening comment, timer) ride in the cached scan, so no file is read again; a file never scanned has none.
+  const headOf = (path) => {
+    const scan = codeScans[path];
+    return scan ? `${scan.lead ?? ''}${scan.loop ? '\nsetInterval(' : ''}` : '';
+  };
+  const hookFiles = new Set(hooksScan.map((h) => h.file));
+  const fileOwner = new Map();
+  for (const [path, scan] of Object.entries(codeScans)) {
+    const imports = (scan.imports ?? []).map((imp) => ({ spec: imp.spec, target: resolve(path, imp.spec), names: imp.names ?? [] }));
+    fileOwner.set(path, classifyFile({ path, type: codeTypeOf(path), text: headOf(path), imports, signals: scan.signals ?? [], isHook: hookFiles.has(path) }));
+  }
+  // The file's own words, masked like the page masks everything: the first sentence is what the function is for, the
+  // next two are how it works (fl17). The part's "How it works" sentence about the file joins them when it exists.
+  const sentenceMemo = new Map();
+  const commentSentencesOf = (path) => {
+    if (sentenceMemo.has(path)) return sentenceMemo.get(path);
+    const lines = headOf(path).slice(0, 8000).split('\n').map((l) => l.replace(/\r$/, ''));
+    let i = 0;
+    if (lines[0]?.startsWith('#!')) i++;
+    while (i < lines.length && !lines[i].trim()) i++;
+    const first = lines[i]?.trim() ?? '';
+    const words = [];
+    if (first.startsWith('//')) {
+      for (; i < lines.length && lines[i].trim().startsWith('//'); i++) words.push(lines[i].trim().replace(/^\/\/+\s?/, ''));
+    } else if (first.startsWith('/*')) {
+      for (; i < lines.length; i++) {
+        const l = lines[i].trim();
+        const end = l.includes('*/');
+        words.push(l.replace(/^\/\*+/, '').replace(/\*+\/.*$/, '').replace(/^\*+\s?/, ''));
+        if (end) break;
+      }
+    } else {
+      sentenceMemo.set(path, []);
+      return [];
+    }
+    const sentences = maskSecrets(words.join(' ')).replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s+/).map((s) => s.replace(/\s+([:;,.])/g, '$1').trim()).filter(Boolean);
+    sentenceMemo.set(path, sentences);
+    return sentences;
+  };
+  const clipTo = (s, max) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+  const wordsOfFile = (path) => {
+    const sentences = commentSentencesOf(path);
+    return {
+      purpose: sentences[0] ? clipTo(sentences[0], 240) : null,
+      how: sentences.slice(1, 3).join(' ') || null,
+    };
+  };
+  // The census (fl16): every function of the program, the part that owns it ([] = none claims it, an orphan) and its
+  // owner; roles the Flow does not read are still listed, with role null, so the page can filter them itself.
+  const census = allPaths.map((path) => {
+    const kind = kindOfFile(path);
+    const role = roleOf(path);
+    const partIds = ownersAllOf([path], program, { topLevel })[0] ?? [];
+    const known = fileOwner.get(path);
+    const owner = known ?? classifyFile({ path, type: codeTypeOf(path), text: headOf(path), imports: [], signals: [], isHook: false });
+    return { path, kind, role, partIds, owner: owner.owner, reasons: owner.reasons, ...wordsOfFile(path) };
+  }).filter((f) => !['dep', 'generated', 'binary'].includes(f.kind)).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
   const model = assembleModel({
     arch, readmeText, scans: codeScans, owners, resolve, source, projectId, notes, shas, manifests, trace,
     packageJson: rootPkg ? { path: 'package.json', ...rootPkg } : null,
@@ -657,22 +737,56 @@ export async function buildFlowModel({
       }
       if (out.length) links.set(path, out);
     }
-    Object.assign(side, { ready: true, owners, links, trace, paths: all, topLevel, entries, program, shas, scanned: Object.keys(codeScans) });
+    Object.assign(side, { ready: true, owners, links, trace, paths: all, topLevel, entries, program, shas, scanned: Object.keys(codeScans), fileOwner });
   }
-  const recomputed = model.nodes.filter((n) => cache?.nodes[n.id]?.filesHash !== n.filesHash).map((n) => n.id).sort();
-  const nodeHashes = Object.fromEntries(model.nodes.map((n) => [n.id, { filesHash: n.filesHash }]));
-  const digest = sha16(JSON.stringify({ rows, scans, model }));
+  // The layer of each part, from the assembled model, and the part files' own words about each function: the census row
+  // says the function's layer and how it works, with the facts it already carries.
+  const layerOfPart = new Map((model.nodes ?? []).filter((n) => n.kind === 'part' && n.partId).map((n) => [n.partId, n.layer]));
+  const howSentences = new Map();
+  const sentencesOf = (partId) => {
+    if (howSentences.has(partId)) return howSentences.get(partId);
+    const part = arch.parts.find((p) => p.id === partId);
+    let sentences = [];
+    if (part?.file && source === 'worktree' && arch.dir) {
+      const abs = safeResolve(root, `${arch.dir}/${part.file}`);
+      try {
+        const text = abs ? readFile(abs, 'utf8') : '';
+        const m = /^## How it works\s*\n([\s\S]*?)(?=^## |\Z)/m.exec(text);
+        sentences = m ? m[1].split(/(?<=[.!?])\s+/).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean) : [];
+      } catch { /* the part file is gone */ }
+    }
+    howSentences.set(partId, sentences);
+    return sentences;
+  };
+  const escFor = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const aboutOfFile = (path, partId) => {
+    const plain = String(path).replace(/\/$/, '');
+    const base = plain.split('/').at(-1);
+    const sentences = sentencesOf(partId);
+    return sentences.find((s) => s.includes(plain) || new RegExp(`(^|[\\s\`/(])${escFor(base)}($|[\\s\`),.:;])`).test(s)) ?? null;
+  };
+  const withCensus = {
+    ...model,
+    files: census.map((f) => ({
+      ...f,
+      layer: f.partIds?.[0] ? layerOfPart.get(f.partIds[0]) ?? null : null,
+      about: f.partIds?.[0] ? aboutOfFile(f.path, f.partIds[0]) : null,
+    })),
+  };
+  const recomputed = withCensus.nodes.filter((n) => cache?.nodes[n.id]?.filesHash !== n.filesHash).map((n) => n.id).sort();
+  const nodeHashes = Object.fromEntries(withCensus.nodes.map((n) => [n.id, { filesHash: n.filesHash }]));
+  const digest = sha16(JSON.stringify({ rows, scans, model: withCensus }));
   // What a page compares to know the drawing changed: the model alone, not the times of the files.
-  const stamp = sha16(JSON.stringify(model));
+  const stamp = sha16(JSON.stringify(withCensus));
   let wrote = false;
   let generatedAt = now().toISOString();
   if (cache?.digest === digest) generatedAt = cache.model?.generatedAt ?? generatedAt;
   else if (smDir && projectId) {
     writeAtomic(modelCachePath(smDir, projectId), JSON.stringify({
       version: MODEL_VERSION, scanner: SCANNER, catalog: CATALOG_VERSION, extractors: EXTRACTORS, digest,
-      files: rows, scans, nodes: nodeHashes, model: { ...model, generatedAt, stamp },
+      files: rows, scans, nodes: nodeHashes, model: { ...withCensus, generatedAt, stamp },
     }));
     wrote = true;
   }
-  return { ...model, generatedAt, stamp, stats: { files: wanted.length, scanned, reused, recomputed, wrote } };
+  return { ...withCensus, generatedAt, stamp, stats: { files: wanted.length, scanned, reused, recomputed, wrote } };
 }

@@ -9,6 +9,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 ## Where in the code
 
 - `server/web/`
+- `server/cards.mjs`
 - `./DESIGN.md`
 
 ## Rules that must not break
@@ -17,6 +18,12 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - Every state works without hover and respects reduced motion.
 
 ## What's missing
+
+### Testes quebrados no working tree (14/10/2026)
+
+- [ ] **Claude:** `test/web-design.test.mjs` falha (4 asserções, "the type scale has seven steps") — os tokens de design da página mudaram no trabalho não commitado `mm54`
+- [x] **Claude:** `test/web-point.test.mjs` falha (1 asserção, "aihelpers.js: undefined" — todo script da página precisa parsear) `mm55`
+- [ ] **Claude:** `test/web-ai-activity.test.mjs` falha (1 asserção, "the page shows what the server kept") `mm56`
 
 ### Requests and the repository
 
@@ -89,7 +96,7 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Answer Claude's multiple-choice questions from the page in a page chat, and attach files that are not images (today only images; a project file is pointed at with `@`).
   - The built-in `/` commands of Claude Code that work in a page chat, beside the skills.
   - On a phone, the chat sheet uses the whole height under the top bar (today the map's toolbar leaves it about half the screen).
-  - The chat header on one line (title, model and mode, cost), as the owner asked (`id56`); `mm08` left two short lines so the mode stays in sight of someone who does not program. The owner decides between the two.
+  - The chat header on one line (title, model and mode, cost), as the owner asked (`id56`); done on 2026-10-14 by `pc34`: one line (dot · title · part chip · Livro · ⋯ · fechar), and the box tabs (Resumo, Arquivos…) moved to their own strip under the header, always in sight — the first one-line try hid them and the owner said so.
 - [x] **Claude:** Move and rename a conversation with one click `mm21`
   - Move a conversation to another project or part (the placement learns from it); rename it with a title that makes sense to the owner.
   - Why: a long chat opened in one project's folder about another project landed in the wrong project and part, under an automatic title that did not say what it was about.
@@ -222,3 +229,20 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Every conversation of the last 31 days wherever it ran, as Working now, Waiting for you and Recent, with its place on the map, age, cost and origin; search; This project / All projects; a click opens the branches to its box and the conversation. Released in v0.2.2.
 - [x] **Claude:** Live: what is working now, in every project `mm29`
   - One card per working conversation with its way down the map, latest steps, workflows (done/total) and helpers with their model; on the map the path to the box being worked lights up with the latest step. Released in v0.2.2.
+
+### The second engine
+
+- [x] **DeepSeek:** The DeepSeek mark and its buttons on the page `mm53`
+  - From `id119`. The list marks a DeepSeek conversation with its own icon (`i-spark` in `server/web/index.html`) and the word DeepSeek (pt and en in `server/web/i18n.js`); the chat header, the list row and the ⋯ menu offer **Open in DeepSeek** instead of the VS Code and terminal buttons, and the sheet reads the conversation without a writing box or a Stop button.
+- [x] The Flow tab's new level "O programa": the interface map and the blueprint drawn inside the system `mm57`
+  - From request `id130`.
+  - `server/census.mjs` reads the page's own screens from the code (the 13 areas, their view files, headings, buttons, dialogs, with the page's real texts) and the engine's blueprint; `GET /api/census/ui` serves it; the level's view (`server/web/programview.js`) draws the tree in the Flow tab; the external files in `.dev/prints` become exports of the same census. Verified live on 2026-10-14: 13 areas, 1096 itens.
+- [x] Discover's airplane mode: one switch for the skills, and each installed plugin's own `mm58`
+  - From request `id136`.
+  - The config key `skills.airplane` (machine-wide, `server/config.mjs`), the state carries it (`server/collect.mjs`), the guard's `chatSkillSettings` honors it (every skill name-only, every plugin off except the program's own, `server/chat/guard.mjs` + `server/chat/hub.mjs`), the route `PATCH /api/settings/skills-airplane` flips it (`server/main.mjs`), and Discover draws the switch plus the installed plugins with their `rd09` switches (`server/web/discover.js`, `server/web/api.js`, the `discoverAirplane` panel in `index.html`, texts in both languages). Tested in `test/guard-agent-choice.test.mjs`; 99 verdes nas suítes afetadas. The professional names arrived with `id137`: "Skills kill-switch" and "Technical debt ledger" on the page.
+- [x] Discover separates the installed skills, the installed plugins and the catalog `mm59`
+  - From request `id138`.
+  - The panel has three groups, in the professional terms: the kill-switch on top, "Installed skills" (each with its command and state), "Installed plugins" (each with its switch), and below the heading "Catalog — available to install" the GitHub items. `server/web/discover.js` (the panel), `index.html` (the catalog heading), `app.js` (the skills list), i18n pt/en. Verified served and 30 web tests green on 2026-10-14.
+- [x] Each installed skill gets its own switch in Discover `mm60`
+  - From request `id139`.
+  - The config list `skills.off` (machine-wide), the state carries it (`server/collect.mjs`), the guard's `chatSkillSettings` honors it — an off skill stays name-only whatever the focus picks (`server/chat/guard.mjs` + `server/chat/hub.mjs`), the route `PATCH /api/settings/skill` flips one skill (`server/main.mjs`), and Discover draws a switch per skill (`server/web/discover.js`, `server/web/api.js`, `app.js`). Tested in `test/guard-agent-choice.test.mjs`; flipped live on 2026-10-14 (OFF/ON 200, config written); prova viva 8/8.

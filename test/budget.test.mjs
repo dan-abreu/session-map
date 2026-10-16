@@ -133,9 +133,8 @@ test('the conductor\'s line: the spend, a warning past 80%, and at 100% "start n
   const smDir = tmp();
   try {
     const line = projectBudgetLine(b(9));
-    assert.ok(tailFor({ kind: 'auto' }, smDir, () => null, line).endsWith(line));
     assert.ok(tailFor({ kind: 'autonomous' }, smDir, () => null, line).endsWith(line));
-    assert.equal(tailFor({ kind: 'fixed' }, smDir, () => null, line), '', 'only the conductor ways read it');
+    assert.equal(tailFor({ kind: 'talk' }, smDir, () => null, line), '', 'only Autonomous reads it');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
 

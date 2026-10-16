@@ -1,15 +1,15 @@
 // Interpreter (AI agent): authored this file; pending human review
 
-// The entry brain (or31, or29): every message of the person is weighed before it runs, and the conversation starts or
-// moves to the model and effort that weight asks for. Pure and deterministic: no AI, no cost. When the rules cannot tell
-// (sizeRequest said confidence 'low') and the text is long, the caller may ask Haiku once and pass its answer; where the
-// two disagree the higher level wins, because under-routing costs quality and over-routing only money.
+// The entry brain (or31, or35): every message of the person is weighed before it runs, to know which phase of the
+// conversation it is. The phase shapes the turn (the plan and build directives) and the run line; it never moves the
+// model: the chat runs on the one level of the policy (chat in policy.json) and only the person changes it. Pure and
+// deterministic: no AI, no cost. When the rules cannot tell (sizeRequest said confidence 'low') and the text is long,
+// the caller may ask Haiku once and pass its answer; where the two disagree the bigger phase wins.
 //
 // Phases: trivial (a greeting, thanks, one short command or question), talk (a question or an opinion, no work),
 // plan (an idea, or a medium or large request nobody approved yet), build (a go-ahead, or a small concrete change).
-// Never Fable, never xhigh or max on its own: those belong to a task the plan names, not to the entry chat.
 
-import { phaseLevel } from './policy.mjs';
+import { chatLevel } from './policy.mjs';
 
 export const PHASES = Object.freeze(['trivial', 'talk', 'plan', 'build']);
 const SIZES = ['trivial', 'small', 'medium', 'large'];
@@ -43,9 +43,8 @@ function sensitiveOf(t, kind) {
   return null;
 }
 
-// The table (or29, or33) is server/ai/policy.json, read through phaseLevel: the cheapest level that does the phase well.
-// Size never raises it (high only after a failure, by the ladder); security, money and personal data go to Opus in plan and build.
-const tableFor = (phase, size, sensitive) => phaseLevel(phase, size, Boolean(sensitive));
+// The level (or35) is the chat's in server/ai/policy.json, the same for every phase, size and subject.
+const levelOf = () => chatLevel();
 
 const bigger = (a, b) => (SIZES.indexOf(a) >= SIZES.indexOf(b) ? a : b);
 const isBig = (size) => size === 'medium' || size === 'large';
@@ -86,8 +85,6 @@ function rulesOf(raw, measured, planned) {
   return { phase, size, sensitive };
 }
 
-const levelOf = ({ phase, size, sensitive }) => tableFor(phase, size, sensitive);
-
 export const levelRank = (model, effort) => Math.max(0, MODEL_ORDER.indexOf(model)) * 10 + Math.max(0, EFFORT_ORDER.indexOf(effort));
 
 // Is it worth one cheap Haiku call? Only when the rules were unsure and there is enough text to be unsure about.
@@ -127,8 +124,9 @@ export function weigh({ text, measured, haiku, planned } = {}) {
   let best = { ...rules, ...levelOf(rules), why: whyOf(rules.phase, rules.size, rules.sensitive) };
   if (validHaiku(haiku) && wantsHaiku({ text: raw, measured: m })) {
     const asked = { phase: haiku.phase, size: haiku.size, sensitive: haiku.sensitive ? rules.sensitive ?? true : null };
-    const level = levelOf(asked);
-    if (levelRank(level.model, level.effort) > levelRank(best.model, best.effort)) best = { ...asked, ...level, why: whyOf(asked.phase, asked.size, asked.sensitive) };
+    // The bigger phase wins (trivial < talk < plan < build), and a sensitive subject is kept: both only shape the turn.
+    const bigger = PHASES.indexOf(asked.phase) > PHASES.indexOf(best.phase) || (asked.sensitive && !best.sensitive);
+    if (bigger) best = { ...asked, ...levelOf(asked), why: whyOf(asked.phase, asked.size, asked.sensitive) };
   }
   return { phase: best.phase, model: best.model, effort: best.effort, why: best.why, size: best.size };
 }

@@ -2,6 +2,8 @@
 
 Define como os agentes de IA executam as outras 13 etapas: quem orquestra, que modelo e nível de raciocínio cada tarefa usa, que regras impedem a IA de inventar, como o trabalho é revisado e como o custo fica dentro do orçamento. A regra nº 1 é qualidade; economia é consequência de escolher bem, não de cortar etapa.
 
+> **Vale para todas as IAs (id154).** Este padrão é o mesmo para Claude, OpenAI, Gemini, DeepSeek ou qualquer outra, e todas podem mexer em tudo no projeto. Quem faz cada função é o **Cérebro** (a aba do mapa): ele diz qual IA, qual modelo e qual nível trabalha em cada lugar, e o motor obedece. Nenhuma regra de trabalho trava uma IA; só ficam o push forçado (o histórico nunca é reescrito) e o OK do dono para dinheiro. A entrada de qualquer IA no repositório é o arquivo `AGENTS.md`.
+
 ## Sumário
 
 1. O maestro

@@ -1,2 +1,3 @@
 .dev/
 node_modules/
+.session-map-runs/

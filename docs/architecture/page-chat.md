@@ -23,6 +23,11 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [x] **Claude:** "New idea" chat that proposes the part and writes only after an OK `pc02`
 - [x] **Claude:** Attach an image to a message `pc03`
   - Paste, drop or pick up to four images (PNG, JPG, GIF, WebP); they go to claude as image blocks and show on the message (mm22).
+- [x] **in progress:** The composer rebuilt lean on the brain: the ways menu, the model chips, the Ultracode door and the duplicated context and permissions sections leave; the brain's line stays `pc35`
+  - From `id146`. The Cérebro routes the chat (or39–or42), so the bar keeps the attach, the key hints, the cost chip, the line "Cérebro: engine · model · effort" (the run event's brain) and Send; the menu by Send dies with its paths, chips, context and permissions (the Configurações link stays). `server/web/chat.js`, `views.js`, `index.html`, i18n.
+  - Built on 2026-10-15: the composer's bar is attach · hints · cost chip · the brain's line (`data-chat="brain"`, "Sonnet · low — conversa", quiet until the first run event) · Send; the run menu, the chips, the Ultracode warning, Context and Permissions left `chat.js` and `index.html`; `views.js` lost EXPECTED/runWords/runPicks and kept brainLine; Configurações kept the limit, the language, the alerts and the permission mode (selfPart died); the i18n block `run.path*`/`run.way*`/chips left and `chat.brainTitle` came in pt/en; the CSS of the menu left and `.chat-brain` joined the bar. `test/web-chat`, `test/web-chat-around`, `test/web-chat-full`, `test/web-composer`, `test/web-chatfold`, `test/web-i18n` updated and green.
+- [x] **in progress:** The composer's bar keeps only what is needed: a memory chip ("48k / 200k") by the cost, and the brain's line cut to model and level `pc37`
+  - From `id157`. The program already read each reply's `usage` (`claude-conversation.mjs`, `turn-check.mjs`) and already had the mark of a heavy conversation (`waste.mjs` `MAX_CONTEXT`, 200k); the chat showed neither. `readConversation` returns `contextTokens` (input + cache written + cache read of the last reply of the chat itself, helpers left out); the hub puts `context: {tokens, max}` on the history (`itemsOf`) and on the `run` event after each turn (`memoryOf` reads the transcript's tail); the page chip (`data-chat="memory"`, `contextMeter` in `views.js`) turns amber from 70 % and red from 90 %. The brain's line is now "Sonnet · low"; the entry brain's why ("a chat") moved to the tooltip. The key hints stay (the owner's choice). DeepSeek conversations give no number, so no chip. `test/web-turn-check`, `web-chat`, `web-chat-around`, `web-chat-full`, `turn-check`, `sources-conversation`, `chat` updated and green.
 
 ### Permissions
 
@@ -30,8 +35,9 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 
 ### Chat states
 
-- [ ] **important:** A chat with nothing running goes to "Esperando você" and says why it stopped `pc25`
+- [x] **important:** A chat with nothing running goes to "Esperando você" and says why it stopped `pc25`
   - From `id99`. When neither a turn nor a team of helpers is running, the chat leaves "working" at once, shows in "Esperando você" and carries one plain line on why: finished, waiting for your answer, cut by a restart of session-map (and whether it resumes by itself), out of credit or limit, an error. Never a chat that looks busy while nothing works.
+  - Done 2026-10-14 (`pc34`): one state line above the box that never goes dark — "Trabalhando · passo [Parar]", "Esperando você · esperando sua resposta", "Cortada · motivo [Continuar]", "Finalizado · resumo", "Erro · texto". Out of credit or limit is not reported by the engine yet.
 - [x] **Claude:** Clear state on every page chat `pc05`
   - Working, finished (with the final summary), interrupted, waiting for permission. A chat that ended must never look stuck.
   - An on-screen notice when a chat finishes.
@@ -63,16 +69,27 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 
 ### A professional chat (step 1 of `id93`)
 
-- [ ] **in progress:** The model and the mode in plain sight by Send, in professional terms: Agente · Planejar · Perguntar, the model and its reasoning level `pc20`
+- [x] **Claude:** The model and the mode in plain sight by Send, in professional terms: Agente · Planejar · Perguntar, the model and its reasoning level `pc20`
   - From `id93`. Like Cursor's and ChatGPT's selectors; the words: Modelo, Raciocínio, Contexto, Permissões, Modo agente, Modo plano.
-- [ ] **in progress:** Actions on every message: edit and resend, regenerate, copy, and code blocks with their own copy `pc21`
+  - Done 2026-10-14 (`pc34`): the button by Send reads "way · model · reasoning" and its menu shows everything the engine has — Modo with all six ways (Agente · Planejar · Perguntar · Orquestrar · Ultracode · Igual ao meu Claude; the advanced ways left Configurações, and Ultracode's cost warning lives in the menu), Modelo · Raciocínio chips always in sight (they pick in Perguntar and show the engine's pick in the other ways), Contexto (cost and images) and Permissões (the mode now, and the link to Configurações). The professional names live in the Full mode, as every technical term does; the plain mode says the same in everyday words.
+- [x] **Claude:** Actions on every message: edit and resend, regenerate, copy, and code blocks with their own copy `pc21`
   - From `id93`.
-- [ ] **in progress:** The conversation's context in sight: attached files and images as chips, @ files, and a meter of context used and cost `pc22`
+  - Done 2026-10-14 (`pc34`): one quiet row on hover under every message — copy (all), edit and send again (the person's own), run the last turn again (the last reply); code blocks keep their own copy. One copy per message: the meta line's copy gives way to the row.
+- [x] **in progress:** The conversation's context in sight: attached files and images as chips, @ files, and a meter of context used and cost `pc22`
   - From `id93`.
-- [ ] **in progress:** Conversation history like the big chats: search, pin, rename and export `pc23`
+  - Done 2026-10-14 (`pc34`): the cost as a quiet chip by Send and as the Context section of the menu (cost and images); @ files and the images of each message were already in sight. Left: a meter of context used — the engine does not report tokens used, so the meter waits for an honest number.
+  - Done 2026-10-15 (`pc37`): the honest number was in the transcript all along (each reply's `usage`); the meter is the chip "48k / 200k" by Send.
+- [x] **Claude:** Conversation history like the big chats: search, pin, rename and export `pc23`
   - From `id93`.
+  - Done 2026-10-14 (`pc34`): the sheet's list searches its titles, pins conversations on top (a session-map list, like archive: `server/actions.mjs` pin and unpin) and the ⋯ exports the whole conversation as one markdown file; rename or move was already there. History's own search and state filters came with `mm33`.
 - [ ] **in progress:** Titles written by the AI from the conversation, rewritten when the topic moves, never over a title the person set `pc24`
   - From `id93`.
+
+### The chat, redesigned again (2026-10-14)
+
+- [x] **Claude:** A full visual rework: one standard for every control, the missing options in their places, no leftover clutter `pc34`
+  - From `id121`. One design language for the whole sheet (header, state lines, bubbles, chips, buttons, menus, the working line and the box); the stacked and repeated controls move to one clear place each; the options a professional chat needs are filled in; the dialogue keeps most of the height and the visual noise goes.
+  - Done 2026-10-14 (`server/web/chat.js`, `index.html`, `style.css`, `i18n.js`, `transcript.js`, `app.js`, `server/actions.mjs` and `server/chat/hub.mjs` for pin; 117 chat tests green, the new ones in `web-export.test.mjs` and `actions-files.test.mjs`): the header as the owner drew it — title with its ? (one click on the title renames or moves), the search in the chat, the ⋯ of the extra options, minimize (−) and close (×); under it a tab bar (Chat · the box's tabs Resumo, Mudanças, Arquivos… · Livro da conversa · Terminal) where each tab opens its thing whole, none overlapping the chat; the state line that never goes dark (`pc25`); actions on every message (`pc21`, beside the meta line's own copy, which stays); the selector by Send with every way (Agente · Planejar · Perguntar · Orquestrar · Ultracode · Igual ao meu Claude) and the model and reasoning chips always in sight (`pc20`); the cost chip (`pc22`); the list with search and pin and the export in the ⋯ (`pc23`); the cut-off card stays in the log; everything on the design tokens, in both languages.
 
 ### How it runs
 
@@ -133,3 +150,10 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Done 2026-10-14: `autoCompactWindow` removed from `guardSettings` in `server/chat/guard.mjs` (the Stop and SessionStart hooks of the book stay); `BOOK_WINDOW` is gone. Raising the window instead (200k or more) was not tried: Claude Code accepts 100k as the least, the fixed start would still be 40% of a 200k window, and the lesson of the routing change is to change one thing at a time and measure it.
   - From `id118`.
   - From `id117`.
+- [ ] The tidier spends by phase: Sonnet medium only when the turn is plan or build; talk and trivial pass the message as written `pc36`
+  - From `id147`. `tidy-words.mjs` rewrites every message ≥15 words with Sonnet medium (~US$0.02 each) and doubles the message in the prompt. Waits for the `or35` bench result before any change: if talk keeps a strong model, the tidier may be dropped there; if it moves down, the tidier gains value.
+
+### The second engine
+
+- [x] **DeepSeek:** A DeepSeek conversation opens on the page read-only, and continues in the DeepSeek app `pc33`
+  - From `id119`. `transcriptOf` in `server/chat/hub.mjs` also finds the DeepSeek log (`sessions/<project>/<session-id>/session.v4.jsonl.zstd`, the newest generation), and `itemsOf` dispatches to the right `readConversation` by the file's suffix. A DeepSeek row comes with `chattable: false`, so `start` refuses to drive one with a claude process (the `409 live-chat` backstop) and the sheet shows it read-only with **Open in DeepSeek** — the same read-only flow a VS Code conversation uses. Images and helper transcripts stay Claude-only for now.

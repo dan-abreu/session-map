@@ -27,6 +27,14 @@ Being built (`fd01` to `fd16`): the blocks so far, the knowledge they read, thei
 
 ## What's missing
 
+### Testes quebrados no working tree (14/10/2026)
+
+- [x] **Claude:** `test/foundation-health-accept.test.mjs` falha (6 asserções, "each known gap of acme-shop appears once") — o trabalho não commitado da Foundation mudou a lista de lacunas; acertar o teste ou o código `fd18`
+- [x] **Claude:** `test/foundation-health-secrets.test.mjs` falha (1 asserção sobre git real) — conferir se é o teste ou o detector de segredos `fd19`
+- [x] **Claude:** `test/foundation-http-health.test.mjs` falha (2 asserções, "POST online fetches") `fd20`
+- [x] **Claude:** `test/foundation-optional.test.mjs` falha (1 asserção, "toolOf: depcruise never resolves to a .cmd shim") `fd21`
+- [x] **Claude:** `test/foundation-versions.test.mjs` falha (1 asserção, "package.json 1.2.0 with tag v1.1.0 shows both") `fd22`
+
 ### Facts from the code
 
 - [x] **important:** Program census, letter by letter, with a 100% read ledger `fd01`
@@ -118,6 +126,10 @@ Being built (`fd01` to `fd16`): the blocks so far, the knowledge they read, thei
   - A single choice per project replaces the scattered switches: Automatic (does everything and logs it in Changes with Undo; recommended for people who are not technical), Suggest (tips with what, why and before/after, and Accept / Not now / Never; nothing is written to the repository without an OK) and Look only. It is asked once at first use in plain words and can be changed per project.
   - It governs every feature that writes: documents, architecture, Flow sync and fixes. Sensitive actions (delete, publish, money, accounts) always ask for confirmation, in every mode. The rule applies to everything session-map creates or maintains in any project, and to session-map itself.
   - How to confirm it is done: in a test project, Suggest leaves the repository byte-identical until a tip is accepted; Automatic applies the same tip, shows it in Changes and Undo restores the files; Look only writes nothing; a delete asks for confirmation in all three modes; the mode is asked once and survives a restart.
+
+- [x] **Claude:** The watcher's version and count fixes are a motor edit, checked by the same judge `fd23`
+  - From `id153`. A `version-mismatch` finding already names the found and expected versions and the line; the motor swaps the number on that line. A `docs-disagree` count ("12 routes" against 10 in the code) swaps the number where the rule read it. Both go through the program's own judge (no extra changes, no new secret, no new finding, no broken link) and fall back to the AI when the judge refuses. `server/foundation/docfix.mjs`; the estimate is US$ 0 for the motor path.
+  - Built on 2026-10-15: `motorFix` in `server/foundation/docfix.mjs` (version swap on the finding's own line, count swap through `swapCount` exported from `server/foundation/docwatch-agree.mjs`); the AI route stays as the safety net when the judge refuses; `estimateFix` is US$ 0 for the two rules; tests in `test/foundation-docfix.test.mjs` (34 verdes).
 
 ### The professional standard
 

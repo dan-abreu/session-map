@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { digestOf } from './ai/digest.mjs';
-import { aiPlacements, aiStatus, explainRelations, lifeOf, placeChanged, withRelationWhys } from './ai/life.mjs';
+import { aiPlacements, aiStatus, explainRelations, lifeOf, placeChanged, setPlanLimits, withRelationWhys } from './ai/life.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { alwaysOn, backgroundOf, isWorking, tidyOn } from './background.mjs';
 import { attachBudgets, readLedger } from './budget.mjs';
@@ -28,6 +28,7 @@ import { parseCard } from './parse/card.mjs';
 import { waitingFor } from './parse/waiting.mjs';
 import { normalizePath, projectIdOf, repoFiles } from './paths.mjs';
 import { bootTime, listLiveSessions, listTranscripts, readHelperUsage, readHelperWork, readTranscript, readWorkflows } from './sources/claude.mjs';
+import { isBusy as isDshBusy, listSessions as listDshSessions, readSummary as readDshSummary, zstdAvailable, deepseekCostOf, deepseekPrices, deepseekWindowed } from './sources/deepseek.mjs';
 import { readDismissed, readRemoved } from './hidden.mjs';
 import { countRepo } from './sources/count.mjs';
 import { autoFetch } from './sources/fetch.mjs';
@@ -68,12 +69,14 @@ const CUT_BOOT_SLACK_MS = 5_000;
 const INTERNALS = Symbol.for('session-map.internals');
 
 const summaries = new Map();
+const dshSummaries = new Map();
 const roots = new Map();
 const gitMemo = new Map();
 
 const cut = (s) => String(s ?? '').slice(0, TEXT_MAX);
 const modelOf = (usage) => [...(usage ?? [])].reverse().find((u) => u.model && u.model !== 'unknown')?.model ?? null;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
+const round6Null = (n) => (n === null ? null : round6(n));
 // The savings advice of a conversation's own replies, or null when no rule has anything to say (sb05).
 const adviceOf = (usage, prices) => {
   const a = adviceFor(usage, prices);
@@ -95,7 +98,8 @@ function helperWork(sessionDir) {
 
 // liveIds: a live conversation's workflow agents move on while its own transcript sits still, so their journals and the
 // files they edit are read again on every pass (each agent's transcript only when it changed).
-function readItems(dir, smDir, nowMs, liveIds) {
+// dshDir: the DeepSeek Harness data folder (~/.dsh); when set (and Node carries zstd), its sessions join Claude's.
+function readItems(dir, smDir, nowMs, liveIds, dshDir) {
   const items = [];
   for (const ref of listTranscripts(dir, { sinceMs: nowMs - WINDOW_MS })) {
     try {
@@ -112,9 +116,28 @@ function readItems(dir, smDir, nowMs, liveIds) {
       }
       if (!hit.summary.cwd || isAiRunnerCwd(hit.summary.cwd, smDir)) continue;
       const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
-      items.push({ ref, ...hit, card });
+      items.push({ ref, ...hit, card, engine: 'claude' });
     } catch (err) {
       log('warn', 'transcript-failed', { sessionId: ref.sessionId, error: err.message });
+    }
+  }
+  if (dshDir && zstdAvailable()) {
+    for (const ref of listDshSessions(dshDir, { sinceMs: nowMs - WINDOW_MS })) {
+      try {
+        const key = `${ref.mtimeMs}:${ref.size}`;
+        let hit = dshSummaries.get(ref.path);
+        if (hit?.key !== key) {
+          const summary = readDshSummary(ref.path);
+          if (!summary) continue;
+          hit = { key, summary, helperUsage: [], workflows: [], helperCommits: [], helperEdits: [], helperLast: null, helperSkills: [] };
+          dshSummaries.set(ref.path, hit);
+        }
+        if (!hit.summary.cwd) continue;
+        const card = hit.summary.lastCardText ? parseCard(hit.summary.lastCardText) : null;
+        items.push({ ref, ...hit, card, engine: 'deepseek' });
+      } catch (err) {
+        log('warn', 'deepseek-transcript-failed', { sessionId: ref.sessionId, error: err.message });
+      }
     }
   }
   return items;
@@ -197,8 +220,11 @@ function placeInPart(item, arch, placeFiles, root, aiAnswers, page, placement, v
   const edited = [...new Set(repoFiles([...s.editedFiles ?? [], ...item.helperEdits ?? []], root, s.cwd))];
   const byFiles = placeFiles(edited).partId;
   if (byFiles) return placed(byFiles, 'files', { files: votersFor(edited, byFiles).slice(0, 3) });
-  const byAi = aiAnswers[s.sessionId]?.partId;
-  if (byAi && arch.parts.some((p) => p.id === byAi)) return placed(byAi, 'ai');
+  const answer = aiAnswers[s.sessionId];
+  const byAi = answer?.partId;
+  if (byAi && arch.parts.some((p) => p.id === byAi)) {
+    return answer.rule === 'keyword' ? placed(byAi, 'keyword', { words: (answer.words ?? []).slice(0, 3) }) : placed(byAi, 'ai');
+  }
   return placed(null, 'none');
 }
 
@@ -337,7 +363,8 @@ function activityItems(raw, events, touched, workCells, items) {
 }
 
 // fromPage: the chat opens with the page's context block, so it is the page's even when page-chats.json lost it.
-function originOf(sessionId, entrypoint, pageChats, fromPage = false) {
+function originOf(sessionId, entrypoint, pageChats, fromPage = false, engine = 'claude') {
+  if (engine === 'deepseek') return 'deepseek';
   if (pageChats[sessionId] || (fromPage && entrypoint.startsWith('sdk'))) return 'map';
   if (entrypoint === 'claude-vscode') return 'vscode';
   if (entrypoint === 'claude-desktop') return 'desktop';
@@ -376,17 +403,20 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
   const motherOf = (id) => [lineage[id], pageChats[id]?.parentId].find((m) => typeof m === 'string' && UUID_RE.test(m) && m !== id) ?? null;
   const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
   const nodeOf = (page) => (page?.node && typeof page.node.kind === 'string' ? page.node : null);
-  // The model session-map runs a page chat on (an orchestrator's activity chat shows it); null for the rest.
-  const runModelOf = (page) => (page ? expectedRun(parseRun(page.run) ?? { kind: 'settings' }, { model: null }).model ?? null : null);
+  // The model session-map runs a page chat on (an orchestrator's activity chat shows it); null for the rest and for
+  // legacy saved ways the brain replaced (id146).
+  const runModelOf = (page) => (page ? expectedRun(parseRun(page.run))?.model ?? null : null);
   const fromTranscripts = placed.filter((x) => !removed.has(x.item.summary.sessionId)).map((x) => {
     const s = x.item.summary;
+    const engine = x.item.engine ?? 'claude';
     const live = liveById.get(s.sessionId);
     const chat = onMap.get(s.sessionId);
     const page = pageChats[s.sessionId];
     const row = {
       sessionId: s.sessionId,
       title: cut(titleOf(s) || page?.title),
-      origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats, s.fromPage),
+      origin: originOf(s.sessionId, live?.entrypoint || s.entrypoint || '', pageChats, s.fromPage, engine),
+      engine,
       partId: x.partId,
       partSource: x.partSource,
       partWhy: x.partWhy,
@@ -402,7 +432,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       updatedAt: x.updatedAt,
       archived: archived.has(s.sessionId),
       live: Boolean(live),
-      chattable: !live,
+      chattable: engine === 'deepseek' ? false : !live,
       onMap: Boolean(chat),
     };
     const cutOff = cutOffOf(row, page, s, cutCtx);
@@ -415,6 +445,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
       sessionId,
       title: cut(c.title),
       origin: 'map',
+      engine: 'claude',
       partId: knownPart(c.partId),
       partSource: knownPart(c.partId) ? 'page' : 'none',
       partWhy: { rule: knownPart(c.partId) ? 'page' : 'none' },
@@ -469,14 +500,16 @@ async function buildProject(ctx, { root, items }) {
   const openBranches = new Set(memo.workCells.filter((w) => w.status !== 'merged').map((w) => w.branch));
   const placed = items.map((item) => {
     const s = item.summary;
+    const engine = item.engine ?? 'claude';
     const updatedAt = s.endedAt ?? new Date(item.ref.mtimeMs).toISOString();
     return {
-      item, updatedAt,
+      item, updatedAt, engine,
       ...placeInPart(item, arch, placeFiles, root, aiAnswers, pageOf(s.sessionId), placements[s.sessionId], votersFor),
       ...placeInWorkCell(s, item.card, memo.workCells),
-      costUSD: round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
+      // DeepSeek prices come from its own catalog (providers.mjs, peak rates): unknown as null, never a wrong number.
+      costUSD: engine === 'deepseek' ? round6Null(deepseekCostOf([...s.usage, ...item.helperUsage])) : round6(costOf([...s.usage, ...item.helperUsage], prices).usd),
       // The part of that cost inside the 30 days the project's cost shows (sb06).
-      costD30: windowed([...s.usage, ...item.helperUsage], now, prices).d30,
+      costD30: engine === 'deepseek' ? round6Null(deepseekWindowed([...s.usage, ...item.helperUsage], now)?.d30 ?? null) : windowed([...s.usage, ...item.helperUsage], now, prices).d30,
       // Removed from session-map (mm43): its cost still counts below, but it shows nowhere.
       shown: !removed.has(s.sessionId) && (liveById.has(s.sessionId) || now.getTime() - item.ref.mtimeMs < RECENT_MS || openBranches.has(s.gitBranch)),
     };
@@ -494,11 +527,13 @@ async function buildProject(ctx, { root, items }) {
   const monthPlugins = weekByPlugin(skillCalls, skillSizes, now.getTime(), MONTH_MS);
   const chats = placed.filter((x) => x.shown).map((x) => {
     const s = x.item.summary;
+    const engine = x.engine ?? 'claude';
     const live = liveById.get(s.sessionId) ?? null;
     const waiting = waitingFor(s, live, x.item.card);
     return {
       sessionId: s.sessionId,
       title: cut(titleOf(s)),
+      engine,
       partId: x.partId,
       partSource: x.partSource,
       partWhy: x.partWhy,
@@ -518,20 +553,20 @@ async function buildProject(ctx, { root, items }) {
       waiting: { strong: waiting.strong, weak: waiting.weak, items: waiting.items.map(cut) },
       card: x.item.card,
       costUSD: x.costUSD,
-      advice: adviceOf(x.item.summary.usage, prices),
+      advice: engine === 'deepseek' ? null : adviceOf(x.item.summary.usage, prices),
       workflows: x.item.workflows,
       skillUse: skillUseOf({ own: s.skillCalls ?? [], runs: x.item.helperSkills ?? [], sizes: skillSizes }),
       liveSteps: s.liveSteps ?? [],
       startedAt: s.startedAt,
       updatedAt: x.updatedAt,
       archived: archived.has(s.sessionId),
-      chattable: !live,
+      chattable: engine === 'deepseek' ? false : !live,
     };
   });
   // Every conversation of the window, not only the shown ones: the list opens older ones in a terminal too.
   for (const x of placed) {
     const { sessionId, cwd } = x.item.summary;
-    ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null });
+    ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null, engine: x.engine ?? 'claude', path: x.item.ref.path });
   }
   const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed, lineage });
   // A cut-off conversation (mm43) waits for nobody: the person had answered and its turn was running. Its question and its
@@ -579,14 +614,30 @@ async function buildProject(ctx, { root, items }) {
 
   const chatFiles = new Map(placed.filter((x) => x.shown).map((x) => [x.item.summary.sessionId, repoFiles(x.item.summary.editedFiles ?? [], root, x.item.summary.cwd)]));
   // The AI's plain-words reason for each relation (mm32): asked in the background where the AI may work, shown from disk.
+  // The relation sentence is a motor (sb16): no call, so it is written whatever the AI switch says.
   const explained = (links) => {
-    if (config.ai?.enabled === false) return links;
-    if (aiOn) explainRelations(life, { smDir, projectId, arch }, links);
+    explainRelations(life, { smDir, projectId, arch }, links);
     return withRelationWhys(life, { smDir, projectId, arch }, links);
   };
   const milestones = roadmap?.milestones.map((m) => ({ ...m, workCellId: placed.find((x) => x.workCellId && x.item.card?.milestone === m.id)?.workCellId ?? null })) ?? null;
-  const allRows = items.flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
+  const allRows = items.filter((i) => (i.engine ?? 'claude') !== 'deepseek').flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
+  // DeepSeek usage joins the project's cost at its own prices; an unpriced row anywhere keeps its share out (never wrong).
+  const dshRows = items.filter((i) => (i.engine ?? 'claude') === 'deepseek').flatMap((i) => [...i.summary.usage, ...i.helperUsage]);
+  const dshWindow = dshRows.length ? deepseekWindowed(dshRows, now) : null;
   const cost = windowed(allRows, now, prices);
+  const mergeByDay = (a, b) => {
+    const out = { ...a };
+    for (const [day, usd] of Object.entries(b ?? {})) out[day] = round6((out[day] ?? 0) + usd);
+    return out;
+  };
+  const mergeByModel = (a, b) => {
+    const out = {};
+    for (const [day, byModel] of Object.entries({ ...(a ?? {}), ...(b ?? {}) })) {
+      out[day] = { ...(a?.[day] ?? {}), ...(b?.[day] ?? {}) };
+      for (const key of Object.keys(out[day])) if (a?.[day]?.[key] && b?.[day]?.[key]) out[day][key] = round6(a[day][key] + b[day][key]);
+    }
+    return out;
+  };
   const name = basename(root.replace(/[\\/]+$/, '')) || root;
   // The status robot (sb13): what is being built now and what main has built, from facts; it also marks the plan.
   const live = liveOfProject({ arch, placed, liveById, titleOf, workCells, mainCommits: memo.mainCommits ?? [], nowMs: now.getTime() });
@@ -614,9 +665,9 @@ async function buildProject(ctx, { root, items }) {
       ],
       skills: skillList,
       plugins: pluginList.map((pl) => ({ ...pl, week: weekPlugins.get(pl.name) ?? { count: 0, bytes: 0 }, month: monthPlugins.get(pl.name) ?? { count: 0, bytes: 0 } })),
-      cost: { today: round6(cost.today), d7: round6(cost.d7), d30: round6(cost.d30) },
-      costByDay: dailyCost(allRows, prices),
-      costByModel: modelDaily(allRows, prices),
+      cost: { today: round6(cost.today + (dshWindow?.today ?? 0)), d7: round6(cost.d7 + (dshWindow?.d7 ?? 0)), d30: round6(cost.d30 + (dshWindow?.d30 ?? 0)) },
+      costByDay: dshWindow ? mergeByDay(dailyCost(allRows, prices), dailyCost(dshRows, deepseekPrices())) : dailyCost(allRows, prices),
+      costByModel: dshWindow ? mergeByModel(modelDaily(allRows, prices), modelDaily(dshRows, deepseekPrices())) : modelDaily(allRows, prices),
       // Why the money can be there with no chat on the map (sb06): how many conversations that cost something are off it,
       // either too old for the map (they wait in History) or removed by the person.
       costWhy: {
@@ -639,8 +690,9 @@ function currencyOf(c) {
 }
 
 // ai: {bin, run} replaces the claude binary and the call (tests); isAlive replaces the pid check. bootMs: when this PC
-// started; driving: the sessionIds the chat hub runs right now (mm43).
-export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootMs = bootTime(), driving = new Set() } = {}) {
+// started; driving: the sessionIds the chat hub runs right now (mm43). dshDir: the DeepSeek Harness folder (~/.dsh),
+// null when DeepSeek support is off (no folder, or Node without zstd).
+export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootMs = bootTime(), driving = new Set(), dshDir = null } = {}) {
   const nowIso = now.toISOString();
   const userConfig = readJsonFile(join(smDir, 'config.json'), {}) ?? {};
   const sessions = listLiveSessions(dir, isAlive ? { isAlive, bootMs } : { bootMs });
@@ -660,7 +712,20 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     internals: new Map(),
     placements: readPlacements(smDir),
   };
-  const items = readItems(dir, smDir, now.getTime(), ctx.liveById);
+  const items = readItems(dir, smDir, now.getTime(), ctx.liveById, dshDir);
+  // The plan's weekly and 5-hour limits, from the limit messages in the histories (wa09): the account's, not a project's.
+  // One computation feeds the state and holds the background AI back (life.mjs) while a limit is hit.
+  const limits = planLimits(items.flatMap((i) => [i.summary.limitHit?.weekly, i.summary.limitHit?.session]).filter(Boolean), now.getTime());
+  ctx.limits = limits;
+  setPlanLimits(ctx.life, limits);
+  // The DSH writes no session files: a DeepSeek session whose turn is open and whose log was written recently is the
+  // one working now, and the map and the "Ao vivo" panel read it as busy like a Claude process would be.
+  for (const item of items) {
+    if (item.engine !== 'deepseek' || ctx.liveById.has(item.summary.sessionId)) continue;
+    if (isDshBusy(item.summary, item.ref.mtimeMs, now.getTime())) {
+      ctx.liveById.set(item.summary.sessionId, { sessionId: item.summary.sessionId, status: 'busy', entrypoint: 'deepseek-harness', alive: true, updatedAt: new Date(item.ref.mtimeMs).toISOString() });
+    }
+  }
   const groups = await groupByRoot(items, ctx.placements);
   const touches = new Map();
   for (const g of groups) for (const item of g.items) touches.set(item.summary.sessionId, touchOf(item, g.root, [dir, smDir]));
@@ -720,10 +785,16 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     generatedAt: nowIso,
     waitingCount,
     currency: currencyOf(userConfig.currency),
+    // The page's vocabulary mode (id126): held by the engine, the default is the technical terms.
+    terms: userConfig.terms === 'simple' ? 'simple' : 'technical',
+    // The skills' airplane mode (id136): the owner's one switch; true = every skill and plugin off for new chats.
+    skillsAirplane: userConfig.skills?.airplane === true,
+    // The per-skill switches (id139): the names the owner turned off, whatever the focus picks.
+    skillsOff: Array.isArray(userConfig.skills?.off) ? userConfig.skills.off : [],
     totals: { today: sum('today'), d7: sum('d7'), d30: sum('d30') },
     budget: Number.isFinite(monthlyUSD) && monthlyUSD > 0 ? { monthlyUSD, used: round6(costOf(monthRows, ctx.prices).usd) } : null,
     // The plan's weekly and 5-hour limits, from the limit messages in the histories (wa09): the account's, not a project's.
-    limits: planLimits(items.flatMap((i) => [i.summary.limitHit?.weekly, i.summary.limitHit?.session]).filter(Boolean), now.getTime()),
+    limits,
     // How much of the plan's week is used, as Claude Code last saw it (~/.claude.json, next to the .claude folder): near
     // the end only urgent and important work starts in the orchestration (or08, wa09). Null when unknown or stale.
     weekUse: readWeekUse(join(dirname(dir), '.claude.json'), now.getTime()),

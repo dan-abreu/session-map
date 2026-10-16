@@ -10,6 +10,7 @@ import { key as archKey, parseArch } from '../arch/parse.mjs';
 import { FILE_MAX, isSecretsFile, safeResolve } from '../files.mjs';
 import { maskSecrets } from '../sources/claude-conversation.mjs';
 import { DEFAULT_LIMITS, docTypeOf } from './docsize.mjs';
+import { swapCount } from './docwatch-agree.mjs';
 import { RULES, buildRuleInput } from './docwatch.mjs';
 import { brokenLinks, headingsOf, maskCode } from './mdlinks.mjs';
 import { planSplit, verifySplit } from './split.mjs';
@@ -387,6 +388,58 @@ async function aiFix(finding, input, { ai, bin, env }) {
   }, Number(answer.costUSD) || 0);
 }
 
+// ---------- the motor route (fd23): the version and count swaps, no AI ----------
+
+// The document with the found version swapped for the expected one on the finding's own line, or null when the line
+// is not what the finding says.
+function versionSwap(finding, doc) {
+  const p = finding.what?.params ?? {};
+  const { found, expected } = p;
+  if (typeof found !== 'string' || !found || typeof expected !== 'string' || !expected || found === expected) return null;
+  if (!Number.isInteger(finding.target?.line) || finding.target.line < 1) return null;
+  const rows = doc.text.split('\n');
+  const line = rows[finding.target.line - 1];
+  if (line === undefined || !line.includes(found)) return null;
+  rows[finding.target.line - 1] = line.replace(found, expected);
+  return rows.join('\n');
+}
+
+// The motor's own edit for the two mechanical rules. Returns done(op) when the judge accepts it, null when the motor
+// cannot do this one (the AI route may still), fail() when there is nothing to do at all.
+function motorFix(finding, input) {
+  const path = docPathFor(finding, input);
+  if (!path || !/\.md$/i.test(path)) return null;
+  const doc = input.docs.find((d) => d.path === path);
+  if (!doc) return null;
+  let afterLF;
+  if (finding.rule === 'version-mismatch' && finding.fix?.kind !== 'manual') {
+    afterLF = versionSwap(finding, doc);
+  } else if (finding.rule === 'docs-disagree') {
+    const p = finding.what?.params ?? {};
+    if (p.node !== undefined || typeof p.claimed !== 'number' || typeof p.count !== 'number' || typeof p.kind !== 'string') return null;
+    const rows = lf(doc.text).split('\n');
+    const line = Number.isInteger(finding.target?.line) && finding.target.line >= 1 ? rows[finding.target.line - 1] : undefined;
+    if (line === undefined) return null;
+    const swapped = swapCount(line, { claimed: p.claimed, count: p.count, kind: p.kind });
+    if (swapped === null) return null;
+    rows[finding.target.line - 1] = swapped;
+    afterLF = rows.join('\n');
+  } else {
+    return null;
+  }
+  if (afterLF === null) return null; // the motor cannot do this one: the AI route may still try
+  if (afterLF === lf(doc.text)) return fail('no-change');
+  const finalText = conform(doc.text, afterLF);
+  if (finalText === doc.text) return fail('no-change');
+  const verdict = judge(finding, input, doc, finalText, lf(doc.text), afterLF);
+  if (verdict) return null; // the AI route may still try
+  return done({
+    kind: 'doc-update', sensitive: false, findingId: finding.id,
+    files: [{ path, after: finalText }],
+    why: { msg: finding.what?.msg ?? `watch.${finding.rule}.what`, params: finding.what?.params ?? {} },
+  });
+}
+
 // ---------- public ----------
 
 // opFromFinding(finding, ctx, { ai, bin, env }) -> { ok: true, op, costUSD } | { ok: false, error, reason? }.
@@ -399,6 +452,11 @@ export async function opFromFinding(finding, ctx, { ai, bin, env } = {}) {
   if (finding.rule === 'owner-missing') return ownerFix(finding, input);
   if (!AI_RULES.has(finding.rule)) return fail('no-fix', 'unknown-rule');
   if (finding.fix?.kind !== 'ai-update') return fail('no-fix', 'manual');
+  // fd23: the motor tries the mechanical rules first; the AI route remains the safety net.
+  if (finding.rule === 'version-mismatch' || finding.rule === 'docs-disagree') {
+    const motor = motorFix(finding, input);
+    if (motor) return motor;
+  }
   return aiFix(finding, input, { ai, bin, env });
 }
 
@@ -409,6 +467,8 @@ const GUESS_BYTES = 12_000;
 // Dollars the AI will probably cost for this finding: the document goes in and comes back whole. 0 when the program does it.
 export function estimateFix(finding, { bytes, model = 'sonnet' } = {}) {
   if (finding?.fix?.kind !== 'ai-update' || !AI_RULES.has(finding.rule)) return 0;
+  // fd23: the version and count swaps are the motor's work; only their rare judge refusal would reach the AI.
+  if (finding.rule === 'version-mismatch' || (finding.rule === 'docs-disagree' && finding.what?.params?.node === undefined)) return 0;
   const tokens = Math.ceil(Math.min(Number.isFinite(bytes) ? bytes : GUESS_BYTES, DOC_AI_MAX) / 4);
   const [pin, pout] = PRICE[model] ?? PRICE.sonnet;
   return Math.round(((tokens + 600) * pin + (tokens + 100) * pout) / 1e3) / 1e3;

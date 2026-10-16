@@ -2,14 +2,14 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { readJsonFile, writeAtomic } from './store.mjs';
+import { isAnySessionId } from './sources/deepseek.mjs';
 import { addRemoved, dismissCut } from './hidden.mjs';
 import { safeResolve, vscodeUrl } from './files.mjs';
 import { installFromCatalog } from './sources/catalog.mjs';
 import { killProcess, newTerminal, openUrl, processName as processNameDefault, processStart as processStartDefault } from './launch.mjs';
 import { log } from './log.mjs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install', 'open-file', 'delete', 'dismiss-cut']);
+const ACTIONS = new Set(['open', 'new', 'close', 'archive', 'unarchive', 'install', 'open-file', 'delete', 'dismiss-cut', 'pin', 'unpin']);
 const CLAUDE_PROCESS_RE = /claude|node/i;
 const PID_START_SLACK_MS = 5000;
 const LINE_MAX = 10_000_000;
@@ -34,7 +34,7 @@ function findChat(state, sessionId) {
 
 // The actions that only write session-map's own lists: a state a few seconds old is enough for them. Open and close start
 // or stop a process, so they wait for a fresh one.
-const LIST_ACTIONS = new Set(['archive', 'unarchive', 'delete', 'dismiss-cut']);
+const LIST_ACTIONS = new Set(['archive', 'unarchive', 'delete', 'dismiss-cut', 'pin', 'unpin']);
 export const listActionOn = (state, body) => LIST_ACTIONS.has(body?.action) && typeof body.sessionId === 'string' && findChat(state, body.sessionId) !== null;
 
 function findWorkCell(state, frontId, projectId) {
@@ -57,6 +57,16 @@ function sessionFile(dir, pid) {
 
 function setArchived(smDir, sessionId, on) {
   const file = join(smDir, 'archived.json');
+  const stored = readJsonFile(file, []);
+  const ids = new Set(Array.isArray(stored) ? stored : []);
+  if (on) ids.add(sessionId);
+  else ids.delete(sessionId);
+  writeAtomic(file, `${JSON.stringify([...ids])}\n`);
+}
+
+// Pin (pc23): a conversation the person keeps on top of its list; the same shape as archived.json.
+function setPinned(smDir, sessionId, on) {
+  const file = join(smDir, 'pinned.json');
   const stored = readJsonFile(file, []);
   const ids = new Set(Array.isArray(stored) ? stored : []);
   if (on) ids.add(sessionId);
@@ -125,13 +135,18 @@ async function dispatch(body, deps) {
     return reply(200);
   }
 
-  if (typeof body.sessionId !== 'string' || !UUID_RE.test(body.sessionId)) return reply(400, { error: 'bad-session' });
+  if (typeof body.sessionId !== 'string' || !isAnySessionId(body.sessionId)) return reply(400, { error: 'bad-session' });
   const chat = findChat(state, body.sessionId);
   if (!chat) return reply(404, { error: 'unknown-session' });
   const info = state[INTERNALS]?.chats.get(chat.sessionId);
 
   switch (body.action) {
     case 'open':
+      // The DeepSeek Harness has no --resume CLI: its protocol focuses the running app (and starts it when it is not).
+      if (info?.engine === 'deepseek' || chat.engine === 'deepseek') {
+        openUrl('dsh://open', launchOpts);
+        return reply(200, { opened: 'deepseek' });
+      }
       if (chat.entrypoint === 'claude-vscode') {
         openUrl(`vscode://anthropic.claude-code/open?session=${chat.sessionId}`, launchOpts);
         return reply(200, { opened: 'vscode' });
@@ -151,6 +166,10 @@ async function dispatch(body, deps) {
     case 'dismiss-cut':
       dismissCut(deps.smDir, chat.sessionId, chat.updatedAt ?? null);
       return reply(200);
+    case 'pin':
+    case 'unpin':
+      setPinned(deps.smDir, chat.sessionId, body.action === 'pin');
+      return reply(200);
     default:
       setArchived(deps.smDir, chat.sessionId, body.action === 'archive');
       return reply(200);
@@ -168,6 +187,9 @@ export function logAction(smDir, body, status) {
   if (typeof body?.projectId === 'string') line.projectId = body.projectId.slice(0, 100);
   if (Number.isInteger(body?.count)) line.count = body.count;
   if (Number.isFinite(body?.usd)) line.usd = body.usd;
+  // The same line joins the program's professional log (sv19): everything in one machine-readable place.
+  const { ts, ...rest } = line;
+  log('info', 'action', rest);
   try {
     mkdirSync(smDir, { recursive: true });
     appendFileSync(join(smDir, 'actions.log'), `${JSON.stringify(line)}\n`);

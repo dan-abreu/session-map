@@ -36,17 +36,20 @@ Cada falha de verdade sobe um degrau, nunca mais de um por vez. O nível máximo
 5. Opus, nível altíssimo
 6. Fable, nível alto
 
+## A conversa
+
+A conversa com a pessoa roda em **Opus, nível alto** e nunca troca de modelo sozinha: a conversa recebe a pessoa e decide; nunca troca de modelo sozinha. Só a pessoa muda esse nível, na aba Cérebro (a linha Conversa) ou numa linha desta tabela. O trabalho pesado vai para tarefas com o modelo do tipo delas, acima.
+
 ## Fases da conversa
 
-O cérebro de entrada pesa cada mensagem e leva a conversa para o nível da fase. O tamanho do pedido não sobe o nível: o nível alto só vem depois de uma falha.
+O cérebro de entrada pesa cada mensagem só para saber de que fase ela é; a fase dá o tom do turno (planejar antes de construir), não o modelo.
 
-| Fase | Modelo | Nível | Por quê |
-|---|---|---|---|
-| trivial | Haiku | baixo | um cumprimento ou um comando curto |
-| conversa | Sonnet | baixo | uma pergunta ou uma opinião, sem trabalho a fazer |
-| plano | Sonnet | médio | planejar: o mesmo resultado medido do tipo plano (8 de 8) |
-| construção | Sonnet | médio | qualquer tamanho; nível alto só depois de uma falha |
-| sensível (plano ou construção) | Opus | alto | segurança, dinheiro ou dado pessoal, no plano ou na construção |
+| Fase | O que é |
+|---|---|
+| trivial | um cumprimento ou um comando curto |
+| conversa | uma pergunta ou uma opinião, sem trabalho a fazer |
+| plano | uma ideia, ou um pedido médio ou grande que ninguém aprovou ainda |
+| construção | um sinal verde, ou uma mudança pequena e concreta |
 
 ## Limites
 

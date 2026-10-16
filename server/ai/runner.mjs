@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { readJsonFile, writeAtomic } from '../store.mjs';
@@ -9,11 +9,19 @@ import { normalizePath } from '../paths.mjs';
 import { HELPER_KINDS, emptyHelperState, helperStatus, pausedFor, providerReview, recordReview, resumeHelper, reviewPicks, sameAnswer } from './review.mjs';
 import { PROVIDERS, estimateCostUSD, providerOf } from './providers.mjs';
 import { bulkModelOf, laneWeights, pickLane, route } from './router.mjs';
+import { activeGroupOf, applyGroup } from './groups.mjs';
+import { isQuotaError, isQuotaPaused, markQuotaError, noteQuotaOk, preflight, quotaFile, quotaPause, readQuota } from './quota.mjs';
+import { BACKGROUND_PREFERENCE, enginesOf, resolveEngine } from './engine.mjs';
+import { levelsOf } from './efforts.mjs';
+import { addOthersSpend } from '../budget.mjs';
 
 const TIMEOUT_MS = 90_000;
 const OUTPUT_MAX = 1_000_000;
 const HOUR = 60 * 60 * 1000;
 const CACHE_MAX = 1000;
+// The Cérebro's "background" row may name these for the map's own Claude calls (id146): anything else falls back.
+const CLAUDE_MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable']);
+const EFFORT_WORDS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const VSCODE_EXT_RE = /^anthropic\.claude-code-(\d+)\.(\d+)\.(\d+)/;
 
 export const aiRunnerDir = (smDir) => join(smDir, 'ai-runner');
@@ -146,6 +154,13 @@ const hashOf = (key) => createHash('sha1').update(JSON.stringify(key)).digest('h
 export const aiKeyHash = hashOf;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 
+// The tokens a provider's reply already counted (or49): kept out when absent, so old log lines keep their shape.
+const tokensOf = (res) => ({
+  ...(Number.isFinite(res?.tokensIn) && res.tokensIn > 0 ? { tokensIn: res.tokensIn } : {}),
+  ...(Number.isFinite(res?.tokensOut) && res.tokensOut > 0 ? { tokensOut: res.tokensOut } : {}),
+  ...(Number.isFinite(res?.tokensCacheHit) && res.tokensCacheHit > 0 ? { cacheHit: res.tokensCacheHit } : {}),
+});
+
 // Background calls to the user's own claude: one at a time, capped per hour, cached by content in smDir/ai-cache.json.
 // others: () => othersSettings(...) ({enabled, dailyUSD, off, models, keys}), read on every call; with apiRun and keyOf
 // the bulk kinds (HELPER_KINDS) go to every other AI with a key at once, in the order route() gives (or14): one call
@@ -204,6 +219,24 @@ export class AiQueue {
       this.#state.cache = Object.fromEntries(entries.slice(0, CACHE_MAX));
     }
     writeAtomic(join(this.#smDir, 'ai-cache.json'), JSON.stringify(this.#state));
+  }
+
+  // The credit failover state (or36): read on each decision, written only when a call learned something.
+  #quota() { return readQuota(this.#smDir); }
+
+  #quotaSave(state) { try { writeFileSync(quotaFile(this.#smDir), JSON.stringify(state)); } catch { /* the work goes on */ } }
+
+  #group() {
+    try { return activeGroupOf(readJsonFile(join(this.#smDir, 'config.json'), null)?.ai); } catch { return null; }
+  }
+
+  #engines() {
+    try { return enginesOf(readJsonFile(join(this.#smDir, 'config.json'), null)?.ai); } catch { return { brain: 'auto', background: 'auto' }; }
+  }
+
+  // The per-function choice of the Cérebro tab (or39), read raw: importing brainpanel would pull the policy chain in.
+  #functionChoice(id) {
+    try { return readJsonFile(join(this.#smDir, 'config.json'), null)?.ai?.others?.functions?.[id] ?? null; } catch { return null; }
   }
 
   #cached(hash) {
@@ -294,11 +327,17 @@ export class AiQueue {
   // Run directly: only from a job already in Claude's line.
   // Each of session-map's own Claude calls is also written to the activity file (sb11), like the other AIs': it leaves
   // no transcript (--no-session-persistence), so this line is the only trace of what it cost, for the statement.
-  async #askClaude(prompt, schemaHint, now, projectId, kind = 'other') {
+  async #askClaude(prompt, schemaHint, now, projectId, kind = 'other', functionId = 'background') {
     const t0 = this.#now();
-    const res = await this.#run(prompt, { model: this.model, cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
+    // The Cérebro's "background" row (id146): the owner's claude model and level for the map's own calls ride along;
+    // the legacy ai.model default stays under it.
+    const chosen = this.#functionChoice(functionId);
+    const onClaude = !chosen?.provider || chosen.provider === 'claude';
+    const model = onClaude && CLAUDE_MODELS.has(chosen?.model) ? chosen.model : this.model;
+    const effort = onClaude && EFFORT_WORDS.has(chosen?.effort) ? chosen.effort : undefined;
+    const res = await this.#run(prompt, { model, ...(effort ? { effort } : {}), cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
     this.#spend(now, projectId, 'claude', res.costUSD);
-    this.#noteOutside({ kind, sensitivity: 'client', provider: 'claude', model: this.model, ms: this.#now() - t0, costUSD: res.costUSD ?? 0, ok: Boolean(res.ok), ...(res.ok ? {} : { error: res.error }) });
+    this.#noteOutside({ kind, sensitivity: 'client', provider: 'claude', model, ms: this.#now() - t0, costUSD: res.costUSD ?? 0, ok: Boolean(res.ok), ...(res.ok ? {} : { error: res.error }) });
     return res;
   }
 
@@ -311,8 +350,9 @@ export class AiQueue {
   // The outside AIs that may take this job right now: a key, switched on, not paused for it, room under the cap.
   #usable(s, kind, now) {
     if (this.#outsideSpent(now) + this.#held() >= s.dailyUSD) return [];
+    const quota = this.#quota();
     return (s.keys ?? []).filter((p) => providerOf(p) && !(s.off ?? []).includes(p) && !pausedFor(this.#state.helper, p, kind)
-      && this.#spentToday(p, now) + this.#held(p) < s.dailyUSD);
+      && !isQuotaPaused(quota, p) && this.#spentToday(p, now) + this.#held(p) < s.dailyUSD);
   }
 
   // Where a new job goes: {provider, model} of an outside AI, or null for Claude. Claude conducts: with any other AI
@@ -321,12 +361,21 @@ export class AiQueue {
     if (!HELPER_KINDS.has(kind)) return null;
     const s = this.#settings();
     if (!s) return null;
-    const candidates = route({ kind, sensitivity, available: this.#usable(s, kind, this.#now()), stats: this.#stats(), models: s.models });
+    const routed = route({ kind, sensitivity, available: this.#usable(s, kind, this.#now()), stats: this.#stats(), models: s.models });
+    const candidates = applyGroup(routed, this.#group(), { kind }).candidates;
     if (!candidates.length) return null;
     const at = pickLane(laneWeights(candidates), candidates.map((c) => this.#lanes.get(c.provider)?.load ?? 0));
     return at < 0 ? null : candidates[at];
   }
 
+  // The map's own outside work counts in the project's monthly budget too (or50): the daily cap alone hid it from
+  // the budget bar. A ledger that fails must not fail the call it describes.
+  #bookMonth(root, costUSD) {
+    if (!root || !(Number.isFinite(costUSD) && costUSD > 0)) return;
+    try { addOthersSpend(this.#smDir, root, costUSD, this.#now()); } catch { /* the work goes on */ }
+  }
+
+  // The tokens the provider already counted (or49): kept out when absent, so the old log lines keep their shape.
   // The activity log (activity.mjs) hears of every outside call: who, how long, what it cost, never the request. A log
   // that fails must not fail the call it describes.
   #noteOutside(call) {
@@ -345,7 +394,7 @@ export class AiQueue {
   // Claude conducts: it answers when the other AI cannot, and re-asks a sample of its answers, having the last word.
   // valid: the caller's check of an answer (place: a listed part id or null). An answer that fails it is a wrong
   // answer, not a success: Claude answers instead and the miss counts against that AI.
-  async #answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity) {
+  async #answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, root, valid, sensitivity) {
     const viaClaude = () => this.#onClaude(() => this.#askClaude(prompt, schemaHint, now, projectId, kind));
     const s = this.#settings();
     const { provider } = target;
@@ -353,14 +402,23 @@ export class AiQueue {
     const key = await Promise.resolve(this.#keyOf(provider)).catch(() => null);
     if (!key) return viaClaude();
     const estimateUSD = estimateCostUSD(provider, target.model, prompt, undefined, schemaHint);
+    const flight = preflight(this.#quota(), provider, estimateUSD);
+    if (!flight.ok) {
+      log('warn', 'ai-helper-fallback', { provider, error: `quota-${flight.reason}` });
+      return viaClaude();
+    }
     const ticket = this.reserveOutside(provider, estimateUSD, s.dailyUSD);
     if (!ticket) return viaClaude();
     const t0 = this.#now();
     const fromOther = await this.#askOutside(target, key, prompt, schemaHint);
+    // Credit signals learn across calls: an empty provider is paused for the cooldown, a success clears the pause.
+    if (isQuotaError(fromOther?.error)) this.#quotaSave(markQuotaError(this.#quota(), provider, fromOther.error));
+    else if (fromOther?.ok && quotaPause(this.#quota(), provider)) this.#quotaSave(noteQuotaOk(this.#quota(), provider));
     // A call that threw may have left: it costs the estimate. providers.mjs does the same for a timeout.
     const paid = Number.isFinite(fromOther.costUSD) ? fromOther.costUSD : fromOther.error === 'helper-threw' ? estimateUSD : 0;
     ticket.settle(paid, projectId);
-    this.#noteOutside({ kind, sensitivity, provider, model: target.model, ms: this.#now() - t0, costUSD: paid, ok: Boolean(fromOther.ok), ...(fromOther.ok ? {} : { error: fromOther.error }) });
+    this.#bookMonth(root, paid);
+    this.#noteOutside({ kind, sensitivity, provider, model: target.model, ms: this.#now() - t0, costUSD: paid, ok: Boolean(fromOther.ok), ...(fromOther.ok ? {} : { error: fromOther.error }), ...tokensOf(fromOther) });
     const invalid = fromOther.ok && typeof valid === 'function' && !valid(fromOther.value);
     if (fromOther.ok && !invalid && !reviewPicks(hash)) return fromOther;
     if (!fromOther.ok) log('warn', 'ai-helper-fallback', { provider, error: fromOther.error });
@@ -376,7 +434,50 @@ export class AiQueue {
     return { ...fromClaude, costUSD, reviewed: true };
   }
 
-  async #call(hash, kind, prompt, schemaHint, uncapped, projectId, valid, target, sensitivity) {
+  // The background engine (id123): 'auto' or the person's choice, mechanical from the config. When it resolves to an
+  // outside AI with a key, the map's own work goes to its API instead of the Claude CLI; the sensitivity and quota
+  // rules hold like everywhere else. Anything that cannot run there falls back to Claude, as before.
+  // functionId: the Cérebro row whose choice rules this call ('background' for the map's own work, 'book' for the book's
+  // titles and summaries). outsideOnly: when no other AI can take it, say so instead of falling back to Claude (the caller
+  // has its own Claude call).
+  async #engineOrClaude(prompt, schemaHint, now, projectId, kind, sensitivity, root, functionId = 'background', outsideOnly = false) {
+    const s = this.#settings();
+    const avail = [];
+    if (this.#bin) avail.push('claude');
+    if (s) for (const p of s.keys ?? []) avail.push(p);
+    // The Cérebro's background row names the AI first (id155); the older engine switch is its fallback.
+    const row = this.#functionChoice(functionId);
+    const wanted = typeof row?.provider === 'string' && row.provider !== 'auto' ? row.provider : functionId === 'background' ? this.#engines().background : 'claude';
+    const eng = resolveEngine(wanted, { available: avail, preference: BACKGROUND_PREFERENCE, fallback: 'claude' });
+    if (eng.id && eng.id !== 'claude' && this.#apiRun && this.#keyOf) {
+      const provider = eng.id;
+      const key = await Promise.resolve(this.#keyOf(provider)).catch(() => null);
+      if (key) {
+        const chosen = row;
+        const model = (typeof chosen?.model === 'string' && chosen.model) ? chosen.model
+          : s.models?.[provider] ?? providerOf(provider)?.defaultModel ?? null;
+        const eff = chosen?.effort;
+        const useEffort = typeof eff === 'string' && eff && eff !== 'auto' && levelsOf(provider, model).includes(eff) ? eff : null;
+        const estimateUSD = estimateCostUSD(provider, model, prompt, undefined, schemaHint);
+        const flight = preflight(this.#quota(), provider, estimateUSD);
+        const ticket = flight.ok ? this.reserveOutside(provider, estimateUSD, s.dailyUSD) : null;
+        if (ticket) {
+          const t0 = this.#now();
+          let res;
+          try { res = await this.#apiRun(prompt, { provider, model, key, schemaHint, ...(useEffort ? { effort: useEffort } : {}) }); } catch { res = { ok: false, error: 'helper-threw', costUSD: estimateUSD }; }
+          const paid = Number.isFinite(res?.costUSD) ? res.costUSD : estimateUSD;
+          ticket.settle(paid, projectId);
+          this.#bookMonth(root, paid);
+          this.#noteOutside({ kind, sensitivity: sensitivity ?? 'internal', provider, model, ms: this.#now() - t0, costUSD: paid, ok: Boolean(res?.ok), ...(res?.ok ? {} : { error: res?.error }), ...tokensOf(res) });
+          if (res?.ok) return res;
+        }
+      }
+    }
+    if (outsideOnly) return { ok: false, error: 'no-outside' };
+    return this.#askClaude(prompt, schemaHint, now, projectId, kind, functionId);
+  }
+
+  async #call(hash, kind, prompt, schemaHint, uncapped, projectId, root, valid, target, sensitivity, functionId = 'background', outsideOnly = false) {
     const hit = this.#cached(hash);
     if (hit) return hit;
     const now = this.#now();
@@ -386,24 +487,24 @@ export class AiQueue {
       this.#state.calls.push(now);
     }
     const res = target
-      ? await this.#answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, valid, sensitivity)
-      : await this.#askClaude(prompt, schemaHint, now, projectId, kind);
+      ? await this.#answerOutside(target, hash, kind, prompt, schemaHint, now, projectId, root, valid, sensitivity)
+      : await this.#engineOrClaude(prompt, schemaHint, now, projectId, kind, sensitivity, root, functionId, outsideOnly);
     if (res.ok) this.#state.cache[hash] = { value: res.value, at: now };
     this.#save();
     return res;
   }
 
   // uncapped: the one-time bootstrap of a new project, which the hourly cap would stretch over hours.
-  // sensitivity: what the prompt holds (router.mjs SENSITIVITIES). Unsaid is the strictest, 'client': a caller must say
-  // 'internal' or 'public' (life.mjs passes the project's class) before a direct Gemini key or DeepSeek may take it.
-  ask({ key, prompt, schemaHint, uncapped = false, projectId = null, valid = null, sensitivity = 'client' }) {
+  // sensitivity: what the prompt holds (router.mjs SENSITIVITIES). A label for the activity log and the statement
+  // (life.mjs passes the project's class); it no longer keeps any AI from the work.
+  ask({ key, prompt, schemaHint, uncapped = false, projectId = null, root = null, valid = null, sensitivity = 'client', functionId = 'background', outsideOnly = false }) {
     if (!this.enabled) return Promise.resolve({ ok: false, error: 'ai-off' });
     const hash = hashOf(key);
     const hit = this.#cached(hash);
     if (hit) return Promise.resolve(hit);
     const kind = key?.kind;
     const target = this.#target(kind, sensitivity);
-    const work = () => this.#call(hash, kind, prompt, schemaHint, uncapped, projectId, valid, target, sensitivity);
+    const work = () => this.#call(hash, kind, prompt, schemaHint, uncapped, projectId, root, valid, target, sensitivity, functionId, outsideOnly);
     this.#pending++;
     return (target ? this.#onLane(target.provider, work) : this.#onClaude(work)).finally(() => { this.#pending--; });
   }

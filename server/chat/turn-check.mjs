@@ -3,15 +3,21 @@ import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } fr
 import { join } from 'node:path';
 import { priceReply, usageOf } from '../statement.mjs';
 import { parseLines } from '../sources/claude.mjs';
+import { roleOf } from '../ai/agents.mjs';
+import { contextOf } from '../waste.mjs';
 
 // The OK at the end of a request (or26), read from what the turn left behind without asking any AI: did the tests run
-// and pass, which plan items were ticked, what was saved, what the turn cost, and what is missing.
+// and pass, which plan items were ticked, what was saved, what the turn cost, and what is missing. Since or58 it also
+// reads the roles that worked (every Agent/Task call's kind tag mapped to the catalog) and charges each one its proof.
 
 const SHELLS = new Set(['Bash', 'PowerShell']);
 const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+const AGENT_TOOLS = new Set(['Agent', 'Task']);
+const AGENT_TAG_RE = /^\s*\[([a-z-]+)(?:\^[12])?\]/;
 const TEST_CMD = /\b(?:npm\s+(?:run\s+)?test|npx\s+(?:vitest|jest)|vitest|jest|pytest|node\s+(?:\S+\s+)*--test|go\s+test|cargo\s+test)\b/;
 const DOC_FILE = /\.(?:md|txt)$/i;
 const PLAN_FILE = /(?:^|[\\/])docs[\\/]architecture[\\/][^\\/]+\.md$/i;
+const PLAN_DOC_RE = /(?:^|[\\/])docs[\\/]superpowers[\\/]plans[\\/][^\\/]+\.md$/i;
 const ITEM = /^\s*- \[([ x])\].*`([a-z]+\d+)`\s*$/;
 const USAGE_FIELDS = ['input', 'cacheWrite5m', 'cacheWrite1h', 'cacheRead', 'output', 'thinking', 'webSearch'];
 
@@ -55,6 +61,7 @@ export function turnCheck({ entries = [], startedAt = 0, gitBefore = null, gitAf
   const replies = new Map();
   const calls = [];
   const results = new Map();
+  const agentKinds = [];
   for (const e of inTurn) {
     if (e.type === 'assistant' && e.message?.usage) {
       const u = usageOf(e.message.usage);
@@ -66,8 +73,13 @@ export function turnCheck({ entries = [], startedAt = 0, gitBefore = null, gitAf
       replies.set(key, r);
     }
     for (const b of blocksOf(e)) {
-      if (b?.type === 'tool_use') calls.push(b);
-      else if (b?.type === 'tool_result') results.set(b.tool_use_id, { text: textOf(b.content), isError: b.is_error === true });
+      if (b?.type === 'tool_use') {
+        calls.push(b);
+        if (AGENT_TOOLS.has(b.name)) {
+          const tag = AGENT_TAG_RE.exec(String(b.input?.description ?? ''));
+          if (tag) agentKinds.push(tag[1]);
+        }
+      } else if (b?.type === 'tool_result') results.set(b.tool_use_id, { text: textOf(b.content), isError: b.is_error === true });
     }
   }
   let costUSD = 0;
@@ -111,7 +123,25 @@ export function turnCheck({ entries = [], startedAt = 0, gitBefore = null, gitAf
   if (tests && tests.failed > 0) missing.push('tests-failed');
   if (worked.length) missing.push('not-ticked');
   if ((codeChanged || ticked.size) && !saved.length) missing.push('not-saved');
-  return { tests, ticked: [...ticked], saved, costUSD, missing };
+  // The roles that worked (or58): every agent's kind mapped to the catalog, and each one charged its proof. The
+  // planner's exit is a plan on paper; a planner that worked without one leaves 'role-plan'.
+  const roles = [...new Set(agentKinds.map((k) => roleOf(k)?.id).filter(Boolean))];
+  const planEdited = calls.some((c) => EDITS.has(c.name) && !results.get(c.id)?.isError
+    && (PLAN_FILE.test(String(c.input?.file_path ?? '')) || PLAN_DOC_RE.test(String(c.input?.file_path ?? ''))));
+  if (roles.includes('planner') && !planEdited) missing.push('role-plan');
+  return { tests, roles, ticked: [...ticked], saved, costUSD, missing };
+}
+
+// The memory a conversation carries (pc37): the prompt side of the last reply of the chat itself (a helper's lines are
+// not the chat's), null when no reply reported any.
+export function contextTokens(entries = []) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (e?.type !== 'assistant' || e.isSidechain || !e.message?.usage || e.message.model === '<synthetic>') continue;
+    const tokens = contextOf(usageOf(e.message.usage));
+    if (tokens > 0) return tokens;
+  }
+  return null;
 }
 
 // ---- reading the turn's surroundings (the hub's side; every failure gives nothing) ----

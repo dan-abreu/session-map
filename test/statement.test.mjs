@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildStatement, chatsCsv, detailCsv, ownWords, planName, priceReply, statementHtml, toolLabel, usageOf } from '../server/statement.mjs';
+import { buildStatement, chatsCsv, detailCsv, ownWords, planName, priceReply, roleTotals, statementHtml, toolLabel, usageOf } from '../server/statement.mjs';
 import { costOf, loadPrices } from '../server/cost.mjs';
 
 const M = 1_000_000;
@@ -91,6 +91,33 @@ test('a statement counts each reply once, keeps what it read and did, and splits
   assert.equal(csv.trim().split('\r\n').length, 4);
   assert.match(chatsCsv(st), /ajudante: Ler o código/);
   assert.match(statementHtml(st, { since: 0, pricesAsOf: '2026-10-11' }), /Extrato de gastos com Claude/);
+});
+
+test('the spend per specialist: the agents group by their kind tag into the catalog roles (or60)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'stmt-roles-'));
+  const proj = join(root, 'C--dev-demo');
+  mkdirSync(join(proj, 's1', 'subagents'), { recursive: true });
+  const at = '2026-10-11T12:00:00.000Z';
+  const usage = { input_tokens: 100, cache_read_input_tokens: 0, output_tokens: 100, cache_creation_input_tokens: 0 };
+  writeFileSync(join(proj, 's1.jsonl'), line({ type: 'assistant', sessionId: 's1', timestamp: at, requestId: 'r0', message: { id: 'm0', model: 'claude-a', content: [], usage } }));
+  const agent = (id, description) => {
+    writeFileSync(join(proj, 's1', 'subagents', `agent-${id}.jsonl`), line({ type: 'assistant', sessionId: 's1', timestamp: at, requestId: `r-${id}`, message: { id: `m-${id}`, model: 'claude-a', content: [], usage } }));
+    writeFileSync(join(proj, 's1', 'subagents', `agent-${id}.meta.json`), JSON.stringify({ description, model: 'haiku' }));
+  };
+  agent('c1', '[code] fix the header');
+  agent('c2', '[code] fix the footer');
+  agent('r1', '[review] check the diff');
+  agent('d1', 'ler o código');
+
+  const st = await buildStatement({ projectsDir: root, since: 0, prices });
+  const totals = roleTotals(st, { from: 0, to: Date.parse('2026-10-12T00:00:00Z') });
+  const byId = Object.fromEntries(totals.map((t) => [t.id, t]));
+  assert.equal(byId.coder.replies, 2);
+  assert.equal(byId.reviewer.replies, 1);
+  const codeUsd = st.rows.filter((r) => r.kind === 'code').reduce((a, r) => a + r.cost.total, 0);
+  assert.equal(byId.coder.usd, Math.round(codeUsd * 1e6) / 1e6);
+  assert.ok(!totals.some((t) => t.id === 'writer'), 'no [docs] agent: no writer row');
+  assert.ok(!totals.some((t) => t.id === 'finder'), 'an agent without a kind tag stays out');
 });
 
 test('a reply written over several lines takes the final counts and a speed given only on a later line', async () => {

@@ -27,6 +27,7 @@ const KEY_B = 'b'.repeat(32);
 const KEY_C = 'c'.repeat(32);
 const KEY_D = 'd'.repeat(32);
 const AUTONOMOUS = { kind: 'autonomous' };
+const TALK = { kind: 'talk' };
 const NOW = Date.parse('2026-10-11T12:00:00.000Z');
 
 const tempDir = () => mkdtempSync(join(tmpdir(), 'sm-restart-'));
@@ -108,7 +109,7 @@ test('a request holds new turns and waits for the chat mid-turn; then it writes 
     const w = fakeWorld();
     const chats = [
       { sessionId: A, key: KEY_A, projectId: 'shop', run: AUTONOMOUS, running: true, held: false },
-      { sessionId: B, key: KEY_B, projectId: 'shop', run: { kind: 'auto', selfReinforce: false }, running: false, held: true },
+      { sessionId: B, key: KEY_B, projectId: 'shop', run: TALK, running: false, held: true },
     ];
     const hub = fakeHub(w, chats);
     const r = restarterFor(w, hub, smDir);
@@ -141,7 +142,7 @@ test('a request holds new turns and waits for the chat mid-turn; then it writes 
       version: 1, at: new Date(w.clock).toISOString(), reasons: ['Reload after editing hub.mjs'],
       chats: [
         { sessionId: A, key: KEY_A, projectId: 'shop', run: AUTONOMOUS, running: false, held: false, asked: false },
-        { sessionId: B, key: KEY_B, projectId: 'shop', run: { kind: 'auto', selfReinforce: false }, running: false, held: true, asked: true },
+        { sessionId: B, key: KEY_B, projectId: 'shop', run: TALK, running: false, held: true, asked: true },
       ],
     });
 
@@ -238,7 +239,7 @@ const savedFile = (smDir, extra = {}) => writeFileSync(join(smDir, RESUME_FILE),
   chats: [
     { sessionId: A, key: KEY_A, projectId: 'shop', run: AUTONOMOUS, running: true, held: false, asked: false },
     { sessionId: B, key: KEY_B, projectId: 'shop', run: AUTONOMOUS, running: false, held: false, asked: true },
-    { sessionId: C, key: KEY_C, projectId: 'shop', run: { kind: 'auto', selfReinforce: false }, running: false, held: false, asked: false },
+    { sessionId: C, key: KEY_C, projectId: 'shop', run: TALK, running: false, held: false, asked: false },
     { sessionId: D, key: KEY_D, projectId: 'blog', run: AUTONOMOUS, running: false, held: true, asked: false },
   ],
   ...extra,
@@ -263,7 +264,7 @@ test('the new process resumes the chats cut mid-turn, held or asking with the no
       { projectId: 'shop', sessionId: A, cut: true, run: AUTONOMOUS, text: note },
       { projectId: 'shop', sessionId: B, run: AUTONOMOUS, text: resumeNote(['Reload after editing hub.mjs'], { asked: true }) },
       { projectId: 'blog', sessionId: D, run: AUTONOMOUS, text: note },
-      { projectId: 'shop', sessionId: C, run: { kind: 'auto', selfReinforce: false }, idle: true },
+      { projectId: 'shop', sessionId: C, run: TALK, idle: true },
     ], 'the idle one last, driven again without a message');
     assert.ok(started.every((s) => s.state === STATE));
     assert.deepEqual(alerts, [{

@@ -108,14 +108,12 @@ test('a bad request is refused with its reason', async () => {
   });
 });
 
-test('with real keys the outside AIs are offered, client data never to DeepSeek, keys never shown, and the reason is recorded', async () => {
+test('with real keys the outside AIs are offered whatever the class, keys never shown, and the reason is recorded', async () => {
   await withServer({ seed: (smDir) => seedKeys(smDir) }, async ({ call, smDir }) => {
     const r = await call('POST', '/api/ai/recommend', { auth: 'header', body: { kind: 'review', size: 'medium', sensitivity: 'client' } });
     assert.equal(r.status, 200, r.text);
     assert.equal(r.json.worker.provider, 'openai');
-    const all = [r.json.worker, ...r.json.alternatives, ...(r.json.reviewer ? [r.json.reviewer] : [])];
-    assert.ok(all.every((w) => w.provider !== 'deepseek'));
-    assert.ok(r.json.blocked.some((b) => b.provider === 'deepseek' && b.why === 'sensitivity'));
+    assert.ok(!r.json.blocked.some((b) => b.why === 'sensitivity'), 'the data class blocks no one');
     for (const k of Object.values(KEYS)) assert.ok(!r.text.includes(k) && !r.text.includes(k.slice(-4)));
     const log = readFileSync(join(smDir, 'conductor.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.equal(log.at(-1).kind, 'review');
@@ -250,7 +248,7 @@ test('a conductor chat starts with the day\'s tail after its prompt; the facts c
   };
   const hub = createChatHub({ smDir, dir: root, bin: FAKE, env: { ...process.env, FAKE_LOG: log }, conductorFacts: () => facts });
   try {
-    const res = await hub.start({ projectId: 'demo-abc123', text: 'hi' }, makeState(root));
+    const res = await hub.start({ projectId: 'demo-abc123', text: 'hi', run: { kind: 'autonomous' } }, makeState(root));
     assert.equal(res.status, 200, JSON.stringify(res.body));
     let argv = null;
     for (let i = 0; i < 100 && !argv; i++) {

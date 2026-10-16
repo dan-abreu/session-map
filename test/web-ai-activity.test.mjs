@@ -241,10 +241,10 @@ test('choosing a class saves it at once for that project\'s folder, and a refusa
 
   const bad = build({ view: helpersView(), projects: PROJECTS, save: () => ({ ok: false, status: 400, error: 'unknown-project' }) });
   await bad.ui.open();
-  const s2 = all(bad.dialog, (n) => n.tag === 'select')[0];
+  const s2 = all(bad.dialog, (n) => n.tag === 'select' && n.attrs['data-ah-class'] !== undefined)[0];
   await s2.attrs.onchange({ target: { value: 'public' } });
   assert.match(textOf({ kids: bad.dialog.kids }), /não conhece esse projeto/i);
-  assert.equal(all(bad.dialog, (n) => n.tag === 'select')[0].kids.find((o) => o.attrs.selected).attrs.value, 'client', 'the page shows what the server kept');
+  assert.equal(all(bad.dialog, (n) => n.tag === 'select' && n.attrs['data-ah-class'] !== undefined)[0].kids.find((o) => o.attrs.selected).attrs.value, 'client', 'the page shows what the server kept');
 });
 
 test('with no project known yet, the class section explains instead of showing an empty list', async () => {

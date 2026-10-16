@@ -469,3 +469,60 @@ test('estimateFix is zero for the program, and grows with the document and the m
   assert.ok(estimateFix(ai) > 0, 'a guess is made when the size is not known');
   assert.ok(estimateFix(ai, { bytes: 40_000 }) < 1, 'a 40 KB document costs well under a dollar');
 });
+
+// ---------- the motor route (fd23): version and count swaps, no AI ----------
+
+const noAi = () => { throw new Error('the motor must not ask the AI'); };
+
+test('a version mismatch in the README is swapped by the motor: no AI, no cost, the judge checks it', async () => {
+  const root = repo({ 'README.md': '# Shop\n\nVersion: 1.2.0\n', 'package.json': '{"name":"shop","version":"1.3.0"}' });
+  const input = await inputFor(root);
+  const [f] = findings(input, 'version-mismatch');
+  assert.ok(f, 'the README names an old version');
+  assert.deepEqual([f.what.params.found, f.what.params.expected], ['1.2.0', '1.3.0']);
+  const res = await opFromFinding(f, input, { ai: noAi });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.costUSD, 0);
+  assert.equal(res.op.kind, 'doc-update');
+  assert.deepEqual(res.op.files, [{ path: 'README.md', after: '# Shop\n\nVersion: 1.3.0\n' }]);
+  assert.equal(readFileSync(join(root, 'README.md'), 'utf8'), '# Shop\n\nVersion: 1.2.0\n', 'building the op writes nothing');
+});
+
+test('a "12 routes" count is swapped to the code count by the motor: no AI, no cost', async () => {
+  const root = repo({ 'README.md': '# Shop\n\nThe API has 12 routes.\n', 'apps/api/src/orders.ts': 'export const a = 1;\n' });
+  const input = await inputFor(root, { facts: factsOf(route('GET', '/a'), route('POST', '/b')) });
+  const [f] = findings(input, 'docs-disagree');
+  assert.ok(f, 'the README counts 12 routes, the code has 2');
+  assert.deepEqual([f.what.params.claimed, f.what.params.count], [12, 2]);
+  const res = await opFromFinding(f, input, { ai: noAi });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.costUSD, 0);
+  assert.deepEqual(res.op.files, [{ path: 'README.md', after: '# Shop\n\nThe API has 2 routes.\n' }]);
+});
+
+test('when the finding line does not hold the found version, the AI route is tried', async () => {
+  const root = repo({ 'README.md': '# Shop\n\nVersion: 1.2.0\n', 'package.json': '{"name":"shop","version":"1.3.0"}' });
+  const input = await inputFor(root);
+  const [f] = findings(input, 'version-mismatch');
+  const { ai, calls } = fakeAi({ after: '# Shop\n\nVersion: 1.3.0\n' });
+  const wrong = { ...f, target: { file: f.target.file, line: 1 } };
+  const res = await opFromFinding(wrong, input, { ai });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(calls.length, 1, 'the motor could not, the AI tried');
+});
+
+test('a diagram-node disagreement has no motor: the AI route is tried', async () => {
+  const root = repo({ 'README.md': '# Shop\n\nText.\n\nMore text.\n' });
+  const input = await inputFor(root);
+  const f = { id: 'f:cccccccccccc', rule: 'docs-disagree', target: { file: 'README.md', line: 1 }, evidence: [], what: { msg: 'm', params: { node: 'X', a: 'README.md', b: 'parts', what: 'X' } }, fix: { kind: 'ai-update', opId: null } };
+  const { ai, calls } = fakeAi({ after: '# Shop\n\nText.\n\nMore text.\n\n' });
+  const res = await opFromFinding(f, input, { ai });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(calls.length, 1);
+});
+
+test('estimateFix is zero for the motor rules; a diagram node still goes to the AI', () => {
+  assert.equal(estimateFix({ rule: 'version-mismatch', fix: { kind: 'ai-update' } }), 0);
+  assert.equal(estimateFix({ rule: 'docs-disagree', fix: { kind: 'ai-update' }, what: { params: { claimed: 12, count: 10, kind: 'route' } } }), 0);
+  assert.ok(estimateFix({ rule: 'docs-disagree', fix: { kind: 'ai-update' }, what: { params: { node: 'X' } } }) > 0, 'a diagram node still goes to the AI');
+});

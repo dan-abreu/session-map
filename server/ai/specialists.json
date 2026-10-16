@@ -1,0 +1,19 @@
+{
+  "_note": "The neutral knobs of the domain specialists (id158, or68). The specialists themselves are not listed here: server/ai/specialists.mjs derives one per code part of the project's architecture map. nativeRoles: the roles of server/ai/agents.json that also get their own agent file (they isolate context or verify independently); the builder roles (coder, debugger, designer, writer) are carried by the domain specialists instead. builder: the kinds of task a domain specialist takes, the kind whose policy row gives its model and level (primary), and the tool classes it carries. toolClasses: how the neutral classes (read, edit, shell) are spelled by each AI that can narrow tools per agent; Codex cannot (sandbox and tools follow the parent session), so its guarantee is the isolated copy and the exit gates. cardMaxBytes: the ceiling of the card, which is input tokens on every call of the specialist (id150).",
+  "prefix": "sm-",
+  "nativeRoles": ["finder", "planner", "architect", "reviewer", "guardian"],
+  "builder": {
+    "kinds": ["code", "test", "debug", "screen", "docs"],
+    "primary": "code",
+    "classes": ["read", "edit", "shell"]
+  },
+  "cardMaxBytes": 4096,
+  "ownsListed": 12,
+  "rulesListed": 8,
+  "ruleMaxChars": 260,
+  "testsListed": 10,
+  "toolClasses": {
+    "claude": { "read": ["Read", "Glob", "Grep"], "edit": ["Edit", "Write", "MultiEdit"], "shell": ["Bash", "PowerShell"] },
+    "gemini": { "read": ["read_file", "list_directory", "glob", "grep_search"], "edit": ["replace", "write_file"], "shell": ["run_shell_command"] }
+  }
+}

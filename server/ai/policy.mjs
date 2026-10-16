@@ -1,13 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// The one routing policy (or33): which model and effort each kind of task gets, the ladder a failure climbs, and the
-// conversation's phases. The AI only says what kind of task it is; the brain, recommend() and the guard read this file.
+// The one routing policy (or33): which model and effort each kind of task gets, the ladder a failure climbs, the one
+// level of the chat (or35: it never moves on its own) and the conversation's phases, which only shape the turn.
+// The AI only says what kind of task it is; the brain, recommend() and the guard read this file.
 // It is loaded and checked once: a typo in a model or effort stops the server at start, not in the middle of a task.
 export const POLICY_FILE = fileURLToPath(new URL('./policy.json', import.meta.url));
 export const MODELS = Object.freeze(['haiku', 'sonnet', 'opus', 'fable']);
 export const EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']);
-export const PHASE_KEYS = Object.freeze(['trivial', 'talk', 'plan', 'build', 'sensitive']);
+export const PHASE_KEYS = Object.freeze(['trivial', 'talk', 'plan', 'build']);
 
 const rankOf = ({ model, effort }) => MODELS.indexOf(model) * 10 + EFFORTS.indexOf(effort);
 
@@ -41,16 +42,22 @@ export function validatePolicy(raw) {
     // Fable only after an Opus rung failed.
     if (r.model === 'fable' && !ladder.slice(0, i).some((p) => p.model === 'opus')) throw new Error('policy: fable needs an opus rung before it');
   });
+  // The chat's level (or35): one, fixed, never moved by the brain. Only the person (changeRun) or a line here changes it.
+  const chatLv = level('chat', raw.chat);
+  if (typeof raw.chat.whyPt !== 'string' || !raw.chat.whyPt.trim()) throw new Error('policy: chat has no whyPt');
+  if (chatLv.effort === 'max') throw new Error('policy: max is never automatic, so the chat does not run on it');
+  const chat = Object.freeze({ ...chatLv, why: String(raw.chat.why ?? ''), whyPt: raw.chat.whyPt });
   const phases = {};
   for (const key of PHASE_KEYS) {
     const row = raw.phases?.[key];
-    const lv = level(`phase ${key}`, row);
+    if (!row || typeof row !== 'object') throw new Error(`policy: phase ${key} is missing`);
+    if (row.model !== undefined || row.effort !== undefined) throw new Error(`policy: phase ${key} names a level; the chat has one level (chat), phases only shape the turn`);
     if (typeof row.whyPt !== 'string' || !row.whyPt.trim()) throw new Error(`policy: phase ${key} has no whyPt`);
-    phases[key] = Object.freeze({ ...lv, why: String(row.why ?? ''), whyPt: row.whyPt });
+    phases[key] = Object.freeze({ why: String(row.why ?? ''), whyPt: row.whyPt });
   }
   const agents = raw.limits?.agentsPerWorkflow;
   if (!Number.isInteger(agents) || agents < 1) throw new Error('policy: limits.agentsPerWorkflow must be a whole number');
-  return Object.freeze({ tasks: Object.freeze(tasks), ladder: Object.freeze(ladder), phases: Object.freeze(phases), limits: Object.freeze({ agentsPerWorkflow: agents }) });
+  return Object.freeze({ tasks: Object.freeze(tasks), ladder: Object.freeze(ladder), chat, phases: Object.freeze(phases), limits: Object.freeze({ agentsPerWorkflow: agents }) });
 }
 
 export const POLICY = validatePolicy(JSON.parse(readFileSync(POLICY_FILE, 'utf8')));
@@ -71,11 +78,10 @@ export function levelFor(kind, rungsUp = 0, policy = POLICY) {
   return { model: r.model, effort: r.effort };
 }
 
-// The conversation's level: a sensitive plan or build goes to the sensitive row; the size never raises it (high only after a failure).
-export function phaseLevel(phase, size, sensitive, policy = POLICY) {
-  const key = (phase === 'plan' || phase === 'build') && sensitive ? 'sensitive' : phase;
-  const row = policy.phases[key] ?? policy.phases.talk;
-  return { model: row.model, effort: row.effort };
+// The chat's level (or35): the same for every phase, size and subject. Neither the brain nor the size moves it; a higher
+// level comes only from the person (changeRun) or from a task the plan names.
+export function chatLevel(policy = POLICY) {
+  return { model: policy.chat.model, effort: policy.chat.effort };
 }
 
 // The next rung above a level, or null at the top.
@@ -92,7 +98,7 @@ export const rungsOfModel = (model, policy = POLICY) => policy.ladder.filter((r)
 
 export const PAGE_FILE = fileURLToPath(new URL('../../docs/standard/politica-de-modelos.md', import.meta.url));
 const KIND_PT = { search: 'busca', read: 'leitura', bulk: 'trabalho em lote', text: 'texto curto', commit: 'commit', docs: 'documentação', code: 'código', test: 'teste', screen: 'tela', debug: 'depuração', plan: 'plano', review: 'revisão', architecture: 'arquitetura', security: 'segurança', money: 'dinheiro', 'personal-data': 'dado pessoal' };
-const PHASE_PT = { trivial: 'trivial', talk: 'conversa', plan: 'plano', build: 'construção', sensitive: 'sensível (plano ou construção)' };
+const PHASE_PT = { trivial: 'trivial', talk: 'conversa', plan: 'plano', build: 'construção' };
 const MODEL_PT = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
 const EFFORT_PT = { low: 'baixo', medium: 'médio', high: 'alto', xhigh: 'altíssimo', max: 'máximo' };
 const RULE_PT = { 'no judgment needed': 'não pede julgamento', 'high risk': 'risco alto', 'known facts only': 'só registra fatos já conhecidos' };
@@ -126,13 +132,17 @@ export function policyPage(policy = POLICY) {
     '',
     ...policy.ladder.map((r, i) => `${i + 1}. ${lv(r)}`),
     '',
+    '## A conversa',
+    '',
+    `A conversa com a pessoa roda em **${lv(policy.chat)}** e nunca troca de modelo sozinha: ${policy.chat.whyPt}. Só a pessoa muda esse nível, na aba Cérebro (a linha Conversa) ou numa linha desta tabela. O trabalho pesado vai para tarefas com o modelo do tipo delas, acima.`,
+    '',
     '## Fases da conversa',
     '',
-    'O cérebro de entrada pesa cada mensagem e leva a conversa para o nível da fase. O tamanho do pedido não sobe o nível: o nível alto só vem depois de uma falha.',
+    'O cérebro de entrada pesa cada mensagem só para saber de que fase ela é; a fase dá o tom do turno (planejar antes de construir), não o modelo.',
     '',
-    '| Fase | Modelo | Nível | Por quê |',
-    '|---|---|---|---|',
-    ...Object.entries(policy.phases).map(([k, p]) => `| ${PHASE_PT[k] ?? k} | ${MODEL_PT[p.model]} | ${EFFORT_PT[p.effort]} | ${p.whyPt} |`),
+    '| Fase | O que é |',
+    '|---|---|',
+    ...Object.entries(policy.phases).map(([k, p]) => `| ${PHASE_PT[k] ?? k} | ${p.whyPt} |`),
     '',
     '## Limites',
     '',

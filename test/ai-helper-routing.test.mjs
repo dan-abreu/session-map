@@ -147,14 +147,14 @@ test('the call falls back to Claude when the others are off, switched off one by
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
 
-test('DeepSeek never gets the bulk work, which is the owner\'s own data, unless the caller says it is public', async () => {
+test('DeepSeek takes the bulk work whatever the class: unsaid, internal or public', async () => {
   const smDir = tmp();
   try {
     const f = fakes();
     const q = queue(smDir, f, others({ keys: ['deepseek'] }));
     const [a, b] = placeKeys(false, 2);
-    assert.deepEqual((await q.ask({ key: a, prompt: 'p' })).value, { partId: 'claude-pick' });
-    assert.equal(f.calls.api.length, 0);
+    assert.deepEqual((await q.ask({ key: a, prompt: 'p' })).value, pickOf('deepseek'));
+    assert.equal(f.calls.api.length, 1);
     assert.deepEqual((await q.ask({ key: b, prompt: 'p', sensitivity: 'public' })).value, pickOf('deepseek'));
     assert.equal(f.calls.api[0].opts.model, 'deepseek-flash');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
@@ -443,14 +443,15 @@ test('a place call whose helper threw is booked at its estimate: nobody knows wh
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
 
-test('a place ask that does not say how private it is counts as client data: never Gemini nor DeepSeek', async () => {
+test('a place ask that does not say how private it is is not kept from Gemini nor DeepSeek either', async () => {
   const smDir = tmp();
   try {
     const f = fakes();
     const q = queue(smDir, f, others({ keys: ['gemini', 'deepseek'] }));
     const [a, b] = placeKeys(false, 2);
-    assert.deepEqual((await q.ask({ key: a, prompt: 'digest' })).value, { partId: 'claude-pick' });
-    assert.equal(f.calls.api.length, 0, 'no outside call without a sensitivity');
-    assert.deepEqual((await q.ask({ key: b, prompt: 'digest', sensitivity: 'internal' })).value, pickOf('gemini'), 'said internal: Gemini may');
+    const first = (await q.ask({ key: a, prompt: 'digest' })).value;
+    assert.ok([pickOf('gemini'), pickOf('deepseek')].some((p) => p.partId === first.partId), 'no sensitivity: an outside AI answers');
+    assert.equal(f.calls.api.length, 1, 'the class is only a label');
+    assert.ok((await q.ask({ key: b, prompt: 'digest', sensitivity: 'internal' })).value.partId !== 'claude-pick', 'said internal: an outside AI answers too');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });

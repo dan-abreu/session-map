@@ -638,13 +638,12 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .ol-box { flex: 1; min-width: 0; padding: 8px 12px; }
 .ol-item.k-item > .ol-row .ol-box { padding: 8px 10px; }
 
-/* ---------- point sheet: a box's information on top, its chat always under it (mm07) ---------- */
+/* ---------- point sheet: a box's information, open whole by its own tab (pc34) ---------- */
 
-/* The information takes at most --info-h of the sheet (the split line moves it) and scrolls inside; folded, it leaves
-   the sheet to the chat and comes back from the chat's ⋯, "About this part" (pc18). */
+/* The information takes at most --info-h of the sheet (the split line moves it) and scrolls inside. */
 .point-info { flex: 0 1 auto; display: flex; flex-direction: column; min-height: 0; max-height: var(--info-h, 46%); }
 .point-info[hidden], .point-split[hidden] { display: none; }
-.point-info[data-folded] { display: none; }
+.point-info[data-folded] .point-body { display: none; }
 .point-body { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .point-body .point-details { overflow: visible; padding-top: 14px; }
 .point-fold {
@@ -660,7 +659,7 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .point-fold[aria-expanded="false"] .pf-chevron { transform: rotate(-90deg); }
 .pf-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink); }
 .pf-hint { flex: none; font-size: var(--fs-xs); }
-.point-tabs { flex: none; margin: 0 16px; }
+.point-tabs { flex: none; margin: 0 16px 2px; }
 .point-tabs .ptabs { margin: 0; }
 /* The line between the information and the chat names the chat and moves the boundary, like a split view. */
 .point-split {
@@ -678,6 +677,27 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 body.is-splitting { cursor: row-resize; user-select: none; }
 .ps-icon { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 .ps-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The chat's tab bar (pc34): each thing opens whole, as its own tab — the conversation, each tab of the box's
+   information, the conversation book and the terminal. Nothing overlaps the chat. */
+.chat-tabbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px 8px 2px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.chat-tabbar[hidden] { display: none; }
+.ctab {
+  height: 28px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: none;
+  color: var(--ink-2); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
+}
+.ctab:hover { background: var(--bg-3); color: var(--ink); }
+.ctab:focus-visible { outline-offset: -2px; }
+.ctab.is-on { background: var(--bg-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.chat .point-info, .chat .point-split { display: none; }
+.chat[data-ctab^="info-"] .point-info { display: flex; flex: 1 1 auto; max-height: none; }
+.chat[data-ctab^="info-"] .point-fold, .chat[data-ctab^="info-"] .point-tabs { display: none; }
+.chat[data-ctab^="info-"] .chat-pane { display: none; }
+.chat[data-ctab="book"] .chat-pane > :not(.chat-book) { display: none; }
+.chat[data-ctab="book"] .chat-book { max-height: none; flex: 1 1 auto; overflow-y: auto; }
+/* The − of the header docks the chat as a slim bar at the bottom; the same − brings it back (pc34). */
+.chat[data-min="1"] { top: auto; bottom: 12px; left: auto; right: 12px; width: min(480px, calc(100% - 24px)); height: auto; box-shadow: var(--shadow-lg); }
+.chat[data-min="1"] > :not(.chat-head) { display: none; }
 .kind-neutral { --k-fill: var(--bg-3); --k-ink: var(--ink); }
 .no-files { display: flex; align-items: center; gap: 6px; }
 /* In the project Summary a waiting row is one line of reason, title and place; the full sign is one click away. */
@@ -1023,6 +1043,9 @@ body.is-splitting { cursor: row-resize; user-select: none; }
 }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"], .seg button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+/* Quiet chips while the engine picks per task (pc34): the current pick keeps its mark, the rest wait for Perguntar. */
+.seg button:disabled { color: var(--ink-2); opacity: 0.55; cursor: default; }
+.seg button:disabled:hover { color: var(--ink-2); }
 .tabs-mini { margin-top: 14px; }
 
 .switch { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
@@ -1217,6 +1240,21 @@ button.req-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 
 .msg-starters { display: flex; flex-wrap: wrap; gap: 6px; }
 .msg-starters .btn { height: auto; min-height: 30px; padding: 4px 12px; border-radius: var(--r-pill); font-weight: 500; text-align: left; white-space: normal; }
 
+/* Actions on every message (pc21): one quiet row that shows on hover; always there, dimmed, on a touch screen. In the
+   chat the copy of the meta line gives way to it, so a message has one copy, not two. */
+.msg { position: relative; }
+.msg-acts { display: flex; gap: 2px; margin-top: 4px; opacity: 0; transition: opacity var(--dur-fast); }
+.msg:hover .msg-acts, .msg:focus-within .msg-acts { opacity: 1; }
+.msg-user .msg-acts { justify-content: flex-end; }
+.act-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-2); cursor: pointer;
+}
+.act-btn:hover { background: var(--bg-3); color: var(--ink); }
+.act-btn:focus-visible { outline-offset: -2px; }
+.act-btn .btn-icon { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+@media (pointer: coarse) { .msg-acts { opacity: 0.55; } }
+
 .ledger { display: grid; margin: 4px 0 0; border-top: 1px solid var(--line); }
 .ledger > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .ledger dt { color: var(--ink-2); }
@@ -1271,10 +1309,15 @@ body.is-resizing .sheet { animation: none; }
   font-size: var(--fs-xs); font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-part[hidden] { display: none; }
+/* The title is the rename: one click opens it (pc34). */
+.chat-head h2.is-renamable { cursor: pointer; }
+.chat-head h2.is-renamable:hover { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line); }
+.chat-head h2:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-xs); }
 .chat-head .help-dot { flex: none; }
-/* Two rows: the icons on top, always there; the state, the title and the part under them. */
-.chat-head { flex-wrap: wrap; row-gap: 2px; }
-.chat-head .sheet-head-tools { order: -1; flex: 1 0 100%; justify-content: flex-end; margin-left: auto; gap: 2px; }
+/* One clean line (pc34): the state dot, the title, the part chip, then the book, ⋯ and close. The box tabs live in
+   their own strip under the header, so this line always fits whatever the width. */
+.chat-head { flex-wrap: nowrap; }
+.chat-head .sheet-head-tools { flex: none; margin-left: auto; gap: 2px; }
 .chat-head h2 { flex: 0 1 auto; }
 .chat-head .icon-btn { width: 32px; height: 32px; margin: 0; }
 .chat-head .icon-btn[hidden] { display: none; }
@@ -1288,6 +1331,22 @@ body.is-resizing .sheet { animation: none; }
 .chat-list { margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line); max-height: 40%; overflow-y: auto; }
 .chat-list[hidden], .chat-note[hidden] { display: none; }
 .chat-list-head { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; padding-bottom: 4px; }
+/* pc23: the list's own search and each row's pin; pinned ones sit on top (the server keeps the order on the next open). */
+.chat-list-search { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; }
+.chat-list-search-icon { width: 14px; height: 14px; flex: none; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; }
+.chat-list-search-input {
+  flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--bg-2); color: var(--ink); font: inherit; font-size: var(--fs-sm);
+}
+.chat-list-search-input:focus-visible { outline: none; border-color: var(--focus); }
+.chat-list-row { display: flex; align-items: center; gap: 2px; }
+.chat-list-row .link-row { flex: 1; min-width: 0; }
+.chat-list-none { padding: 2px 0 8px; font-size: var(--fs-sm); color: var(--ink-2); }
+.list-pin { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; flex: none; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-2); cursor: pointer; }
+.list-pin:hover { background: var(--bg-3); color: var(--ink); }
+.list-pin .btn-icon { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.list-pin.is-pinned { color: var(--active-ink); }
+.list-pin.is-pinned .btn-icon { fill: currentColor; stroke: none; }
 .chat-log { list-style: none; margin: 0; padding: 12px 16px; flex: 1; overflow-y: auto; display: grid; align-content: start; gap: 10px; overscroll-behavior: contain; }
 
 /* The composer (pc18): the working line when a turn runs, then one box holding the text, its key hints, attach, the way
@@ -1319,16 +1378,36 @@ body.is-resizing .sheet { animation: none; }
 @media (pointer: coarse) { .chat-hints, .pm-keys { display: none; } }
 .chat-bar { display: flex; align-items: center; gap: 6px; margin-left: -6px; }
 .chat-send { gap: 6px; }
+/* The quiet chip by Send with the conversation's cost so far (pc22). */
+.chat-cost {
+  flex: none; max-width: 40%; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--bg-3);
+  color: var(--ink-2); font-size: var(--fs-2xs); font-weight: 600; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-cost[hidden] { display: none; }
+/* The memory the conversation carries (pc37), "48k / 200k": quiet like the cost, amber from 70 % and red from 90 % of the
+   mark the program calls a heavy conversation. */
+.chat-memory {
+  flex: none; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--bg-3);
+  color: var(--ink-2); font-size: var(--fs-2xs); font-weight: 600; line-height: 22px; white-space: nowrap; cursor: default;
+}
+.chat-memory[hidden] { display: none; }
+.chat-memory[data-tone="warn"] { background: var(--waiting-fill); color: var(--waiting-ink); }
+.chat-memory[data-tone="high"] { background: var(--clash-fill); color: var(--clash-ink); }
 
-/* The one working line (pc18): "Trabalhando · lendo app.js", and Stop at its end. */
+/* The one state line above the box (pc25): quiet by default, colored by what it says, the dot pulsing only while
+   something runs. It never goes dark while the conversation has something to say. */
 .chat-live {
   display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 6px 0 12px; border-radius: var(--r-md);
-  background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-sm);
+  background: var(--bg-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--fs-sm);
 }
 .chat-live[hidden] { display: none; }
-.chat-live[data-state="permission"] { background: var(--waiting-fill); color: var(--waiting-ink); }
-.chat-live-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--active); animation: live-pulse var(--dur-loop) ease-out infinite; }
-.chat-live[data-state="permission"] .chat-live-dot { background: var(--waiting); animation: none; }
+.chat-live[data-state="working"], .chat-live[data-state="mirror"] { background: var(--active-fill); color: var(--active-ink); box-shadow: none; }
+.chat-live[data-state="waiting"] { background: var(--waiting-fill); color: var(--waiting-ink); box-shadow: none; }
+.chat-live[data-state="clash"] { background: var(--clash-fill); color: var(--clash-ink); box-shadow: none; }
+.chat-live-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); }
+.chat-live[data-state="working"] .chat-live-dot, .chat-live[data-state="mirror"] .chat-live-dot { background: var(--active); animation: live-pulse var(--dur-loop) ease-out infinite; }
+.chat-live[data-state="waiting"] .chat-live-dot { background: var(--waiting); }
+.chat-live[data-state="clash"] .chat-live-dot { background: var(--clash); }
 .chat-status { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-status b { font-weight: 650; }
 .chat-live-step { margin-left: 6px; color: var(--ink-2); }
@@ -1341,87 +1420,23 @@ body.is-resizing .sheet { animation: none; }
 .chat-stop[hidden] { display: none; }
 .chat-stop .btn-icon { width: 12px; height: 12px; }
 
-/* How the conversation runs: a compact button by Send, like Claude's model button, and the menu it opens above the box. */
-/* It keeps its whole width ("Manual · Sonnet"): the key hints beside it give the room. */
-.chat-run { display: flex; flex: none; min-width: 0; margin-left: auto; --tone: var(--idle); }
-.run-toggle {
-  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; height: 32px; padding: 0 8px 0 10px;
-  border: 0; border-radius: var(--r-md); background: none; color: var(--ink-2); font: inherit; font-size: var(--fs-sm); cursor: pointer;
+/* How the conversation runs (id146): the quiet line by Send with the brain's route — the model, the reasoning and,
+   when the entry brain weighed the turn, why. The Cérebro tab is the one place that changes it. */
+.chat-brain {
+  flex: none; max-width: 40%; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--bg-3);
+  color: var(--ink-2); font-size: var(--fs-2xs); font-weight: 600; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.run-toggle:hover, .run-toggle[aria-expanded="true"] { background: var(--bg-3); color: var(--ink); }
-.run-toggle::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
-.run-toggle.tone-autonomous, .run-toggle.tone-auto, .run-toggle.tone-maestro { --tone: var(--active); }
-.run-toggle.tone-reinforced, .run-toggle.tone-ultracode { --tone: var(--doing); }
-.run-toggle.tone-ask { --tone: var(--waiting); }
-.run-way { flex: none; font-weight: 600; color: var(--ink); }
-.run-way:has(+ .run-model)::after { content: "·"; margin-left: 6px; font-weight: 400; color: var(--ink-2); }
-.run-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.run-caret {
-  flex: none; width: 6px; height: 6px; margin: 0 2px 4px;
-  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform var(--dur-base) var(--ease-out);
-}
-.run-toggle[aria-expanded="true"] .run-caret { transform: translateY(2px) rotate(225deg); }
+.chat-brain[hidden] { display: none; }
 
-.chat-menu {
-  position: absolute; right: -2px; bottom: calc(100% + 8px); z-index: 6; display: grid; width: min(340px, calc(100vw - 32px)); max-height: min(560px, 62vh);
-  overflow: hidden auto; overscroll-behavior: contain;
-  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-2); box-shadow: var(--shadow-lg);
-  animation: pop-menu-in var(--dur-base) var(--ease-out);
-}
-.chat-menu[hidden] { display: none; }
-.run-panel { display: grid; gap: 0; padding: 6px; }
-.run-why { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; }
-.run-why.tone-ask { color: var(--waiting-ink); font-weight: 600; }
-/* The three ways (pc19): a name and one plain sentence each, a round mark; the one in use sits on a quiet card. */
-.run-paths { display: grid; gap: 2px; }
-.run-path-btn {
-  display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; padding: 10px 10px 10px;
-  text-align: left; border: 0; border-radius: var(--r-md); background: none; color: var(--ink); font: inherit; font-size: var(--fs-sm); cursor: pointer;
-}
-.run-path-btn:hover { background: var(--bg-3); }
-.run-path-btn:focus-visible { outline-offset: -2px; }
-.run-path-btn::before {
-  content: ""; grid-row: 1 / 3; width: 16px; height: 16px; margin-top: 1px; box-sizing: border-box; border-radius: 50%;
-  box-shadow: inset 0 0 0 1.5px var(--ink-2); transition: box-shadow var(--dur-fast);
-}
-.run-path-btn .run-option-name { grid-column: 2; font-weight: 650; }
-.run-path-btn .run-hint { grid-column: 2; }
-.run-path-btn[aria-checked="true"] { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
-.run-path-btn[aria-checked="true"]::before { box-shadow: inset 0 0 0 5px var(--ink); }
-/* Manual, chosen: its model and level right under it. */
-.run-fixed { display: grid; gap: 10px; margin: 2px 0 6px 36px; padding: 2px 10px 8px 0; }
-.run-pick { display: grid; gap: 4px; }
-.run-pick-label { margin: 0; font-size: var(--fs-2xs); font-weight: 650; color: var(--ink-2); }
-.run-seg { flex-wrap: wrap; max-width: 100%; }
-.run-seg button { padding: 0 8px; font-size: var(--fs-xs); }
-.run-advanced-now { margin: 6px 10px 2px; padding: 8px 10px; border-radius: var(--r-md); background: var(--doing-fill); color: var(--doing-ink); font-size: var(--fs-xs); line-height: 1.45; }
-.run-foot { display: grid; gap: 6px; margin-top: 6px; padding: 10px 10px 4px; border-top: 1px solid var(--line); }
 .turn-check { margin: var(--space-1, 4px) 0 0; font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.run-line { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.run-settings {
-  justify-self: start; display: inline-flex; align-items: center; gap: 4px; margin: 0 -4px; padding: 2px 4px; border: 0; border-radius: var(--r-xs);
-  background: none; color: var(--focus); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
-}
-.run-settings:hover { text-decoration: underline; text-underline-offset: 2px; }
-.run-settings-icon { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.run-ways { display: grid; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; }
-.run-ways legend { padding: 0 0 6px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
-.run-option {
-  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; align-items: start;
-  margin: 0 -10px; padding: 8px 10px; border-radius: var(--r-md); cursor: pointer;
-}
-.run-option:hover { background: var(--bg-3); }
-.run-option:has(input:checked) { background: var(--active-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--active) 30%, transparent); }
-.run-option input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--active); }
 .run-option-text { display: grid; gap: 1px; }
 .run-option-name { font-weight: 600; }
 .run-hint { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--ink-2); }
-.run-warn, .run-ask { padding: 12px 14px; border-radius: var(--r-lg); background: var(--waiting-fill); }
-.run-warn p, .run-ask p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
-.run-warn p + p, .run-ask p + p { margin-top: 4px; }
-.run-warn-title, .run-ask-title { font-weight: 650; color: var(--waiting-ink); }
-.run-warn .actions, .run-ask .actions { margin-top: 10px; }
-.run-ask { margin-top: 10px; }
+.run-ask { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--waiting-fill); }
+.run-ask p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.run-ask p + p { margin-top: 4px; }
+.run-ask-title { font-weight: 650; color: var(--waiting-ink); }
+.run-ask .actions { margin-top: 10px; }
 
 /* Configurações (pc19): the alerts dialog's look, with a head that holds the close button. */
 .st-dialog { width: min(520px, calc(100% - 32px)); }
@@ -1450,18 +1465,6 @@ body.is-resizing .sheet { animation: none; }
 .st-for { margin: -2px 0 4px; }
 .st-mode { margin-top: 10px; }
 .st-note { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--bg-3); font-size: var(--fs-sm); line-height: 1.45; color: var(--ink); }
-.st-advanced { margin-top: 12px; border-top: 1px solid var(--line); }
-.st-advanced > summary {
-  display: flex; align-items: center; gap: 8px; padding: 12px 0 8px; list-style: none; cursor: pointer;
-  font-size: var(--fs-sm); font-weight: 650; color: var(--ink);
-}
-.st-advanced > summary::-webkit-details-marker { display: none; }
-.st-advanced > summary::before {
-  content: ""; flex: none; width: 6px; height: 6px; margin: 0 4px 1px 2px;
-  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-base) var(--ease-out);
-}
-.st-advanced[open] > summary::before { transform: rotate(45deg); }
-.st-advanced .run-ways { padding: 0 10px 4px; }
 .msg-auto-note summary { cursor: pointer; list-style: none; }
 .msg-auto-note summary::-webkit-details-marker { display: none; }
 .msg-auto-note summary:hover { color: var(--ink); }
@@ -1552,7 +1555,7 @@ body.is-resizing .sheet { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .msg-claude.is-streaming p::after, .bx-live::after { animation: none; }
   .hist-read { animation: none; }
-  .run-caret, .fold-chip summary::before { transition: none; }
+  .fold-chip summary::before { transition: none; }
 }
 
 /* ---------- the Flow tab: diagram, workshop and import ---------- */
@@ -1817,6 +1820,57 @@ body.is-resizing .sheet { animation: none; }
 }
 .fl-journeys[hidden] { display: none; }
 .fl-journeys > * { flex-shrink: 0; }
+/* The Functions level (fl17): the whole census as a list, grouped by part, with the owner badge per function. */
+.fl-functions {
+  display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 16px 20px 24px; background: var(--bg); overscroll-behavior: contain;
+}
+.fl-functions[hidden] { display: none; }
+.fl-fn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fl-fn-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--ink); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
+  transition: background var(--dur-base), border-color var(--dur-base);
+}
+.fl-fn-chip:hover { background: var(--bg-3); }
+.fl-fn-chip.is-on { background: var(--bg-2); border-color: var(--ink); box-shadow: var(--shadow); }
+.fl-fn-count { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 6px; border-radius: var(--r-pill); background: var(--bg-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.fl-fn-chip.is-on .fl-fn-count { background: var(--ink); color: var(--bg-2); }
+.fl-fn-search { padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-2); color: var(--ink); font: inherit; font-size: var(--fs-sm); }
+.fl-fn-search:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.fl-fn-list { display: grid; gap: 16px; }
+.fl-fn-layer { display: grid; gap: 10px; }
+.fl-fn-layername { margin: 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.fl-fn-part { display: grid; gap: 6px; }
+.fl-fn-partname {
+  display: flex; align-items: center; gap: 8px; width: fit-content; padding: 0; border: 0; background: none; color: var(--ink);
+  font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; text-align: left;
+}
+.fl-fn-partname:hover { text-decoration: underline; }
+.fl-fn-partname.is-orphan { cursor: default; color: var(--warn-ink, var(--ink-2)); }
+.fl-fn-partname.is-orphan:hover { text-decoration: none; }
+.fl-fn-partcount { color: var(--ink-2); font-size: var(--fs-2xs); font-weight: 600; }
+.fl-fn-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-2); }
+.fl-fn-badge { flex: 0 0 auto; align-self: center; padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.02em; }
+.fl-fn-badge.fl-owner-ai { background: var(--doing-fill); color: var(--doing-ink); }
+.fl-fn-badge.fl-owner-bot { background: var(--clash-fill); color: var(--clash-ink); }
+.fl-fn-badge.fl-owner-script { background: var(--bg-3); color: var(--ink-2); }
+.fl-fn-body { display: grid; gap: 2px; min-width: 0; }
+.fl-fn-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fl-fn-path { font-size: var(--fs-xs); color: var(--ink); overflow-wrap: anywhere; }
+.fl-fn-purpose { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.45; text-wrap: pretty; }
+.fl-fn-about { font-size: var(--fs-2xs); color: var(--ink-3, var(--ink-2)); line-height: 1.4; text-wrap: pretty; }
+.fl-fn-orphan { flex: 0 0 auto; align-self: center; padding: 1px 6px; border: 1px dashed var(--line); border-radius: var(--r-pill); font-size: var(--fs-2xs); color: var(--ink-2); }
+/* The owner chip on a piece of the inner view (fl17). */
+.fl-owner { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.02em; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.fl-owner-ai { fill: var(--doing-ink); }
+.fl-owner-bot { fill: var(--clash-ink); }
+.fl-owner-script { fill: var(--ink-2); }
+/* The owner legend marks on the Functions level. */
+.lg-owner-ai .lg-mark { background: var(--doing-ink); }
+.lg-owner-bot .lg-mark { background: var(--clash-ink); }
+.lg-owner-script .lg-mark { background: var(--ink-2); }
+.lg-orphan .lg-mark { border: 1px dashed var(--ink-2); background: none; }
 .fl-j-title { margin: 0; font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; }
 .fl-j-lede, .fl-j-note { margin: 4px 0 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--ink-2); text-wrap: pretty; }
 .fl-j-note { color: var(--waiting-ink); font-weight: 600; }
@@ -2045,8 +2099,9 @@ body.is-empty .convs { display: none; }
 .cv-rail-live[hidden] { display: none; }
 
 .cv-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* The head: "Conversations", then Novo and the button that folds the column. */
-.cv-head { position: relative; display: flex; align-items: center; gap: 6px; padding: 14px 10px 10px 18px; }
+/* The head: "Conversations", then Novo and the button that folds the column. Each zone has its own ground and a
+   hairline, so nothing reads as sliding over the next (pc34's refinement). */
+.cv-head { position: relative; display: flex; align-items: center; gap: 6px; padding: 14px 10px 10px 18px; background: var(--bg); }
 .cv-head h2 { margin: 0; font-size: var(--fs-lg); font-weight: 680; letter-spacing: -0.005em; }
 .cv-head .new-wrap { flex: none; margin-left: auto; }
 .cv-new { gap: 6px; height: 30px; padding: 0 8px 0 10px; }
@@ -2056,7 +2111,7 @@ body.is-empty .convs { display: none; }
 .cv-collapse:hover { background: var(--bg-3); color: var(--ink); border-color: transparent; }
 
 /* The tools under the head: the search, the switch for the scope and the state chips. */
-.cv-tools { display: grid; gap: 8px; padding: 0 12px 8px; }
+.cv-tools { display: grid; gap: 8px; padding: 0 12px 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .cv-search {
   position: relative; display: flex; align-items: center; height: 32px;
   border-radius: var(--r-md); background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line);
@@ -2394,6 +2449,8 @@ body.is-empty .convs { display: none; }
   list-style: none; margin: 0; padding: 0; pointer-events: none;
 }
 .al-stack:empty { display: none; }
+/* With the chat open, the alerts step left of it instead of covering its header (pc34's refinement). */
+body:has(.chat:not([hidden])) .al-stack { right: calc(var(--chat-w, 460px) + 28px); }
 .al-card {
   --tone: var(--active); --tone-fill: var(--active-fill);
   pointer-events: auto;
@@ -2672,6 +2729,7 @@ button.cv-folder-btn:hover { background: color-mix(in oklch, var(--p) 10%, trans
 .helper-log { padding: 8px 10px; border-radius: var(--r-md); background: color-mix(in srgb, var(--rel) 7%, var(--bg-2)); }
 .helper-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .msg .helper-note { margin: 0; font-size: var(--fs-xs); color: var(--ink-2); }
+.msg .helper-role { margin: 2px 0 4px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink); }
 .msg .thinking-line, .msg-thinking summary { margin: 0; color: var(--ink-2); font-style: italic; font-size: var(--fs-sm); }
 .msg-thinking summary { cursor: pointer; }
 .thinking-body { margin: 4px 0 0; padding-left: 12px; border-left: 1px solid var(--line); color: var(--ink-2); white-space: pre-wrap; font-size: var(--fs-sm); line-height: 1.5; }
@@ -2716,7 +2774,7 @@ button.cv-folder-btn:hover { background: color-mix(in oklch, var(--p) 10%, trans
 .chat-book-label { font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 4px; }
 .chat-book-summary { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); display: grid; gap: 6px; }
 .chat-book-summary summary { cursor: pointer; font-size: var(--fs-sm); }
-.chat-book-summary ul { margin: 0; padding-left: 20px; display: grid; gap: 3px; font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.chat-book-summary ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
 .chat-book-index ol { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 2px; font-size: var(--fs-sm); }
 .chat-book-cap { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); }
 .chat-book-cap[open] { box-shadow: var(--shadow-xs); }
@@ -2839,6 +2897,10 @@ button.cv-folder-btn:hover { background: color-mix(in oklch, var(--p) 10%, trans
 /* like the chat, the list gives the map its place instead of covering the lines it lights */
 .stage:has(.rel-list:not([hidden])) .mm { margin-right: 412px; }
 .stage:has(.rel-list:not([hidden])) .fit-btn { right: 424px; }
+/* With the chat open too, the relations step left of it instead of sliding under (pc34's refinement). */
+.stage:has(.chat:not([hidden])) .rel-list { right: calc(var(--chat-w, 460px) + 24px); }
+.stage:has(.chat:not([hidden])):has(.rel-list:not([hidden])) .mm { margin-right: calc(var(--chat-w, 460px) + 424px); }
+.stage:has(.chat:not([hidden])):has(.rel-list:not([hidden])) .fit-btn { right: calc(var(--chat-w, 460px) + 436px); }
 .rel-list h2 { font-size: var(--fs-xl); padding-top: 6px; }
 .rel-sub { margin-top: 2px; font-size: var(--fs-xs); }
 .rel-sub:empty { display: none; }

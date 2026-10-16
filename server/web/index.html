@@ -61,6 +61,7 @@
     <symbol id="i-desktop" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="13" rx="2.5"/><path d="M3 8.5h18M9 20.5h6"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
     <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2.5c.9 4.8 4.7 8.6 9.5 9.5-4.8.9-8.6 4.7-9.5 9.5-.9-4.8-4.7-8.6-9.5-9.5 4.8-.9 8.6-4.7 9.5-9.5z"/><circle cx="18.5" cy="4.5" r="1.4"/></symbol>
     <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5.5 12.5l4 4 9-9"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></symbol>
@@ -75,6 +76,7 @@
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.5"/><path d="M5.5 19.5c.9-3.2 3.4-5 6.5-5s5.6 1.8 6.5 5"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4.5 7.5h9M17.5 7.5h2M4.5 16.5h3M11.5 16.5h8"/><circle cx="15.5" cy="7.5" r="2"/><circle cx="9.5" cy="16.5" r="2"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 3.5c-3.1 0-5.5 2.4-5.5 5.5 0 3.9 5.5 10 5.5 10s5.5-6.1 5.5-10c0-3.1-2.4-5.5-5.5-5.5z"/><circle cx="12" cy="9" r="1.8"/></symbol>
   </svg>
 
   <header class="bar">
@@ -264,8 +266,7 @@
     <!-- The chat sheet sits on the stage itself: on a computer it takes the whole height, beside the map tools (mm33). -->
     <aside id="chat" class="sheet chat" aria-labelledby="chatTitle" hidden>
       <div class="sheet-resize" id="chatResize" data-i18n-aria="resize.chat" data-i18n-title="resize.chat"></div>
-      <!-- One line (pc18): the state, the title, the part, then ⋯ (about this part, find, rename or move, archive, open in a
-           terminal, delete, new conversation) and close. -->
+      <!-- One line (pc34): the title with its ?, then find, the ⋯ of the extra options, minimize (−) and close (×). -->
       <div class="sheet-head chat-head">
         <span class="chat-dot" data-chat="dot" role="img" hidden></span>
         <h2 id="chatTitle" data-chat="title" data-help="chat"></h2>
@@ -273,16 +274,18 @@
         <div class="sheet-head-tools">
           <span class="chat-tools" data-chat="tools"></span>
           <div class="chat-more">
-            <button type="button" class="icon-btn" data-chat="bookbtn" data-i18n-aria="chat.book" data-i18n-title="chat.book" title="Livro da conversa" aria-label="Livro da conversa" hidden><svg><use href="#i-book"/></svg></button>
             <button type="button" class="icon-btn" id="chatMore" data-chat="more" aria-haspopup="menu" aria-expanded="false" aria-controls="chatMoreMenu" data-i18n-aria="chat.more" data-i18n-title="chat.more" hidden><svg><use href="#i-more"/></svg></button>
             <div class="pop-menu chat-more-menu" id="chatMoreMenu" data-chat="moremenu" role="menu" data-i18n-aria="chat.more" hidden></div>
           </div>
+          <button type="button" class="icon-btn" data-chat="min" data-i18n-aria="chat.min" data-i18n-title="chat.min" title="Minimizar o chat" aria-label="Minimizar o chat"><svg><use href="#i-minus"/></svg></button>
           <button type="button" class="icon-btn" data-close="chat" data-chat="close" data-i18n-aria="panel.close"><svg><use href="#i-close"/></svg></button>
         </div>
       </div>
-      <!-- A box's information on top, in tabs by kind, folding away while the person talks and coming back from the ⋯
-           ("About this part", pc18); the chat about the box under it, always at hand (mm07). app.js draws them; a chat
-           about no box shows only the chat. -->
+      <!-- The tab bar (pc34): each thing of the chat opens whole, as its own tab — the conversation, each tab of the
+           box's information, the conversation book and the terminal. -->
+      <div class="chat-tabbar" id="chatTabbar" hidden></div>
+      <!-- A box's information, shown whole by its tab of the bar above; the chat keeps its own tab, so neither overlaps
+           the other (pc34). -->
       <section class="point-info" id="pointInfo" aria-labelledby="pointFold" hidden>
         <button type="button" class="point-fold" id="pointFold" aria-expanded="true" aria-controls="pointBody">
           <svg class="pf-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
@@ -310,7 +313,7 @@
           <div class="chat-live" data-chat="live" hidden>
             <span class="chat-live-dot" aria-hidden="true"></span>
             <p class="chat-status" id="chatStatus" data-chat="status" role="status"></p>
-            <button type="button" class="chat-stop" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+            <button type="button" class="chat-stop" id="chatStop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span></span></button>
           </div>
           <div class="chat-pending" data-chat="pending" hidden></div>
           <label class="visually-hidden" for="chatInput" data-i18n="chat.inputLabel"></label>
@@ -324,11 +327,11 @@
               <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
               <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
               <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
-              <div class="chat-run" id="chatRun" data-chat="run"></div>
-              <!-- The three ways, the quiet line and the link to Configurações (pc19). -->
-              <div class="chat-menu" id="chatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
-                <div class="run-panel" id="chatRunPanel" data-chat="runpanel"></div>
-              </div>
+              <!-- The memory the conversation carries, "48k / 200k" (pc37). -->
+              <span class="chat-memory num" data-chat="memory" hidden></span>
+              <span class="chat-cost num" data-chat="cost" hidden></span>
+              <!-- The brain's quiet line: what the Cérebro routed for this conversation (id146). -->
+              <span class="chat-brain num" data-chat="brain" hidden></span>
               <button type="submit" class="btn primary chat-send" id="chatSend" data-chat="send"><span data-i18n="chat.send"></span><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg></button>
             </div>
           </div>
@@ -350,6 +353,8 @@
           <button type="button" data-level="1" aria-pressed="true" data-i18n="flow.level.one"></button>
           <button type="button" data-level="parts" aria-pressed="false" data-i18n="flow.level.parts"></button>
           <button type="button" data-level="journeys" aria-pressed="false" data-i18n="flow.level.journeys"></button>
+          <button type="button" data-level="functions" aria-pressed="false" data-i18n="flow.level.functions"></button>
+          <button type="button" data-level="program" aria-pressed="false" data-i18n="flow.level.program"></button>
         </div>
         <div class="fl-actions" id="flowActions">
           <button type="button" class="btn" id="flowCopy"><svg class="btn-icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="flow.copy"></span></button>
@@ -401,6 +406,8 @@
           <p class="fl-editor-error" id="flowEditorError" role="status"></p>
         </div>
         <section class="fl-journeys" id="flowJourneys" aria-labelledby="flowJourneysTitle" hidden></section>
+        <section class="fl-functions" id="flowFunctions" aria-labelledby="flowFunctionsTitle" hidden></section>
+        <section class="fl-program" id="flowProgram" aria-labelledby="flowProgramTitle" hidden></section>
         <div class="fl-canvas-wrap">
           <nav class="fl-crumbs" id="flowCrumbs" data-i18n-aria="flow.l2.crumbs" hidden></nav>
           <div class="fl-filters" id="flowFilters" hidden>
@@ -460,7 +467,7 @@
             <div class="chat-live" data-chat="live" hidden>
               <span class="chat-live-dot" aria-hidden="true"></span>
               <p class="chat-status" data-chat="status" role="status"></p>
-              <button type="button" class="chat-stop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span data-i18n="chat.stop"></span></button>
+              <button type="button" class="chat-stop" data-chat="stop" hidden><svg class="btn-icon" aria-hidden="true"><use href="#i-stop"/></svg><span></span></button>
             </div>
             <div class="chat-pending" data-chat="pending" hidden></div>
             <label class="visually-hidden" for="flowChatInput" data-i18n="chat.inputLabel"></label>
@@ -474,10 +481,9 @@
                 <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
                 <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
                 <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
-                <div class="chat-run" data-chat="run"></div>
-                <div class="chat-menu" id="flowChatMenu" data-chat="menu" role="dialog" data-i18n-aria="run.menuLabel" hidden>
-                  <div class="run-panel" id="flowChatRunPanel" data-chat="runpanel"></div>
-                </div>
+                <span class="chat-memory num" data-chat="memory" hidden></span>
+                <span class="chat-cost num" data-chat="cost" hidden></span>
+                <span class="chat-brain num" data-chat="brain" hidden></span>
                 <button type="submit" class="btn primary chat-send" data-chat="send"><span data-i18n="chat.send"></span><svg class="btn-icon" aria-hidden="true"><use href="#i-send"/></svg></button>
               </div>
             </div>
@@ -494,6 +500,7 @@
     <section id="view-health" class="view" data-i18n-aria="tab.health" hidden></section>
     <section id="view-ideas" class="view" data-i18n-aria="tab.ideas" hidden></section>
     <section id="view-costs" class="view" data-i18n-aria="tab.costs" hidden></section>
+    <section id="view-brain" class="view" data-i18n-aria="tab.brain" hidden></section>
     <section id="view-library" class="view" data-i18n-aria="tab.library" hidden></section>
 
     <section id="view-discover" class="discover" aria-labelledby="discoverTitle" hidden>
@@ -507,6 +514,8 @@
           <label class="dv-field"><span data-i18n="discover.category"></span><select id="discoverCategory"></select></label>
           <button type="button" class="btn" id="discoverRefresh" data-i18n="discover.refresh"></button>
         </div>
+        <div id="discoverAirplane"></div>
+        <h3 class="dv-lede" id="discoverCatalogTitle" data-i18n="discover.toInstall"></h3>
         <p class="dv-status" id="discoverStatus" role="status"></p>
         <ul class="dv-list" id="discoverList"></ul>
       </div>

@@ -60,8 +60,8 @@ test('the "create the map" chat starts through /api/chat/start at the root, only
     const exists = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', ...CREATE } });
     assert.deepEqual([exists.status, exists.body.error], [409, 'arch-exists']);
     assert.equal((await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'nope', ...CREATE } })).status, 404);
-    // Automatic: an Autonomous chat (the default) always runs in Claude Code's auto mode.
-    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'bare-abc123', ...CREATE, mode: 'acceptEdits', run: { kind: 'auto', selfReinforce: false } } });
+    // The brain's talk chat: it runs in the mode the person picked (id146).
+    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'bare-abc123', ...CREATE, mode: 'acceptEdits' } });
     assert.equal(made.status, 200);
     assert.match(made.body.chatKey, /^[0-9a-f]{32}$/);
     assert.equal(made.body.mode, 'acceptEdits', 'the chat runs in the mode the person picked');
@@ -138,15 +138,12 @@ test('the monthly limit for reinforcing on its own: read and set with the token,
   });
 });
 
-test('a chat\'s way of running changes through /api/chat/:key/run, with the token', async () => {
+test('the run route died with the ways the brain replaced: /api/chat/:key/run answers 404, even with the token', async () => {
   await withServer(async ({ call, write }) => {
-    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', node: { kind: 'idea' }, text: 'An idea', run: { kind: 'fixed', model: 'haiku', effort: 'low' } } });
+    const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', node: { kind: 'idea' }, text: 'An idea' } });
     assert.equal(made.status, 200);
     const path = `/api/chat/${made.body.chatKey}/run`;
-    assert.equal((await call('POST', path, { headers: { ...write, cookie: '' }, body: { run: { kind: 'maestro' } } })).status, 401);
-    assert.equal((await call('POST', path, { headers: write, body: { run: { kind: 'nope' } } })).status, 400);
-    const ok = await call('POST', path, { headers: write, body: { run: { kind: 'auto', selfReinforce: true } } });
-    assert.deepEqual([ok.status, ok.body.run], [200, { kind: 'auto', selfReinforce: true }]);
+    assert.equal((await call('POST', path, { headers: write, body: { run: { kind: 'talk' } } })).status, 404);
   });
 });
 

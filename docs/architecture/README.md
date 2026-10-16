@@ -34,6 +34,7 @@ flowchart LR
     SB --> WA
     SB --> OR
     OR --> PC
+    OR --> MM
     BI --> PC
     BI --> AM
     BI --> FL
@@ -56,7 +57,7 @@ flowchart LR
 
 | Part | In one line |
 |---|---|
-| [Readers](readers.md) | Reads Claude Code's local files, git and the config. |
+| [Readers](readers.md) | Reads Claude Code's and DeepSeek's local files, git and the config. |
 | [Architecture map](architecture-map.md) | Reads a project's architecture folder; chats write it. |
 | [Foundation](foundation.md) | Exact facts from the code, counted letter by letter, that everything else is checked against. |
 | [Ideas and requests](ideas.md) | The owner's requests still open (new, accepted, in progress, later), in his words, with where they went and where they stand. |
@@ -74,3 +75,5 @@ flowchart LR
 ## How to keep this true
 
 When someone asks for something new, add it as an item under "What's missing" of the right part before starting; mark it in progress when it starts and tick it when it is done. Every request the owner makes is also recorded in [Ideas and requests](ideas.md) (moved to [the closed part](ideas-closed.md) when done or discarded), pointing to the item it became. The `architecture` skill teaches this to every chat.
+
+**The fundamental rule (id129): nothing is done without being projected in the architecture first.** Every piece of work starts as an item in its part (and as a request in the registry), the Flow gains its box or arrow in the same change, and every file of the program is covered by a mention here — `test/architecture-first.test.mjs` holds it: code that was never projected cannot exist.

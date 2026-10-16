@@ -50,3 +50,9 @@ The server compares each session's state from one read to the next and turns the
   - Read the limit warnings in the histories (such as "hit your weekly limit" and the reset time) and hold what is not urgent.
 - [ ] **Warn about new code outside the map and the Flow** `wa10`
   - "New feature outside the map: add it?"; in `flow.sync` mode `auto` it adds it. Part of the golden rule in `fl12`.
+
+### The projects' records
+
+- [x] **Claude:** A machine-readable record per project of what happened there, readable by any AI `wa11`
+  - From `id125`. Every event the watcher turns up (a chat waiting, finished, an error, a clash, a budget warning) also lands in `smDir/logs/projects/<projectId>.jsonl` (bounded like the AI activity file, masked like the program log), so an AI can read what was done in a project even when the AI that did it forgot.
+  - `server/log.mjs` keeps the project records (`recordProject`), and the watcher hands them its events through `onEvents`. Built on main on 2026-10-14 (the records start with the next restart of session-map).

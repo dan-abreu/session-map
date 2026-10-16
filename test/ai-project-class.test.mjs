@@ -88,42 +88,42 @@ async function withLife(config, fn) {
 
 const jobsFor = (digests, tag) => digests.map((digest, i) => ({ sessionId: `${tag}${i}`, digest }));
 
-test('the bulk work of an unclassified project stays with Claude: no outside AI that bars client data sees it', async () => {
+test('the bulk work of an unclassified project goes to the other AIs too: the class is only a label', async () => {
   await withLife(null, async ({ smDir, life, calls }) => {
     const p = { smDir, projectId: projectIdOf(ROOT_A), arch: PARTS };
     placeChanged(life, p, jobsFor(plainDigests(1), 'a'));
     await settleAi(smDir);
-    assert.deepEqual(calls.api, [], 'a direct Gemini key never gets client data');
-    assert.equal(calls.claude, 1);
+    assert.deepEqual(calls.api, ['gemini'], 'a direct Gemini key takes it as well');
+    assert.equal(calls.claude, 0);
   });
 });
 
-test('the owner marks his own project internal, and its bulk work may go to the other AIs; a client one still may not', async () => {
+test('client and internal projects alike send their bulk work to the other AIs', async () => {
   const config = { ai: { others: { projectClass: { [KEY_A]: 'client', [KEY_B]: 'internal' } } } };
   await withLife(config, async ({ smDir, life, calls }) => {
     const [d1, d2] = plainDigests(2);
     placeChanged(life, { smDir, projectId: projectIdOf(ROOT_A), arch: PARTS }, [{ sessionId: 'shop', digest: d1 }]);
     await settleAi(smDir);
-    assert.deepEqual(calls.api, []);
-    assert.equal(calls.claude, 1);
+    assert.deepEqual(calls.api, ['gemini']);
+    assert.equal(calls.claude, 0);
     placeChanged(life, { smDir, projectId: projectIdOf(ROOT_B), arch: PARTS }, [{ sessionId: 'tool', digest: d2 }]);
     await settleAi(smDir);
-    assert.deepEqual(calls.api, ['gemini']);
-    assert.equal(calls.claude, 1);
+    assert.deepEqual(calls.api, ['gemini', 'gemini']);
+    assert.equal(calls.claude, 0);
   });
 });
 
-test('a class changed on the page applies to the next job without a restart', async () => {
+test('a class changed on the page is read by the next job without a restart, and keeps the work going to the other AIs', async () => {
   await withLife(null, async ({ smDir, life, calls }) => {
     const p = { smDir, projectId: projectIdOf(ROOT_B), arch: PARTS };
     const [d1, d2] = plainDigests(2);
     placeChanged(life, p, [{ sessionId: 'a', digest: d1 }]);
     await settleAi(smDir);
-    assert.deepEqual(calls.api, []);
+    assert.deepEqual(calls.api, ['gemini']);
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { projectClass: { [KEY_B]: 'public' } } } }));
     placeChanged(life, p, [{ sessionId: 'b', digest: d2 }]);
     await settleAi(smDir);
-    assert.deepEqual(calls.api, ['gemini']);
+    assert.deepEqual(calls.api, ['gemini', 'gemini']);
   });
 });
 

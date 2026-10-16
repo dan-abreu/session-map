@@ -296,10 +296,6 @@ export function createAiHelpers(ctx) {
     return h('p', { class: `ah-note${n ? ` is-${n.tone}` : ''}`, role: 'status', 'aria-live': 'polite' }, n?.text ?? '');
   }
 
-  // DeepSeek's models (direct, or through OpenRouter, whose own router may pick one) only get public material: they
-  // never do the map's sorting, which is private (server/ai/router.mjs).
-  const publicOnly = (id, model) => id === 'deepseek' || /deepseek|^openrouter\//i.test(String(model ?? ''));
-
   function providerSection(p) {
     const t = tt();
     const saved = keyOf(p.id);
@@ -319,7 +315,7 @@ export function createAiHelpers(ctx) {
       h('p', { class: 'ah-privacy' }, h('strong', {}, t('aih.privacy')), ' ', t(`aih.privacy.${p.id}`)),
       h('div', { class: 'al-opt ah-switch' },
         h('input', { type: 'checkbox', id: `ahOn-${p.id}`, 'data-ah-on': p.id, checked: on, disabled: !canEdit || !saved, onchange: async (e) => { await switchProvider(p.id, e.target.checked); render(`[data-ah-on="${p.id}"]`); } }),
-        h('label', { for: `ahOn-${p.id}` }, h('span', { class: 'al-opt-name' }, t('aih.on', { name: p.name })), h('span', { class: 'al-opt-hint' }, saved ? t(publicOnly(p.id, st?.model ?? p.defaultModel) ? 'aih.publicOnly' : 'aih.usesModel', { model: st?.model ?? p.defaultModel }) : t('aih.onNeedsKey')))),
+        h('label', { for: `ahOn-${p.id}` }, h('span', { class: 'al-opt-name' }, t('aih.on', { name: p.name })), h('span', { class: 'al-opt-hint' }, saved ? t('aih.usesModel', { model: st?.model ?? p.defaultModel }) : t('aih.onNeedsKey')))),
       st?.paused ? h('p', { class: 'dv-warning', role: 'status' }, `${t('aih.paused', { disagreed: st.pausedWhy?.disagreed ?? 0, of: st.pausedWhy?.of ?? 0 })} `,
         h('button', { type: 'button', class: 'btn small-btn', 'data-ah-resume': p.id, disabled: !canEdit, onclick: async () => { await giveAnotherChance(p.id); render(`[data-ah-on="${p.id}"]`); } }, t('aih.resume'))) : null,
       spentLine ? h('p', { class: 'al-opt-hint ah-today', 'data-ah-spent': p.id }, spentLine) : null,
@@ -355,6 +351,29 @@ export function createAiHelpers(ctx) {
       o?.enabled && o.capReached ? h('p', { class: 'al-opt-hint' }, t('aih.capReached')) : null,
       h('div', { class: 'ah-buttons' }, h('button', { type: 'button', class: 'btn small-btn', 'data-ah-cap': '1', disabled: !canEdit, onclick: async () => { await saveCap(); render('[data-ah-cap]'); } }, t('aih.saveCap'))),
       noteLine('cap'));
+  }
+
+  async function saveEngine(fn, value) {
+    const res = await api.setAiHelper({ engines: { [fn]: value } });
+    if (res.ok) { apply(res); note('engines', tt()('aih.engines.saved'), 'ok'); } else note('engines', why(res), 'error');
+  }
+
+  // The per-function engine choice (id123): which AI runs the map's own work, or 'auto'. Mechanical: the server holds
+  // the choice in the config; this only writes it.
+  function enginesSection() {
+    const t = tt();
+    const engines = data?.engines ?? { brain: 'auto', background: 'auto' };
+    const options = Array.isArray(data?.engineOptions) && data.engineOptions.length ? data.engineOptions : ['auto'];
+    const nameOf = (id) => (id === 'auto' ? t('aih.engines.auto') : id === 'claude' ? 'Claude' : providerName(id));
+    const select = (fn, id) => h('div', { class: 'dv-field ah-field' },
+      h('label', { for: id }, t(`aih.engines.${fn}`)),
+      h('select', { id, 'data-ah-engine': fn, disabled: !canEdit, onchange: async (e) => { await saveEngine(fn, e.target.value); render('#' + id); } },
+        options.map((v) => h('option', { value: v, selected: v === engines[fn] }, nameOf(v)))));
+    return h('section', { class: 'al-section ah-engines', 'data-ah-engines': '1', 'aria-labelledby': 'ahEnginesTitle' },
+      h('h3', { id: 'ahEnginesTitle' }, t('aih.engines.title')),
+      h('p', { class: 'al-opt-hint' }, t('aih.engines.hint')),
+      select('brain', 'ahEngBrain'), select('background', 'ahEngBackground'),
+      noteLine('engines'));
   }
 
   function classesSection() {
@@ -469,6 +488,7 @@ export function createAiHelpers(ctx) {
       panelSection(),
       ...data.providers.map(providerSection),
       capSection(),
+      enginesSection(),
       classesSection(),
       activitySection(),
       h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn primary', onclick: () => dialog.close() }, t('aih.close'))),

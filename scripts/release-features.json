@@ -11,6 +11,7 @@
     { "readme": "Files", "code": ["server/files.mjs#readFileForView", "server/files.mjs#isSecretsFile"] },
     { "readme": "On your phone", "code": ["server/auth.mjs#authorize", "server/auth.mjs#loadToken"] },
     { "readme": "Chat from the page", "code": ["server/chat/hub.mjs#createChatHub"] },
+    { "readme": "DeepSeek Harness", "code": ["server/sources/deepseek.mjs#readSummary", "server/sources/deepseek.mjs#readConversation", "server/sources/deepseek.mjs#deepseekPrices"] },
     { "readme": "Costs are estimates", "code": ["server/cost.mjs#costOf", "server/cost.mjs#budgetStatus"] },
     { "readme": "Configuration", "code": ["server/config.mjs#loadConfig"] }
   ],

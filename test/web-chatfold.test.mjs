@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { foldReply } from '../server/web/chatfold.js';
-import { runWords } from '../server/web/views.js';
 import { chatLog } from '../server/web/views.js';
 import { modelName } from '../server/web/live.js';
 
@@ -51,7 +50,7 @@ test('modelName: aliases and full ids read as a person would say them', () => {
 });
 
 test('chatLog keeps the latest run info and cost, takes the cost of a turn, and marks the answer session-map gave for the person', () => {
-  let log = chatLog(undefined, { type: 'run', data: { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', costUSD: 0 } });
+  let log = chatLog(undefined, { type: 'run', data: { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', costUSD: 0 } });
   assert.equal(log.run.model, 'claude-opus-5-5');
   log = chatLog(log, { type: 'turn-end', data: { costUSD: 0.42 } });
   assert.equal(log.costUSD, 0.42);
@@ -59,44 +58,4 @@ test('chatLog keeps the latest run info and cost, takes the cost of a turn, and 
   assert.equal(log.items.at(-1).auto, 'reinforce');
   log = chatLog(log, { type: 'history', data: { messages: [], costUSD: 1.5 } });
   assert.equal(log.costUSD, 1.5);
-});
-
-const tt = (key, vars) => (vars ? `${key}(${Object.values(vars).join(',')})` : key);
-
-test('runWords: what runs, at which level, why and how much it cost, for each way of running', () => {
-  const mine = { model: 'opus[1m]', effort: 'xhigh', ultracode: false };
-  assert.deepEqual(runWords(tt, { choice: { kind: 'auto', selfReinforce: false }, info: null, mine }), {
-    way: 'run.way.auto', model: 'Opus', effort: 'run.effort.high', why: 'run.why.auto', tone: 'auto', cost: null,
-  });
-  const live = runWords(tt, { choice: { kind: 'auto', selfReinforce: false }, info: { model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 0.3 }, mine });
-  assert.deepEqual([live.model, live.why, live.tone, live.cost], ['Opus 5.5', 'run.level.reinforced(mexe no login)', 'reinforced', 0.3]);
-  assert.equal(runWords(tt, { choice: { kind: 'auto', selfReinforce: false }, info: { level: 'ask-reinforce', why: 'x', estimateUSD: 4 }, mine }).tone, 'ask');
-  const ultra = runWords(tt, { choice: { kind: 'ultracode' }, info: null, mine });
-  assert.deepEqual([ultra.way, ultra.effort, ultra.tone], ['run.way.ultracode', 'run.effort.xhigh', 'ultracode']);
-  const fixed = runWords(tt, { choice: { kind: 'fixed', model: 'haiku', effort: 'low' }, info: null, mine });
-  assert.deepEqual([fixed.model, fixed.effort, fixed.why], ['Haiku', 'run.effort.low', 'run.why.fixed']);
-  const same = runWords(tt, { choice: { kind: 'settings' }, info: null, mine });
-  assert.deepEqual([same.model, same.effort], ['Opus 1M', 'run.effort.xhigh']);
-  const unknown = runWords(tt, { choice: { kind: 'settings' }, info: null, mine: { model: null, effort: null, ultracode: false } });
-  assert.deepEqual([unknown.model, unknown.effort], ['run.modelDefault', null]);
-});
-
-test('runWords: Autonomous runs Opus at high in its own tone, and shows the level it works at', () => {
-  const choice = { kind: 'autonomous' };
-  assert.deepEqual(runWords(tt, { choice, info: null, mine: null }), {
-    way: 'run.way.autonomous', model: 'Opus', effort: 'run.effort.high', why: 'run.why.autonomous', tone: 'autonomous', cost: null,
-  });
-  const live = runWords(tt, { choice, info: { run: choice, model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'muda o login', costUSD: 2 }, mine: null });
-  assert.deepEqual([live.model, live.why, live.tone, live.cost], ['Opus 5.5', 'run.level.reinforced(muda o login)', 'reinforced', 2]);
-  assert.equal(runWords(tt, { choice, info: { run: choice, level: 'ask-reinforce', why: 'x', estimateUSD: 40 }, mine: null }).tone, 'ask');
-  const before = runWords(tt, { choice, info: { run: { kind: 'auto', selfReinforce: false }, model: 'claude-sonnet-5-5', level: 'helpers', costUSD: 1 }, mine: null });
-  assert.deepEqual([before.model, before.why], ['Opus', 'run.why.autonomous'], 'Automatic\'s last run does not speak for Autonomous');
-});
-
-test('runWords: a run event of the way it ran before does not speak for a new choice, but its cost still counts', () => {
-  const info = { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'helpers', why: 'x', costUSD: 0.7 };
-  const words = runWords(tt, { choice: { kind: 'fixed', model: 'haiku', effort: 'low' }, info, mine: null });
-  assert.deepEqual([words.model, words.effort, words.why, words.cost], ['Haiku', 'run.effort.low', 'run.why.fixed', 0.7]);
-  const same = runWords(tt, { choice: { kind: 'auto', selfReinforce: true }, info, mine: null });
-  assert.equal(same.model, 'Opus 5.5', 'only the permission to reinforce changed: the same claude still runs');
 });

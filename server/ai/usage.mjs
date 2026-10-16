@@ -48,6 +48,9 @@ function readEntries(smDir) {
         model: typeof line.model === 'string' ? line.model : '',
         ms: num(line.ms),
         costUSD: num(line.costUSD),
+        tokensIn: num(line.tokensIn),
+        tokensOut: num(line.tokensOut),
+        cacheHit: num(line.cacheHit),
         ok: line.ok === true,
         accepted: undefined,
       };
@@ -86,10 +89,13 @@ function benchOf(smDir) {
   return out;
 }
 
-const tally = () => ({ calls: 0, ok: 0, failed: 0, accepted: 0, refused: 0, waiting: 0, costUSD: 0, msSum: 0, msN: 0, lastAt: 0 });
+const tally = () => ({ calls: 0, ok: 0, failed: 0, accepted: 0, refused: 0, waiting: 0, costUSD: 0, tokensIn: 0, tokensOut: 0, cacheHit: 0, msSum: 0, msN: 0, lastAt: 0 });
 function add(t, e) {
   t.calls++;
   t.costUSD += e.costUSD;
+  t.tokensIn += e.tokensIn;
+  t.tokensOut += e.tokensOut;
+  t.cacheHit += e.cacheHit;
   if (e.at > t.lastAt) t.lastAt = e.at;
   if (!e.ok) { t.failed++; return; }
   t.ok++;
@@ -143,6 +149,9 @@ export function usageSummary({ smDir, now = Date.now(), days = DEFAULT_DAYS } = 
       acceptRate: ratio(t.accepted, t.refused),
       costUSD: round6(t.costUSD),
       costPerAcceptedUSD: t.accepted > 0 ? round6(t.costUSD / t.accepted) : null,
+      tokensIn: t.tokensIn,
+      tokensOut: t.tokensOut,
+      cacheHit: t.cacheHit,
       avgMs: t.msN ? Math.round(t.msSum / t.msN) : 0,
       lastAt: t.lastAt ? new Date(t.lastAt).toISOString() : null,
       byKind: [...ai.kinds.entries()].map(([kind, k]) => ({ kind, calls: k.calls, accepted: k.accepted, refused: k.refused, acceptRate: ratio(k.accepted, k.refused), costUSD: round6(k.costUSD) }))

@@ -17,15 +17,15 @@ test('the input is one line high empty, grows with the text and scrolls past 40%
   assert.deepEqual(composerSize({ scrollHeight: 500, paneHeight: 0, minHeight: 38 }), { height: 38, scroll: true }, 'a hidden panel never collapses the input below one line');
 });
 
-test('both chat sheets start the input at one line and keep only how the chat runs in the menu by Send', () => {
+test('both chat sheets start the input at one line and keep only the brain\'s line and the cost chip by Send', () => {
   const inputs = [...html.matchAll(/<textarea id="(chatInput|flowChatInput)"[^>]*>/g)];
   assert.equal(inputs.length, 2);
   for (const [tag] of inputs) assert.match(tag, /rows="1"/);
-  const menus = [...html.matchAll(/<div class="chat-menu"[^>]*hidden>([\s\S]*?)<\/div>\s*<\/div>/g)];
-  assert.equal(menus.length, 2, 'a closed menu in each sheet');
-  for (const [, menu] of menus) {
-    assert.match(menu, /data-chat="runpanel"/);
-    assert.doesNotMatch(menu, /run-advanced|data-chat="mode"/, 'the permissions moved to Configurações');
+  const bars = [...html.matchAll(/<div class="chat-bar">([\s\S]*?)<\/div>/g)];
+  assert.equal(bars.length, 2, 'one bar in each sheet');
+  for (const [, bar] of bars) {
+    assert.match(bar, /data-chat="brain"/, 'the brain\'s line sits by Send (id146)');
+    assert.doesNotMatch(bar, /chat-run|chat-menu|runpanel|data-chat="mode"/, 'the ways menu and the permissions left the box');
   }
 });
 

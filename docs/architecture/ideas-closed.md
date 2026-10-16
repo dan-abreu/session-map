@@ -12,6 +12,7 @@ Requests that are finished: done (with the release it shipped in, or "on main") 
 - The Flow: id43, id44
 - Clarity and polish: id91
 - This registry: id68, id69
+- The DeepSeek engine: id119
 
 ## How it works
 
@@ -417,3 +418,12 @@ Nothing here is code. The closed registry is this file, read by the map like eve
   - Found: `pc31` removed the 100k window from the PC but left it in the page chats; a page chat starts at about 39k tokens and restarts at 42k to 79k after each summary, so at 100k it looped and Claude Code killed it. That chat died in the middle of the owner's third request (bring the orchestrator work of chat `7430d146`, `id116`/`or35`, and finish it), which is still not done.
   - Where it went: `pc32`.
   - Status: done (2026-10-14: `autoCompactWindow` removed from `guardSettings`; the third request of that chat is open with the owner).
+
+### The DeepSeek engine
+
+- [x] DeepSeek with the same powers as Claude inside session-map, to work straight from the map `id119`
+  - Asked: 2026-10-14 12:16 — "eu quero que o deepseek tenha os mesmo poderes que o claude dentro do session-map, assim posso trabalhar direto pelo session-map"; 2026-10-14 12:50 — "preciso que deixe tudo isso, escrito e organizado em arquitetura, tudo o que é feito em session, tem documentação"; 2026-10-14 13:09 — "quero sim um script automatico que eu nem precise pedir nada que ja observa e faz" (sobre as skills: as que o dono já tem devem valer para toda IA sozinhas)
+  - What it means: the DeepSeek Harness as a first-class engine next to Claude Code — its conversations on the map and in the list, live, readable on the page and opened in the DeepSeek app — and everything done for it written and organized in the architecture, like any other work; and the skills the owner already has shared with every engine by a script that watches and acts by itself.
+  - How to confirm it is done: with `~/.dsh` on the computer (Node 22.15+), the DeepSeek conversations appear on the map with the DeepSeek mark and the working one shows as busy with its steps; the panel reads the whole conversation; Open in DeepSeek opens the app; a skill installed in Claude appears in the DeepSeek catalog by itself within a minute (and leaves it when deleted); the architecture docs carry the request and its items.
+  - Where it went: `rd10`, `sb14`, `sv18`, `pc33`, `mm53`, and the automatic skill sync `scripts/dsh-skills-sync.mjs` (Windows task "session-map skills sync", every minute).
+  - Status: done (on main, 2026-10-14). Left for later by choice: writing into a DeepSeek conversation from the page (the Harness has no terminal command to resume one) and its cost in dollars (the price table is Anthropic's; the tokens are already read).

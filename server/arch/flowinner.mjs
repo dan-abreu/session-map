@@ -13,7 +13,7 @@ import { ownersAllOf } from './attach.mjs';
 import { programOnly } from './flow.mjs';
 import { partSections } from './parse.mjs';
 
-export const INNER_VERSION = 1;
+export const INNER_VERSION = 2;
 // boxes: pieces drawn before the rest of a folder is grouped; neighbours: boxes outside the part on each side;
 // perNeighbour: arrows one outside box sends to (or takes from) the pieces; innerEdges: arrows between pieces.
 export const INNER_LIMITS = { boxes: 14, neighbours: 8, perNeighbour: 2, innerEdges: 40, evidence: 5, how: 600, files: 60, head: 160 };
@@ -211,7 +211,7 @@ const SIDE_ORDER = { actor: 0, part: 1, free: 2, service: 3 };
 // program itself starts from; heads: { path: first sentence of its opening comment }. declaredOnly: no code was read
 // (the demo, a build that failed): one box per path the part file names.
 export function innerModel({
-  part, sections = null, files = [], links = new Map(), owners = new Map(), trace = new Map(), model, entries = [], heads = {}, limits: limitsIn = {}, declaredOnly = false,
+  part, sections = null, files = [], links = new Map(), owners = new Map(), trace = new Map(), model, entries = [], heads = {}, fileOwner = new Map(), limits: limitsIn = {}, declaredOnly = false,
 }) {
   const L = { ...INNER_LIMITS, ...limitsIn };
   const partNode = `part:${part.id}`;
@@ -365,9 +365,20 @@ export function innerModel({
     const declared = b.seeded ? [{ file: part.file, line: b.seedLine ?? null, via: 'part-doc' }] : [];
     const detected = b.files.slice(0, L.evidence).map((file) => ({ file, line: 1, via: codeIn.has(file) ? 'code' : 'file' }));
     const head = !b.folder && b.kind === 'component' && b.fileCount === 1 ? heads[b.files[0]] ?? null : null;
+    // The owner of the piece (fl16/fl17): the majority among its files' owners, with the counts for the hover.
+    const ownersTally = { ai: 0, bot: 0, script: 0 };
+    const ownerReasons = [];
+    for (const file of b.files) {
+      const o = fileOwner.get(file);
+      if (!o) continue;
+      ownersTally[o.owner] += 1;
+      if (ownerReasons.length < 3) for (const r of o.reasons ?? []) ownerReasons.push(r);
+    }
+    const [owner, ownerCount] = Object.entries(ownersTally).sort((a, b) => b[1] - a[1])[0];
     const n = newFact({
       id: b.id, kind: b.kind, name: b.name, nameKey: null, path: b.path, dir: b.dir, folder: b.folder, partId: null, level: 2, parent: partNode,
       files: b.files, fileCount: b.fileCount, other: b.other, band: bandOf(b), about: aboutOf(b), head, declared, detected,
+      owner: ownerCount > 0 ? owner : null, ownerCounts: ownersTally, ownerReasons: [...new Set(ownerReasons)].slice(0, 3),
     });
     return { ...n, origin: originOf(n), badges: badgesOf(n), declaredCount: declared.length, detectedCount: b.files.length };
   });
@@ -551,5 +562,5 @@ export function partView({ root, arch, partId, model, side = null, readFile = re
     const head = headMemo.get(key);
     if (head) heads[f.path] = head;
   }
-  return innerModel({ part, sections, files, links: side.links, owners: side.owners, trace: side.trace, model, entries: [...entries].sort(byPath), heads });
+  return innerModel({ part, sections, files, links: side.links, owners: side.owners, trace: side.trace, model, entries: [...entries].sort(byPath), heads, fileOwner: side.fileOwner ?? new Map() });
 }

@@ -7,13 +7,14 @@ import { helperSettings } from './helper.mjs';
 import { getKey, listKeys } from './keys.mjs';
 import { projectIdOf } from '../paths.mjs';
 import { othersSettings, projectClassOfId } from './others.mjs';
-import { placeByAi } from './place.mjs';
-import { reasonsHash, relationWhyByAi } from './relwhy.mjs';
+import { placeByAi, placeByRules } from './place.mjs';
+import { reasonsHash, relationWhyByRules } from './relwhy.mjs';
 import { runApiJSON } from './providers.mjs';
 import { loadStats } from './router.mjs';
 import { AiQueue } from './runner.mjs';
 
 // The map's background AI, driven from collect: conversations no item code or file placed are shown to the AI once.
+// model below is the pre-brain fallback (id146): the Cérebro's "background" row wins over it in the runner.
 const AI_DEFAULTS = { enabled: true, model: 'haiku', maxCallsPerHour: 30 };
 const lives = new Map();
 
@@ -41,7 +42,7 @@ export function lifeOf(smDir, userConfig, ai = {}) {
     apiRun: ai.apiRun ?? runApiJSON,
     keyOf: ai.keyOf ?? ((provider) => getKey(smDir, provider)),
   });
-  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set(), whys: new Map(), whyWait: new Map(), whyInFlight: new Set(), maxCalls: cfg.maxCallsPerHour, limits: { weekly: false, session: false } };
+  const life = { queue, pending: new Set(), placed: new Map(), inFlight: new Set(), whys: new Map(), maxCalls: cfg.maxCallsPerHour, limits: { weekly: false, session: false } };
   lives.set(smDir, life);
   return life;
 }
@@ -82,8 +83,9 @@ export function aiPlacements(life, smDir, projectId) {
 }
 
 // jobs: [{sessionId, digest}]. A conversation is asked again only when its digest or the list of parts changed.
+// sb17: the keyword motor decides first — no call, no cap, works with the AI off; only what it cannot decide reaches
+// the AI (and the plan limits still hold the AI back).
 export function placeChanged(life, p, jobs) {
-  if (limitHit(life)) return;
   const seen = aiPlacements(life, p.smDir, p.projectId);
   const partIds = p.arch.parts.map((x) => x.id);
   // Sigilo por projeto: the digest leaves with the class the owner gave this project, 'client' when he gave none. Read
@@ -92,13 +94,20 @@ export function placeChanged(life, p, jobs) {
   for (const { sessionId, digest } of jobs) {
     const hash = hashOf({ digest, partIds });
     if (life.inFlight.has(sessionId) || seen[sessionId]?.hash === hash) continue;
+    const byRules = placeByRules(digest, p.arch);
+    if (byRules) {
+      seen[sessionId] = { hash, partId: byRules.partId, rule: 'keyword', words: byRules.words };
+      writeAtomic(placedFile(p.smDir, p.projectId), JSON.stringify(seen));
+      continue;
+    }
+    if (limitHit(life)) return;
     life.inFlight.add(sessionId);
     track(life, (async () => {
       try {
-        const ask = (req) => life.queue.ask({ ...req, projectId: p.projectId, sensitivity });
+        const ask = (req) => life.queue.ask({ ...req, projectId: p.projectId, root: p.root ?? null, sensitivity });
         const partId = await placeByAi(digest, p.arch, ask, p.examples ?? []);
         if (partId === undefined) return;
-        seen[sessionId] = { hash, partId };
+        seen[sessionId] = { hash, partId, rule: 'ai' };
         writeAtomic(placedFile(p.smDir, p.projectId), JSON.stringify(seen));
       } finally {
         life.inFlight.delete(sessionId);
@@ -107,10 +116,9 @@ export function placeChanged(life, p, jobs) {
   }
 }
 
-// The AI's sentence for each relation (mm32): {"a|b": {hash, text}}, the hash being that of the reasons it was written from.
-// On disk, so a restart asks nothing new; a sentence whose reasons changed is not shown and is asked again.
-const WHY_PER_PASS = 5; // and never past half of the hour's calls (explainRelations)
-const WHY_RETRY_MS = 10 * 60 * 1000;
+// The motor's sentence for each relation (sb16): rendered from the reasons the map already holds, on disk with the
+// hash of what it was written from, so a restart asks nothing new and a sentence whose reasons changed is not shown
+// and is written again. No AI call and no hourly budget: the sentence is written whatever the plan limits say.
 const linkKey = (l) => `${l.a}|${l.b}`;
 export const relationWhyFile = (smDir, projectId) => join(brainDir(smDir, projectId), 'relation-why.json');
 
@@ -122,9 +130,8 @@ export function aiRelationWhys(life, smDir, projectId) {
   return life.whys.get(projectId);
 }
 
-// The relations with the sentence the AI wrote for their current reasons; the others stay as they are.
+// The relations with the sentence the motor wrote for their current reasons; the others stay as they are.
 export function withRelationWhys(life, p, links) {
-  if (!life.queue.enabled) return links;
   const seen = aiRelationWhys(life, p.smDir, p.projectId);
   return links.map((l) => {
     const stored = seen[linkKey(l)];
@@ -132,41 +139,25 @@ export function withRelationWhys(life, p, links) {
   });
 }
 
-// links come strongest first. A relation is asked again only when its reasons changed; a call that failed waits ten minutes.
-export function explainRelations(life, p, links, { now = Date.now } = {}) {
-  if (!life.queue.enabled) return;
-  if (limitHit(life)) return;
+// Writes the sentence for each relation that changed and drops the ones that went away. A relation whose reasons no
+// template covers keeps no sentence, like a failed AI call did before.
+export function explainRelations(life, p, links) {
   const seen = aiRelationWhys(life, p.smDir, p.projectId);
-  // Placement is the map's main AI work: half of the hour's calls (and the ones already on their way) are kept for it.
-  const budget = life.queue.callsLeft() - Math.floor((life.maxCalls ?? AI_DEFAULTS.maxCallsPerHour) / 2) - life.whyInFlight.size;
-  if (budget <= 0) return;
   const current = new Set(links.map(linkKey));
-  const flightOf = (l) => `${p.projectId}:${linkKey(l)}`;
-  const jobs = links.filter((l) => {
-    const hash = reasonsHash(l, p.arch);
-    const failed = life.whyWait.get(flightOf(l));
-    return !life.whyInFlight.has(flightOf(l)) && seen[linkKey(l)]?.hash !== hash && !(failed?.hash === hash && now() - failed.at < WHY_RETRY_MS);
-  }).slice(0, Math.min(WHY_PER_PASS, budget));
-  for (const link of jobs) {
+  const stale = Object.keys(seen).filter((k) => !current.has(k));
+  let changed = false;
+  for (const link of links) {
     const key = linkKey(link);
     const hash = reasonsHash(link, p.arch);
-    life.whyInFlight.add(flightOf(link));
-    track(life, (async () => {
-      try {
-        const text = await relationWhyByAi(link, p.arch, (req) => life.queue.ask({ ...req, projectId: p.projectId }), p.projectId);
-        if (text === undefined) return;
-        if (text === null) {
-          life.whyWait.set(flightOf(link), { hash, at: now() });
-          return;
-        }
-        seen[key] = { hash, text };
-        for (const k of Object.keys(seen)) if (!current.has(k)) delete seen[k];
-        writeAtomic(relationWhyFile(p.smDir, p.projectId), JSON.stringify(seen));
-      } finally {
-        life.whyInFlight.delete(flightOf(link));
-      }
-    })());
+    if (seen[key]?.hash === hash) continue;
+    const text = relationWhyByRules(link, p.arch);
+    if (text === null) continue;
+    seen[key] = { hash, text };
+    changed = true;
   }
+  if (!changed && !stale.length) return;
+  for (const k of stale) delete seen[k];
+  writeAtomic(relationWhyFile(p.smDir, p.projectId), JSON.stringify(seen));
 }
 
 export const aiStatus = (life, projectId) => life.queue.status(projectId);

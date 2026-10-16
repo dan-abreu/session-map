@@ -79,7 +79,7 @@ export function projectSections(project, rule) {
     'This is a chat about the whole project, opened at its root folder. What follows is a compact summary from session-map, not the history of its conversations: read the files when you need detail.',
     hasArch ? null : 'This project has no architecture map yet.',
     // The arsenal (orchestration, all the AIs at once): the conductor knows the tool and the routing rule.
-    'You may ask other AIs with the ask_other_ai tool (list_other_ais shows who is on): send a review to another family than the author\'s, DeepSeek only for public data, and verify what they answer.',
+    'You may ask other AIs with the ask_other_ai tool (list_other_ais shows who is on): send a review to another family than the author\'s (any AI that is switched on may take any work), and verify what they answer.',
     // The project's month against its own budget, when the person set one.
     projectBudgetLine(project.budget) || null,
   ].filter(Boolean).join('\n');

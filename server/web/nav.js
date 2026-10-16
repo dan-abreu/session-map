@@ -14,6 +14,7 @@ export const AREAS = [
   { id: 'health', scope: 'project', icon: 'check', bar: false },
   { id: 'ideas', scope: 'project', icon: 'idea', bar: false, waitsForPage: true },
   { id: 'costs', scope: 'project', icon: 'coin', bar: false },
+  { id: 'brain', scope: 'project', icon: 'spark', bar: false },
   { id: 'library', scope: 'global', icon: 'book', bar: false },
   { id: 'discover', scope: 'global', icon: 'puzzle', bar: false },
 ];

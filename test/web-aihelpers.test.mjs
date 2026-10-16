@@ -179,7 +179,7 @@ test('a high limit gets a gentle warning', async () => {
   assert.match(textOf(dialog), /This limit is high/);
 });
 
-test('DeepSeek, and OpenRouter while its model is a DeepSeek one, never claim the map\'s sorting: they say public only', async () => {
+test('every AI, DeepSeek included, says it does the map\'s routine sorting: nothing is public-only any more', async () => {
   const view = baseView({
     keys: [{ provider: 'openai', last4: '1234' }, { provider: 'deepseek', last4: '0000' }, { provider: 'openrouter', last4: '9999' }],
     others: { enabled: true, dailyUSD: 1, off: [], models: {}, keys: ['deepseek', 'openai', 'openrouter'] },
@@ -187,14 +187,14 @@ test('DeepSeek, and OpenRouter while its model is a DeepSeek one, never claim th
   });
   const dialog = await openDialog({ view, posts: [] });
   const blockOf = (id) => textOf(find(dialog, (n) => n.props.for === `ahOn-${id}`)[0]);
-  for (const id of ['deepseek', 'openrouter']) {
-    assert.doesNotMatch(blockOf(id), /routine sorting/, id);
-    assert.match(blockOf(id), /only gets public/i, id);
+  for (const id of ['deepseek', 'openrouter', 'openai']) {
+    assert.match(blockOf(id), /routine sorting/, id);
+    assert.doesNotMatch(blockOf(id), /only gets public/i, id);
   }
-  assert.match(blockOf('openai'), /routine sorting/, 'OpenAI does sort the map');
   for (const lang of Object.values(LANGS)) {
-    assert.ok('aih.publicOnly' in lang);
-    assert.doesNotMatch(lang['aih.privacy.openrouter'], /only for the map|só para a separação/i);
+    assert.ok(!('aih.publicOnly' in lang));
+    assert.doesNotMatch(lang['aih.privacy.deepseek'], /only sends it public|só manda para ela coisas públicas/i);
+    assert.doesNotMatch(lang['aih.privacy.openrouter'], /only gets public|só recebe material público/i);
   }
 });
 

@@ -11,6 +11,7 @@ On first use of a repository without a map, session-map explains what it will do
 - `server/chat/`
 - `server/brain/`
 - `server/arch/`
+- `server/bench/`
 
 ## Rules that must not break
 
@@ -19,6 +20,12 @@ On first use of a repository without a map, session-map explains what it will do
 - The inspector never says "clean" without listing what it checked.
 
 ## What's missing
+
+### Testes quebrados no working tree (14/10/2026)
+
+- [x] **Claude:** `test/bench-run.test.mjs` falha (6 asserções, "every contestant does every item in a fixed order") — o bench mudou no trabalho não commitado; acertar o teste `bi11`
+- [x] **Claude:** `test/bench-sandbox.test.mjs` falha (12 asserções, "a correct module passes every test") `bi12`
+- [x] **Claude:** `test/bench-sets-code-run.test.mjs` falha (1 asserção, "every reference passes its own tests in the sandbox") `bi13`
 
 ### First use of a repository with no map
 

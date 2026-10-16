@@ -1,11 +1,11 @@
 import test from 'node:test';
 import { STANCE } from '../server/ai/stance.mjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  DEFAULT_RUN, parseRun, runArgs, runPrompt, expectedRun, settingsRun, readRunBlock, mayReinforce,
+  DEFAULT_RUN, parseRun, runArgs, runPrompt, expectedRun, readRunBlock, mayReinforce,
   reinforcedSpend, addReinforcedSpend, reinforcedLimit, setReinforcedLimit, withRunNote, budgetLine, isWeighed, withWeighed,
 } from '../server/chat/run.mjs';
 import { conductorTail } from '../server/ai/conductor.mjs';
@@ -13,89 +13,32 @@ import { personsWords } from '../server/chat/prompt.mjs';
 
 const flag = (args, name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 
-test('parseRun keeps the six shapes and refuses anything else; a new conversation runs Autonomous', () => {
-  assert.deepEqual(DEFAULT_RUN, { kind: 'autonomous' });
+test('parseRun keeps the brain\'s two shapes and refuses anything else; a new conversation runs the brain\'s talk', () => {
+  assert.deepEqual(DEFAULT_RUN, { kind: 'talk' });
+  assert.deepEqual(parseRun({ kind: 'talk' }), { kind: 'talk' });
   assert.deepEqual(parseRun({ kind: 'autonomous', selfReinforce: false }), { kind: 'autonomous' });
-  assert.deepEqual(parseRun({ kind: 'auto' }), { kind: 'auto', selfReinforce: false });
-  assert.deepEqual(parseRun({ kind: 'auto', selfReinforce: true }), { kind: 'auto', selfReinforce: true });
-  assert.deepEqual(parseRun({ kind: 'maestro', model: 'haiku' }), { kind: 'maestro' });
-  assert.deepEqual(parseRun({ kind: 'ultracode' }), { kind: 'ultracode' });
-  assert.deepEqual(parseRun({ kind: 'settings' }), { kind: 'settings' });
-  assert.deepEqual(parseRun({ kind: 'fixed', model: 'sonnet', effort: 'medium' }), { kind: 'fixed', model: 'sonnet', effort: 'medium' });
-  for (const bad of [null, 'auto', {}, { kind: 'turbo' }, { kind: 'fixed', model: 'gpt', effort: 'low' }, { kind: 'fixed', model: 'opus', effort: 'ultracode' },
-    { kind: 'fixed', model: 'opus' }, { kind: 'fixed', model: '--dangerously-skip-permissions', effort: 'low' }]) {
+  for (const bad of [null, 'auto', {}, { kind: 'turbo' }, { kind: 'auto', selfReinforce: false }, { kind: 'maestro' },
+    { kind: 'ultracode' }, { kind: 'settings' }, { kind: 'fixed', model: 'sonnet', effort: 'medium' },
+    { kind: 'fixed', model: '--dangerously-skip-permissions', effort: 'low' }]) {
     assert.equal(parseRun(bad), null, JSON.stringify(bad));
   }
 });
 
-test('runArgs: Automatic and Maestro run Opus at high with their prompt, Ultracode uses the documented flag, Same as my Claude passes nothing', () => {
-  const auto = runArgs({ kind: 'auto', selfReinforce: false });
-  assert.equal(flag(auto, '--model'), 'opus');
-  assert.equal(flag(auto, '--effort'), 'high');
-  assert.match(flag(auto, '--append-system-prompt'), /session-map-run/);
-  assert.match(flag(auto, '--append-system-prompt'), /ask-reinforce/);
-  const maestro = runArgs({ kind: 'maestro' });
-  assert.equal(flag(maestro, '--model'), 'opus');
-  assert.equal(flag(maestro, '--effort'), 'high');
-  assert.doesNotMatch(flag(maestro, '--append-system-prompt'), /ask-reinforce/);
-  assert.deepEqual(runArgs({ kind: 'ultracode' }), ['--model', 'opus', '--effort', 'ultracode', '--append-system-prompt', STANCE]);
-  assert.deepEqual(runArgs({ kind: 'fixed', model: 'haiku', effort: 'max' }), ['--model', 'haiku', '--effort', 'max', '--append-system-prompt', STANCE]);
-  for (const kind of ['autonomous', 'auto', 'maestro']) assert.ok(runPrompt({ kind }).includes(STANCE), `${kind}: agrees or disagrees on evidence (or27)`);
-  assert.deepEqual(runArgs({ kind: 'settings' }), []);
-  assert.equal(runPrompt({ kind: 'settings' }), null);
-  assert.equal(runPrompt({ kind: 'fixed', model: 'opus', effort: 'low' }), null);
+test('runArgs: the talk chat runs on the policy\'s chat level with the stance alone, never a conductor prompt', () => {
+  const talk = runArgs({ kind: 'talk' });
+  assert.equal(flag(talk, '--model'), 'opus');
+  assert.equal(flag(talk, '--effort'), 'high');
+  assert.equal(flag(talk, '--append-system-prompt'), STANCE);
+  assert.equal(runPrompt({ kind: 'talk' }), null);
+  assert.ok(runPrompt({ kind: 'autonomous' }).includes(STANCE), 'Autonomous agrees or disagrees on evidence (or27)');
 });
 
 test('expectedRun says what will run before claude reports its model', () => {
-  const mine = { model: 'opus[1m]', effort: 'xhigh', ultracode: false };
-  assert.deepEqual(expectedRun(DEFAULT_RUN, mine), { model: 'opus', effort: 'high', ultracode: false });
-  assert.deepEqual(expectedRun({ kind: 'ultracode' }, mine), { model: 'opus', effort: 'xhigh', ultracode: true });
-  assert.deepEqual(expectedRun({ kind: 'fixed', model: 'sonnet', effort: 'low' }, mine), { model: 'sonnet', effort: 'low', ultracode: false });
-  assert.deepEqual(expectedRun({ kind: 'settings' }, mine), mine);
-});
-
-test('settingsRun reads model, effort and ultracode as Claude does: user, then project, then local; a per-model level wins', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'sm-run-dir-'));
-  const root = mkdtempSync(join(tmpdir(), 'sm-run-root-'));
-  try {
-    assert.deepEqual(settingsRun(root, dir), { model: null, effort: null, ultracode: false });
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'claude-opus-5', effortLevel: 'xhigh' }));
-    assert.deepEqual(settingsRun(root, dir), { model: 'claude-opus-5', effort: 'xhigh', ultracode: false });
-    mkdirSync(join(root, '.claude'));
-    writeFileSync(join(root, '.claude', 'settings.local.json'), JSON.stringify({ model: 'sonnet', ultracode: true, modelSettings: { sonnet: { effortLevel: 'low' } } }));
-    assert.deepEqual(settingsRun(root, dir), { model: 'sonnet', effort: 'low', ultracode: true });
-    writeFileSync(join(root, '.claude', 'settings.local.json'), '{ not json');
-    assert.deepEqual(settingsRun(root, dir), { model: 'claude-opus-5', effort: 'xhigh', ultracode: false });
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-// code.claude.com/docs/en/settings-reference#modelsettings: entries live under the canonical name and match its alias and
-// [1m]; a top-level effortLevel in the user file no longer applies to Opus 5.5 and later (it still does in project files).
-test('settingsRun matches a level saved under the canonical name to the alias, and skips the user file\'s top-level level on Opus 5.5', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'sm-run-dir-'));
-  const root = mkdtempSync(join(tmpdir(), 'sm-run-root-'));
-  const user = (s) => writeFileSync(join(dir, 'settings.json'), JSON.stringify(s));
-  try {
-    user({ model: 'opus[1m]', effortLevel: 'xhigh', modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } });
-    assert.equal(settingsRun(root, dir).effort, 'high');
-    user({ model: 'opus', modelSettings: { 'claude-opus-5': { effortLevel: 'low' }, 'claude-opus-5-5': { effortLevel: 'max' }, 'claude-sonnet-5-5': { effortLevel: 'medium' } } });
-    assert.equal(settingsRun(root, dir).effort, 'max', 'the alias is the newest of its family');
-    user({ model: 'claude-opus-5-5-20260901[1m]', modelSettings: { 'claude-opus-5-5': { effortLevel: 'low' } } });
-    assert.equal(settingsRun(root, dir).effort, 'low');
-    user({ model: 'opus[1m]', effortLevel: 'xhigh' });
-    assert.equal(settingsRun(root, dir).effort, null, 'Opus 5.5 ignores the user file\'s top-level level');
-    user({ model: 'claude-opus-5', effortLevel: 'xhigh' });
-    assert.equal(settingsRun(root, dir).effort, 'xhigh', 'older models keep it');
-    mkdirSync(join(root, '.claude'));
-    writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'low' }));
-    assert.equal(settingsRun(root, dir).effort, 'low', 'a project file\'s top-level level applies to every model');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
-  }
+  assert.deepEqual(expectedRun(DEFAULT_RUN), { model: 'opus', effort: 'high', ultracode: false });
+  assert.deepEqual(expectedRun({ kind: 'talk' }), { model: 'opus', effort: 'high', ultracode: false });
+  assert.deepEqual(expectedRun({ kind: 'autonomous' }), { model: 'opus', effort: 'high', ultracode: false });
+  assert.equal(expectedRun(null), null);
+  assert.equal(expectedRun({ kind: 'junk' }), null);
 });
 
 test('readRunBlock takes the last session-map-run fence of a reply and ignores junk', () => {
@@ -121,19 +64,18 @@ test('readRunBlock shortens a long reason at a word and marks the cut', () => {
   assert.ok(!/\s…$/.test(why) && !/[,;]…$/.test(why), why);
 });
 
-test('the Automatic prompt asks for a short reason', () => {
-  assert.match(runPrompt({ kind: 'auto', selfReinforce: false }), /"why": "a short reason[^"]*(\d+) words/);
+test('the Autonomous prompt asks for a short reason', () => {
+  assert.match(runPrompt({ kind: 'autonomous' }), /"why": "a short reason[^"]*(\d+) words/);
 });
 
-// ---- the Autonomous way (pc16) ----
+// ---- the Autonomous way (pc16), the orchestrator's own ----
 
 test('runArgs and expectedRun: Autonomous runs Opus at high with its own prompt and the tail', () => {
   const args = runArgs({ kind: 'autonomous' }, 'TAIL');
   assert.equal(flag(args, '--model'), 'opus');
   assert.equal(flag(args, '--effort'), 'high');
   assert.equal(flag(args, '--append-system-prompt'), `${runPrompt({ kind: 'autonomous' })}\nTAIL`);
-  assert.deepEqual(expectedRun({ kind: 'autonomous' }, null), { model: 'opus', effort: 'high', ultracode: false });
-  assert.notEqual(runPrompt({ kind: 'autonomous' }), runPrompt({ kind: 'auto', selfReinforce: true }));
+  assert.deepEqual(expectedRun({ kind: 'autonomous' }), { model: 'opus', effort: 'high', ultracode: false });
 });
 
 // The activity chats of the orchestrator (or02/or06) run the Autonomous way on the model and effort it picked.
@@ -151,8 +93,8 @@ test('Autonomous takes an optional model and effort from the fixed lists, Opus a
   assert.match(flag(sonnet, '--append-system-prompt'), /TAIL$/);
   assert.equal(flag(runArgs({ kind: 'autonomous', model: 'haiku' }), '--effort'), 'high');
   assert.equal(flag(runArgs({ kind: 'autonomous', effort: 'max' }), '--model'), 'opus');
-  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'fable', effort: 'max' }, null), { model: 'fable', effort: 'max', ultracode: false });
-  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'haiku' }, null), { model: 'haiku', effort: 'high', ultracode: false });
+  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'fable', effort: 'max' }), { model: 'fable', effort: 'max', ultracode: false });
+  assert.deepEqual(expectedRun({ kind: 'autonomous', model: 'haiku' }), { model: 'haiku', effort: 'high', ultracode: false });
   assert.match(runPrompt({ kind: 'autonomous' }), /Opus at high effort/);
 });
 
@@ -175,6 +117,15 @@ test('the Autonomous prompt finishes on its own, never asks, decides and lists i
   assert.match(p, /ask_other_ai/, 'the shared arsenal is there');
   assert.match(p, /"level": "direct" \| "helpers" \| "reinforced" \| "ask-reinforce"/);
   assert.match(p, /"why": "a short reason[^"]*(\d+) words/);
+});
+
+test('the conductor knows the nine specialists and their entry ingredients (or59)', () => {
+  const p = runPrompt({ kind: 'autonomous' });
+  for (const role of ['planner', 'finder', 'writer', 'coder', 'designer', 'debugger', 'reviewer', 'architect', 'guardian']) {
+    assert.match(p, new RegExp(`\\b${role}\\b`), role);
+  }
+  assert.match(p, /Specialists: planner/);
+  assert.match(p, /Vague brief denied: name defect, delivery, tests, code/);
 });
 
 test('the Autonomous prompt stays compact: with the tail of a day with nothing measured it is under 4 KB', () => {
@@ -227,35 +178,33 @@ test('the reinforced spend is counted per calendar month, and the limit lives in
 });
 
 test('a run note goes before the person\'s words when the way of working changes mid-conversation, and the page never shows it', () => {
-  const sent = withRunNote({ kind: 'maestro' }, 'Fix the header');
+  const sent = withRunNote({ kind: 'autonomous' }, 'Fix the header');
   assert.notEqual(sent, 'Fix the header');
-  assert.match(sent, /Maestro|maestro/);
+  assert.match(sent, /Autonomous/);
   assert.equal(personsWords(sent), 'Fix the header');
-  const fixed = withRunNote({ kind: 'fixed', model: 'haiku', effort: 'low' }, 'Rename it');
-  assert.equal(personsWords(fixed), 'Rename it');
+  const plain = withRunNote({ kind: 'talk' }, 'Rename it');
+  assert.equal(plain, 'Rename it', 'the talk run has no note of its own');
   assert.equal(personsWords('plain words'), 'plain words');
 });
 
-// ---- the entry brain's level on top of the run (or31) ----
+// ---- the entry brain's level on top of the run (or31/or35) ----
 
-test('withWeighed puts the brain\'s level on Autonomous and Automatic only when no model or effort was named; the prompt names the real model', () => {
+test('withWeighed puts the weighed level on the talk and the unnamed Autonomous; the prompt names the real model', () => {
   const level = { model: 'sonnet', effort: 'low' };
+  assert.equal(isWeighed({ kind: 'talk' }), true);
   assert.equal(isWeighed({ kind: 'autonomous' }), true);
-  assert.equal(isWeighed({ kind: 'auto', selfReinforce: true }), true);
-  for (const run of [{ kind: 'autonomous', model: 'opus' }, { kind: 'autonomous', effort: 'high' }, { kind: 'maestro' }, { kind: 'fixed', model: 'haiku', effort: 'low' }, { kind: 'settings' }]) {
+  for (const run of [{ kind: 'autonomous', model: 'opus' }, { kind: 'autonomous', effort: 'high' }]) {
     assert.equal(isWeighed(run), false, JSON.stringify(run));
     assert.deepEqual(withWeighed(run, level), run);
   }
-  assert.deepEqual(withWeighed({ kind: 'autonomous' }, null), { kind: 'autonomous' });
-  const auto = withWeighed({ kind: 'auto', selfReinforce: false }, level);
-  assert.deepEqual(auto, { kind: 'auto', selfReinforce: false, model: 'sonnet', effort: 'low' });
-  const args = runArgs(auto);
+  assert.deepEqual(withWeighed({ kind: 'talk' }, null), { kind: 'talk' });
+  const talk = withWeighed({ kind: 'talk' }, level);
+  assert.deepEqual(talk, { kind: 'talk', model: 'sonnet', effort: 'low' });
+  const args = runArgs(talk);
   assert.deepEqual([flag(args, '--model'), flag(args, '--effort')], ['sonnet', 'low']);
-  assert.match(flag(args, '--append-system-prompt'), /You run on Sonnet at low effort/);
-  assert.deepEqual(expectedRun(auto, null), { model: 'sonnet', effort: 'low', ultracode: false });
+  assert.equal(flag(args, '--append-system-prompt'), STANCE);
+  assert.deepEqual(expectedRun(talk), { model: 'sonnet', effort: 'low', ultracode: false });
   assert.match(runPrompt(withWeighed({ kind: 'autonomous' }, { model: 'haiku', effort: 'low' })), /on Haiku at low effort/);
-  // The plain run is what the page sends and what is saved: parseRun never lets a level in through Automatic.
-  assert.deepEqual(parseRun({ kind: 'auto', model: 'haiku', effort: 'low' }), { kind: 'auto', selfReinforce: false });
 });
 
 test('the weighed Autonomous prompt with its tail stays under 4 KB at every level', () => {

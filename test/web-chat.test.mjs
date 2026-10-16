@@ -24,6 +24,7 @@ class El {
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   fire(type, evt = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, ...evt }); }
   replaceChildren(...cs) { this.children = cs; }
+  append(...cs) { this.children.push(...cs); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   removeAttribute(k) { delete this.attrs[k]; }
   contains(other) { return walk(this).includes(other); }
@@ -42,13 +43,12 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatList': 'list', '#chatNote': 'note', '[data-close="chat"]': 'close', '#chatWhere': 'where', '#chatDot': 'dot', '#chatLive': 'live',
-  '#chatRun': 'run', '#chatRunPanel': 'runpanel', '#chatMenu': 'menu', '#chatMore': 'more', '#chatMoreMenu': 'moremenu',
+  '#chatBrain': 'brain', '#chatMore': 'more', '#chatMoreMenu': 'moremenu',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
   const byRole = new Map(Object.entries(ROLES).map(([s, role]) => [`[data-chat="${role}"]`, parts.get(s)]));
-  // As in the page, the way's panel sits inside the menu the button opens, and Stop in the working line.
-  parts.get('#chatMenu').children = [parts.get('#chatRunPanel')];
+  // Stop sits in the working line.
   parts.get('#chatLive').children = [parts.get('#chatStatus'), parts.get('#chatStop')];
   const root = new El();
   root.hidden = true;
@@ -127,7 +127,7 @@ test('opening a part lists the conversations the page opened there, and picking 
   chat.open({ projectId: 'acme-shop', title: 'New chat in Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
   await settle();
   assert.ok(calls.some((c) => c.path === '/api/chat/list?projectId=acme-shop&partId=checkout'));
-  const picks = walk(part('#chatList')).filter((e) => e.tag === 'button' && e.attrs.onclick);
+  const picks = walk(part('#chatList')).filter((e) => e.tag === 'button' && String(e.attrs?.class ?? '').includes('link-row'));
   assert.equal(picks.length, 2);
   assert.ok(text(picks[0]).includes('Second question'), 'the one used last comes first');
   assert.ok(text(picks[1]).includes('First question'));
@@ -143,7 +143,7 @@ test('opening a part lists the conversations the page opened there, and picking 
   part('#chatForm').fire('submit');
   await settle();
   const start = calls.find((c) => c.path === '/api/chat/start');
-  assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', run: { kind: 'settings' }, text: 'And the retry' });
+  assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', text: 'And the retry' });
 });
 
 test('a reload reopens the saved conversation of this project; closing the sheet forgets it', async () => {
@@ -207,7 +207,7 @@ test('a reopened running conversation replays only the events after its history,
 });
 
 test('a reopened running conversation still takes the header events from before its history, and shows it is working (pc13)', async () => {
-  const live = { ...HISTORY, chatKey: KEY, fromEventId: 5, running: true, run: { kind: 'auto', selfReinforce: false } };
+  const live = { ...HISTORY, chatKey: KEY, fromEventId: 5, running: true };
   const { streams } = server({ [`GET /api/chat/history/${S1}`]: () => live });
   const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
   const { chat, part } = makeChat({ storage });
@@ -215,10 +215,13 @@ test('a reopened running conversation still takes the header events from before 
   await settle();
   assert.equal(part('#chatStop').hidden, false, 'its turn is still running, though its message is in the history');
   assert.equal(part('#chatLive').hidden, false, 'the working line says so');
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.ok(!text(part('#chatRunPanel')).includes('Sonnet 5.5'));
-  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-sonnet-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 3);
-  assert.ok(text(byRun(part('#chatRunPanel'), 'line')).includes('Sonnet 5.5'), 'the model claude reported, from before the history\'s end');
+  assert.equal(part('#chatBrain').hidden, true, 'no run event yet: the brain\'s line is quiet');
+  sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-sonnet-5-5', effort: 'high', brain: { phase: 'build', why: 'money' }, costUSD: 1.5 }, 3);
+  assert.equal(part('#chatBrain').hidden, false);
+  const line = text(part('#chatBrain'));
+  assert.ok(line.includes('Sonnet 5.5'), 'the model claude reported, from before the history\'s end');
+  assert.ok(line.includes('run.effort.high') && !line.includes('run.brain.'), 'the reasoning, not the entry brain\'s why');
+  assert.ok(part('#chatBrain').attrs.title.includes('run.brain.money'), 'the why rides in the tooltip');
 });
 
 test('events that arrive together are drawn once, on the next frame (pc13)', async () => {
@@ -301,7 +304,7 @@ test('"New conversation" is in the ⋯ once the sheet holds a conversation, and 
   assert.equal(fresh, 1);
   chat.open({ projectId: 'acme-shop', title: 'New project chat', intro: 'intro', newChat, start: { node: { kind: 'project' } } });
   await settle();
-  walk(part('#chatList')).find((e) => e.tag === 'button' && e.attrs.onclick).attrs.onclick();
+  walk(part('#chatList')).find((e) => e.tag === 'button' && String(e.attrs?.class ?? '').includes('link-row')).attrs.onclick();
   await settle();
   assert.ok(newRow(), 'one reopened from the panel list keeps it');
   chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { sessionId: S1 } });
@@ -336,7 +339,7 @@ test('a new chat about a box says what to ask in the box to write in, and its re
   assert.equal(part('#chatInput').value, 'Explain Checkout');
   assert.ok(!calls.some((c) => c.path === '/api/chat/start'), 'nothing is sent until the person presses Send');
   chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', starters: ['Explain Checkout'], start: { sessionId: S1 } });
-  assert.equal(walk(part('#chatLog')).filter((e) => e.tag === 'button').length, 0, 'a conversation picked up again offers none');
+  assert.equal(walk(part('#chatLog')).filter((e) => e.tag === 'button' && !String(e.attrs?.class ?? '').includes('act-btn')).length, 0, 'a conversation picked up again offers none');
   assert.equal(part('#chatInput').placeholder, 'chat.placeholder', 'and without its own words the box says the usual');
   await settle();
 });
@@ -348,7 +351,7 @@ test('a ready request fills the box and goes with the point in the first message
   assert.equal(part('#chatInput').value, 'Create the architecture map.');
   part('#chatForm').fire('submit');
   await settle();
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body, { projectId: 'acme-shop', node: { kind: 'create-arch' }, mode: 'settings', run: { kind: 'autonomous' }, text: 'Create the architecture map.' });
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body, { projectId: 'acme-shop', node: { kind: 'create-arch' }, mode: 'settings', text: 'Create the architecture map.' });
 });
 
 test('"use this mode on the whole PC" waits for a real mode, then hands it to the page', async () => {
@@ -434,11 +437,10 @@ test('a conversation that lives in VS Code reads here with its note and buttons;
   assert.equal(chat.current(), null);
 });
 
-// ---- how the conversation runs: header, Automatic / Manual, folded blocks (plano-v02 item 12) ----
+// ---- how the conversation runs (id146): the brain's line by Send ----
 
 const byRun = (el, name) => walk(el).find((e) => e.attrs?.['data-run'] === name);
-const MINE = { model: 'opus[1m]', effort: 'xhigh', ultracode: false };
-const LIST_RUN = { chats: [], settings: { mode: 'default', downgraded: false }, mine: MINE, reinforce: { limitUSD: 20, spentUSD: 3 } };
+const LIST_RUN = { chats: [], settings: { mode: 'default', downgraded: false }, reinforce: { limitUSD: 20, spentUSD: 3 } };
 const openPart = (chat) => chat.open({ projectId: 'acme-shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
 const send = async (part, words) => {
   part('#chatInput').value = words;
@@ -446,66 +448,67 @@ const send = async (part, words) => {
   await settle();
 };
 
-test('a new conversation shows Autonomous on its button by Send, says model and level inside the menu, and the first message carries that choice', async () => {
+test('a new conversation sends no run of its own: the Cérebro decides, and the first message carries only the words and the mode', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  const button = text(part('#chatRun'));
-  assert.ok(button.includes('run.way.autonomous'));
-  assert.ok(!button.includes('Opus') && !button.includes('run.effort.high'), 'the button says only the way: "Autônomo ▾"');
-  assert.match(byRun(part('#chatRun'), 'toggle').attrs.class, /tone-autonomous/);
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.ok(text(part('#chatRunPanel')).includes('run.pathHint.autonomous'), 'the way says in one sentence what it does');
-  assert.ok(text(byRun(part('#chatRunPanel'), 'line')).includes('Opus') && text(byRun(part('#chatRunPanel'), 'line')).includes('run.effort.high'), 'the model and the level are the quiet line of the menu');
   await send(part, 'Fix the button');
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'autonomous' });
+  const body = calls.find((c) => c.path === '/api/chat/start').body;
+  assert.equal('run' in body, false, 'no way, no model chips: the Cérebro routes (id146)');
+  assert.equal(body.mode, 'settings');
+  assert.equal(body.text, 'Fix the button');
 });
 
-test('the run menu has three ways, Autonomous chosen by default; Automatic and Manual are one press away, and Manual keeps its last model', async () => {
-  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+test('the brain\'s line by Send is quiet until the run event, then says the model and the reasoning; the why is in the tooltip', async () => {
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  const pressed = () => ['autonomous', 'auto', 'manual'].map((p) => byRun(part('#chatRunPanel'), `path-${p}`).attrs['aria-checked']);
-  assert.deepEqual(pressed(), ['true', 'false', 'false']);
-  for (const p of ['autonomous', 'auto', 'manual']) {
-    const btn = byRun(part('#chatRunPanel'), `path-${p}`);
-    assert.ok(text(btn).includes(`run.path.${p}`) && text(btn).includes(`run.pathHint.${p}`), `${p}: its name and one plain sentence, in the same button`);
-  }
-  assert.equal(byRun(part('#chatRunPanel'), 'limit'), undefined, 'the monthly limit lives in Configurações');
-
-  byRun(part('#chatRunPanel'), 'path-auto').attrs.onclick();
-  assert.deepEqual(pressed(), ['false', 'true', 'false']);
-  assert.ok(text(part('#chatRun')).includes('run.way.auto'));
-  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
-  assert.deepEqual(pressed(), ['false', 'false', 'true']);
-  assert.ok(text(part('#chatRun')).includes('run.path.manual'));
-  byRun(part('#chatRunPanel'), 'model-opus').attrs.onclick();
-  byRun(part('#chatRunPanel'), 'path-autonomous').attrs.onclick();
-  assert.deepEqual(pressed(), ['true', 'false', 'false']);
-  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
-  assert.ok(text(part('#chatRun')).includes('Opus'), 'Manual comes back to the last model picked');
-  await send(part, 'Go');
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'fixed', model: 'opus', effort: 'medium' });
+  await send(part, 'Change the sign in');
+  assert.equal(part('#chatBrain').hidden, true);
+  sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', brain: { phase: 'build', why: 'money' }, costUSD: 0.1 }, 1);
+  assert.equal(part('#chatBrain').hidden, false);
+  const line = text(part('#chatBrain'));
+  assert.ok(line.includes('Opus 5.5') && line.includes('run.effort.high') && !line.includes('run.brain.'), line);
+  assert.equal(part('#chatBrain').attrs.title, 'chat.brainTitle\nchat.brainWhy(run.brain.money)', 'the why rides in the tooltip');
 });
 
-test('reopening an Autonomous conversation, Manual still offers a manual way, not Autonomous again', async () => {
-  const live = { ...HISTORY, chatKey: KEY, running: false, run: { kind: 'autonomous' } };
-  server({ [`GET /api/chat/history/${S1}`]: () => live });
-  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
-  const { chat, part } = makeChat({ storage });
-  chat.restore('acme-shop');
+test('a run event without a brain weight still names the model and the reasoning, never a why', async () => {
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
   await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
-  assert.equal(byRun(part('#chatRunPanel'), 'path-manual').attrs['aria-checked'], 'true');
-  assert.ok(text(part('#chatRun')).includes('run.path.manual'), 'one model at one level, never autonomous');
+  await send(part, 'Hi');
+  sse(streams.at(-1), 'run', { run: { kind: 'autonomous', model: 'sonnet', effort: 'medium' }, model: 'claude-sonnet-5-5', effort: 'medium', brain: null, costUSD: 0 }, 1);
+  const line = text(part('#chatBrain'));
+  assert.ok(line.includes('Sonnet 5.5') && line.includes('run.effort.medium') && !line.includes('run.brain.'), line);
+  assert.equal(part('#chatBrain').attrs.title, 'chat.brainTitle', 'no why to add');
+});
+
+test('the folded steps line names the specialists that worked (id148)', async () => {
+  const agents = [
+    { id: 'coder', label: 'Developer', labelPt: 'Desenvolvedor', kinds: ['code', 'test'] },
+    { id: 'reviewer', label: 'Reviewer', labelPt: 'Revisor', kinds: ['review'] },
+  ];
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }), 'GET /api/ai/brain': () => ({ ok: true, agents }) });
+  const { chat, part } = makeChat();
+  openPart(chat);
+  await settle();
+  await send(part, 'Fix the button');
+  const stream = streams.at(-1);
+  const at = new Date().toISOString();
+  sse(stream, 'tool', { id: 't1', name: 'Agent', phase: 'use', step: { kind: 'agent', target: '[code] fix the header' }, input: '{"description":"[code] fix the header"}', ts: at }, 1);
+  sse(stream, 'tool', { id: 't2', name: 'Agent', phase: 'use', step: { kind: 'agent', target: '[code] add tests' }, input: '{"description":"[code] add tests"}', ts: at }, 2);
+  sse(stream, 'tool', { id: 't3', name: 'Agent', phase: 'use', step: { kind: 'agent', target: '[review] check it' }, input: '{"description":"[review] check it"}', ts: at }, 3);
+  await settle();
+  const line = text(part('#chatLog'));
+  assert.ok(line.includes('chat.steps.role(2,Developer)'), line);
+  assert.ok(line.includes('chat.steps.role(1,Reviewer)'), line);
 });
 
 test('a step the Autonomous way left for the person shows as a line without buttons, and the chat keeps working', async () => {
-  const live = { ...HISTORY, chatKey: KEY, running: true, run: { kind: 'autonomous' } };
+  const live = { ...HISTORY, chatKey: KEY, running: true };
   const { streams } = server({ [`GET /api/chat/history/${S1}`]: () => live });
   const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
   const { chat, part } = makeChat({ storage });
@@ -520,35 +523,7 @@ test('a step the Autonomous way left for the person shows as a line without butt
   assert.equal(part('#chatStatus').dataset.state, 'working', 'not waiting for a permission');
 });
 
-test('the button opens its menu and keeps focus: Esc or a press outside closes it and focus goes back to the button', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
-  const { chat, part } = makeChat();
-  openPart(chat);
-  await settle();
-  const toggle = byRun(part('#chatRun'), 'toggle');
-  assert.equal(part('#chatMenu').hidden, true);
-  assert.equal(toggle.attrs['aria-expanded'], 'false');
-  toggle.attrs.onclick();
-  assert.equal(byRun(part('#chatRun'), 'toggle'), toggle, 'the same button after a redraw, so the keyboard focus is not lost');
-  assert.equal(part('#chatMenu').hidden, false);
-  assert.equal(toggle.attrs['aria-expanded'], 'true');
-  const menu = text(part('#chatRunPanel'));
-  for (const words of ['run.path.auto', 'run.path.manual']) assert.ok(menu.includes(words), words);
-  pointerDown(walk(part('#chatRunPanel')).at(-1));
-  assert.equal(part('#chatMenu').hidden, false, 'a press inside the menu leaves it open');
-  part('#chatMenu').fire('keydown', { key: 'Escape', stopPropagation() {} });
-  assert.equal(part('#chatMenu').hidden, true);
-  assert.equal(toggle.attrs['aria-expanded'], 'false');
-  assert.equal(document.activeElement, toggle, 'Esc gives the focus back to the button');
-  toggle.attrs.onclick();
-  pointerDown(new El());
-  assert.equal(part('#chatMenu').hidden, true, 'a press anywhere else closes it');
-  toggle.attrs.onclick();
-  pointerDown(toggle);
-  assert.equal(part('#chatMenu').hidden, false, 'the button\'s own press is left to its click, which toggles it');
-});
-
-test('both sheets: nothing about how the chat runs sits above the conversation; the button and its menu sit by Send', async () => {
+test('both sheets: nothing about how the chat runs sits above the conversation; the brain\'s line sits by Send, before it', async () => {
   const { readFileSync } = await import('node:fs');
   const html = readFileSync(new URL('../server/web/index.html', import.meta.url), 'utf8');
   for (const id of ['chat', 'flowChat']) {
@@ -557,36 +532,21 @@ test('both sheets: nothing about how the chat runs sits above the conversation; 
     const top = sheetHtml.slice(0, sheetHtml.indexOf('data-chat="log"'));
     for (const role of ['run', 'runpanel', 'menu']) assert.ok(!top.includes(`data-chat="${role}"`), `${id}: no ${role} above the conversation`);
     const bar = sheetHtml.slice(sheetHtml.indexOf('class="chat-bar"'), sheetHtml.indexOf('data-chat="send"'));
-    for (const role of ['run', 'menu', 'runpanel']) assert.ok(bar.includes(`data-chat="${role}"`), `${id}: ${role} sits in the bar, before Send`);
+    assert.ok(bar.includes('data-chat="brain"'), `${id}: the brain's line sits in the bar, before Send`);
+    for (const role of ['run', 'menu', 'runpanel']) assert.ok(!bar.includes(`data-chat="${role}"`), `${id}: no ${role} in the bar`);
   }
 });
 
-test('the advanced ways, the permission mode and "use in every Claude" live together in Configurações (pc19)', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
-  const { chat } = makeChat();
-  openPart(chat);
-  await settle();
-  const { sheetCtl, dialog } = makeSettings();
-  await sheetCtl.open(chat.settings());
-  for (const tag of ['mode', 'pcmode', 'way-maestro', 'way-ultracode', 'way-settings']) assert.ok(bySet(dialog, tag), tag);
-  const adv = walk(dialog).find((e) => e.tag === 'details');
-  assert.ok(!adv.attrs.open, 'the advanced ways are folded while none is in use');
-  bySet(dialog, 'way-maestro').attrs.onchange();
-  await settle();
-  assert.ok(walk(dialog).find((e) => e.tag === 'details').attrs.open, 'open while one of them is in use');
-});
-
-test('choosing Manual shows its model and level in place; the other two ways put them away', async () => {
+test('Configurações keeps the permissions, the limit and the alerts; nothing about the ways of working', async () => {
   server({ 'GET /api/chat/list': () => LIST_RUN });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.equal(byRun(part('#chatRunPanel'), 'model-sonnet'), undefined);
-  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
-  assert.ok(byRun(part('#chatRunPanel'), 'model-sonnet') && byRun(part('#chatRunPanel'), 'effort-medium'));
-  byRun(part('#chatRunPanel'), 'path-auto').attrs.onclick();
-  assert.equal(byRun(part('#chatRunPanel'), 'model-sonnet'), undefined);
+  const { sheetCtl, dialog } = makeSettings();
+  await sheetCtl.open(chat.settings());
+  for (const tag of ['mode', 'pcmode', 'limit', 'limit-save']) assert.ok(bySet(dialog, tag), tag);
+  assert.equal(bySet(dialog, 'self'), undefined, '"may reinforce on its own" left with the ways');
+  assert.equal(text(dialog).includes('settings.permissions'), true, 'the permissions stay in Configurações');
 });
 
 test('the header is one line: the title, then ⋯ with rename, archive and open, once the conversation has an id', async () => {
@@ -625,67 +585,6 @@ test('the header is one line: the title, then ⋯ with rename, archive and open,
   assert.equal(part('#chatMoreMenu').hidden, true, 'a press elsewhere closes it');
 });
 
-test('Manual: the model and the level say when to use them; a fixed model and effort go with the first message and show on the button', async () => {
-  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
-  const { chat, part } = makeChat();
-  openPart(chat);
-  await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.equal(part('#chatMenu').hidden, false);
-  byRun(part('#chatRunPanel'), 'path-manual').attrs.onclick();
-  assert.equal(byRun(part('#chatRunPanel'), 'model-haiku').attrs.title, 'run.modelHint.haiku');
-  byRun(part('#chatRunPanel'), 'model-haiku').attrs.onclick();
-  byRun(part('#chatRunPanel'), 'effort-low').attrs.onclick();
-  assert.ok(text(part('#chatRunPanel')).includes('run.effortHint.low'));
-  const head = text(part('#chatRun'));
-  assert.ok(head.includes('Haiku') && head.includes('run.path.manual') && !head.includes('run.effort.low'), 'the button: "Manual · Haiku"');
-  assert.ok(text(byRun(part('#chatRunPanel'), 'line')).includes('run.effort.low'), 'the level: inside the menu');
-  await send(part, 'Rename it');
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'fixed', model: 'haiku', effort: 'low' });
-});
-
-test('Ultracode waits for a confirmation that warns about the cost; cancelling keeps the way it was', async () => {
-  const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
-  const { chat, part } = makeChat();
-  openPart(chat);
-  await settle();
-  const { sheetCtl, dialog } = makeSettings();
-  await sheetCtl.open(chat.settings());
-  bySet(dialog, 'way-maestro').attrs.onchange();
-  await settle();
-  for (const hint of ['run.hint.maestro', 'run.hint.ultracode', 'run.hint.settings(Opus 1M,run.effort.xhigh)']) assert.ok(text(dialog).includes(hint), hint);
-  bySet(dialog, 'way-ultracode').attrs.onchange();
-  assert.ok(text(dialog).includes('run.ultra.warn'));
-  assert.ok(text(part('#chatRun')).includes('run.way.maestro'), 'not applied before the OK');
-  bySet(dialog, 'ultra-no').attrs.onclick();
-  assert.ok(!text(dialog).includes('run.ultra.warn'));
-  bySet(dialog, 'way-ultracode').attrs.onchange();
-  bySet(dialog, 'ultra-yes').attrs.onclick();
-  assert.ok(text(part('#chatRun')).includes('run.way.ultracode'));
-  await send(part, 'Rebuild the sign in');
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'ultracode' });
-});
-
-test('on a running conversation a new choice goes to the server at once, and the button and its menu follow the run events with the cost', async () => {
-  const live = { ...HISTORY, chatKey: KEY, run: { kind: 'auto', selfReinforce: false }, mine: MINE, reinforce: { limitUSD: null, spentUSD: 0 }, costUSD: 0.2 };
-  const { calls, streams } = server({ [`GET /api/chat/history/${S1}`]: () => live, [`POST /api/chat/${KEY}/run`]: (body) => ({ run: body.run }) });
-  const storage = memoryStorage({ 'sm.chat': JSON.stringify({ projectId: 'acme-shop', sessionId: S1, title: 'Second question' }) });
-  const { chat, part } = makeChat({ storage, money: (usd) => `$${usd.toFixed(2)}` });
-  chat.restore('acme-shop');
-  await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  assert.ok(text(part('#chatRunPanel')).includes('run.lineCost($0.20)'), 'the cost so far, before any event');
-  sse(streams.at(-1), 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'reinforced', why: 'mexe no login', costUSD: 1.5 }, 1);
-  const menu = text(part('#chatRunPanel'));
-  assert.ok(menu.includes('Opus 5.5'));
-  assert.ok(menu.includes('run.level.reinforced(mexe no login)') && menu.includes('$1.50'), 'the open menu follows the run');
-  const { sheetCtl, dialog } = makeSettings();
-  await sheetCtl.open(chat.settings());
-  bySet(dialog, 'self').attrs.onchange();
-  await settle();
-  assert.deepEqual(calls.find((c) => c.path === `/api/chat/${KEY}/run`).body, { run: { kind: 'auto', selfReinforce: true } });
-});
-
 test('Configurações shows the monthly limit and what was used, from the same place as Home, and saves a new limit', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'GET /api/settings/reinforced-limit': () => ({ limitUSD: 20, spentUSD: 3 }), 'POST /api/settings/reinforced-limit': (body) => ({ limitUSD: body.usd }) });
   const toasts = [];
@@ -712,7 +611,7 @@ test('a reply folds its status line and session-map card into chips; an ask to r
   const stream = streams.at(-1);
   const reply = '**Skills:** none · **Agentes:** none\n\nThis touches the sign in.\n\n```session-map\n{"title":"Sign in","doing":"Waiting for the OK"}\n```\n\n```session-map-run\n{"level":"ask-reinforce","why":"sign in","estimateUSD":4}\n```';
   sse(stream, 'text', { text: reply, partial: false }, 1);
-  sse(stream, 'run', { run: { kind: 'auto', selfReinforce: false }, model: 'claude-opus-5-5', effort: 'high', level: 'ask-reinforce', why: 'sign in', estimateUSD: 4, costUSD: 0.1 }, 2);
+  sse(stream, 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', level: 'ask-reinforce', why: 'sign in', estimateUSD: 4, costUSD: 0.1 }, 2);
   sse(stream, 'turn-end', { costUSD: 0.1 }, 3);
   const log = part('#chatLog');
   const shown = text(log);
@@ -776,7 +675,7 @@ test('a conversation a restart cut off says so, and Continue picks it up with on
   const { chat, part } = makeChat();
   chat.open({ projectId: 'acme-shop', title: 'Second question', start: { sessionId: S1 } });
   await settle();
-  assert.equal(part('#chatStatus').dataset.state, 'interrupted');
+  assert.equal(part('#chatStatus').dataset.state, 'clash', 'the state line says so, in the cut-off colour');
   assert.equal(part('#chatDot').attrs['aria-label'], 'chat.state.interrupted', 'the header\'s dot says it');
   assert.equal(part('#chatDot').dataset.state, 'clash');
   const cont = walk(part('#chatLog')).find((e) => e.attrs['data-sig-act'] === 'continue');
@@ -807,11 +706,12 @@ test('on a phone a conversation opens tall, below the tabs, not squeezed under t
   assert.match(phoneChat, /top: 96px/, 'the same top as a conversation read in History');
 });
 
-test('the head of the run menu draws no stray empty child: a browser would write "null" there', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
+test('the brain\'s line draws no stray empty child: a browser would write "null" there', async () => {
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  byRun(part('#chatRun'), 'toggle').attrs.onclick();
-  for (const el of walk(part('#chatRunPanel'))) assert.ok(el.children.every((c) => c !== null && c !== undefined), `${el.tag}: no null child`);
+  await send(part, 'Fix it');
+  sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', brain: { phase: 'build', why: 'build' }, costUSD: 0 }, 1);
+  for (const el of walk(part('#chatBrain'))) assert.ok(el.children.every((c) => c !== null && c !== undefined), `${el.tag}: no null child`);
 });

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PLACE_SCHEMA, placeByAi, placePrompt } from '../server/ai/place.mjs';
-import { aiPlacements, forgetLife, lifeOf, placeChanged, placedFile, settleAi } from '../server/ai/life.mjs';
+import { PLACE_SCHEMA, placeByAi, placeByRules, placePrompt } from '../server/ai/place.mjs';
+import { aiPlacements, forgetLife, lifeOf, placeChanged, placedFile, setPlanLimits, settleAi } from '../server/ai/life.mjs';
 
 const part = (id, name, about, codePaths = []) => ({ id, name, file: `docs/architecture/${id}.md`, about, codePaths, groups: [], counts: {}, chatIds: [], workCellIds: [] });
 const ARCH = {
@@ -89,4 +89,62 @@ test('placeByAi hands the queue a check that accepts only the listed part ids or
   assert.equal(seen.valid({ partId: 'Orders' }), false);
   assert.equal(seen.valid({}), false);
   assert.equal(seen.valid(null), false);
+});
+
+// ---- the keyword motor (sb17)
+
+test('placeByRules: a digest that clearly names one part is placed by the motor, with its words as proof', () => {
+  const clear = { title: 'Basket totals', branch: null, prompts: ['sum the basket lines for the orders'], files: [], commits: [] };
+  assert.deepEqual(placeByRules(clear, ARCH), { partId: 'orders', words: ['orders', 'basket'] });
+  assert.equal(placeByRules(DIGEST, ARCH), null, 'one word alone is not enough for the motor');
+});
+
+test('placeByRules: a tie between two parts is not decided, and a silent digest is not decided', () => {
+  const tied = {
+    ...ARCH,
+    parts: [
+      part('storefront', 'Storefront', 'Basket totals live here.', []),
+      part('orders', 'Orders', 'Basket totals drive the check.', []),
+    ],
+  };
+  assert.equal(placeByRules({ ...DIGEST, prompts: ['basket totals everywhere'] }, tied), null, 'both parts say the same words');
+  assert.equal(placeByRules({ title: 'x', prompts: ['y'], files: [], commits: [] }, ARCH), null);
+});
+
+test('placeChanged: the keyword motor writes the placement with its proof and asks no AI', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-place-'));
+  try {
+    let calls = 0;
+    const run = async () => { calls++; return { ok: true, value: { partId: 'storefront' }, costUSD: 0.001 }; };
+    const p = { smDir, projectId: 'shop-abc123', arch: ARCH };
+    const life = lifeOf(smDir, {}, { bin: 'fake-claude', run });
+    placeChanged(life, p, [{ sessionId: 'a', digest: { title: 'Basket totals', branch: null, prompts: ['sum the basket lines for the orders'], files: [], commits: [] } }]);
+    await settleAi(smDir);
+    assert.equal(calls, 0);
+    const stored = aiPlacements(life, smDir, p.projectId).a;
+    assert.equal(stored.partId, 'orders');
+    assert.equal(stored.rule, 'keyword');
+    assert.ok(stored.words.includes('basket'));
+  } finally {
+    forgetLife(smDir);
+    rmSync(smDir, { recursive: true, force: true });
+  }
+});
+
+test('placeChanged: the keyword motor works with the AI off and a hit limit — it calls nothing', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-place-'));
+  try {
+    let calls = 0;
+    const run = async () => { calls++; return { ok: true, value: { partId: 'storefront' }, costUSD: 0.001 }; };
+    const p = { smDir, projectId: 'shop-abc123', arch: ARCH };
+    const life = lifeOf(smDir, { ai: { enabled: false } }, { bin: 'fake-claude', run });
+    setPlanLimits(life, { weekly: { hit: true, resetsAt: null, resetsText: null }, session: { hit: false, resetsAt: null, resetsText: null } });
+    placeChanged(life, p, [{ sessionId: 'a', digest: { title: 'Basket totals', branch: null, prompts: ['sum the basket lines for the orders'], files: [], commits: [] } }]);
+    await settleAi(smDir);
+    assert.equal(calls, 0);
+    assert.equal(aiPlacements(life, smDir, p.projectId).a.rule, 'keyword');
+  } finally {
+    forgetLife(smDir);
+    rmSync(smDir, { recursive: true, force: true });
+  }
 });

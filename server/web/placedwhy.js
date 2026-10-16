@@ -3,7 +3,7 @@
 
 const PART = {
   code: 'chat.why.code', files: 'chat.why.files', page: 'chat.why.page', ai: 'chat.why.ai',
-  owner: 'chat.why.owner', project: 'chat.why.project', none: 'chat.why.none',
+  keyword: 'chat.why.keyword', owner: 'chat.why.owner', project: 'chat.why.project', none: 'chat.why.none',
 };
 const BRANCH = {
   card: 'chat.branchWhy.card', branch: 'chat.branchWhy.branch', cwd: 'chat.branchWhy.cwd', guess: 'chat.branchWhy.guess',
@@ -14,6 +14,7 @@ export function placedWhy(chat, t, list) {
   const why = chat.partWhy ?? { rule: chat.partSource ?? 'none' };
   if (why.rule === 'code') return why.codes?.length ? t(PART.code, { codes: list(why.codes) }) : t('chat.why.codeAny');
   if (why.rule === 'files') return why.files?.length ? t(PART.files, { files: list(why.files) }) : t('chat.why.filesAny');
+  if (why.rule === 'keyword') return why.words?.length ? t(PART.keyword, { words: list(why.words) }) : t('chat.why.keywordAny');
   if (why.rule === 'owner' && why.none) return t('chat.why.ownerNone');
   return t(PART[why.rule] ?? PART.none);
 }

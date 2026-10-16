@@ -2,31 +2,23 @@ import { api } from './api.js';
 import { foldReply, quickReplies } from './chatfold.js';
 import { modelName } from './live.js';
 import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } from './transcript.js';
-import { brainLine, chatLog, chatState, checkLine, composerSize, runWords, stepCounts, stepRuns } from './views.js';
+import { brainLine, chatLog, chatState, checkLine, composerSize, contextMeter, stepCounts, stepRoles, stepRuns } from './views.js';
 import { signalCard } from './blocks.js';
 import { errorSignal } from './signals.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // What the header shows (the way it runs, the mode, the session), as opposed to the turns the transcript also holds.
 const HEADER_EVENTS = new Set(['session', 'mode', 'run']);
-// How the conversation runs (server/chat/run.mjs): Autonomous is the default of a new one (pc16). The menu by Send has
-// three ways (pc19): Autonomous, Automatic and Manual (one model at one level); the advanced ways (Maestro, Ultracode, the
-// person's own Claude) are picked in Configurações (runsettings.js).
-const DEFAULT_RUN = { kind: 'autonomous' };
-const WAYS = ['maestro', 'ultracode', 'fixed', 'settings'];
-const PATHS = ['autonomous', 'auto', 'manual'];
-const MODELS = ['haiku', 'sonnet', 'opus', 'fable'];
-const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
-const RUN_KINDS = new Set(['autonomous', 'auto', ...WAYS]);
+// The chat runs the brain's way (id146): no ways menu, no model chips. The composer's quiet line says what the brain
+// routed for this conversation (the run event's model, effort and brain), the Cérebro tab is the one place that changes it.
 // Why session-map wrote a message itself, besides the one answer to a reinforcing ask (hub.mjs, orchestra.mjs).
 const AUTO_KINDS = new Set(['inbox', 'tidy', 'orchestrator', 'opening']);
-const pathOf = (run) => (run.kind === 'fixed' ? 'manual' : PATHS.includes(run.kind) ? run.kind : 'advanced');
 // A count in words ("Fez 1 passo", "Fez 12 passos"); a translator without plurals gets the key's two forms.
 const count = (tt, key, n) => (tt.count ? tt.count(key, n) : tt(`${key}.${n === 1 ? 'one' : 'other'}`, { n }));
 // A reply that ends asking waits for the person: the header's dot turns amber.
 const endsAsking = (text) => /\?[*_\s]*$/.test(String(text ?? ''));
 const usd = (v) => `US$ ${v.toFixed(2)}`;
-// "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in the header.
+// "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in Configurações.
 const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
 const SAVED = 'sm.chat';
 // What the composer accepts like Claude Code does (the server checks the same): a few images per message.
@@ -63,7 +55,7 @@ const browserStorage = () => {
 // information about the box in place (null when there is none to show), find, more(sessionId) → [{id, label, icon?, run()}]
 // (rename or move, archive, open in a terminal, delete) once the conversation has an id, and New conversation.
 // pc19: openSettings(binding, opener) opens Configurações for this conversation (the sheet's settings() is the binding),
-// onRunChange() follows a change of the way it runs, safety: the words under its permissions.
+// safety: the words under its permissions.
 // waitingOf(sessionId) → true or false by the pill's own rule (now.js needsYou) when the page's state knows the
 // conversation, null when it does not: the header's dot waits only then, so it never shows amber where the pill does not.
 // The sheet's parts are found by their data-chat role, so the map and the workshop each have a sheet of their own; the
@@ -72,7 +64,7 @@ const browserStorage = () => {
 export function createChat({
   root, h, t, toast, errorText, onSession, onClose, storage = browserStorage(), savedKey = SAVED, relative = () => '',
   money = usd, onDraft, beforeSend, showText = (text) => text, lang = () => 'en', icon = null, commands = () => [], more = null,
-  about = null, infoTabs = null, openSettings = null, onRunChange = null, safety = 'chat.safety', waitingOf = null,
+  about = null, infoTabs = null, openSettings = null, safety = 'chat.safety', waitingOf = null,
   schedule = (fn, ms) => setTimeout(fn, ms), cancel = (id) => clearTimeout(id), readImage = readAsBase64, debounceMs = 150,
   frame = globalThis.requestAnimationFrame ? (fn) => globalThis.requestAnimationFrame(fn) : (fn) => fn(),
 }) {
@@ -85,22 +77,37 @@ export function createChat({
   const listEl = q('list');
   const noteEl = q('note');
   const whereEl = q('where');
-  const runEl = q('run');
-  const panelEl = q('runpanel');
+  const brainEl = q('brain');
   const findEl = q('find');
   const tasksEl = q('tasks');
   const attachEl = q('attach');
   const fileEl = q('filepick');
   const pendingEl = q('pending');
   const suggestEl = q('suggest');
+  // The header's title is the rename: one click (or Enter on it) opens rename or move (pc34).
+  const titleEl = q('title');
+  titleEl?.setAttribute('tabindex', '0');
+  titleEl?.setAttribute('role', 'button');
+  titleEl?.addEventListener('click', () => renameChat());
+  titleEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); renameChat(); }
+  });
+  function renameChat() {
+    const id = shownId();
+    more?.(id)?.find((a) => a.id === 'rename')?.run();
+  }
   // The header's state dot, and the one working line with Stop above the box (pc18).
   const dotEl = q('dot');
   const liveEl = q('live');
-  // The compact button by Send opens this menu (the three ways, the model and level, the cost), as Claude's model button does.
-  const menuEl = q('menu') ?? panelEl;
   const moreEl = q('more');
   const bookBtn = q('bookbtn');
   const toolsEl = q('tools');
+  // The − that minimizes the sheet to its header, and the tab bar's switch (pc34).
+  const minBtn = q('min');
+  // The quiet chip by Send with the conversation's cost so far (pc22).
+  const costEl = q('cost');
+  // The one beside it with the memory the conversation carries (pc37).
+  const memoryEl = q('memory');
   bookBtn?.addEventListener('click', () => (bookEl && !bookEl.hidden ? closeBook() : openBook()));
   const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
@@ -114,9 +121,12 @@ export function createChat({
   let returnFocus = null;
   let settings = null;
   let choice = 'settings';
-  let run = DEFAULT_RUN;
-  let lastFixed = { model: 'sonnet', effort: 'medium' };
-  let mine = null;
+  // The specialist roles (id148, or55): the catalog from the brain model (api.brain), read once per open; the steps
+  // line names the roles that worked. Null until it arrives — the steps stay plain, nothing waits on it.
+  let rolesByKind = null;
+  let rolesById = new Map();
+  // What the one button of the state line does now: 'stop' a running turn, or 'continue' one a restart cut off.
+  let stopAction = null;
   // mm22: what is drawn (items with their date lines) and the node of each, reused while the item is the same object.
   let shown = [];
   let nodes = [];
@@ -148,6 +158,9 @@ export function createChat({
   let findCount = null;
   let jumpSel = null;
   let drawing = false;
+  // pc23: the conversations opened on this point (the list above the log) and the words the person searches them by.
+  let listChats = [];
+  let listQuery = '';
   // A message arrived since the last drawing: the next one follows it down, whatever came after it in the same frame.
   let toNewest = false;
 
@@ -166,7 +179,10 @@ export function createChat({
       box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperLoading')));
       const res = await api.chatHelper(shownId(), agent.id);
       if (!res.ok) return box.replaceChildren(h('p', { class: 'helper-note' }, t()('chat.helperMissing')));
-      return box.replaceChildren(h('ol', { class: 'helper-items' }, (res.items ?? []).map((i) => tv.node(i))));
+      // The specialist's badge (id148, or55): the role line the guard injected, shown as words, never as raw text.
+      const tt = t();
+      const role = res.role ? h('p', { class: 'helper-role' }, tt('chat.helperRole', { role: lang() === 'pt-BR' ? res.role.labelPt : res.role.label })) : null;
+      return box.replaceChildren(...[role, h('ol', { class: 'helper-items' }, (res.items ?? []).map((i) => tv.node(i)))].filter(Boolean));
     },
   });
 
@@ -192,10 +208,7 @@ export function createChat({
     if (evt.type === 'draft') return onDraft?.(evt.data.text);
     log = chatLog(log, { ...evt, at: new Date().toISOString() });
     if (evt.type === 'user') toNewest = true;
-    if (['run', 'turn-end', 'session'].includes(evt.type)) {
-      renderRun();
-      renderPanel();
-    }
+    if (['run', 'turn-end', 'session'].includes(evt.type)) renderBrain();
     if (evt.type === 'session' && evt.data.state === 'started') {
       const isNew = sessionId !== evt.data.sessionId;
       sessionId = evt.data.sessionId;
@@ -246,14 +259,64 @@ export function createChat({
   }
 
   // The kinds the chat itself draws (a reply with its folded blocks, a permission, an error); every other kind is drawn by
-  // the transcript the same way History draws it.
+  // the transcript the same way History draws it. User and assistant messages carry their own actions (pc21).
   function itemView(item, isLast) {
     const tt = t();
     if (item.type === 'user' && item.auto) return autoNote(item, tt);
-    if (item.type === 'assistant') return claudeView(item, isLast);
+    if (item.type === 'assistant') return withActs(claudeView(item, isLast), item, isLast);
     if (item.type === 'permission') return permissionView(item);
     if (item.type === 'error') return h('li', { class: 'msg msg-error', role: 'alert' }, errorText(item.error));
+    if (item.type === 'user') return withActs(tv.node(item), item, isLast);
     return tv.node(item);
+  }
+
+  // ---- actions on every message (pc21): copy on all, edit on the person's own, run again on the last reply ----
+
+  function copyText(text) {
+    const done = globalThis.navigator?.clipboard?.writeText?.(String(text ?? ''));
+    if (!done) return toast(t()('chat.copyFailed'));
+    return done.then(() => toast(t()('chat.copied')), () => toast(t()('chat.copyFailed')));
+  }
+
+  // One quiet row under the message, shown on hover (always there, dimmed, on a touch screen).
+  function actsOf(item, isLast) {
+    const tt = t();
+    const acts = [];
+    if (String(item.text ?? '').trim()) {
+      acts.push(h('button', {
+        type: 'button', class: 'act-btn', 'data-act': 'copy', title: tt('chat.act.copy'), 'aria-label': tt('chat.act.copy'),
+        onclick: () => copyText(item.text),
+      }, icon ? icon('copy', 'btn-icon') : tt('chat.act.copy')));
+    }
+    if (item.type === 'user' && !item.auto && !form.hidden && !input.disabled) {
+      acts.push(h('button', {
+        type: 'button', class: 'act-btn', 'data-act': 'edit', title: tt('chat.act.edit'), 'aria-label': tt('chat.act.edit'),
+        onclick: () => {
+          input.value = item.text ?? '';
+          fitInput();
+          input.focus();
+          logEl.scrollTop = logEl.scrollHeight;
+        },
+      }, icon ? icon('rename', 'btn-icon') : tt('chat.act.edit')));
+    }
+    // Run the last turn again: the same person's message goes once more, like the big chats' regenerate.
+    if (item.type === 'assistant' && isLast && !log.running && !form.hidden) {
+      const lastUser = log?.items.findLast((i) => i.type === 'user' && !i.auto);
+      if (lastUser) {
+        acts.push(h('button', {
+          type: 'button', class: 'act-btn', 'data-act': 'again', title: tt('chat.act.regenerate'), 'aria-label': tt('chat.act.regenerate'),
+          onclick: () => { if (!sendBtn.disabled) send(lastUser.text); },
+        }, icon ? icon('redo', 'btn-icon') : tt('chat.act.regenerate')));
+      }
+    }
+    return acts.length ? h('div', { class: 'msg-acts', role: 'group', 'aria-label': tt('chat.act.label') }, acts) : null;
+  }
+
+  function withActs(node, item, isLast) {
+    if (!node) return node;
+    const acts = actsOf(item, isLast);
+    if (acts) node.append(acts);
+    return node;
   }
 
   function claudeView(item, isLast) {
@@ -301,12 +364,18 @@ export function createChat({
     const running = end === shown.length && Boolean(log?.running);
     const c = stepCounts(rows);
     const files = [c.read ? count(tt, 'chat.steps.read', c.read) : null, c.changed ? count(tt, 'chat.steps.changed', c.changed) : null].filter(Boolean).join(', ');
+    const roleText = rolesByKind ? stepRoles(rows, rolesByKind).map((r) => {
+      const role = rolesById.get(r.id);
+      const label = role ? (lang() === 'pt-BR' ? role.labelPt : role.label) : r.id;
+      return tt('chat.steps.role', { n: r.n, role: label });
+    }).join(', ') : '';
     group.li.classList.toggle('is-running', running);
     // A browser writes "null" for a null child of replaceChildren: only what is there goes in.
     group.summary.replaceChildren(...[
       icon ? icon('list', 'step-icon') : null,
       h('b', { class: 'steps-count' }, count(tt, running ? 'chat.steps.doing' : 'chat.steps.done', c.steps)),
       files ? h('span', { class: 'steps-files' }, `· ${files}`) : null,
+      roleText ? h('span', { class: 'steps-roles' }, `· ${roleText}`) : null,
       icon ? icon('next', 'steps-chev') : null,
     ].filter(Boolean));
     group.list.replaceChildren(...nodes.slice(start, end));
@@ -393,15 +462,7 @@ export function createChat({
         h('button', { type: 'button', class: 'btn', 'data-run': 'ask-no', onclick: answer('run.ask.noText') }, tt('run.ask.no'))));
   }
 
-  // ---- how the conversation runs: the compact button by Send and its menu (pc19: three ways, the quiet line, the link) ----
-
-  // One button for the life of the sheet: redrawn in place, so a click or a key leaves the focus on it.
-  const toggleEl = runEl ? h('button', {
-    type: 'button', class: 'run-toggle', 'data-run': 'toggle', 'aria-haspopup': 'dialog', 'aria-expanded': 'false',
-    'aria-controls': menuEl?.id || null, onclick: () => setMenu(!menuOpen()),
-  }) : null;
-  runEl?.replaceChildren(toggleEl);
-  const menuOpen = () => Boolean(menuEl && !menuEl.hidden);
+  // ---- how the conversation runs: the quiet line by Send with the brain's route (id146) ----
 
   // A message session-map sent on its own, in words: the answer to a reinforcing ask, or what the orchestrator's work put in
   // the chat (notes from its chats, a tidy pass, its orders, the first opening); those can be opened to read the text.
@@ -410,86 +471,21 @@ export function createChat({
     return h('li', { class: 'msg msg-auto' }, h('details', { class: 'msg-auto-note' }, h('summary', {}, tt(`run.auto.${item.auto}`)), h('p', { class: 'msg-auto-text' }, item.text)));
   }
 
-  // The button says only the way ("Autônomo"); Manual adds its model, the one thing it chose.
-  function renderRun() {
-    if (toggleEl) {
-      const tt = t();
-      const words = runWords(tt, { choice: run, info: log?.run ?? null, mine });
-      toggleEl.setAttribute('class', `run-toggle tone-${words.tone}`);
-      toggleEl.setAttribute('aria-expanded', String(menuOpen()));
-      toggleEl.setAttribute('title', tt('run.change'));
-      toggleEl.replaceChildren(...[
-        h('span', { class: 'run-way' }, run.kind === 'fixed' ? tt('run.path.manual') : words.way),
-        run.kind === 'fixed' ? h('span', { class: 'run-model' }, words.model) : null,
-        h('span', { class: 'run-caret', 'aria-hidden': 'true' }),
-      ].filter(Boolean));
-    }
-    onRunChange?.();
-  }
-
-  // Esc and a press outside close it, as a menu does; Esc gives the focus back to the button.
-  function setMenu(open, { focusBack = false } = {}) {
-    if (!menuEl) return;
-    menuEl.hidden = !open;
-    renderRun();
-    renderPanel();
-    if (!open && focusBack) toggleEl?.focus();
-  }
-
-  async function pick(next) {
-    run = next;
-    if (next.kind === 'fixed') lastFixed = { model: next.model, effort: next.effort };
-    renderRun();
-    renderPanel();
-    // Not started yet, or paused: the choice goes with the next message.
-    if (!key || !log || log.ended) return;
-    const res = await api.chatRun(key, next);
-    if (!res.ok && res.error !== 'ended') toast(errorText(res.error));
-  }
-
-  // Manual, chosen: the model and the level right under it, as two short rows of choices.
-  function fixedChoices(tt) {
-    const seg = (id, label, values, name, hint) => h('div', { class: 'run-pick' },
-      h('p', { class: 'run-pick-label', id: `${uid}-run-${id}` }, label),
-      h('div', { class: 'seg run-seg', role: 'group', 'aria-labelledby': `${uid}-run-${id}` },
-        values.map((v) => h('button', {
-          type: 'button', 'data-run': `${id}-${v}`, 'aria-pressed': String(run[id] === v), title: hint(v), onclick: () => pick({ ...run, [id]: v }),
-        }, name(v)))));
-    return h('div', { class: 'run-fixed' },
-      seg('model', tt('run.modelLabel'), MODELS, modelName, (m) => tt(`run.modelHint.${m}`)),
-      seg('effort', tt('run.effortLabel'), EFFORTS, (e) => tt(`run.effort.${e}`), (e) => tt(`run.effortHint.${e}`)),
-      h('p', { class: 'run-hint' }, tt(`run.effortHint.${run.effort}`)));
-  }
-
-  // How a way starts when chosen: Manual comes back to the model and level chosen last.
-  const firstRun = (p) => (p === 'autonomous' ? { kind: 'autonomous' } : p === 'auto' ? { kind: 'auto', selfReinforce: false } : { kind: 'fixed', ...lastFixed });
-
-  // The three ways, one plain sentence each, as one radio group (one tab stop: the chosen way, or the first); Manual opens
-  // its model and level right under it, outside the group. Then one quiet line, "Opus · alto · US$ 68 nesta conversa",
-  // and the way to the rest: "Limite do mês e permissões…".
-  function renderPanel() {
-    if (!panelEl || !menuOpen()) return;
+  // The brain's line (or31, id146): what really runs — the model and the reasoning the run event reports ("Sonnet · low").
+  // The entry brain's weight of the turn ("a chat") rides in the tooltip. The Cérebro tab is the one place that changes
+  // the route; the line only says it.
+  function renderBrain() {
+    if (!brainEl) return;
     const tt = t();
-    const path = pathOf(run);
-    const stop = PATHS.includes(path) ? path : PATHS[0];
-    const words = runWords(tt, { choice: run, info: log?.run ?? null, mine });
-    const cost = log?.costUSD ?? null;
-    panelEl.replaceChildren(...[
-      h('div', { class: 'run-paths', role: 'radiogroup', 'aria-label': tt('run.pathLabel') },
-        PATHS.map((p) => h('button', {
-          type: 'button', role: 'radio', class: 'run-path-btn', 'data-run': `path-${p}`, 'aria-checked': String(path === p), tabindex: p === stop ? '0' : '-1',
-          onclick: () => { if (path !== p) pick(firstRun(p)); },
-        }, h('span', { class: 'run-option-name' }, tt(`run.path.${p}`)), h('span', { class: 'run-hint' }, tt(`run.pathHint.${p}`))))),
-      path === 'manual' ? fixedChoices(tt) : null,
-      path === 'advanced' ? h('p', { class: 'run-advanced-now' }, tt('run.advancedNow', { way: words.way })) : null,
-      h('div', { class: 'run-foot' },
-        words.tone === 'reinforced' || words.tone === 'ask' ? h('p', { class: `run-why tone-${words.tone}` }, words.why) : null,
-        h('p', { class: 'run-line num', 'data-run': 'line' }, [brainLine(tt, words, log?.run?.brain) ?? [words.model, words.effort].filter(Boolean).join(' · '), cost !== null ? tt('run.lineCost', { cost: money(cost) }) : null].filter(Boolean).join(' · ')),
-        openSettings ? h('button', {
-          type: 'button', class: 'run-settings', 'data-run': 'settings', 'aria-haspopup': 'dialog',
-          onclick: () => { setMenu(false); openSettings(binding, toggleEl); },
-        }, h('span', {}, tt('run.settingsLink')), icon ? icon('next', 'run-settings-icon') : null) : null),
-    ].filter(Boolean));
+    const info = log?.run ?? null;
+    const model = info?.model ? modelName(info.model) : null;
+    const effort = info?.effort ? tt(`run.effort.${info.effort}`) : null;
+    const { line, why } = brainLine(tt, { model: model ?? (info?.brain ? tt('run.modelDefault') : null), effort }, info?.brain);
+    brainEl.hidden = !line;
+    if (line) {
+      brainEl.setAttribute?.('title', why ? `${tt('chat.brainTitle')}\n${tt('chat.brainWhy', { why })}` : tt('chat.brainTitle'));
+      brainEl.replaceChildren(h('span', { class: 'chat-brain-line' }, line));
+    } else brainEl.replaceChildren();
   }
 
   const modeName = (mode) => t()(`chat.modeName.${mode}`);
@@ -518,18 +514,14 @@ export function createChat({
     if (!res.ok) toast(errorText(res.error));
   }
 
-  // What Configurações reads and changes of this conversation (runsettings.js): the same object for the run menu's link and
-  // for the person's menu.
+  // What Configurações reads and changes of this conversation (runsettings.js): the same object for the ⋯ and the page's bar.
   const binding = {
     title: () => context?.title ?? '',
     safety,
     modes: MODES,
-    run: () => run,
-    pick: (next) => pick(next),
     choice: () => choice,
     setChoice: (mode) => setChoice(mode),
     claudeMode: () => settings?.mode ?? 'default',
-    mine: () => mine,
     isOpen: () => !root.hidden,
   };
 
@@ -537,7 +529,7 @@ export function createChat({
   // written here. ctx.where() is asked again on each render, so it follows the language.
   function renderWhere() {
     const where = context?.where?.() ?? null;
-    // Nothing is run from here while it is open elsewhere: the box goes, and with it the button of how it runs.
+    // Nothing is run from here while it is open elsewhere: the box goes.
     form.hidden = Boolean(where && !where.canWrite);
     if (!whereEl) return;
     whereEl.hidden = !where;
@@ -618,21 +610,67 @@ export function createChat({
     return tt('chat.live.starting');
   }
 
-  // The one working line above the box (pc18): "Trabalhando · lendo app.js [Parar]", amber while a permission waits, and
-  // "Ao vivo" while a conversation from elsewhere is mirrored. Gone when nothing runs.
+  // ---- the one state line above the box (pc18 + pc25): never dark while there is something to say ----
+
+  // What the line says, in the order the states matter: mirrored live, working (with its step and Stop), waiting for a
+  // permission, cut off (with Continue), an error, finished (with the summary), waiting for the person's answer, paused.
+  function statusView(state, items) {
+    const tt = t();
+    if (mirror) return { tone: 'mirror', parts: [h('b', {}, tt('chat.mirrorShort')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.mirror')}`)] };
+    if (log?.running) {
+      if (state.kind === 'permission') return { tone: 'waiting', parts: [h('b', {}, tt('chat.state.permission'))] };
+      return { tone: 'working', parts: [h('b', {}, tt('chat.live.working')), h('span', { class: 'chat-live-step' }, `· ${currentStep(items)}`)], action: 'stop' };
+    }
+    if (state.kind === 'interrupted') {
+      return {
+        tone: 'clash',
+        parts: [h('b', {}, tt('chat.cut')), h('span', { class: 'chat-live-step' }, `· ${tt(state.reason === 'restart' ? 'chat.cutWhy.restart' : 'chat.cutWhy.exited')}`)],
+      };
+    }
+    if (state.kind === 'error') {
+      const last = items.findLast((i) => i.type === 'error');
+      return { tone: 'clash', parts: [h('b', {}, tt('chat.errorShort')), h('span', { class: 'chat-live-step' }, `· ${errorText(last?.error ?? 'generic')}`)] };
+    }
+    const id = sessionId ?? context?.start?.sessionId ?? null;
+    const known = id && waitingOf ? waitingOf(id) : null;
+    if (state.kind === 'finished') {
+      const waiting = known === true || (known !== false && endsAsking(foldReply(items.findLast((i) => i.type === 'assistant')?.text).text));
+      return waiting
+        ? { tone: 'waiting', parts: [h('b', {}, tt('chat.waiting')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.wait.answer')}`)] }
+        : { tone: 'quiet', parts: [h('b', {}, tt('chat.finished')), ...(state.summary ? [h('span', { class: 'chat-live-step' }, `· ${state.summary}`)] : [])] };
+    }
+    if (state.kind === 'paused') return { tone: 'quiet', parts: [h('b', {}, tt('chat.waiting')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.wait.write')}`)] };
+    if (items.length) {
+      const asking = endsAsking(foldReply(items.findLast((i) => i.type === 'assistant')?.text).text);
+      return asking
+        ? { tone: 'waiting', parts: [h('b', {}, tt('chat.waiting')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.wait.answer')}`)] }
+        : { tone: 'quiet', parts: [h('b', {}, tt('chat.pausedShort')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.wait.write')}`)] };
+    }
+    return null;
+  }
+
   function renderLive(state, items) {
     const statusEl = q('status');
-    const running = Boolean(log?.running);
-    statusEl.dataset.state = mirror ? 'mirror' : state.kind;
-    if (liveEl) {
-      liveEl.hidden = !running && !mirror;
-      liveEl.dataset.state = mirror ? 'mirror' : state.kind;
-    }
     const tt = t();
-    if (mirror) return statusEl.replaceChildren(h('b', {}, tt('chat.mirrorShort')), h('span', { class: 'chat-live-step' }, `· ${tt('chat.mirror')}`));
-    if (!running) return statusEl.replaceChildren();
-    if (state.kind === 'permission') return statusEl.replaceChildren(h('b', {}, tt('chat.state.permission')));
-    return statusEl.replaceChildren(h('b', {}, tt('chat.live.working')), h('span', { class: 'chat-live-step' }, `· ${currentStep(items)}`));
+    const view = statusView(state, items);
+    const tone = view?.tone ?? 'none';
+    if (liveEl) {
+      // From the first message on the line is there: a chat never looks quiet about why nothing is running (pc25).
+      liveEl.hidden = !view;
+      liveEl.dataset.state = tone;
+    }
+    statusEl.dataset.state = tone;
+    statusEl.replaceChildren(...(view?.parts ?? []));
+    // The one button at the end of the line: Stop while a turn runs, Continue when a restart cut one off.
+    stopAction = view?.action ?? null;
+    stopBtn.hidden = !stopAction;
+    if (stopAction) {
+      const use = stopBtn.querySelector?.('use');
+      use?.setAttribute('href', stopAction === 'continue' ? '#i-next' : '#i-stop');
+      const label = stopBtn.querySelector?.('span');
+      if (label) label.textContent = tt(stopAction === 'continue' ? 'chat.continue' : 'chat.stop');
+      stopBtn.setAttribute('aria-label', tt(stopAction === 'continue' ? 'chat.continue' : 'chat.stop'));
+    }
   }
 
   // ---- find inside the conversation, and jump to a day or an hour (in the ⋯ and on Ctrl F since pc18) ----
@@ -812,15 +850,24 @@ export function createChat({
     const running = Boolean(log?.running);
     // An ended process is only paused: with its id known, the next message resumes the conversation.
     const stuck = Boolean(log?.ended) && !sessionId;
-    stopBtn.hidden = !running;
     sendBtn.disabled = running || stuck;
     input.disabled = stuck;
     // The ⋯ shows once it has something to offer (a conversation the page started a moment ago has no id yet).
     if (moreEl) moreEl.hidden = !moreActions().length;
+    // The title reads as the rename when the conversation offers one (pc34).
+    if (titleEl) {
+      const renamable = Boolean(shownId() && more?.(shownId())?.some((a) => a.id === 'rename'));
+      titleEl.classList.toggle?.('is-renamable', renamable);
+      if (renamable) titleEl.setAttribute('title', t()('chat.renameTitle'));
+      else titleEl.removeAttribute('title');
+    }
     // The book has its own button in the header, so it is one click away and not hidden in the ⋯.
     if (bookBtn) bookBtn.hidden = !(shownId() && findEl);
     renderTools();
     renderHead(state, items);
+    renderCost();
+    renderMemory();
+    renderBrain();
   }
 
   // ---- pasted and picked images ----
@@ -848,6 +895,31 @@ export function createChat({
       if (img?.data) pending.push({ media: img.media, data: img.data, url: `data:${img.media};base64,${img.data}` });
     }
     renderPending();
+  }
+
+  // ---- the quiet chip by Send with the cost so far (pc22) ----
+
+  function renderCost() {
+    if (!costEl) return;
+    const tt = t();
+    const cost = log?.costUSD;
+    costEl.hidden = !(Number.isFinite(cost) && cost > 0);
+    if (!costEl.hidden) {
+      costEl.textContent = money(cost);
+      costEl.title = tt('chat.costChip');
+    }
+  }
+
+  // ---- the quiet chip with the memory the conversation carries (pc37) ----
+
+  function renderMemory() {
+    if (!memoryEl) return;
+    const meter = contextMeter(log?.context);
+    memoryEl.hidden = !meter;
+    if (!meter) return;
+    memoryEl.textContent = meter.label;
+    memoryEl.dataset.tone = meter.tone;
+    memoryEl.title = t()('chat.memoryChip', { used: meter.used, max: meter.max, pct: meter.pct });
   }
 
   // ---- "@" for a project file and "/" for a command, as in Claude Code ----
@@ -927,7 +999,6 @@ export function createChat({
     pending = [];
     renderPending();
     closeSuggest();
-    if (menuOpen()) setMenu(false);
     log = chatLog(log, { type: 'local-send', at: new Date().toISOString(), data: { text, images: shownImages } });
     listEl.hidden = true;
     render();
@@ -943,13 +1014,33 @@ export function createChat({
     const opens = !live && !sessionId && context.orchestrator;
     const res = live
       ? await api.chatSend(key, text, images)
-      : await (opens ? api.orchestratorOpen({ projectId: context.projectId, text, ...(images.length ? { images } : {}) }) : api.chatStart({ projectId: context.projectId, ...start, mode: choice, run, text, ...(images.length ? { images } : {}) }));
+      : await (opens ? api.orchestratorOpen({ projectId: context.projectId, text, ...(images.length ? { images } : {}) }) : api.chatStart({ projectId: context.projectId, ...start, mode: choice, text, ...(images.length ? { images } : {}) }));
     if (!res.ok && !(res.error === 'busy' && res.chatKey)) {
       log = chatLog(log, { type: 'error', data: { error: res.error } });
       return render();
     }
     if (!live) watch(res.chatKey);
     return undefined;
+  }
+
+  // The specialist catalog (id148, or55): kind → role and role → words, from the brain model. A failed read leaves the
+  // steps plain; the next open asks again.
+  async function loadRoles() {
+    const ctx = context;
+    try {
+      const res = await api.brain();
+      if (!res?.ok) return;
+      const byKind = new Map();
+      const byId = new Map();
+      for (const r of res.agents ?? []) {
+        byId.set(r.id, r);
+        for (const k of r.kinds ?? []) if (!byKind.has(k)) byKind.set(k, r);
+      }
+      if (context !== ctx || root.hidden) return; // the sheet closed meanwhile: nothing to draw
+      rolesByKind = byKind;
+      rolesById = byId;
+      renderSoon();
+    } catch { /* no roles: the steps stay plain */ }
   }
 
   // The conversations the page opened on this point of the map (or branch), and what the person's Claude settings say.
@@ -962,24 +1053,56 @@ export function createChat({
     const res = await api.chatList({ projectId: ctx.projectId, ...scope });
     if (context !== ctx || !res.ok) return;
     settings = res.settings ?? null;
-    mine = res.mine ?? null;
     renderMode();
-    renderRun();
-    renderPanel();
+    renderBrain();
     const chats = res.chats ?? [];
+    listChats = chats;
     if (!chats.length || key || log?.items.length) return;
-    const tt = t();
-    listEl.replaceChildren(
-      h('li', { class: 'chat-list-head' }, ctx.listTitle ?? tt('chat.openHere')),
-      ...chats.map((c) => h('li', {},
-        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: ctx.projectId, sessionId: c.sessionId, title: c.title || ctx.title, subtitle: ctx.subtitle, newChat: ctx.newChat, listTitle: ctx.listTitle, placeholder: ctx.placeholder }) },
-          h('span', { class: 'lr-title' }, c.title || tt('chat.untitled')),
-          h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt)),
-          Number.isFinite(c.costUSD) ? h('span', { class: 'lr-cost num' }, money(c.costUSD)) : null))));
-    listEl.hidden = false;
+    renderList();
   }
 
-  const historyData = (res) => ({ messages: res.messages ?? [], items: res.items, costUSD: res.costUSD, interrupted: res.interrupted === true, running: res.running === true });
+  // The list (pc23): a search over the titles, and each row with its pin; pinned ones sit on top.
+  function renderList() {
+    const tt = t();
+    const query = listQuery.trim().toLowerCase();
+    const rows = listChats.filter((c) => !query || String(c.title ?? '').toLowerCase().includes(query));
+    const wasFocused = document.activeElement?.classList?.contains?.('chat-list-search-input') === true;
+    const search = h('input', { type: 'search', class: 'chat-list-search-input', placeholder: tt('chat.listSearch'), 'aria-label': tt('chat.listSearch'), value: listQuery });
+    search.addEventListener('input', () => { listQuery = search.value; renderList(); });
+    listEl.replaceChildren(
+      h('li', { class: 'chat-list-head' }, context?.listTitle ?? tt('chat.openHere')),
+      h('li', { class: 'chat-list-search' }, icon ? icon('search', 'chat-list-search-icon') : null, search),
+      ...(rows.length ? rows.map((c) => h('li', { class: 'chat-list-row' },
+        h('button', {
+          type: 'button', class: `list-pin${c.pinned ? ' is-pinned' : ''}`, 'aria-pressed': String(Boolean(c.pinned)),
+          title: tt(c.pinned ? 'chat.unpin' : 'chat.pin'), 'aria-label': tt(c.pinned ? 'chat.unpin' : 'chat.pin'),
+          onclick: () => pinChat(c),
+        }, icon ? icon('pin', 'btn-icon') : tt('chat.pin')),
+        h('button', { type: 'button', class: 'link-row', onclick: () => resume({ projectId: context.projectId, sessionId: c.sessionId, title: c.title || context.title, subtitle: context.subtitle, newChat: context.newChat, listTitle: context.listTitle, placeholder: context.placeholder }) },
+          h('span', { class: 'lr-title' }, c.title || tt('chat.untitled')),
+          h('span', { class: `lr-date${c.interrupted ? ' is-cut' : ''}` }, c.running ? tt('chat.running') : c.interrupted ? tt('chat.interruptedShort') : relative(c.updatedAt)),
+          Number.isFinite(c.costUSD) ? h('span', { class: 'lr-cost num' }, money(c.costUSD)) : null)))
+        : [h('li', { class: 'chat-list-none' }, tt('chat.listNone'))]));
+    listEl.hidden = false;
+    // The search re-renders on every key: the focus goes back to it, at the end of what was typed.
+    if (wasFocused) {
+      const next = listEl.querySelector?.('.chat-list-search-input');
+      next?.focus();
+      next?.setSelectionRange?.(next.value.length, next.value.length);
+    }
+  }
+
+  // Pin lives in session-map's own list (server/actions.mjs), like archive: it holds across reloads and conversations.
+  async function pinChat(c) {
+    const next = !c.pinned;
+    const res = await api.action({ action: next ? 'pin' : 'unpin', sessionId: c.sessionId });
+    if (!res.ok) return toast(errorText(res.error ?? 'generic'));
+    listChats = listChats.map((x) => (x.sessionId === c.sessionId ? { ...x, pinned: next } : x));
+    listChats.sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+    renderList();
+  }
+
+  const historyData = (res) => ({ messages: res.messages ?? [], items: res.items, costUSD: res.costUSD, context: res.context, interrupted: res.interrupted === true, running: res.running === true });
 
   // A conversation still running in VS Code or a terminal: asked again every few seconds with the version the page has,
   // so an unchanged one costs a short answer; it stops when the conversation ends or the sheet shows something else.
@@ -1009,8 +1132,7 @@ export function createChat({
       log = chatLog(log, { type: 'history', data });
       histStart = Math.min(histStart, start);
       histEnd = start + (res.items?.length ?? 0);
-      renderRun();
-      renderPanel();
+      renderBrain();
       if (res.live === false) {
         mirror = null;
         render();
@@ -1028,10 +1150,6 @@ export function createChat({
     if (context !== ctx || root.hidden || !res.ok) return;
     settings = res.settings ?? settings;
     choice = MODES.includes(res.mode) ? res.mode : 'settings';
-    // What the conversation ran with before; one from elsewhere (or older than these choices) keeps its own Claude.
-    run = RUN_KINDS.has(res.run?.kind) ? res.run : { kind: 'settings' };
-    if (run.kind === 'fixed') lastFixed = { model: run.model, effort: run.effort };
-    mine = res.mine ?? mine;
     sessionId = ctx.start.sessionId;
     rememberOpen();
     log = chatLog(log, { type: 'history', data: historyData(res) });
@@ -1040,8 +1158,7 @@ export function createChat({
     if (res.chatKey) watch(res.chatKey, Number(res.fromEventId) || 0);
     else if (res.readOnly && res.live) startMirror(ctx, res.version);
     renderMode();
-    renderRun();
-    renderPanel();
+    renderBrain();
     render();
     nearTop();
   }
@@ -1133,34 +1250,21 @@ export function createChat({
     addFiles([...(fileEl.files ?? [])]);
     fileEl.value = '';
   });
-  stopBtn.addEventListener('click', stopRun);
+  stopBtn.addEventListener('click', () => {
+    if (stopAction === 'continue') send(t()('chat.continueText'));
+    else stopRun();
+  });
   q('close').addEventListener('click', () => close());
+  // The − of the header minimizes the sheet to its header; the same − brings it back (pc34).
+  minBtn?.addEventListener('click', () => {
+    if (root.dataset?.min) { delete root.dataset.min; minBtn.title = t()('chat.min'); minBtn.setAttribute('aria-label', t()('chat.min')); }
+    else { root.dataset.min = '1'; minBtn.title = t()('chat.restore'); minBtn.setAttribute('aria-label', t()('chat.restore')); }
+  });
   // Ctrl F (⌘ F) inside the sheet finds in the conversation instead of the whole page (pc18).
   root.addEventListener?.('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || String(e.key).toLowerCase() !== 'f' || !findEl || !log?.items?.length) return;
     e.preventDefault();
     openFind();
-  });
-
-  const escMenu = (e) => {
-    if (e.key !== 'Escape' || !menuOpen()) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu(false, { focusBack: true });
-  };
-  menuEl?.addEventListener('keydown', escMenu);
-  runEl?.addEventListener('keydown', escMenu);
-  // The three ways are one choice: the arrows walk them, as in a list of radio buttons.
-  // A radio group: the arrows choose the next way as they move, and the focus follows it into the redrawn panel.
-  const radios = () => [...(panelEl.querySelectorAll?.('[role="radio"]') ?? [])];
-  panelEl?.addEventListener('keydown', (e) => {
-    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-    const at = radios().indexOf(document.activeElement);
-    if (!step || at < 0) return;
-    e.preventDefault();
-    const to = (at + step + PATHS.length) % PATHS.length;
-    if (pathOf(run) !== PATHS[to]) pick(firstRun(PATHS[to]));
-    radios()[to]?.focus();
   });
 
 // ---- the book panel (pc28): the chapters of this conversation, each opened on its own ----
@@ -1170,6 +1274,7 @@ export function createChat({
 
   function closeBook() {
     if (bookEl) bookEl.hidden = true;
+    setTab('chat');
     (moreEl && !moreEl.hidden ? moreEl : logEl).focus();
   }
 
@@ -1223,6 +1328,7 @@ export function createChat({
       findEl.after(bookEl);
     }
     bookEl.hidden = false;
+    setTab('book');
     bookEl.classList.toggle('big', bookBig);
     const body = h('div', { class: 'chat-book-body' }, h('p', { class: 'muted' }, tt('chat.bookLoading')));
     const sizeBtn = h('button', { type: 'button', class: 'icon-btn small', 'aria-label': tt(bookBig ? 'chat.bookSmaller' : 'chat.bookBigger'), title: tt(bookBig ? 'chat.bookSmaller' : 'chat.bookBigger'),
@@ -1278,13 +1384,24 @@ export function createChat({
     ].map((group) => group.filter(Boolean)).filter((group) => group.length);
   }
 
-  // Every action of the ⋯ also sits in the header as its own icon (its name in the tooltip), so nothing hides in a menu.
+  // The tab bar (pc34): each tab opens its thing whole, nothing overlaps the chat. The bar is drawn by the page
+  // (app.js), the switch is shared: 'chat', 'info-<tab>' for the box's information, 'book'.
+  function setTab(name) {
+    if (!root.dataset) return;
+    if (name === 'chat') delete root.dataset.ctab;
+    else root.dataset.ctab = name;
+    root.querySelectorAll?.('[data-ctab]')?.forEach?.((b) => b.classList?.toggle?.('is-on', b.dataset?.ctab === name));
+  }
+
+  // The header's one icon: find in the conversation (also Ctrl F); the rest lives in the ⋯ (pc34).
   function renderTools() {
     if (!toolsEl || !icon) return;
-    const acts = moreActions().flat().filter((a) => a.id !== 'book');
-    toolsEl.replaceChildren(...acts.map((a) => h('button', {
-      type: 'button', class: 'icon-btn', 'data-tool': a.id ?? null, title: a.keys ? `${a.label} (${a.keys})` : a.label, 'aria-label': a.label, onclick: () => a.run(),
-    }, icon(a.icon ?? 'more'))));
+    const tt = t();
+    const has = Boolean(log?.items?.length);
+    toolsEl.replaceChildren(...(has && findEl ? [h('button', {
+      type: 'button', class: 'icon-btn', 'data-tool': 'find', title: tt('chat.find'), 'aria-label': tt('chat.find'),
+      onclick: () => openFind(),
+    }, icon('search', 'btn-icon'))] : []));
   }
 
   function setMore(open, { focusBack = false } = {}) {
@@ -1319,7 +1436,6 @@ export function createChat({
 
   // A press anywhere outside an open menu closes it; the menu's own button is left to its click.
   document.addEventListener('pointerdown', (e) => {
-    if (menuOpen() && !menuEl.contains(e.target) && !runEl?.contains(e.target)) setMenu(false);
     if (moreMenuEl && !moreMenuEl.hidden && !moreMenuEl.contains(e.target) && !moreEl.contains(e.target)) setMore(false);
   }, true);
 
@@ -1336,9 +1452,13 @@ export function createChat({
   // new conversation takes its first message as title) and draft.
   function open(ctx) {
     if (root.hidden) returnFocus = document.activeElement;
+    // The chat opens whole: a minimized bar is a session's own state, never the default (pc34).
+    if (root.dataset?.min) delete root.dataset.min;
+    if (minBtn) { minBtn.title = t()('chat.min'); minBtn.setAttribute('aria-label', t()('chat.min')); }
     detach();
     stopMirror();
     closeSuggest();
+    setTab('chat');
     context = ctx;
     key = null;
     sessionId = null;
@@ -1348,14 +1468,15 @@ export function createChat({
     older = null;
     lastEventId = 0;
     choice = 'settings';
-    run = DEFAULT_RUN;
     findQuery = '';
     findAt = 0;
     findOpen = false;
     openSteps.clear();
     pending = [];
+    listChats = [];
+    listQuery = '';
+    stopAction = null;
     freshDrawing();
-    if (menuEl) menuEl.hidden = true;
     setMore(false);
     listEl.hidden = true;
     listEl.replaceChildren();
@@ -1367,11 +1488,12 @@ export function createChat({
     buildFind();
     renderPending();
     renderMode();
-    renderRun();
+    renderBrain();
     render();
     input.focus();
     if (ctx.start?.sessionId) loadHistory(ctx);
     else loadList(ctx);
+    loadRoles();
   }
 
   function resume(entry) {
@@ -1398,6 +1520,9 @@ export function createChat({
     open,
     close,
     isOpen: () => !root.hidden,
+    // The tab bar's switch and the book's own tab (pc34); the page draws the bar, both switch it.
+    setTab,
+    openBook,
     // What Configurações reads and changes of this conversation (pc19).
     settings: () => binding,
     // The page's state changed (a poll): the dot reads waitingOf again.
@@ -1419,8 +1544,7 @@ export function createChat({
       buildFind();
       renderPending();
       renderMode();
-      renderRun();
-      renderPanel();
+      renderBrain();
       render();
     },
   };

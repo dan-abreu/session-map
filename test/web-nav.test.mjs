@@ -5,8 +5,8 @@ import { AREAS, tabsFor, modeOf, normalizeView, iconsOf } from '../server/web/na
 
 const ids = AREAS.map((a) => a.id);
 
-test('the table has twelve areas, each id once, each with a non-empty icon', () => {
-  assert.equal(AREAS.length, 12);
+test('the table has thirteen areas, each id once, each with a non-empty icon', () => {
+  assert.equal(AREAS.length, 13);
   assert.equal(new Set(ids).size, ids.length);
   for (const a of AREAS) {
     assert.ok(['global', 'project'].includes(a.scope), a.id);
@@ -19,7 +19,7 @@ test('the table has twelve areas, each id once, each with a non-empty icon', () 
 });
 
 // Around the map (mm47): one row, Home · Map · Conversations · More; Full puts every area on the bar of a computer.
-const MORE = ['flow', 'requests', 'changes', 'health', 'costs', 'library', 'discover'];
+const MORE = ['flow', 'requests', 'changes', 'health', 'costs', 'brain', 'library', 'discover'];
 
 test('Simple: the bar shows Home, then Map and Conversations; the other areas sit under More', () => {
   const t = tabsFor({ tech: false });
@@ -32,7 +32,7 @@ test('Simple: the bar shows Home, then Map and Conversations; the other areas si
 test('Full: every area with a page is on the bar, in table order, and nothing waits under More', () => {
   const t = tabsFor({ tech: true });
   assert.deepEqual(t.global, ['home', 'library', 'discover']);
-  assert.deepEqual(t.project, ['map', 'flow', 'requests', 'convs', 'changes', 'health', 'costs']);
+  assert.deepEqual(t.project, ['map', 'flow', 'requests', 'convs', 'changes', 'health', 'costs', 'brain']);
   assert.deepEqual(t.more, []);
 });
 
@@ -51,7 +51,7 @@ test('on desktop, global + project + more is every area once but the two waiting
   for (const tech of [false, true]) {
     const t = tabsFor({ tech });
     const all = [...t.global, ...t.project, ...t.more];
-    assert.equal(all.length, 10);
+    assert.equal(all.length, 11);
     assert.deepEqual([...all].sort(), ids.filter((id) => !['route', 'ideas'].includes(id)).sort());
   }
 });

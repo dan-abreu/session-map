@@ -25,12 +25,12 @@
     { "model": "opus", "effort": "xhigh" },
     { "model": "fable", "effort": "high" }
   ],
+  "chat": { "model": "opus", "effort": "high", "why": "the chat receives the person and decides; it never moves on its own (or35)", "whyPt": "a conversa recebe a pessoa e decide; nunca troca de modelo sozinha" },
   "phases": {
-    "trivial": { "model": "haiku", "effort": "low", "why": "a greeting or one short command", "whyPt": "um cumprimento ou um comando curto" },
-    "talk": { "model": "sonnet", "effort": "low", "why": "a question or an opinion, no work", "whyPt": "uma pergunta ou uma opinião, sem trabalho a fazer" },
-    "plan": { "model": "sonnet", "effort": "medium", "why": "bench 2026-10-13 plan 8/8 (or30)", "whyPt": "planejar: o mesmo resultado medido do tipo plano (8 de 8)" },
-    "build": { "model": "sonnet", "effort": "medium", "why": "any size; high only after a failure", "whyPt": "qualquer tamanho; nível alto só depois de uma falha" },
-    "sensitive": { "model": "opus", "effort": "high", "why": "security, money or personal data, in plan or build", "whyPt": "segurança, dinheiro ou dado pessoal, no plano ou na construção" }
+    "trivial": { "why": "a greeting or one short command", "whyPt": "um cumprimento ou um comando curto" },
+    "talk": { "why": "a question or an opinion, no work", "whyPt": "uma pergunta ou uma opinião, sem trabalho a fazer" },
+    "plan": { "why": "an idea, or a medium or large request nobody approved yet", "whyPt": "uma ideia, ou um pedido médio ou grande que ninguém aprovou ainda" },
+    "build": { "why": "a go-ahead, or a small concrete change", "whyPt": "um sinal verde, ou uma mudança pequena e concreta" }
   },
   "limits": { "agentsPerWorkflow": 10 }
 }

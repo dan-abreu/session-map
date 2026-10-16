@@ -10,43 +10,43 @@ import { withRunNote } from '../server/chat/run.mjs';
 const w = (text, extra = {}) => weigh({ text, measured: sizeRequest({ text }), ...extra });
 const at = (r) => `${r.phase} ${r.model}/${r.effort}`;
 
-test('a greeting, thanks or one short command is trivial: Haiku at low', () => {
+test('a greeting, thanks or one short command is trivial, at the chat\'s one level (or35)', () => {
   for (const text of ['oi, tudo bem?', 'obrigado!', 'valeu', 'bom dia', 'thanks', 'hello', 'roda os testes', 'que horas são?']) {
-    assert.equal(at(w(text)), 'trivial haiku/low', text);
+    assert.equal(at(w(text)), 'trivial opus/high', text);
   }
 });
 
-test('a question or an opinion with no work verb is talk: Sonnet at low', () => {
+test('a question or an opinion with no work verb is talk, at the chat\'s one level', () => {
   for (const text of ['o que acha de usar Ollama?', 'por que o hub guarda os eventos?', 'como funciona o cache do conductor?', 'what do you think about Postgres?']) {
-    assert.equal(at(w(text)), 'talk sonnet/low', text);
+    assert.equal(at(w(text)), 'talk opus/high', text);
   }
   assert.equal(w('o que faz o hub?').phase, 'talk', '"faz" in "o que faz" is a question, not a go-ahead');
 });
 
-test('planning words, or a medium or large request with no go-ahead, are the plan phase: Sonnet at medium, by the bench (or30)', () => {
+test('planning words, or a medium or large request with no go-ahead, are the plan phase', () => {
   for (const text of ['vamos planejar o login', 'tenho uma ideia para o painel', 'e se a gente guardasse o resumo?', 'como poderíamos mostrar o custo?', 'vamos pensar no onboarding', 'let us plan the export']) {
-    assert.equal(at(w(text)), 'plan sonnet/medium', text);
+    assert.equal(at(w(text)), 'plan opus/high', text);
   }
-  assert.equal(at(w('um sistema novo de relatórios para o projeto inteiro')), 'plan sonnet/medium');
-  assert.equal(at(w('mexer em server/a.mjs, server/b.mjs e server/c.mjs')), 'plan sonnet/medium', 'medium, no go-ahead');
+  assert.equal(at(w('um sistema novo de relatórios para o projeto inteiro')), 'plan opus/high');
+  assert.equal(at(w('mexer em server/a.mjs, server/b.mjs e server/c.mjs')), 'plan opus/high', 'medium, no go-ahead');
 });
 
-test('a go-ahead or a small concrete change is the build phase: Sonnet at medium at any size (high only after a failure, or33)', () => {
-  assert.equal(at(w('pode construir')), 'build sonnet/medium');
-  assert.equal(at(w('corrige o título cortado em header.js')), 'build sonnet/medium');
-  assert.equal(at(w('fix the typo in README.md')), 'build sonnet/medium');
-  assert.equal(at(w('implementa isso em server/a.mjs e server/b.mjs')), 'build sonnet/medium');
-  assert.equal(at(w('pode construir', { planned: 'large' })), 'build sonnet/medium', 'a bare go-ahead after a large plan builds at the plan\'s size');
-  assert.equal(at(w('ok, pode seguir', { planned: 'medium' })), 'build sonnet/medium');
-  assert.equal(at(w('pode construir', { planned: 'small' })), 'build sonnet/medium');
+test('a go-ahead or a small concrete change is the build phase, at any size', () => {
+  assert.equal(at(w('pode construir')), 'build opus/high');
+  assert.equal(at(w('corrige o título cortado em header.js')), 'build opus/high');
+  assert.equal(at(w('fix the typo in README.md')), 'build opus/high');
+  assert.equal(at(w('implementa isso em server/a.mjs e server/b.mjs')), 'build opus/high');
+  assert.equal(at(w('pode construir', { planned: 'large' })), 'build opus/high', 'a bare go-ahead after a large plan builds at the plan\'s size');
+  assert.equal(at(w('ok, pode seguir', { planned: 'medium' })), 'build opus/high');
+  assert.equal(at(w('pode construir', { planned: 'small' })), 'build opus/high');
 });
 
-test('security, money and personal data go to Opus at high in the plan and build phases only', () => {
+test('security, money and personal data keep their why; the chat level never moves', () => {
+  assert.equal(w('corrige o bug do pagamento').why, 'money');
   assert.equal(at(w('corrige o bug do pagamento')), 'build opus/high');
   assert.equal(at(w('vamos planejar o login com senha')), 'plan opus/high');
   assert.equal(at(w('implementa o controle de dado pessoal (LGPD)')), 'build opus/high');
-  assert.equal(w('corrige o bug do pagamento').why, 'money');
-  assert.equal(at(w('o que acha de guardar a senha em texto?')), 'talk sonnet/low', 'talk stays cheap');
+  assert.equal(at(w('o que acha de guardar a senha em texto?')), 'talk opus/high');
   // The kind is read from the measure, too.
   assert.equal(at(weigh({ text: 'faz isso', measured: { ok: true, kind: 'security', size: 'medium', confidence: 'high' } })), 'build opus/high');
 });
@@ -69,10 +69,10 @@ test('why is a short key the page puts in the person\'s words', () => {
   assert.equal(w('corrige o título em header.js').why, 'build');
 });
 
-test('empty or odd input still weighs: one level up in doubt', () => {
-  assert.equal(at(weigh({ text: '', measured: null })), 'talk sonnet/low');
-  assert.equal(at(weigh({ text: 'oi' })), 'trivial haiku/low', 'works without a measure');
-  assert.equal(weigh().model, 'sonnet');
+test('empty or odd input still weighs, at the chat\'s one level', () => {
+  assert.equal(at(weigh({ text: '', measured: null })), 'talk opus/high');
+  assert.equal(at(weigh({ text: 'oi' })), 'trivial opus/high', 'works without a measure');
+  assert.equal(weigh().model, 'opus');
 });
 
 // ---- the Haiku tie-break ----
@@ -87,14 +87,14 @@ test('Haiku is asked only when the rules are unsure and the text is long', () =>
   assert.ok(haikuPrompt('x'.repeat(20000)).length < 6000, 'the text is cut');
 });
 
-test('when Haiku disagrees with the rules the higher level wins; it is ignored when sure or invalid', () => {
+test('when Haiku disagrees with the rules the bigger phase wins; it is ignored when sure or invalid', () => {
   assert.ok(LONG.length > 200);
   const rules = w(LONG);
-  assert.equal(rules.model, 'sonnet');
+  assert.equal(rules.model, 'opus');
   const up = weigh({ text: LONG, measured: sizeRequest({ text: LONG }), haiku: { phase: 'build', size: 'large', sensitive: true } });
   assert.equal(at(up), 'build opus/high');
-  const sameLevel = weigh({ text: LONG, measured: sizeRequest({ text: LONG }), haiku: { phase: 'plan', size: 'large', sensitive: false } });
-  assert.equal(at(sameLevel), 'plan sonnet/medium');
+  const samePhase = weigh({ text: LONG, measured: sizeRequest({ text: LONG }), haiku: { phase: 'plan', size: 'large', sensitive: false } });
+  assert.equal(at(samePhase), 'plan opus/high');
   // Lower than the rules: the rules stay.
   const down = weigh({ text: LONG, measured: sizeRequest({ text: LONG }), haiku: { phase: 'trivial', size: 'trivial', sensitive: false } });
   assert.equal(at(down), at(rules));
@@ -138,7 +138,7 @@ test('the plan and build directives are short English, carry no item code, and a
   // After the context block of a first message, and under the note of a changed way of working.
   const first = firstPrompt({ sections: ['Point on the map'], text: phaseNote('build', 'pode construir') });
   assert.equal(personsWords(first), 'pode construir');
-  assert.equal(personsWords(withRunNote({ kind: 'maestro' }, planned)), 'vamos planejar');
+  assert.equal(personsWords(withRunNote({ kind: 'talk' }, planned)), 'vamos planejar');
 });
 
 test('every reason the brain can give has its words in both languages', () => {

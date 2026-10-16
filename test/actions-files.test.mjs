@@ -33,6 +33,21 @@ function fixture() {
 const urlOf = (spawned) => spawned.at(-1).args.at(-1);
 const slash = (p) => p.replaceAll('\\', '/');
 
+test('pin keeps a conversation in pinned.json; unpin takes it out, like archive', async () => {
+  const f = fixture();
+  const id = '11111111-2222-4333-8444-555555555555';
+  f.deps.state.projects[0].chats = [{ sessionId: id, title: 'Cart', status: 'idle' }];
+  try {
+    assert.equal((await runAction({ action: 'pin', sessionId: id }, f.deps)).status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(f.deps.smDir, 'pinned.json'), 'utf8')), [id]);
+    assert.equal((await runAction({ action: 'unpin', sessionId: id }, f.deps)).status, 200);
+    assert.deepEqual(JSON.parse(readFileSync(join(f.deps.smDir, 'pinned.json'), 'utf8')), []);
+    // Unknown sessions and unknown actions stay refused.
+    assert.equal((await runAction({ action: 'pin', sessionId: '99999999-9999-4999-8999-999999999999' }, f.deps)).status, 404);
+    assert.equal((await runAction({ action: 'pin-forever', sessionId: id }, f.deps)).status, 400);
+  } finally { f.cleanup(); }
+});
+
 test('open-file hands the vscode:// link of a checked file to the system, with the line', async () => {
   const f = fixture();
   try {

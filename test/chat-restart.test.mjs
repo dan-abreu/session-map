@@ -15,7 +15,7 @@ import { RESUME_FILE, resumeAfterRestart, resumeNote } from '../server/restart.m
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-claude.mjs', import.meta.url));
 const CLOSED = '11111111-1111-4111-8111-111111111111';
-const AUTO = { kind: 'auto', selfReinforce: false };
+const AUTO = { kind: 'talk' }; // the page chat: the brain's Conversa (id146)
 
 function makeState(root) {
   const state = {
@@ -106,7 +106,7 @@ test('the hub counts the chats mid-turn and lists every chat it drives with its 
 test('while a restart waits, Autonomous\'s automatic answer to reinforce is held and the chat is listed as held', async () => {
   await withHub({}, async ({ hub, state, smDir }) => {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Rebuild the sign in RUN:ask-reinforce:0.5' }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Rebuild the sign in RUN:ask-reinforce:0.5', run: { kind: 'autonomous' } }, state);
     hub.hold(true);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
@@ -122,7 +122,7 @@ test('while a restart waits, Autonomous\'s automatic answer to reinforce is held
 test('after a restart the hub resumes a chat cut mid-turn with the note, as Continue does', async () => {
   await withHub({}, async ({ hub, state, smDir, root }) => {
     writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
-      [CLOSED]: { projectId: 'demo-abc123', partId: 'auth', cwd: root, root, run: AUTO, prompted: 'auto', running: true, title: 'Fix the login', startedAt: new Date().toISOString() },
+      [CLOSED]: { projectId: 'demo-abc123', partId: 'auth', cwd: root, root, run: AUTO, prompted: 'plain', running: true, title: 'Fix the login', startedAt: new Date().toISOString() },
     }));
     writeFileSync(join(smDir, RESUME_FILE), JSON.stringify({
       version: 1, at: new Date().toISOString(), reasons: ['Reload after editing hub.mjs'],
@@ -146,7 +146,7 @@ test('after a restart the hub resumes a chat cut mid-turn with the note, as Cont
 test('after a restart a chat that was between turns is driven again without a message, and takes the next one as usual', async () => {
   await withHub({}, async ({ hub, state, smDir, root }) => {
     writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({
-      [CLOSED]: { projectId: 'demo-abc123', partId: 'auth', cwd: root, root, run: AUTO, prompted: 'auto', running: false, title: 'Fix the login', startedAt: new Date().toISOString() },
+      [CLOSED]: { projectId: 'demo-abc123', partId: 'auth', cwd: root, root, run: AUTO, prompted: 'plain', running: false, title: 'Fix the login', startedAt: new Date().toISOString() },
     }));
     assert.equal((await hub.start({ projectId: 'demo-abc123', idle: true }, state)).status, 400, 'only a resume may start without a message');
     const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, run: AUTO, idle: true }, state);

@@ -15,12 +15,17 @@ const denied = (a) => a?.hookSpecificOutput?.permissionDecision === 'deny';
 
 test('--user skips at once with SESSION_MAP_PAGE_CHAT=1, and works without it', () => {
   const step = JSON.stringify({ tool_name: 'Agent', tool_input: { description: 'no tag here', prompt: 'x' } });
-  const run = (hook, args, env) => spawnSync(process.execPath, [hook, ...args], { input: step, env: { ...process.env, SESSION_MAP_PAGE_CHAT: '', ...env }, encoding: 'utf8' });
+  // The strict guard (config.json "guard": {"strict": true}) denies the untagged agent; the open one (id154) lets it run.
+  const strictDir = mkdtempSync(join(tmpdir(), 'sm-hooks-strict-'));
+  writeFileSync(join(strictDir, 'config.json'), JSON.stringify({ guard: { strict: true } }));
+  const openDir = mkdtempSync(join(tmpdir(), 'sm-hooks-open-'));
+  const run = (hook, args, env, smDir = strictDir) => spawnSync(process.execPath, [hook, ...args], { input: step, env: { ...process.env, SESSION_MAP_PAGE_CHAT: '', SESSION_MAP_DIR: smDir, ...env }, encoding: 'utf8' });
   const skipped = run(GUARD_HOOK, ['--user'], { SESSION_MAP_PAGE_CHAT: '1' });
   assert.equal(skipped.status, 0);
   assert.equal(skipped.stdout, '');
   assert.match(run(GUARD_HOOK, ['--user'], {}).stdout, /"deny"/);
   assert.match(run(GUARD_HOOK, [], { SESSION_MAP_PAGE_CHAT: '1' }).stdout, /"deny"/, 'without --user the env changes nothing');
+  assert.equal(run(GUARD_HOOK, ['--user'], {}, openDir).stdout, '', 'open: the untagged agent runs as asked');
   const book = run(BOOK_HOOK, ['--compact', '--user'], { SESSION_MAP_PAGE_CHAT: '1' });
   assert.equal(book.status, 0);
   assert.equal(book.stdout, '');
@@ -34,7 +39,7 @@ test('a page chat process gets SESSION_MAP_PAGE_CHAT=1', () => {
 });
 
 test('Workflow check: more than the limit of literal agent() calls is denied, the limit itself passes', async () => {
-  const calls = (n) => Array.from({ length: n }, (_, i) => `await agent({ label: 'a${i}', prompt: 'x' });`).join('\n');
+  const calls = (n) => `// plan: docs/superpowers/plans/2026-10-14-user-hooks-fixture.md\n${Array.from({ length: n }, (_, i) => `await agent({ label: 'a${i}', prompt: 'x' });`).join('\n')}`;
   assert.ok(denied(await guardStep(wf(calls(11)))));
   assert.match((await guardStep(wf(calls(11)))).hookSpecificOutput.permissionDecisionReason, /11 agents/);
   assert.equal(await guardStep(wf(calls(10))), null);
@@ -67,7 +72,7 @@ test('Workflow check: a normal workflow is allowed, loops are not guessed at, sc
 test('hooks.json: guard, stop and compact with --user, the old SessionEnd kept, no shell matcher', () => {
   const h = JSON.parse(readFileSync(fileURLToPath(new URL('../hooks/hooks.json', import.meta.url)), 'utf8')).hooks;
   const pre = h.PreToolUse[0];
-  for (const t of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow']) assert.match(t, new RegExp(`^(?:${pre.matcher})$`));
+  for (const t of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow', 'Read']) assert.match(t, new RegExp(`^(?:${pre.matcher})$`), 'the guard sees the reads too (id150, or57)');
   for (const t of ['Bash', 'PowerShell']) assert.doesNotMatch(t, new RegExp(`^(?:${pre.matcher})$`));
   assert.equal(pre.hooks[0].command, 'node "${CLAUDE_PLUGIN_ROOT}/server/chat/guard-hook.mjs" --user');
   assert.equal(h.Stop[0].hooks[0].command, 'node "${CLAUDE_PLUGIN_ROOT}/server/chat/book-hook.mjs" --stop --user');

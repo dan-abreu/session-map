@@ -13,6 +13,7 @@ import { createChatHub } from '../server/chat/hub.mjs';
 import { firstPrompt, personsWords } from '../server/chat/prompt.mjs';
 import { ownWords } from '../server/statement.mjs';
 import { STANCE } from '../server/ai/stance.mjs';
+import { TAG_LINE } from '../server/ai/cerebro-note.mjs';
 import { readConversation } from '../server/sources/claude-conversation.mjs';
 import { createApp } from '../server/main.mjs';
 import { loadToken } from '../server/auth.mjs';
@@ -80,7 +81,7 @@ async function withHub(opts, fn) {
 }
 
 // Automatic, for the tests about the person's own permission mode and cards: a new chat runs Autonomous otherwise.
-const AUTO = { kind: 'auto', selfReinforce: false };
+const AUTO = { kind: 'talk' }; // the page chat: the brain's Conversa (id146)
 const turnEnds = (r) => r.count((e) => e.type === 'turn-end');
 const nthTurnEnd = (r, n) => r.until(() => turnEnds(r) >= n).then(() => r.events.filter((e) => e.type === 'turn-end')[n - 1]);
 
@@ -452,6 +453,38 @@ test('reopening an ended conversation shows its history without the context bloc
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
       await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     }
+  });
+});
+
+test('the memory a conversation carries rides on the run event after a turn and on its history (pc37)', async () => {
+  await withClaudeDir(async ({ dir, env }) => {
+    const smDir = mkdtempSync(join(tmpdir(), 'sm-chat-sm-'));
+    const root = mkdtempSync(join(tmpdir(), 'sm-chat-root-'));
+    const state = makeState(root);
+    const hub = createChatHub({ smDir, dir, bin: FAKE, env: { ...env, FAKE_USAGE: '1' } });
+    try {
+      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Add the error message' }, state);
+      const r = recorder();
+      hub.subscribe(res.body.chatKey, r.sink);
+      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
+      await nthTurnEnd(r, 1);
+      assert.deepEqual(r.events.filter((e) => e.type === 'run').at(-1).data.context, { tokens: 30100, max: 200000 }, 'input + cache written + cache read of the last reply');
+      assert.deepEqual(hub.history(sessionId).body.context, { tokens: 30100, max: 200000 });
+    } finally {
+      await hub.close();
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+      await rm(smDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    }
+  });
+});
+
+test('a reply that carries no usage gives no memory number: the run event says null and the history omits it (pc37)', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    const { body } = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'first' }, state);
+    const r = recorder();
+    hub.subscribe(body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.equal(r.events.filter((e) => e.type === 'run').at(-1).data.context, null);
   });
 });
 
@@ -911,17 +944,17 @@ test('a conversation of the list the page did not start: its history reads read-
   });
 });
 
-// ---- the way a page conversation runs: model, effort, Automatic / Manual (plano-v02 item 12) ----
+// ---- how a page conversation runs (id146): the brain's talk, and the orchestrator's Autonomous (pc16) ----
 
 const argvOf = (log) => JSON.parse(readFileSync(log, 'utf8')).argv;
 const flagOf = (argv, name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
 const fakeLog = () => join(mkdtempSync(join(tmpdir(), 'sm-chat-log-')), 'fake.json');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('Automatic: Opus at high with the maestro prompt; the run event names the real model and the cost', async () => {
+test('a new conversation runs the brain\'s talk: the policy\'s chat level with the stance alone, weighed for its phase', async () => {
   const log = fakeLog();
   await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state, smDir }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'corrige o bug do pagamento', run: AUTO }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'corrige o bug do pagamento' }, state);
     assert.equal(res.status, 200);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
@@ -929,45 +962,30 @@ test('Automatic: Opus at high with the maestro prompt; the run event names the r
     const argv = argvOf(log);
     assert.equal(flagOf(argv, '--model'), 'opus');
     assert.equal(flagOf(argv, '--effort'), 'high');
-    assert.match(flagOf(argv, '--append-system-prompt'), /ask-reinforce/);
+    assert.equal(flagOf(argv, '--append-system-prompt'), `${STANCE}\n${TAG_LINE}`, 'the stance and how to start an agent, never a conductor prompt');
     const runs = r.events.filter((e) => e.type === 'run');
-    assert.deepEqual(runs[0].data.run, { kind: 'auto', selfReinforce: false });
+    assert.deepEqual(runs[0].data.run, { kind: 'talk' });
     assert.equal(runs[0].data.model, 'claude-opus-5-5', 'the model claude reported, not the alias');
     assert.equal(runs[0].data.effort, 'high');
+    assert.equal(runs[0].data.brain.phase, 'build', 'the entry brain weighed the turn');
     assert.equal(r.events.find((e) => e.type === 'turn-end').data.costUSD, 0.001);
     assert.equal(runs.at(-1).data.costUSD, 0.001);
     const sessionId = r.events.find((e) => e.type === 'session').data.sessionId;
     const saved = JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8'))[sessionId];
-    assert.deepEqual(saved.run, { kind: 'auto', selfReinforce: false });
+    assert.deepEqual(saved.run, { kind: 'talk' });
   });
 });
 
-test('Manual: a fixed model and effort, Ultracode through --effort ultracode, Same as my Claude with no flags; junk is refused', async () => {
-  const log = fakeLog();
-  await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state }) => {
-    const run = async (choice) => {
-      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run: choice }, state);
-      assert.equal(res.status, 200);
-      const r = recorder();
-      hub.subscribe(res.body.chatKey, r.sink);
-      await nthTurnEnd(r, 1);
-      return { argv: argvOf(log), run: r.events.find((e) => e.type === 'run').data };
-    };
-    const fixed = await run({ kind: 'fixed', model: 'haiku', effort: 'low' });
-    assert.deepEqual([flagOf(fixed.argv, '--model'), flagOf(fixed.argv, '--effort'), flagOf(fixed.argv, '--append-system-prompt')], ['haiku', 'low', STANCE], 'only the stance rule (or27), never the conductor');
-    assert.equal(fixed.run.model, 'claude-haiku-5-5');
-    const ultra = await run({ kind: 'ultracode' });
-    assert.equal(flagOf(ultra.argv, '--effort'), 'ultracode');
-    assert.equal(ultra.run.ultracode, true);
-    const mine = await run({ kind: 'settings' });
-    assert.equal(flagOf(mine.argv, '--model'), undefined);
-    assert.equal(flagOf(mine.argv, '--effort'), undefined);
-    const bad = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run: { kind: 'fixed', model: 'opus', effort: '--x' } }, state);
-    assert.deepEqual([bad.status, bad.body.error], [400, 'bad-run']);
+test('the ways the brain replaced are refused: nothing outside talk and the orchestrator\'s Autonomous reaches claude', async () => {
+  await withHub({}, async ({ hub, state }) => {
+    for (const run of [{ kind: 'fixed', model: 'haiku', effort: 'low' }, { kind: 'ultracode' }, { kind: 'auto', selfReinforce: false }, { kind: 'maestro' }, { kind: 'settings' }, { kind: 'fixed', model: 'opus', effort: '--x' }]) {
+      const bad = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'hi', run }, state);
+      assert.deepEqual([bad.status, bad.body.error], [400, 'bad-run'], JSON.stringify(run));
+    }
   });
 });
 
-test('a conversation the page did not start resumes the way it ran (no flags), and the cost adds to what it had already spent', async () => {
+test('a conversation the page did not start resumes as talk too, and the cost adds to what it had already spent', async () => {
   const log = fakeLog();
   await withHub({ env: { ...process.env, FAKE_LOG: log } }, async ({ hub, state }) => {
     state.projects[0].conversations = [{ sessionId: CLOSED, title: 'old', chattable: true, live: false, costUSD: 0.5 }];
@@ -975,16 +993,29 @@ test('a conversation the page did not start resumes the way it ran (no flags), a
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 1);
-    assert.equal(flagOf(argvOf(log), '--model'), undefined);
-    assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'settings' });
+    assert.equal(flagOf(argvOf(log), '--model'), 'opus', 'the brain\'s level, never no flags');
+    assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'talk' });
     assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: go on'), 'no note: nothing changed');
     assert.equal(r.events.find((e) => e.type === 'turn-end').data.costUSD, 0.501);
   });
 });
 
-test('Automatic asks before reinforcing: the run event carries the reason and estimate, and nothing is sent for the person', async () => {
-  await withHub({}, async ({ hub, state }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:4.5', run: AUTO }, state);
+test('a legacy saved way (from before the brain) resumes as talk', async () => {
+  await withHub({}, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [CLOSED]: { projectId: 'demo-abc123', cwd: state.projects[0].root, run: { kind: 'fixed', model: 'haiku', effort: 'low' }, title: 'old' } }));
+    const res = await hub.start({ projectId: 'demo-abc123', sessionId: CLOSED, text: 'go on' }, state);
+    assert.equal(res.status, 200);
+    const r = recorder();
+    hub.subscribe(res.body.chatKey, r.sink);
+    await nthTurnEnd(r, 1);
+    assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'talk' });
+  });
+});
+
+test('Autonomous asks before reinforcing: the run event carries the reason and estimate, and past the limit nothing is sent for the person', async () => {
+  await withHub({}, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:4.5', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 1);
@@ -995,11 +1026,10 @@ test('Automatic asks before reinforcing: the run event carries the reason and es
   });
 });
 
-test('"may reinforce on its own" answers the ask while the monthly limit holds, counts the reinforced cost, and asks again past it', async () => {
+test('Autonomous answers the ask itself while the monthly limit holds, counts the reinforced cost, and asks again past it', async () => {
   await withHub({}, async ({ hub, state, smDir }) => {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
-    const run = { kind: 'auto', selfReinforce: true };
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.5', run }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.5', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 2);
@@ -1023,8 +1053,7 @@ test('a reinforced turn counts against the month whatever level it ends on, and 
   await withHub({ env: { ...process.env, FAKE_RUN: 'ask-reinforce:0.1' } }, async ({ hub, state, smDir }) => {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
     const spent = () => Object.values(JSON.parse(readFileSync(join(smDir, 'reinforced-spend.json'), 'utf8')))[0];
-    const run = { kind: 'auto', selfReinforce: true };
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.1', run }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Change the sign in RUN:ask-reinforce:0.1', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 2);
@@ -1039,55 +1068,11 @@ test('a reinforced turn counts against the month whatever level it ends on, and 
   });
 });
 
-test('changing the way it runs mid-conversation restarts claude with the new flags and tells it in the next message, which the page never shows', async () => {
+test('the list and the history tell the page how much reinforcing is left this month', async () => {
   await withClaudeDir(async ({ dir, env }) => {
-    const log = fakeLog();
-    await withHub({ dir, env: { ...env, FAKE_LOG: log } }, async ({ hub, state }) => {
-      const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'first' }, state);
-      const r = recorder();
-      hub.subscribe(res.body.chatKey, r.sink);
-      const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
-      await nthTurnEnd(r, 1);
-      assert.equal(hub.run(res.body.chatKey, { run: { kind: 'turbo' } }).status, 400);
-      assert.equal(hub.run(res.body.chatKey, { run: { kind: 'fixed', model: 'sonnet', effort: 'medium' } }).status, 200);
-      await r.until((e) => e.type === 'session' && e.data.state === 'ended');
-      const again = await hub.start({ projectId: 'demo-abc123', sessionId, text: 'second' }, state);
-      assert.equal(again.status, 200);
-      const r2 = recorder();
-      hub.subscribe(again.body.chatKey, r2.sink);
-      await nthTurnEnd(r2, 1);
-      assert.deepEqual([flagOf(argvOf(log), '--model'), flagOf(argvOf(log), '--effort')], ['sonnet', 'medium']);
-      const echoed = r2.events.find((e) => e.type === 'text' && !e.data.partial).data.text;
-      assert.match(echoed, /session-map: the way this conversation runs changed/);
-      assert.deepEqual(r2.events.filter((e) => e.type === 'user').map((e) => e.data.text), ['second']);
-      const shown = hub.history(sessionId, state).body;
-      assert.deepEqual(shown.run, { kind: 'fixed', model: 'sonnet', effort: 'medium' });
-      assert.ok(shown.items.filter((i) => i.type === 'user').every((i) => !i.text.includes('session-map: the way')));
-    });
-  });
-});
-
-test('only "may reinforce on its own" changed: the running claude keeps going, no restart and no note', async () => {
-  await withHub({}, async ({ hub, state }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'first', run: AUTO }, state);
-    const r = recorder();
-    hub.subscribe(res.body.chatKey, r.sink);
-    await nthTurnEnd(r, 1);
-    assert.equal(hub.run(res.body.chatKey, { run: { kind: 'auto', selfReinforce: true } }).status, 200);
-    assert.equal(hub.send(res.body.chatKey, { text: 'second' }).status, 200);
-    await nthTurnEnd(r, 2);
-    assert.ok(r.events.some((e) => e.type === 'text' && e.data.text === 'echo: second'));
-    assert.equal(r.count((e) => e.type === 'session' && e.data.state === 'ended'), 0);
-  });
-});
-
-test('the list and the history tell the page what "Same as my Claude" runs and how much reinforcing is left this month', async () => {
-  await withClaudeDir(async ({ dir, env }) => {
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ model: 'opus[1m]', effortLevel: 'xhigh', modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } }));
     await withHub({ dir, env }, async ({ hub, state, smDir }) => {
       writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 20 } }));
       const listed = hub.list({ projectId: 'demo-abc123', partId: 'auth' }, state).body;
-      assert.deepEqual(listed.mine, { model: 'opus[1m]', effort: 'high', ultracode: false });
       assert.deepEqual(listed.reinforce, { limitUSD: 20, spentUSD: 0 });
     });
   });
@@ -1097,7 +1082,7 @@ test('the list and the history tell the page what "Same as my Claude" runs and h
 
 const toolResult = (r) => r.events.find((e) => e.type === 'tool' && e.data.phase === 'result').data;
 
-test('a new conversation runs Autonomous: Opus at high with its prompt and the monthly limit, in the auto permission mode whatever was picked', async () => {
+test('the talk chat runs in the mode Configurações picked, kept per conversation, never forced to auto', async () => {
   await withClaudeDir(async ({ dir, env }) => {
     settingsIn(dir, 'default');
     const log = fakeLog();
@@ -1105,29 +1090,20 @@ test('a new conversation runs Autonomous: Opus at high with its prompt and the m
       writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 20 } }));
       const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'corrige o bug do pagamento', mode: 'acceptEdits' }, state);
       assert.equal(res.status, 200);
-      assert.equal(res.body.mode, 'auto');
+      assert.equal(res.body.mode, 'acceptEdits');
       const r = recorder();
       hub.subscribe(res.body.chatKey, r.sink);
       const sessionId = (await r.until((e) => e.type === 'session')).data.sessionId;
       await nthTurnEnd(r, 1);
       const argv = argvOf(log);
-      assert.deepEqual([flagOf(argv, '--permission-mode'), flagOf(argv, '--model'), flagOf(argv, '--effort')], ['auto', 'opus', 'high']);
-      assert.match(flagOf(argv, '--append-system-prompt'), /Decisions I took/);
-      assert.match(flagOf(argv, '--append-system-prompt'), /Monthly limit for reinforced work: US\$ 20\.00, US\$ 20\.00 left/);
+      assert.deepEqual([flagOf(argv, '--permission-mode'), flagOf(argv, '--model'), flagOf(argv, '--effort')], ['acceptEdits', 'opus', 'high']);
+      assert.equal(flagOf(argv, '--append-system-prompt'), `${STANCE}\n${TAG_LINE}`);
       assert.ok(!argv.includes('bypassPermissions'));
-      assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'autonomous' });
+      assert.deepEqual(r.events.find((e) => e.type === 'run').data.run, { kind: 'talk' });
       const saved = JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8'))[sessionId];
-      assert.deepEqual([saved.run, saved.mode], [{ kind: 'autonomous' }, 'acceptEdits'], 'the chat\'s own mode is kept for another way');
+      assert.deepEqual([saved.run, saved.mode], [{ kind: 'talk' }, 'acceptEdits']);
 
-      assert.equal(hub.mode(res.body.chatKey, { mode: 'default' }).body.mode, 'auto', 'a header change does not lower it');
-      assert.equal(hub.run(res.body.chatKey, { run: AUTO }).status, 200);
-      await r.until((e) => e.type === 'session' && e.data.state === 'ended');
-      const again = await hub.start({ projectId: 'demo-abc123', sessionId, text: 'go on' }, state);
-      assert.equal(again.body.mode, 'default', 'another way runs in the chat\'s own mode again');
-      const r2 = recorder();
-      hub.subscribe(again.body.chatKey, r2.sink);
-      await nthTurnEnd(r2, 1);
-      assert.equal(flagOf(argvOf(log), '--permission-mode'), 'default');
+      assert.equal(hub.mode(res.body.chatKey, { mode: 'default' }).body.mode, 'default', 'the chat\'s own mode follows Configurações');
     });
   });
 });
@@ -1135,7 +1111,7 @@ test('a new conversation runs Autonomous: Opus at high with its prompt and the m
 test('Autonomous: a permission that reaches session-map is denied at once and shown as left for the person; no card, no wait, no alert', async () => {
   const alerts = [];
   await withHub({ onAlert: (a) => alerts.push(a) }, async ({ hub, state }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Write' }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Write', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     const end = await nthTurnEnd(r, 1);
@@ -1154,7 +1130,7 @@ test('Autonomous: a permission that reaches session-map is denied at once and sh
 
 test('Autonomous: AskUserQuestion is denied with "decide yourself", and the page shows no permission for it', async () => {
   await withHub({}, async ({ hub, state }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:AskUserQuestion' }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:AskUserQuestion', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 1);
@@ -1166,7 +1142,7 @@ test('Autonomous: AskUserQuestion is denied with "decide yourself", and the page
 test('a force push is denied in every way of running, even with the shell allowed for the whole conversation', async () => {
   await withHub({ env: { ...process.env, FAKE_PERM_COMMAND: 'git push --force-with-lease origin main' } }, async ({ hub, state, smDir }) => {
     writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [CLOSED]: { projectId: 'demo-abc123', cwd: state.projects[0].root, always: ['Bash'] } }));
-    const runs = [{ kind: 'autonomous' }, AUTO, { kind: 'maestro' }, { kind: 'ultracode' }, { kind: 'fixed', model: 'haiku', effort: 'low' }, { kind: 'settings' }];
+    const runs = [{ kind: 'autonomous' }, { kind: 'talk' }];
     for (const run of runs) {
       const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Bash', run }, state);
       const r = recorder();
@@ -1186,7 +1162,7 @@ test('a force push is denied in every way of running, even with the shell allowe
   });
 });
 
-test('Manual and Automatic still show the Allow / Deny card for a step outside their mode', async () => {
+test('the talk chat still shows the Allow / Deny card for a step outside its mode', async () => {
   await withHub({ env: { ...process.env, FAKE_PERM_COMMAND: 'git push origin main' } }, async ({ hub, state }) => {
     const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Bash', run: AUTO }, state);
     const r = recorder();
@@ -1222,21 +1198,6 @@ test('Autonomous: a snapshot when each turn starts, and before a destructive ste
   });
 });
 
-test('a way changed mid-turn applies from the next process: the running one, started without the Autonomous prompt, still shows its cards', async () => {
-  await withHub({}, async ({ hub, state }) => {
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'PERM:Write PERM:Write', run: AUTO }, state);
-    const r = recorder();
-    hub.subscribe(res.body.chatKey, r.sink);
-    const first = await r.until((e) => e.type === 'permission' && e.data.state === 'asked');
-    assert.equal(hub.run(res.body.chatKey, { run: { kind: 'autonomous' } }).status, 200);
-    hub.permission(res.body.chatKey, { requestId: first.data.requestId, allow: true });
-    const second = await r.until((e) => e.type === 'permission' && e.data.requestId !== first.data.requestId && e.data.state !== 'allowed');
-    assert.equal(second.data.state, 'asked', 'not left for the person by a way this process does not run');
-    hub.permission(res.body.chatKey, { requestId: second.data.requestId, allow: true });
-    assert.equal((await nthTurnEnd(r, 1)).data.denials, 0);
-  });
-});
-
 test('Autonomous: a snapshot that hangs before a destructive step is given up after a short wait, inside the permission tool\'s 30 s', async () => {
   const hang = () => new Promise(() => {});
   await withHub({ snapshot: hang, askSnapshotMs: 100, env: { ...process.env, FAKE_PERM_COMMAND: 'rm -rf build' } }, async ({ hub, state, smDir, root }) => {
@@ -1252,7 +1213,7 @@ test('Autonomous reinforces on its own while the monthly limit holds, and past i
   const alerts = [];
   await withHub({ onAlert: (a) => alerts.push(a) }, async ({ hub, state, smDir }) => {
     writeFileSync(join(smDir, 'config.json'), JSON.stringify({ budget: { reinforcedMonthlyUSD: 1 } }));
-    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Rebuild the sign in RUN:ask-reinforce:0.5' }, state);
+    const res = await hub.start({ projectId: 'demo-abc123', partId: 'auth', text: 'Rebuild the sign in RUN:ask-reinforce:0.5', run: { kind: 'autonomous' } }, state);
     const r = recorder();
     hub.subscribe(res.body.chatKey, r.sink);
     await nthTurnEnd(r, 2);
@@ -1306,6 +1267,15 @@ test('history gives every step, image and helper of a conversation, and says whe
       assert.equal(helper.status, 200);
       assert.deepEqual(helper.body.items.map((i) => [i.type, i.text]), [['user', 'Scan it'], ['assistant', 'Scanned.']]);
       assert.equal(hub.helper(VS, '../x', state).status, 404);
+
+      // The specialist's role line opens the brief (id148, or55): the page gets the role as words, never the raw line.
+      writeFileSync(join(folder, VS, 'subagents', 'agent-xyz1.jsonl'), [
+        { type: 'user', isSidechain: true, timestamp: at(1), message: { role: 'user', content: 'session-map-role: coder — tools: Edit, Write; method: 1) read the tests; exit: code with its tests passing.\nScan it' } },
+      ].map((l) => JSON.stringify(l)).join('\n'));
+      const coder = hub.helper(VS, 'xyz1', state);
+      assert.equal(coder.status, 200);
+      assert.deepEqual(coder.body.role, { id: 'coder', label: 'Developer', labelPt: 'Desenvolvedor' });
+      assert.deepEqual(coder.body.items.map((i) => [i.type, i.text]), [['user', 'Scan it']], 'the injected line never reaches the page as text');
     });
   });
 });

@@ -15,6 +15,11 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/brain/`
 - `server/cost.mjs`
 - `server/statement.mjs`
+- `server/statement-route.mjs`
+- `server/budget.mjs`
+- `server/ledger.mjs`
+- `server/savings.mjs`
+- `server/waste.mjs`
 - `server/placements.mjs`
 - `server/footprint.mjs`
 - `server/changes-state.mjs`
@@ -28,8 +33,13 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 
 - The AI sees a digest of a conversation, never the transcript.
 - With the AI off, everything still works: chats are placed by the files they touch.
+- A hit plan limit (weekly or 5-hour) holds the background AI back (`setPlanLimits`/`limitHit` in `server/ai/life.mjs`, read by collect every pass): while the account's door is closed, no placement call goes out. The relation sentence and the keyword placement are motors (`sb16`, `sb17`): they never call an AI, so they work whatever the limits and the AI switch say. The pause clears by itself when the limit passes, so the background wakes without a restart.
 
 ## What's missing
+
+### Testes quebrados no working tree (14/10/2026)
+
+- [x] **Claude:** `test/ai-runner.test.mjs` falha (2 asserções, "runClaudeJSON runs claude with a clean env in its own folder") `sb15`
 
 ### Placement
 
@@ -42,6 +52,19 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
   - The robot also writes the "in progress" mark into the plan line when the plan still says to do; it never ticks done by itself (a commit that names a code can be partial), it shows "built, not ticked" instead.
   - On 2026-10-13 six items were being built while the map still showed them as to do: the AI had not written the mark.
   - From `id112`.
+
+- [x] **Claude:** The relation sentence comes from a motor, not from an AI: one template per reason kind `sb16`
+  - From `id153`. The reasons the map already holds are structured facts — a chat or a branch that worked on both parts, a chat continued from one in the other, a document of one that points to the other — so the sentence in plain words is rendered by templates in the map's language (`server/ai/relwhy.mjs` gains `relationWhyByRules`; `explainRelations` in `server/ai/life.mjs` writes it straight to `relation-why.json`). No AI call, no hourly budget for sentences.
+  - Built on 2026-10-15: one template per reason kind in both languages, the sentence stored with the same reasons hash, and a kind without a template keeps no sentence; the old AI path and its hourly budget are gone; tests rewritten in `test/ai-relwhy.test.mjs` and `test/collect.test.mjs` (13 + 52 verdes).
+- [x] **Claude:** The placer gains a keyword step before the AI: a chat whose words name one part is placed by the motor `sb17`
+  - From `id153`. The words of each part (its name, its about and its folder names) are matched against the digest's title, prompts and commits; a clear single winner is placed with `partSource: 'keyword'` and its words as the proof, the rest goes to the AI as today. `server/ai/place.mjs` and `placeChanged` in `server/ai/life.mjs`; the ladder in `server/collect.mjs` reads the new rule.
+  - Built on 2026-10-15: `placeByRules` in `server/ai/place.mjs` (two words decide, a tie or nothing goes to the AI; no call and no cap, works with the AI off); the placement is stored with its rule and words, the page says it with `chat.why.keyword` (`server/web/placedwhy.js`, i18n pt/en); tests in `test/ai-place.test.mjs` and `test/web-placedwhy.test.mjs` (9 + 5 verdes).
+
+### Engines
+
+- [x] **DeepSeek:** DeepSeek conversations in the state with their own engine mark `sb14`
+  - From `id119`. Every conversation carries `engine: 'claude' | 'deepseek'` — the map's chats, the list rows and the internals the actions read. A DeepSeek session whose turn is open and whose log was written in the last 30 minutes counts as working (`isBusy` in `server/sources/deepseek.mjs`), so the map, the Live panel and the waiting rules see it like a Claude process, without a session file with a pid.
+  - Cost: DeepSeek usage rows join the map's cost at DeepSeek's own API prices (`deepseekPrices`/`deepseekCostOf`/`deepseekWindowed` in `server/sources/deepseek.mjs`, from the deepseek catalog in `server/ai/providers.mjs`: peak rates checked 2026-10-14 on the official page, cache reads at the cache price). A row whose model is not in the table refuses the whole sum (costUSD null, the DeepSeek share out of the project totals): a wrong number would be worse than none. The statement stays Claude-only (`statement.mjs` reads Claude transcripts; each engine keeps its own books), so a DeepSeek conversation shows its cost on the map and in the list, but not in the extract — a DeepSeek table for the statement is left for later. A DeepSeek conversation is never writable from the page (`chattable: false`), so it is read there and continued in the DeepSeek app; the summary, the card block and the placement rules (owner's move, item codes, edited files) work exactly as for Claude.
 
 ### Cost
 

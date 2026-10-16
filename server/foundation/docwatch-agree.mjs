@@ -153,6 +153,18 @@ const COUNT_KIND = { route: 'route', rota: 'route', screen: 'screen', tela: 'scr
 const COUNT_RE = /(?<![\d.,~≈])(\d+)(\+?)\s+(?:(?:API|HTTP|REST|database|banco)\s+)?(routes?|rotas?|screens?|telas?|tables?|tabelas?|queues?|filas?)\b/gi;
 const VAGUE_BEFORE = /(?:over|more than|up to|about|around|nearly|almost|at least|mais de|cerca de|até|aproximadamente|quase|pelo menos)\s+$/i;
 
+// The motor's swap for a count finding (fd23): the number of the claim on this line becomes the count the code holds,
+// found with the same pattern the rule read the claim with. A line with no such claim returns null (the AI's turn).
+export function swapCount(line, { claimed, count, kind }) {
+  if (typeof line !== 'string' || typeof claimed !== 'number' || typeof count !== 'number' || typeof kind !== 'string') return null;
+  for (const m of line.matchAll(COUNT_RE)) {
+    const k = COUNT_KIND[m[3].toLowerCase().replace(/s$/, '')];
+    if (k !== kind || Number(m[1]) !== claimed || m[2] === '+') continue;
+    return `${line.slice(0, m.index)}${String(count)}${line.slice(m.index + m[1].length)}`;
+  }
+  return null;
+}
+
 function countClaims(doc) {
   const rows = lineList(maskCode(doc.text));
   const out = [];

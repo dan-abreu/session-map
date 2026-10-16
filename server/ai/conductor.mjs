@@ -20,8 +20,54 @@ import { SENSITIVITIES, explainRoute, familyOf, loadStats, routeKindOf } from '.
 export const CONDUCTOR_KINDS = Object.freeze([
   'search', 'read', 'bulk', 'code', 'text', 'portuguese', 'review', 'reasoning', 'business', 'security', 'money', 'architecture',
 ]);
+
+// The owner's per-function choice of the Cérebro (or42/id146), read raw like the runner does: the heavy brainpanel chain
+// is the tab's, never a call site's. null when absent or unreadable — the policy holds.
+const functionChoice = (smDir, id) => {
+  try {
+    const f = JSON.parse(readFileSync(join(smDir, 'config.json'), 'utf8'))?.ai?.others?.functions?.[id];
+    return f && typeof f === 'object' ? f : null;
+  } catch { return null; }
+};
 export const SIZES = Object.freeze(['trivial', 'small', 'medium', 'large']);
 const LADDER = ['haiku', 'sonnet', 'opus', 'fable'];
+const CLAUDE_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+// The Cérebro row of each policy kind (functions.json, the first row that lists it), for cerebroFirst.
+const ROW_OF_KIND = (() => {
+  try {
+    const byKind = new Map();
+    for (const f of JSON.parse(readFileSync(new URL('./functions.json', import.meta.url), 'utf8')).functions) {
+      for (const k of f.kinds ?? []) if (!byKind.has(k)) byKind.set(k, f.id);
+    }
+    return byKind;
+  } catch { return new Map(); }
+})();
+
+// The Cérebro drives the work (id155): the owner's choice for the row of this kind of work comes first, whatever the
+// size or the measures say. A Claude row sets Claude's model and level and puts Claude first; another company's AI
+// leads when the hard gate lets it (key, switched on, not paused, cap left) and has not failed this task. A row with
+// only a model or a level sets Claude's, in its place. A failed level is never forced back.
+function cerebroFirst(list, { smDir, kind, failed, models = {}, permitted, forKind }) {
+  const rowId = ROW_OF_KIND.get(POLICY_KIND[kind]);
+  const pick = rowId ? functionChoice(smDir, rowId) : null;
+  if (!pick) return list;
+  const provider = typeof pick.provider === 'string' && pick.provider !== 'auto' ? pick.provider : null;
+  const why = `the Cérebro puts ${rowId} on ${provider && provider !== 'claude' ? provider : 'Claude'}`;
+  if (!provider || provider === 'claude') {
+    const model = LADDER.includes(pick.model) && !failed.has(`claude:${pick.model}`) ? pick.model : null;
+    const effort = CLAUDE_EFFORTS.has(pick.effort) ? pick.effort : null;
+    let next = model || effort ? list.map((w) => (w.provider === 'claude' ? claudeAt(model ?? w.model, effort ?? w.effort, why) : w)) : list;
+    if (provider === 'claude') next = [...next.filter((w) => w.provider === 'claude'), ...next.filter((w) => w.provider !== 'claude')];
+    return next;
+  }
+  if (!Object.hasOwn(PROVIDERS, provider)) return list;
+  const model = typeof pick.model === 'string' && pick.model !== 'auto' && cleanModel(pick.model) ? pick.model
+    : (typeof models[provider] === 'string' && models[provider]) || PROVIDERS[provider].defaultModel;
+  const chosen = { provider, model, why };
+  if (failed.has(idOf(chosen)) || !permitted(chosen, forKind)) return list;
+  return [chosen, ...list.filter((w) => idOf(w) !== idOf(chosen))];
+}
 const NAME = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
 // The conductor's kinds, read as the policy's kinds (portuguese is prose to read by a person: docs).
 const POLICY_KIND = Object.freeze({
@@ -111,17 +157,13 @@ export function readyFor(st, routeKind) {
 
 // The hard rules, as code: throws ConductorBlocked when this worker must not get this work. Claude always may.
 // kind: the kind of work (a router or conductor kind), for pauses; without it, any pause counts.
-export function assertWorker(worker, { sensitivity, others, kind } = {}) {
+export function assertWorker(worker, { others, kind } = {}) {
   const provider = worker?.provider;
   if (provider === 'claude') return;
   if (!Object.hasOwn(PROVIDERS, provider)) throw new ConductorBlocked('blocked-unknown', 'not a known AI');
-  const s = SENSITIVITIES.includes(sensitivity) ? sensitivity : 'client';
   // The model the call would really use: providers.mjs sends the provider's default when none is given.
   const model = typeof worker.model === 'string' && worker.model ? worker.model : PROVIDERS[provider].defaultModel;
   if (typeof model !== 'string' || !model) throw new ConductorBlocked('blocked-unknown', 'no model to judge');
-  const family = familyOf(provider, model);
-  if (family === 'deepseek' && s !== 'public') throw new ConductorBlocked('blocked-sensitivity', 'DeepSeek only ever gets public data');
-  if (provider === 'gemini' && s === 'client') throw new ConductorBlocked('blocked-sensitivity', 'a direct Gemini key never gets client data');
   const st = outsideState(others);
   if (st.why === 'cap') throw new ConductorBlocked('blocked-cap', 'the daily cap for the outside AIs is reached');
   if (!st.open) throw new ConductorBlocked('blocked-others-off', 'the outside AIs are off or not reachable');
@@ -232,7 +274,7 @@ export function recommend({ kind, size, sensitivity, critical = false, longRun =
   // Every outside candidate passes the hard rules here, the one gate: what it refuses is listed, never offered.
   const permitted = (w, forKind) => {
     try {
-      assertWorker(w, { sensitivity: sens, others, kind: forKind });
+      assertWorker(w, { others, kind: forKind });
       return true;
     } catch (err) {
       if (!(err instanceof ConductorBlocked)) throw err;
@@ -268,6 +310,7 @@ export function recommend({ kind, size, sensitivity, critical = false, longRun =
     const outsideMayLead = routeKind === 'review' || (!crit && (routeKind === 'bulk' || size !== 'large'));
     if (!outsideMayLead) list = [...list.filter((w) => w.provider === 'claude'), ...list.filter((w) => w.provider !== 'claude')];
   }
+  if (smDir) list = cerebroFirst(list, { smDir, kind, failed, models: out.models, permitted, forKind: routeKind ?? kind });
   const worker = list[0];
   const alternatives = list.slice(1);
 
@@ -283,7 +326,10 @@ export function recommend({ kind, size, sensitivity, critical = false, longRun =
     const routed = explainRoute({ kind: 'review', sensitivity: sens, author: idOf(worker), available: availableFor('review'), stats: measured });
     const pick = routed.candidates.find((c) => !failed.has(idOf(c)) && (c.provider === 'claude' || permitted(c, 'review')));
     if (pick?.provider === 'claude') {
-      reviewer = { provider: 'claude', model: 'opus', effort: 'high' };
+      // The review row of the Cérebro (id146): the owner's choice for it rides, the policy's review row is the default.
+      const base = POLICY.tasks.review;
+      const choice = smDir ? functionChoice(smDir, 'review') : null;
+      reviewer = { provider: 'claude', model: choice?.model ?? base.model, effort: choice?.effort ?? base.effort };
       reviewWhy = `reviewed by ${label(reviewer)}, another family than the author`;
     } else if (pick) {
       reviewer = { provider: pick.provider, model: pick.model };
@@ -294,10 +340,12 @@ export function recommend({ kind, size, sensitivity, critical = false, longRun =
   }
 
   // Fable's last word (or04): a large critical delivery, after the other family's review; not when Fable did the work.
+  // The ladder's top rung, read from the one table (or33), never repeated here.
   let finalCheck = null;
   let finalWhy = '';
+  const top = POLICY.ladder[POLICY.ladder.length - 1] ?? { model: 'fable', effort: 'high' };
   if (crit && size === 'large' && DELIVERY.has(kind) && !(worker.provider === 'claude' && worker.model === 'fable') && !failed.has('claude:fable')) {
-    finalCheck = { provider: 'claude', model: 'fable', effort: 'high' };
+    finalCheck = { provider: 'claude', model: top.model, effort: top.effort };
     finalWhy = `; then ${label(finalCheck)} has the last word on this critical delivery`;
   }
 

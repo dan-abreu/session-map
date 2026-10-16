@@ -76,6 +76,10 @@ export function recordActivity(smDir, entry) {
     model: cleanName(entry.model),
     ms: Number.isFinite(entry.ms) && entry.ms > 0 ? Math.round(entry.ms) : 0,
     costUSD: Number.isFinite(entry.costUSD) && entry.costUSD > 0 ? round6(entry.costUSD) : 0,
+    // The tokens the provider already counted (or49): kept only when real, so the old lines keep their shape.
+    ...(Number.isFinite(entry.tokensIn) && entry.tokensIn > 0 ? { tokensIn: Math.round(entry.tokensIn) } : {}),
+    ...(Number.isFinite(entry.tokensOut) && entry.tokensOut > 0 ? { tokensOut: Math.round(entry.tokensOut) } : {}),
+    ...(Number.isFinite(entry.cacheHit) && entry.cacheHit > 0 ? { cacheHit: Math.round(entry.cacheHit) } : {}),
     ok: entry.ok === true,
     ...(typeof entry.error === 'string' && ERROR_RE.test(entry.error) ? { error: entry.error } : {}),
     ...(cleanText(entry.recommendedBy, RESULT_WHY_MAX) ? { recommendedBy: cleanText(entry.recommendedBy, RESULT_WHY_MAX) } : {}),

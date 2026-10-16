@@ -19,13 +19,19 @@ const state = { generatedAt: new Date().toISOString(), waitingCount: 0, projects
 const PROMPT = 'Is this function correct? function add(a, b) { return a - b }';
 const ANSWER = 'No: it subtracts. PRIVATE-ANSWER-WORDS';
 
+const asJson = (textRun) => async (prompt, o) => {
+  const r = await textRun(prompt, o);
+  return r?.ok ? { ...r, value: { verdict: r.text } } : r;
+};
+
 async function withServer(opts, fn) {
   const dir = mkdtempSync(join(tmpdir(), 'sm-ask-dir-'));
   const smDir = mkdtempSync(join(tmpdir(), 'sm-ask-sm-'));
   if (opts.seed) await opts.seed(smDir);
   const app = createApp({
     dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state,
-    helpers: { backend, ...(opts.textRun ? { textRun: opts.textRun } : {}), ...(opts.apiRun ? { apiRun: opts.apiRun } : {}) },
+    // A review asks for the review shape (id142): without its own JSON fake, the text fake answers it, so no test reaches a real provider.
+    helpers: { backend, ...(opts.textRun ? { textRun: opts.textRun } : {}), ...(opts.apiRun || opts.textRun ? { apiRun: opts.apiRun ?? asJson(opts.textRun) } : {}) },
     ...(opts.ask ? { askAi: { ask: opts.ask } } : {}),
     ...(opts.address ? { addressOf: () => opts.address } : {}),
     ...(opts.demo ? { demo: true, token: 'x'.repeat(64) } : {}),
@@ -192,11 +198,9 @@ test('end to end: the router picks another family, the answer comes back, and th
     const got = await call('POST', '/api/ai/ask', { auth: 'header', body: { kind: 'review', sensitivity: 'client', prompt: PROMPT } });
     assert.equal(got.status, 200, got.text);
     assert.equal(got.json.answers.length, 1);
-    assert.notEqual(got.json.answers[0].provider, 'deepseek', 'client data never goes to DeepSeek');
-    assert.equal(got.json.answers[0].text, ANSWER);
-    assert.ok(calls.every((c) => c.provider !== 'deepseek'));
+    assert.deepEqual(got.json.answers[0].value, { verdict: ANSWER }, 'a review comes back in the review shape (id142)');
     assert.equal(calls[0].key, KEYS[calls[0].provider], 'the key is fetched inside the server');
-    assert.ok(got.json.skipped.some((s) => s.provider === 'deepseek' && s.why === 'sensitivity'));
+    assert.ok(!got.json.skipped.some((s) => s.why === 'sensitivity'), 'the data class keeps no AI from the work');
     for (const k of Object.values(KEYS)) {
       assert.ok(!got.text.includes(k), 'no key in the answer');
       assert.ok(!actionsLog(smDir).includes(k), 'no key in the log');

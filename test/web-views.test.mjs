@@ -4,9 +4,29 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   costRows, estimateTone, budgetTone, aiSpend, chatButtons, chatLog, visibleProject, waitingEntries, safeTunnel, changedLines, waitingCounts, clashWords,
-  waitingKind, pcModeOffer,
+  waitingKind, pcModeOffer, stepRoles,
 } from '../server/web/views.js';
 import { clashKey } from '../server/web/signals.js';
+
+// The specialists in the steps line (id148, or55): the kind tag of each Agent step maps to the role through the catalog
+// the brain model sends; pure and free, nothing reads the AI.
+test('stepRoles names the specialists a stretch called on, most used first', () => {
+  const byKind = new Map([
+    ['code', { id: 'coder' }], ['review', { id: 'reviewer' }], ['security', { id: 'guardian' }],
+  ]);
+  const tool = (name, step, input) => ({ type: 'tool', name, step, input });
+  const items = [
+    tool('Agent', { kind: 'agent', target: '[code] fix the header' }, '{"description":"[code] fix the header"}'),
+    tool('Agent', { kind: 'agent', target: '[code] add tests' }, '{"description":"[code] add tests"}'),
+    tool('Agent', { kind: 'agent', target: '[review] check it' }, '{"description":"[review] check it"}'),
+    tool('Read', { kind: 'read', target: 'app.js' }, '{"file":"app.js"}'),
+    tool('Bash', { kind: 'run', target: 'npm test' }, '{"command":"npm test"}'),
+    tool('thinking', {}, null),
+  ];
+  assert.deepEqual(stepRoles(items, byKind), [{ id: 'coder', n: 2 }, { id: 'reviewer', n: 1 }], 'only Agent steps with a known kind count');
+  assert.deepEqual(stepRoles(items, new Map()), [], 'no catalog: the steps stay plain');
+  assert.deepEqual(stepRoles([tool('Agent', { kind: 'agent', target: 'no tag here' }, '{}')], byKind), [], 'a description without a kind tag names no role');
+});
 
 const DEMO = JSON.parse(readFileSync(new URL('../demo/state.json', import.meta.url), 'utf8'));
 const clone = (v) => JSON.parse(JSON.stringify(v));

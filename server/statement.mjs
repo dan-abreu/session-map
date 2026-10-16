@@ -18,6 +18,7 @@ import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { loadPrices, priceKeyFor } from './cost.mjs';
 import { actOf } from './ledger.mjs';
+import { roleOf } from './ai/agents.mjs';
 
 const PER_MILLION = 1_000_000;
 const WEB_SEARCH_USD = 10 / 1000; // $10 per 1,000 searches
@@ -101,8 +102,10 @@ export function placeOf(projectsDir, file) {
   // In plain words: a helper the chat called, or a helper of a team (a workflow) with the team's step.
   const kind = wf ? `ajudante da equipe${meta.workflowPhase ? ` (${meta.workflowPhase})` : ''}` : 'ajudante';
   const what = meta.description ? oneLine(meta.description, 70) : basename(file, '.jsonl');
+  // The specialist's kind, from the tag that starts the description ("[code] ...", or42): the spend per role (or60) reads it.
+  const tag = /^\s*\[([a-z-]+)(?:\^[12])?\]/.exec(String(meta.description ?? ''));
   // agentId and runId (the wf_ folder) let the waste signals (or24) count agents and workflow runs.
-  return { folder, sessionId, agent: `${kind}: ${what}`, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null, agentId: basename(file, '.jsonl').replace(/^agent-/, ''), runId: wf ?? null };
+  return { folder, sessionId, agent: `${kind}: ${what}`, kind: tag ? tag[1] : null, agentModel: meta.model ?? null, agentEffort: meta.effort ?? null, agentId: basename(file, '.jsonl').replace(/^agent-/, ''), runId: wf ?? null };
 }
 
 const LIMIT_NOTICE = /hit your (weekly|monthly|session|daily)[^"]{0,40}limit|out of (extra usage|credits)|spend limit/i;
@@ -310,6 +313,7 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
       seen.set(r.key, r);
       r.sessionId = place.sessionId;
       r.who = place.agent ?? 'conversa principal';
+      r.kind = place.kind ?? null;
       r.agentId = place.agentId;
       r.runId = place.runId;
       r.effort = r.effort ?? place.agentEffort ?? null;
@@ -341,6 +345,29 @@ export async function buildStatement({ projectsDir = join(homedir(), '.claude', 
     addTo(get(chat.agents, r.who), r);
   }
   return { rows, sessions, allTime, total, byDay, byHour, byChat, byModel, byProject, unpriced, events: [...events.values()].sort((a, b) => a.at - b.at) };
+}
+
+// The spend per specialist (or60): the agents' rows grouped by their kind tag into the catalog's roles, within the
+// period — mechanical, no AI. A row without a kind (an old meta, the chat itself) stays out.
+export function roleTotals(st, { from = null, to = null } = {}) {
+  const out = new Map();
+  for (const r of st.rows ?? []) {
+    if (from !== null && r.ts < from) continue;
+    if (to !== null && r.ts >= to) continue;
+    if (!r.kind) continue;
+    const role = roleOf(r.kind);
+    if (!role) continue;
+    let t = out.get(role.id);
+    if (!t) {
+      t = { id: role.id, label: role.label, labelPt: role.labelPt, replies: 0, usd: 0, input: 0, output: 0 };
+      out.set(role.id, t);
+    }
+    t.replies += 1;
+    t.usd += r.cost?.total ?? 0;
+    t.input += r.input ?? 0;
+    t.output += r.output ?? 0;
+  }
+  return [...out.values()].sort((a, b) => b.usd - a.usd).map((t) => ({ ...t, usd: Math.round(t.usd * 1e6) / 1e6 }));
 }
 
 // ---- writing -------------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # Padrão profissional do session-map
 
-O que acontece com **cada ideia** de um fundador que não é técnico, desde "eu quero isso" até estar no ar, vendendo e sendo mantida. Quem executa são agentes de IA, com o mesmo cuidado que um time profissional teria. O fundador só decide o que é dele: negócio, dinheiro, contas, contratos e gosto.
+O que acontece com **cada ideia** de um fundador que não é técnico, desde "eu quero isso" até estar no ar, vendendo e sendo mantida. Quem executa são agentes de IA, de qualquer empresa (Claude, OpenAI, Gemini, DeepSeek ou outra), com o mesmo cuidado que um time profissional teria: o padrão é o mesmo para todas, e o Cérebro diz qual delas faz cada função. O fundador só decide o que é dele: negócio, dinheiro, contas, contratos e gosto.
 
 Este padrão não é um curso. Ele descreve **o que o sistema faz**, etapa por etapa, com profundidade suficiente para o fundador confiar que nenhum passo profissional foi pulado, e com a prova de que cada passo foi feito.
 

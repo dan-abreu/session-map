@@ -1,20 +1,16 @@
-// Configurações (page-chat pc19): every setting of the page in one small sheet. The run menu's link "Limite do mês e
-// permissões…" opens it for its conversation; the ⋯ menu of the bar opens it for the conversation on screen, or with no
-// conversation at all. It holds the language and the alert settings (a row that opens them), the monthly limit for
-// reinforced work (the same value as Home's card), "may reinforce on its own", the permission mode with "use this mode in
-// every Claude on this PC", and the advanced ways (Maestro, Ultracode, the person's own Claude).
-import { modelName } from './live.js';
+// Configurações (page-chat pc19): every setting of the page in one small sheet, opened from the ⋯ of the bar or of a chat.
+// It holds the language and the alert settings (a row that opens them), the monthly limit for reinforced work (the same
+// value as Home's card) and the permission mode with "use this mode in every Claude on this PC". How the chat runs is the
+// Cérebro's (id146): this sheet no longer picks a model or a way.
 import { pcModeOffer } from './views.js';
 
 // The modes the settings file of the PC may hold (never bypass), for the sheet opened with no conversation.
 const PC_MODES = ['default', 'acceptEdits', 'auto'];
-const ADVANCED = ['maestro', 'ultracode', 'settings'];
 
 // ctx: dialog (the <dialog>), h, t (translator getter), icon(name, cls), money, toast, errorText, limit ({read(), save(usd)},
 // the API Home's card uses), onPcMode(mode) (asks to use a mode in every Claude on this PC), langs (the codes to choose
 // from), lang() (the open one), setLang(code), openAlerts() (the alert settings, which have their own sheet).
-// A binding is what a chat sheet gives (chat.js settings()): title(), safety, modes, run(), pick(run), choice(),
-// setChoice(mode), claudeMode(), mine().
+// A binding is what a chat sheet gives (chat.js settings()): title(), safety, modes, choice(), setChoice(mode), claudeMode().
 export function createRunSettings(ctx) {
   const { dialog, h, money, toast, errorText, limit } = ctx;
   const t = () => ctx.t();
@@ -22,7 +18,6 @@ export function createRunSettings(ctx) {
   let opener = null;
   let limitData = null;
   let pcChoice = 'default';
-  let confirmUltra = false;
   let limitBox = null;
   let chatBox = null;
 
@@ -76,18 +71,7 @@ export function createRunSettings(ctx) {
       h('p', { class: 'al-opt-hint' }, tt('settings.limitSame')));
   }
 
-  // ---- this conversation: may reinforce, its permissions, the advanced ways ----
-
-  function selfPart(tt, run) {
-    const autonomous = run.kind === 'autonomous';
-    const hint = autonomous ? tt('settings.selfAutonomous') : run.kind === 'auto' ? tt('run.selfHint') : tt('settings.selfOnlyAuto');
-    return h('div', { class: 'al-opt' },
-      h('input', {
-        type: 'checkbox', id: 'stSelf', 'data-set': 'self', checked: autonomous || (run.kind === 'auto' && Boolean(run.selfReinforce)), disabled: run.kind !== 'auto',
-        onchange: () => pick({ kind: 'auto', selfReinforce: !binding.run().selfReinforce }),
-      }),
-      h('label', { for: 'stSelf' }, h('span', { class: 'al-opt-name' }, tt('run.self')), h('span', { class: 'al-opt-hint' }, hint)));
-  }
+  // ---- this conversation: its permissions ----
 
   function modeName(tt, mode) {
     return tt(`chat.modeName.${mode}`);
@@ -109,46 +93,7 @@ export function createRunSettings(ctx) {
         }, tt('pcmode.button'))));
   }
 
-  function ultraWarning(tt) {
-    return h('div', { class: 'run-warn', role: 'alert' },
-      h('p', { class: 'run-warn-title' }, tt('run.ultra.title')),
-      h('p', {}, tt('run.ultra.warn')),
-      h('div', { class: 'actions' },
-        h('button', { type: 'button', class: 'btn primary', 'data-set': 'ultra-yes', onclick: () => pick({ kind: 'ultracode' }) }, tt('run.ultra.yes')),
-        h('button', { type: 'button', class: 'btn', 'data-set': 'ultra-no', onclick: () => { confirmUltra = false; renderChat(); } }, tt('run.ultra.no'))));
-  }
-
-  function chooseWay(way) {
-    if (way === 'ultracode') {
-      confirmUltra = true;
-      return renderChat();
-    }
-    return pick({ kind: way });
-  }
-
-  function advancedPart(tt, run) {
-    const mine = binding.mine();
-    const mineVars = { model: mine?.model ? modelName(mine.model) : tt('run.modelDefault'), effort: mine?.effort ? tt(`run.effort.${mine.effort}`) : tt('run.effortDefault') };
-    return h('details', { class: 'st-advanced', open: ADVANCED.includes(run.kind) || confirmUltra },
-      h('summary', {}, tt('settings.advanced')),
-      h('fieldset', { class: 'run-ways' }, h('legend', { class: 'visually-hidden' }, tt('settings.advanced')),
-        ADVANCED.map((way) => [
-          h('label', { class: 'run-option' },
-            h('input', { type: 'radio', name: 'stWay', value: way, checked: run.kind === way, 'data-set': `way-${way}`, onchange: () => chooseWay(way) }),
-            h('span', { class: 'run-option-text' }, h('span', { class: 'run-option-name' }, tt(`run.way.${way}`)),
-              h('span', { class: 'run-hint' }, tt(`run.hint.${way}`, way === 'settings' ? mineVars : undefined)))),
-          way === 'ultracode' && confirmUltra ? ultraWarning(tt) : null,
-        ])));
-  }
-
-  // The conversation takes the choice at once (it tells the server on its own): the sheet shows it without waiting.
-  function pick(next) {
-    confirmUltra = false;
-    const sent = binding.pick(next);
-    renderChat();
-    return sent;
-  }
-
+  // The conversation takes the mode choice at once (it tells the server on its own): the sheet shows it without waiting.
   function renderChat() {
     if (!chatBox) return;
     const tt = t();
@@ -160,14 +105,11 @@ export function createRunSettings(ctx) {
         h('p', { class: 'st-note' }, tt('settings.noChat')));
       return;
     }
-    const run = binding.run();
     chatBox.replaceChildren(...[
       h('h3', { id: 'stChat' }, tt('settings.chat')),
       binding.title() ? h('p', { class: 'al-opt-hint st-for' }, tt('settings.for', { title: binding.title() })) : null,
-      selfPart(tt, run),
       modePart(tt, { modes: binding.modes, value: binding.choice(), label: tt('settings.permissions'), onchange: (m) => { binding.setChoice(m); renderChat(); } }),
       h('p', { class: 'al-opt-hint' }, tt(binding.safety)),
-      advancedPart(tt, run),
     ].filter(Boolean));
   }
 
@@ -192,7 +134,6 @@ export function createRunSettings(ctx) {
   async function open(next = null, from = null) {
     binding = next && (next.isOpen?.() ?? true) ? next : null;
     opener = from ?? globalThis.document?.activeElement ?? null;
-    confirmUltra = false;
     limitData = null;
     render();
     if (!dialog.open) dialog.showModal();
@@ -211,7 +152,7 @@ export function createRunSettings(ctx) {
     open,
     close: () => { if (dialog.open) dialog.close(); },
     isOpen: () => Boolean(dialog.open),
-    // The conversation changed how it runs (the menu by Send, a run event): the sheet follows, the limit field is kept, and
+    // The conversation's mode changed somewhere: the sheet follows, the limit field is kept, and
     // a choice the person is making in it is not redrawn under their hands.
     refresh() { if (dialog.open && !chatBox?.contains(globalThis.document?.activeElement)) renderChat(); },
     relabel() { if (dialog.open) { render(); } },

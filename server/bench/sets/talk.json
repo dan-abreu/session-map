@@ -1,0 +1,72 @@
+{
+  "kind": "talk",
+  "version": 1,
+  "about": "The owner's own messages, word for word, from the Asked lines of docs/architecture/ideas.md (id105 to id116; id105 holds two). The model answers as the owner's assistant, in the language of the message, no tools. Scored with a judge (or35, task 1): an outside AI reads the message and the replies of the three arms and says which reply is better and why; a reply is good when it wins or ties its round. The arms: sonnet-low (today's talk), sonnet-medium, and split (a strong model writes a short brief, a cheap model writes the reply from it).",
+  "items": [
+    {
+      "id": "tk-agents-reread",
+      "source": "id105",
+      "request": "os agentes estão lendo tudo de uma vez, cada agente ele reler tudo de novo para cumprir a tarefa, também acontece que tem um snow ball no programa, voce ta acionando todas as skills os agentes fazem a mesma coisa, reler tudo antes de começar a trabalhar, precisamos refinar"
+    },
+    {
+      "id": "tk-levels-wrong",
+      "source": "id105",
+      "request": "voce não esta classificando corretamente as IA, todas estão trabalhando com o claude nivel HIGH ... nao falou pra mim que as skill instaladas estão fazendo um gasto gigante ... Eu quero que voce tenha o poder de dizer e tomar decisoes de forma critica pensando no melhor para o projeto e não apenas concordando com as minhas ideias"
+    },
+    {
+      "id": "tk-ok-and-book",
+      "source": "id106",
+      "request": "quero como sistema, na engrenagem, da OK, na finalização das tarefas, Fazer o conceito de um livro que vem o indice, com capitulos e subcapitulos, para as skills e plugins; quando eu falo planejar voce ja sabe ... ou quando estamos conversando poderia ser automaticamente um planejamento; em conversas longas o proprio sistema criar um sistema igual de livro, assim não precisa ler a conversa toda ... ler apenas o que for necessario"
+    },
+    {
+      "id": "tk-agree-on-data",
+      "source": "id107",
+      "request": "voce pode concorda comigo ou discorda, veja ai por favor, quero que na engrenagem, eu não quero uma IA que concorda, não importa qual, quero uma IA consciente que concorde e discorde baseada em dados"
+    },
+    {
+      "id": "tk-cheap-layers",
+      "source": "id108",
+      "request": "imagens da pesquisa do dono com o irmão: Ollama fazendo \"Interface Skeletons\" (imports, tipos, assinaturas, sem corpos), changelogs semânticos em JSON, extração de variáveis e dependências; \"AST determinístico + Ollama cirúrgico\"; cascata de modelos (modelos baratos ou locais leem e separam, o modelo de fronteira só decide e escreve o código difícil)"
+    },
+    {
+      "id": "tk-entry-level",
+      "source": "id109",
+      "request": "tem um problema a entrada, que nivel é? Qual modelo de IA, que nivel da IA ... a OPUS e Fable com certeza iria pensar melhor que o sonnet, mas as vezes nao por apenas está conversando, e o que deve exitir de lei na engrenagem antes de começar sair fazendo qualquer coisa é traçar um plano com a mais barata organizar a ideia e depois construir usando as IA e modelos de acordo com a tarefa ... estava jogando tudo no nivel HIGH e usando opus, e voce ainda me dizia que estava usando o modelo mais fraco, mas por traz os agentes eram sempre os mais caros"
+    },
+    {
+      "id": "tk-thinking-brain",
+      "source": "id110",
+      "request": "poxa a gente nao consegue colocar a entrada e saida como um cerebro pensante? tipo, recebi essa mensagem, é uma mensagem barata, nossa recebi essa mensagem é um projeto grande preciso dar mais atenção, podemos fazer começnado com o mais barato, ele faz umas perguntas para ter ideia do nivel da conversa e dali mudar para a IA mais e modelo mais desenvolvido?"
+    },
+    {
+      "id": "tk-book-index",
+      "source": "id111",
+      "request": "eu gostaria de saber quais skills e plugins instalados por repositorios, quais estão sendo usadas no momento que pode ser nos balões, um metodo de que uma skill ja foi lida, nem todos os agente precisam ler novamente ... aqui ta acontecendo que os 150 agentes vao ler novamente as mesma atividade isso gera um snowball sem tamanho e também o indice nas conversas, a conversa vai passando dos limites, vai se criando indices, com capitulos mais curtos dentro da propria conversa diminuindo o custo da conversa, teria como isso tudo acontecer?"
+    },
+    {
+      "id": "tk-balloons-robot",
+      "source": "id112",
+      "request": "questões de balões criações não era para depender da IA, voce pode errar isso deveria ser mecanismo do programa, eu nao sei falar os termos mas deveria ser um robo, um sistema alguma coisa assim, não simplesmente um arquivo .md"
+    },
+    {
+      "id": "tk-robot-order",
+      "source": "id113",
+      "request": "mesma coisa para os balões e arquivos, tem que ser um robo, não importa se cria novos balões, também serve para o fluxo e nao importa o que é criado, mas tem que seguir uma ordem correta"
+    },
+    {
+      "id": "tk-robot-policy",
+      "source": "id114",
+      "request": "precisamos criar um robo, um documento alguma coisa que não depende apenas de voce fazer a escolha do liga e desliga, porque voce soube o que era, mas no documento já tem um padrao, e estão seguindo esse padrao e esse documento esta mal feito de mais, voce não fez com profissionalismo"
+    },
+    {
+      "id": "tk-rules-in-code",
+      "source": "id115",
+      "request": "não tem uma forma ou arquivo ou documento para criar isso de forma mais centrealizada baseada em codigopara nao depender so do claud md, porque eu trabalho com claude.md a um tempo e falha muito, nao podemos ter falhas"
+    },
+    {
+      "id": "tk-smart-orchestrator",
+      "source": "id116",
+      "request": "eu pedi uma IA mais barata para conversa e me responder, mas está sendo infelizmente muito ruim, pensa pouco, preciso da IA que conversa comigo seja inteligente, mas não quero a mesma IA fazendo tudo, o orquestrador que recebe as minhas mensagens é uma, a mais correta e o que responde seja a mais barata, tem como ser assim?"
+    }
+  ]
+}

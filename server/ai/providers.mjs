@@ -1,6 +1,7 @@
 import { log } from '../log.mjs';
 import { redact } from './redact.mjs';
 import { extractJSON } from './runner.mjs';
+import { effortBody } from './efforts.mjs';
 
 // Other AIs that take session-map's bulk work off Claude (sb07). All four speak the OpenAI chat-completions format,
 // so one call fits them all. Prices are per million tokens, checked by hand on the date given: they change often.
@@ -143,9 +144,16 @@ function readAnswer(providerId, model, data, estimateUSD) {
   const usage = data?.usage ?? {};
   const tokensIn = Number(usage.prompt_tokens) || 0;
   const tokensOut = Math.max(Number(usage.completion_tokens) || 0, (Number(usage.total_tokens) || 0) - tokensIn);
+  // Cache hits, each provider in its own field (or49): DeepSeek prompt_cache_hit_tokens, OpenAI
+  // prompt_tokens_details.cached_tokens. Kept out of the meta when zero, so the old shape never changes.
+  const tokensCacheHit = Math.max(
+    Number(usage.prompt_cache_hit_tokens) || 0,
+    Number(usage.prompt_tokens_details?.cached_tokens) || 0,
+    Number(usage.cached_tokens) || 0,
+  );
   const counted = Number.isFinite(usage.prompt_tokens) && Number.isFinite(usage.completion_tokens);
   const costUSD = Number.isFinite(usage.cost) ? usage.cost : counted ? costOf(providerId, model, tokensIn, tokensOut) : estimateUSD;
-  return { content, cut, tokensIn, tokensOut, costUSD };
+  return { content, cut, tokensIn, tokensOut, ...(tokensCacheHit > 0 ? { tokensCacheHit } : {}), costUSD };
 }
 
 // Pessimistic on purpose: real text runs nearer 4 characters per token. Checked against the daily cap before a call.
@@ -162,7 +170,7 @@ const NOT_SENT = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH
 
 // One chat call -> {ok: true, content, meta} or a failure. Errors are short codes: never the key, a header or the
 // body of the reply, which some providers echo the key into. Everything sent goes through redact().
-async function callApi(text, { provider, model, key, fetchFn = fetch, timeoutMs = TIMEOUT_MS, maxTokens } = {}) {
+async function callApi(text, { provider, model, key, fetchFn = fetch, timeoutMs = TIMEOUT_MS, maxTokens, effort } = {}) {
   const p = providerOf(provider);
   const fail = (error, extra = {}) => {
     log('warn', 'ai-api-failed', { provider: p?.id ?? 'unknown', error });
@@ -171,13 +179,16 @@ async function callApi(text, { provider, model, key, fetchFn = fetch, timeoutMs 
   if (!p) return { fail: fail('unknown-provider') };
   if (typeof key !== 'string' || !key) return { fail: fail('no-key') };
   const usedModel = model || p.defaultModel;
+  // The chosen reasoning level (or41): each provider's own field and room, only when the level fits this engine.
+  const appliedEffort = typeof effort === 'string' && effort ? effortBody(p.id, usedModel, effort) : {};
   const body = {
     model: usedModel,
     messages: [{ role: 'user', content: redact(text) }],
     temperature: 0,
-    [p.maxTokensField ?? 'max_tokens']: maxAnswerTokens(p.id, usedModel, maxTokens),
+    [p.maxTokensField ?? 'max_tokens']: maxAnswerTokens(p.id, usedModel, maxTokens) + (appliedEffort.reasoningRoomTokens || 0),
     ...(p.extraBody ?? {}),
     ...(extrasOf(p, usedModel).body ?? {}),
+    ...(appliedEffort.body ?? {}),
   };
   for (const [field, value] of Object.entries(body)) if (value === null) delete body[field];
   // Once the request has left, the provider may bill it even if no answer or no cost comes back (a timeout, a dropped
@@ -208,8 +219,8 @@ async function callApi(text, { provider, model, key, fetchFn = fetch, timeoutMs 
   } finally {
     clearTimeout(timer);
   }
-  const { content, cut, tokensIn, tokensOut, costUSD } = readAnswer(p.id, usedModel, data, estimateUSD);
-  const meta = { costUSD, provider: p.id, model: usedModel, tokensIn, tokensOut };
+  const { content, cut, tokensIn, tokensOut, tokensCacheHit, costUSD } = readAnswer(p.id, usedModel, data, estimateUSD);
+  const meta = { costUSD, provider: p.id, model: usedModel, tokensIn, tokensOut, ...(tokensCacheHit > 0 ? { tokensCacheHit } : {}) };
   // Stopped by the length limit with nothing to show (reasoning ate the budget): 'answer-cut', never a bad answer.
   if (cut && !(typeof content === 'string' && content.trim())) return { fail: fail('answer-cut', meta) };
   if (typeof content !== 'string') return { fail: fail('bad-output', meta) };

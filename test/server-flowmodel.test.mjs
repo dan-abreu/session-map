@@ -82,7 +82,7 @@ test('the model is read on this PC without the key: every part, the services in 
     assert.equal(res.status, 200);
     assert.equal(res.body.ok, true);
     const { model } = res.body;
-    assert.equal(model.version, 1);
+    assert.equal(model.version, 2);
     assert.equal(model.source, 'worktree');
     const parts = model.nodes.filter((n) => n.kind === 'part').map((n) => n.partId).sort();
     assert.deepEqual(parts, arch.parts.map((p) => p.id).sort());

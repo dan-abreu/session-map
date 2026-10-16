@@ -39,21 +39,23 @@ test('bulk work: Claude haiku first, then the cheap models of the others, in the
   assert.equal(typeof luna.why, 'string');
 });
 
-test('DeepSeek, direct or through OpenRouter, never gets internal or client data', () => {
+test('the privacy class keeps no AI from the work: DeepSeek, direct or through OpenRouter, takes any class (the owner opened it on 2026-10-15)', () => {
   for (const kind of ROUTE_KINDS) {
+    const base = ids(route({ kind, sensitivity: 'public', available: ALL }));
     for (const sensitivity of ['internal', 'client']) {
-      const got = route({ kind, sensitivity, available: ALL });
-      assert.equal(got.some((c) => c.family === 'deepseek'), false, `${kind}/${sensitivity}`);
+      assert.deepEqual(ids(route({ kind, sensitivity, available: ALL })), base, `${kind}/${sensitivity}`);
     }
   }
-  assert.ok(route({ kind: 'code', sensitivity: 'public', available: ALL }).some((c) => c.provider === 'deepseek'));
+  assert.ok(route({ kind: 'code', sensitivity: 'client', available: ALL }).some((c) => c.provider === 'deepseek'));
+  assert.ok(route({ kind: 'bulk', sensitivity: 'client', available: ALL }).some((c) => c.family === 'deepseek'));
   const { skipped } = explainRoute({ kind: 'bulk', sensitivity: 'client', available: ALL });
-  assert.ok(skipped.some((s) => s.provider === 'deepseek' && s.why === 'sensitivity'));
+  assert.equal(skipped.some((x) => x.why === 'sensitivity'), false);
 });
 
-test('an unknown privacy class is treated as the strictest one', () => {
-  assert.equal(route({ kind: 'bulk', sensitivity: 'whatever', available: ALL }).some((c) => c.family === 'deepseek'), false);
-  assert.equal(route({ kind: 'bulk', available: ALL }).some((c) => c.family === 'deepseek'), false);
+test('an unknown or missing privacy class changes nothing either', () => {
+  const base = ids(route({ kind: 'bulk', sensitivity: 'public', available: ALL }));
+  assert.deepEqual(ids(route({ kind: 'bulk', sensitivity: 'whatever', available: ALL })), base);
+  assert.deepEqual(ids(route({ kind: 'bulk', available: ALL })), base);
 });
 
 test('a review comes from another family than the author: Sol for Claude\'s work, Opus for another AI\'s', () => {
@@ -74,7 +76,7 @@ test('a review comes from another family than the author: Sol for Claude\'s work
 
 test('code, long reading, Portuguese and hard reasoning follow the research table', () => {
   assert.deepEqual(ids(route({ kind: 'code', sensitivity: 'public', available: ALL })), ['claude:sonnet', 'openai:gpt-6.1-sol', 'deepseek:deepseek-v4-pro']);
-  assert.deepEqual(ids(route({ kind: 'code', sensitivity: 'client', available: ALL })), ['claude:sonnet', 'openai:gpt-6.1-sol']);
+  assert.deepEqual(ids(route({ kind: 'code', sensitivity: 'client', available: ALL })), ['claude:sonnet', 'openai:gpt-6.1-sol', 'deepseek:deepseek-v4-pro']);
   const read = route({ kind: 'read', sensitivity: 'internal', available: ALL });
   assert.deepEqual(ids(read), ['claude:sonnet', 'openai:gpt-6.1-sol', 'gemini:gemini-3.8-flash']);
   assert.ok(read[2].maxPromptChars > 0, 'Gemini reads in pieces');
@@ -92,11 +94,11 @@ test('only available providers are offered, and what is left out says why', () =
   assert.deepEqual(ids(set), ['openai:gpt-6-luna'], 'a Set works as well as an array');
 });
 
-test('a model the owner pinned for a provider replaces the table\'s, and its family is checked again', () => {
+test('a model the owner pinned for a provider replaces the table\'s, and its family follows it', () => {
   const pinned = route({ kind: 'bulk', sensitivity: 'internal', available: ['openrouter'], models: { openrouter: 'google/gemini-2.5-flash-lite' } });
-  assert.deepEqual(ids(pinned), ['openrouter:google/gemini-2.5-flash-lite'], 'no longer a DeepSeek model: internal data may go');
+  assert.deepEqual(ids(pinned), ['openrouter:google/gemini-2.5-flash-lite'], 'a Google model through OpenRouter');
   const toDeepseek = route({ kind: 'bulk', sensitivity: 'internal', available: ['openrouter'], models: { openrouter: 'deepseek/deepseek-v4.1-flash' } });
-  assert.deepEqual(toDeepseek, []);
+  assert.deepEqual(ids(toDeepseek), ['openrouter:deepseek/deepseek-v4.1-flash'], 'a DeepSeek model is not kept out either');
 });
 
 test('measured results reorder the candidates: the best, and among nearly-as-good the cheapest, first', () => {
@@ -109,20 +111,20 @@ test('measured results reorder the candidates: the best, and among nearly-as-goo
   assert.deepEqual(ids(got).slice(0, 3), ['gemini:gemini-3.1-flash-lite', 'claude:haiku', 'openai:gpt-6-luna']);
   assert.equal(got[0].measured.accuracy, 0.93);
   assert.match(got[0].why, /93%/);
-  assert.equal(ids(got).includes('openrouter:deepseek/deepseek-v4.1-flash'), false, 'internal data');
+  assert.equal(ids(got).includes('openrouter:deepseek/deepseek-v4.1-flash'), true, 'DeepSeek takes internal data too');
   const review = route({ kind: 'review', sensitivity: 'internal', author: 'claude', available: ALL, stats: [
     { kind: 'review', contestant: 'gemini:gemini-3.8-flash', accuracy: 0.9, costPerCorrectUSD: 0.01, n: 30 },
     { kind: 'review', contestant: 'openai:gpt-6.1-sol', accuracy: 0.8, costPerCorrectUSD: 0.001, n: 30 },
     { kind: 'review', contestant: 'claude:opus', accuracy: 0.99, costPerCorrectUSD: 0.1, n: 30 },
   ] });
-  assert.deepEqual(ids(review), ['gemini:gemini-3.8-flash', 'openai:gpt-6.1-sol'], 'measured or not, the author\'s family stays out');
+  assert.deepEqual(ids(review), ['gemini:gemini-3.8-flash', 'openai:gpt-6.1-sol', 'deepseek:deepseek-v4-pro'], 'measured or not, the author\'s family stays out');
 });
 
-test('a measured contestant missing from the table still competes, under the same privacy rules', () => {
+test('a measured contestant missing from the table still competes, whatever the class', () => {
   const stats = [{ kind: 'bulk', contestant: 'openai:gpt-6.1-sol', accuracy: 0.99, costPerCorrectUSD: 0.001, n: 40 }];
   assert.equal(ids(route({ kind: 'bulk', sensitivity: 'client', available: ['openai'], stats }))[0], 'openai:gpt-6.1-sol');
   const ds = [{ kind: 'bulk', contestant: 'deepseek:deepseek-v4-pro', accuracy: 0.99, costPerCorrectUSD: 0.001, n: 40 }];
-  assert.equal(route({ kind: 'bulk', sensitivity: 'client', available: ['deepseek'], stats: ds }).length, 0);
+  assert.equal(ids(route({ kind: 'bulk', sensitivity: 'client', available: ['deepseek'], stats: ds }))[0], 'deepseek:deepseek-v4-pro');
 });
 
 test('spread splits a batch over every qualifying AI at once: evenly without data, by quality per dollar with it', () => {
@@ -181,19 +183,19 @@ test('loadStats reads smDir/bench/routing.json, keeps entries measured at least 
 });
 
 // Review fixes (2026-10-10).
-test('a direct Gemini key never gets client data: the free tier may train on it', () => {
+test('a direct Gemini key takes client data too: the class keeps no AI from the work', () => {
   for (const kind of ROUTE_KINDS) {
-    assert.equal(route({ kind, sensitivity: 'client', available: ALL }).some((c) => c.provider === 'gemini'), false, kind);
+    assert.deepEqual(ids(route({ kind, sensitivity: 'client', available: ALL })), ids(route({ kind, sensitivity: 'public', available: ALL })), kind);
   }
-  assert.ok(route({ kind: 'bulk', sensitivity: 'internal', available: ALL }).some((c) => c.provider === 'gemini'), 'internal data still may');
+  assert.ok(route({ kind: 'bulk', sensitivity: 'client', available: ALL }).some((c) => c.provider === 'gemini'));
   const { skipped } = explainRoute({ kind: 'review', sensitivity: 'client', available: ['gemini'] });
-  assert.ok(skipped.some((s) => s.provider === 'gemini' && s.why === 'sensitivity'));
+  assert.equal(skipped.some((x) => x.why === 'sensitivity'), false);
 });
 
-test('an OpenRouter model that may be DeepSeek counts as DeepSeek, however it is spelled', () => {
+test('an OpenRouter model that may be DeepSeek counts as DeepSeek for the family, and is still offered', () => {
   for (const model of ['DeepSeek-V4', 'deepseek-ai/DeepSeek-V3', 'openrouter/auto', 'some/deepseek-r9']) {
     assert.equal(familyOf('openrouter', model), 'deepseek', model);
-    assert.deepEqual(route({ kind: 'bulk', sensitivity: 'client', available: ['openrouter'], models: { openrouter: model } }), [], model);
+    assert.deepEqual(ids(route({ kind: 'bulk', sensitivity: 'client', available: ['openrouter'], models: { openrouter: model } })), [`openrouter:${model}`], model);
   }
 });
 

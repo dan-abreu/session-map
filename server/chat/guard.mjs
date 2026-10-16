@@ -1,8 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pickSkills } from '../foundation/skills-focus.mjs';
 import { KINDS, POLICY, hasKind, levelFor } from '../ai/policy.mjs';
+import { ROLE_LINE_RE, roleById, roleLine, roleOf } from '../ai/agents.mjs';
+import { planNamedIn, planOf } from '../plans.mjs';
 import { NO_FORCE_PUSH, commandOf, isDestructive, isForcePush, snapshot as takeSnapshot } from './safety.mjs';
 
 // The guard of every page chat (pc16): a PreToolUse hook Claude Code runs before its own permission check, in every
@@ -16,6 +18,46 @@ const SNAPSHOT_WAIT_MS = 45_000;
 
 const deny = (reason) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
 
+const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+// The Claude models and efforts an agent may run today: the Agent tool is Claude Code until the other engines learn to
+// edit files (id93, step 4). The Cérebro's choices ride on them; another engine's choice leaves the policy holding.
+const CLAUDE_MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable']);
+const CLAUDE_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+// Which Cérebro function each policy kind belongs to (functions.json), for the agent's ride-along choice.
+const FUNCTION_ROWS = (() => {
+  try {
+    const rows = JSON.parse(readFileSync(new URL('../ai/functions.json', import.meta.url), 'utf8')).functions;
+    const byKind = new Map();
+    for (const f of rows) for (const k of f.kinds ?? []) if (!byKind.has(k)) byKind.set(k, f.id);
+    return byKind;
+  } catch {
+    return new Map();
+  }
+})();
+
+const readConfig = (dir = process.env.SESSION_MAP_DIR || join(homedir(), '.claude', 'session-map')) => {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+};
+
+// The owner's per-function choices from config.json (or42): {} when the file is absent or unreadable — the policy holds.
+export function readAgentFunctions(dir) {
+  const config = readConfig(dir);
+  return isObject(config?.ai?.others?.functions) ? config.ai.others.functions : {};
+}
+
+// The program is open (id154): no AI is stopped by a work rule. The guard still routes a tagged agent to the policy's
+// model, still snapshots before a destructive step, and still refuses a force push and a money agent without the owner's
+// OK (data and money, never work). The kind tag, the ladder, the role tools and skills, the read limits, the brief
+// gates, the workflow doors and the map clerk are the strict mode: "guard": {"strict": true} in config.json.
+export function readGuardOpen(dir) {
+  return readConfig(dir)?.guard?.strict !== true;
+}
+
 // The engine's hold on agents (or25, or32, or33): the AI only says what kind of task an agent does, by the tag that starts
 // its description ("[code] fix the header"); the model and effort come from server/ai/policy.json, set here with
 // updatedInput (proved on 2026-10-13: the subagent ran on the model the hook wrote, not the one the call asked for).
@@ -28,6 +70,69 @@ const BRIEF_BYTES = 64 * 1024;
 export const NO_KIND = `session-map: start the agent's description with its kind, e.g. [code], [review], [search]; the model and effort come from the policy. Kinds: ${KINDS.join(', ')}.`;
 export const NO_FAILED = 'session-map: [kind^1] and [kind^2] climb the ladder for a real failure: say in the prompt what failed ("failed"), or use the plain kind tag.';
 export const NO_SKILL = 'session-map: an agent opens a skill only when its brief names it; every agent that opens one reads it all again. Do the task with the brief you got.';
+// Money belongs to the owner (orchestration.md's rule, or43): the agent gate holds the one-click confirmation. A money
+// agent runs only when the brief says the owner approved; everything else is a recommendation, never an action.
+export const NO_OWNER_OK = 'session-map: money belongs to the owner — recommend it and wait; only after the owner says yes, say "approved by owner" in the brief.';
+const OWNER_OK_RE = /\b(approved by (the )?owner|owner approved|aprovado pelo dono|o dono aprovou|dono aprovou)\b/i;
+// The specialist roles (id148, or55): every kind has one in the catalog (server/ai/agents.mjs). The guard writes the
+// role's fixed line at the start of the brief and, inside the agent, holds its tools and skills. The same role rules
+// any engine: the catalog is pure data with no vendor names.
+export const NO_ROLE = (kind) => `session-map: kind [${kind}] has no role in the agents catalog — fix server/ai/agents.json.`;
+export const NO_TOOL = (role, tool) => `session-map: the role ${role.id} does not carry the ${tool} tool (allowed: ${role.tools.join(', ') || 'none'}).`;
+export const NO_SKILL_ROLE = (role, skill) => `session-map: the role ${role.id} does not carry the skill ${skill} (allowed: ${role.skills.join(', ') || 'none'}).`;
+// The senior entry gates (id149, or56): a senior worker refuses a vague ticket. In the money gate's pattern, a role's
+// brief must carry its senior ingredient — checked at the call, so the agent never starts without it. The reasons teach
+// the conductor to write senior briefs.
+export const NO_REPRO = 'session-map: a [debug] brief must name the defect — the failing test or the reproduction. The debugger reproduces first and fixes the cause, never the symptom.';
+export const NO_TARGET = 'session-map: a [review] brief must name the delivery to check — the files or the diff.';
+export const NO_PROOF = 'session-map: a [code] brief must name the proof — the tests or the suite that must pass.';
+export const NO_CODE = 'session-map: a [docs] brief must name the code it documents — the files the text must follow.';
+const ROLE_GATES = {
+  debugger: { re: /\b(?:defect|bug|broken|failing|reproduce?|falha|defeito|quebra|quebrando|erro)\b/i, no: NO_REPRO },
+  reviewer: { re: /`[^`\n]+`|\b(?:diff|delivery|entrega|revisar|reviewing)\b/i, no: NO_TARGET },
+  coder: { re: /\b(?:tests?|su[ií]te|green|proof|prova)\b/i, no: NO_PROOF },
+  writer: { re: /`[^`\n]+`|\b(?:c[oó]digo|code|arquivo|file|m[oó]dulo|module)\b/i, no: NO_CODE },
+};
+
+// One role's entry gates, in the order the guard holds them (id149/or56, id150/or57): the money OK (the kind gate:
+// security and data work does not need it), the brief cap and the senior ingredient. The executor of the other
+// engines (server/ai/agents-run.mjs, or61) applies the same gates before its run: the role is one, whatever the engine.
+// open (id154): only the money OK holds; the brief gates are the strict mode.
+export function entryGate(role, task, kind = '', { open = false } = {}) {
+  const text = String(task ?? '');
+  if (kind === 'money' && !OWNER_OK_RE.test(text)) return { ok: false, reason: NO_OWNER_OK };
+  if (open) return { ok: true };
+  const cap = role.briefBytes ?? BRIEF_CAP_BYTES;
+  if (Buffer.byteLength(text) > cap) return { ok: false, reason: NO_BRIEF_LONG(cap) };
+  const gate = ROLE_GATES[role.id];
+  if (gate && !gate.re.test(text)) return { ok: false, reason: gate.no };
+  return { ok: true };
+}
+// The economy as law (id150, or57): an agent that reads half the world before working is the expensive agent. The
+// brief is capped at the call, the map and the rules are the conductor's reading (or23: agents do not re-read them),
+// and a whole big file is denied inside an agent: read a slice (offset/limit) or the index, never the file whole.
+export const BRIEF_CAP_BYTES = 8192;
+export const WHOLE_FILE_BYTES = 64 * 1024;
+export const NO_BRIEF_LONG = (cap) => `session-map: this brief is over ${cap} bytes — a brief names the exact files and lines, what to return and when to stop (or23). Split the work: several small agents beat one that reads everything.`;
+export const NO_REREAD = 'session-map: an agent does not re-read the map or the rules — the conductor read them once and the brief carries the chapter (or23, or32). Work from the brief.';
+export const NO_WHOLE_FILE = (path) => `session-map: ${path} is over ${Math.round(WHOLE_FILE_BYTES / 1024)} KB — an agent reads a slice (offset/limit) or the index, never the whole file (id101).`;
+const DOCS_RE = /\/docs\/(?:arquitetura|architecture|standard)\//i;
+const CLAUDE_RE = /(?:^|\/)CLAUDE\.md$/i;
+// The tools the hook sees inside an agent; Read, Glob and Grep are read-only and never reach the hook, so they are
+// always free. Agent, Task and Workflow are on no role: an agent executes its role, it does not run an orchestra.
+const GATED_TOOLS = new Set(['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'Agent', 'Task', 'Workflow']);
+
+// The role the brief names in its fixed first line (roleLine), or null: no line, no gate — the guard never stops work
+// on its own failure (the same rule the skill gate keeps).
+export function roleFromBrief(text) {
+  const m = ROLE_LINE_RE.exec(String(text ?? ''));
+  return m ? roleById(m[1]) : null;
+}
+// The superpowers doors (id133, or44): the refined method as engine. A 3+ agent workflow passes only when it names a
+// plan that exists and parses (server/plans.mjs); a workflow with code work passes only with its review agent.
+export const NO_PLAN = 'session-map: this workflow needs a plan first — write it in docs/superpowers/plans/ (the superpowers writing-plans format) and name the file in the script.';
+export const NO_REVIEW = 'session-map: code work needs its review — add a [review] agent of another family to this workflow before it runs.';
+const PLAN_MIN_AGENTS = 3;
 
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -47,30 +152,103 @@ export function readBrief(input, { read = readFileSync } = {}) {
 }
 
 // An Agent/Task call's input -> the answer: deny without a known kind tag, else allow with the policy's model and effort
-// (the other fields as they were).
-function agentLevel(ti) {
+// (the other fields as they were). The Cérebro's choice for that kind (or42) replaces the policy's when it is a Claude
+// model; a choice for another engine cannot run an agent yet and leaves the policy holding.
+// open (id154): an agent with no known tag runs as it was asked, and a climb without a failure runs on the plain rung.
+function agentLevel(ti, { functions = {}, open = false } = {}) {
   const tag = TAG_RE.exec(String(ti.description ?? ''));
-  if (!tag || !hasKind(tag[1])) return deny(NO_KIND);
-  const up = Number(tag[2] ?? 0);
-  if (up && !FAILED_RE.test(String(ti.prompt ?? ''))) return deny(NO_FAILED);
+  if (!tag || !hasKind(tag[1])) return open ? null : deny(NO_KIND);
+  let up = Number(tag[2] ?? 0);
+  if (up && !FAILED_RE.test(String(ti.prompt ?? ''))) {
+    if (!open) return deny(NO_FAILED);
+    up = 0;
+  }
+  // The specialist role (id148, or55): every kind has one — the catalog's completeness is the motor's own test. The
+  // role's fixed line rides the brief, byte-identical per role, so the agents of a role pay the cache price after the
+  // first (id102); the inner hook reads it back and holds the role's tools and skills.
+  const role = roleOf(tag[1]);
+  if (!role && !open) return deny(NO_ROLE(tag[1]));
+  // The entry gates (or56/or57), one function shared with the other engines' executor (or61). Money work acts only
+  // after the owner's one-click confirmation (or43), open or not: the brief must say so.
+  if (tag[1] === 'money' && !OWNER_OK_RE.test(String(ti.prompt ?? ''))) return deny(NO_OWNER_OK);
+  const entry = role ? entryGate(role, ti.prompt, tag[1], { open }) : { ok: true };
+  if (!entry.ok) return deny(entry.reason);
   const { model, effort } = levelFor(tag[1], up);
-  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: `session-map policy: ${tag[1]}${up ? `^${up}` : ''} runs on ${model} at ${effort}`, updatedInput: { ...ti, model, effort } } };
+  let useModel = model;
+  let useEffort = effort;
+  const rowId = FUNCTION_ROWS.get(tag[1]);
+  const c = rowId && isObject(functions[rowId]) ? functions[rowId] : null;
+  if (c && (c.provider === undefined || c.provider === 'claude')) {
+    if (typeof c.model === 'string' && CLAUDE_MODELS.has(c.model)) useModel = c.model;
+    if (typeof c.effort === 'string' && CLAUDE_EFFORTS.has(c.effort)) useEffort = c.effort;
+  }
+  // The Cérebro's "agents" row (or40, id146): the owner's one knob for every work agent, riding on top of the kind row
+  // ("the row of the kind they execute, plus the choices here").
+  const all = isObject(functions.agents) ? functions.agents : null;
+  if (all && (all.provider === undefined || all.provider === 'claude')) {
+    if (typeof all.model === 'string' && CLAUDE_MODELS.has(all.model)) useModel = all.model;
+    if (typeof all.effort === 'string' && CLAUDE_EFFORTS.has(all.effort)) useEffort = all.effort;
+  }
+  const prompt = role ? `${roleLine(role)}\n${String(ti.prompt ?? '')}` : String(ti.prompt ?? '');
+  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: `session-map policy: ${tag[1]}${up ? `^${up}` : ''}${role ? ` (role ${role.id})` : ''} runs on ${useModel} at ${useEffort}`, updatedInput: { ...ti, model: useModel, effort: useEffort, prompt } } };
 }
 
-export function guardAgent(input, { brief = readBrief } = {}) {
+// Inside an agent, the role's tools hold (id148, or55): a tool the role does not carry is denied before it runs. No
+// readable brief (no role line) means no gate: the guard fails open on its own failure.
+export function guardAgentTool(input, { brief = readBrief } = {}) {
+  const tool = String(input?.tool_name ?? '');
+  if (!input?.agent_id || !GATED_TOOLS.has(tool)) return null;
+  const role = roleFromBrief(brief(input));
+  if (!role) return null;
+  return role.tools.includes(tool) ? null : deny(NO_TOOL(role, tool));
+}
+
+// Inside an agent, the reads hold (id150, or57): the map and the rules are the conductor's reading — except for the
+// architect and the planner, whose own work IS the map and the standards — and CLAUDE.md is every agent's inherited
+// context, so re-reading it is pure waste. A whole big file is denied: a slice (offset/limit) or the index. A path
+// that cannot be resolved or statted, or a brief with no readable role line, fails open: the guard never stops work
+// on its own failure.
+export function guardAgentRead(input, { stat = statSync, exists = existsSync, brief = readBrief } = {}) {
+  if (String(input?.tool_name ?? '') !== 'Read' || !input?.agent_id) return null;
+  const target = input?.tool_input?.file_path;
+  if (typeof target !== 'string' || !target.trim()) return null;
+  const path = resolve(typeof input.cwd === 'string' ? input.cwd : '.', target).replace(/\\/g, '/');
+  if (DOCS_RE.test(path) || CLAUDE_RE.test(path)) {
+    const role = roleFromBrief(brief(input));
+    if (!role) return null;
+    if (DOCS_RE.test(path) && (role.id === 'architect' || role.id === 'planner')) return null;
+    return deny(NO_REREAD);
+  }
+  const ti = input.tool_input ?? {};
+  if (ti.offset !== undefined || ti.limit !== undefined) return null;
+  try {
+    if (!exists(path) || stat(path).size <= WHOLE_FILE_BYTES) return null;
+  } catch { /* unreadable: nothing to hold the read to */ return null; }
+  return deny(NO_WHOLE_FILE(path));
+}
+
+export function guardAgent(input, { brief = readBrief, functions = {}, open = false } = {}) {
   const tool = String(input?.tool_name ?? '');
   const ti = input?.tool_input ?? {};
   if (AGENT_TOOLS.has(tool)) {
-    return agentLevel(ti);
+    return agentLevel(ti, { functions, open });
   }
-  if (tool === 'Skill' && input?.agent_id) {
+  if (tool === 'Skill' && input?.agent_id && !open) {
     const text = brief(input);
     const skill = fold(ti.skill ?? ti.name ?? '');
     if (text == null || !skill) return null;
     const said = fold(text);
     // Whole names only: a brief about "commitment" does not name the skill "commit".
     const names = (name) => new RegExp(`(?<![a-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9_-])`).test(said);
-    return names(skill) || names(skill.split(':').pop()) ? null : deny(NO_SKILL);
+    if (!(names(skill) || names(skill.split(':').pop()))) return deny(NO_SKILL);
+    // The role's list (id148, or55): the brief named it, and the role must carry it. The last name segment matches, so
+    // "superpowers:test-driven-development" rides a role that carries "test-driven-development".
+    const role = roleFromBrief(text);
+    if (role) {
+      const same = (allowed) => skill.split(':').pop() === fold(allowed).split(':').pop();
+      if (!role.skills.some(same)) return deny(NO_SKILL_ROLE(role, String(ti.skill ?? ti.name ?? '')));
+    }
+    return null;
   }
   return null;
 }
@@ -134,16 +312,38 @@ export function guardWorkflow(input, { read = readFileSync, limit = POLICY.limit
   for (const call of calls) {
     if (HIGH_LEVEL_RE.test(call) && !SENSITIVE_TAG_RE.test(call) && !FAILED_RE.test(call)) return deny(NO_HIGH_LEVEL);
   }
+  // The plan door: 3+ agents = a build, and a build starts from its plan (the superpowers writing-plans artifact).
+  if (calls.length >= PLAN_MIN_AGENTS) {
+    const root = typeof input.cwd === 'string' ? input.cwd : '.';
+    const named = planNamedIn(script);
+    const plan = planOf(root, named, { read });
+    if (!plan.ok) return deny(`${NO_PLAN} (${plan.error})`);
+  }
+  // The review door: code work ships only with its reviewer of another family.
+  const hasCode = calls.some((c) => /\[code(?:\^\d)?\]/.test(c));
+  const hasReview = calls.some((c) => /\[review(?:\^\d)?\]/.test(c));
+  if (hasCode && !hasReview) return deny(NO_REVIEW);
   return null;
 }
 
 // input: the hook's JSON from Claude Code. → the answer to print, or null to say nothing (the step goes on to the
 // permission check as before). A failed or slow snapshot never stops the step.
 // mapEdit: hold map edits to the clerk only where its tools exist (a page chat); the --user copy runs everywhere else.
-export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env, mapEdit = true } = {}) {
-  if (AGENT_TOOLS.has(input?.tool_name) || input?.tool_name === 'Skill') return guardAgent(input, brief ? { brief } : {});
-  if (input?.tool_name === 'Workflow') return guardWorkflow(input);
-  if (MAP_EDIT_TOOLS.has(input?.tool_name)) return mapEdit ? guardMapEdit(input, env ? { env } : {}) : null;
+// open (id154, the hook reads it from config.json with readGuardOpen): no work rule stops a step; the routing, the
+// snapshot, the force push and the money OK stay.
+export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env, mapEdit = true, functions = {}, open = false } = {}) {
+  if (!open) {
+    // Inside an agent, the role's tools hold first (id148, or55): an inner Agent, Task or Workflow is on no role's list.
+    if (input?.agent_id && GATED_TOOLS.has(input?.tool_name)) {
+      const toolDeny = guardAgentTool(input, { ...(brief ? { brief } : {}) });
+      if (toolDeny) return toolDeny;
+    }
+    const readDeny = guardAgentRead(input, { ...(brief ? { brief } : {}) });
+    if (readDeny) return readDeny;
+  }
+  if (AGENT_TOOLS.has(input?.tool_name) || input?.tool_name === 'Skill') return guardAgent(input, { ...(brief ? { brief } : {}), functions, open });
+  if (input?.tool_name === 'Workflow') return open ? null : guardWorkflow(input);
+  if (MAP_EDIT_TOOLS.has(input?.tool_name)) return mapEdit && !open ? guardMapEdit(input, env ? { env } : {}) : null;
   const command = commandOf(String(input?.tool_name ?? ''), input?.tool_input);
   if (isForcePush(command)) return deny(NO_FORCE_PUSH);
   if (snapshotOn && isDestructive(command) && typeof input?.cwd === 'string') {
@@ -161,30 +361,37 @@ export async function guardStep(input, { snapshotOn = false, snapshot = takeSnap
 // 79k after each summary (system prompt, skill list, rules, map context, summary, re-attached files), so at the 100k
 // window (the least Claude Code accepts) it summarized every two or three turns and Claude Code killed it as thrashing;
 // measured 2026-10-14 in four chats, 33 summaries in one night. The summary runs near the model's whole window again.
-// What one chat lists of skills and plugins (pc29). Probed 2026-10-13: --settings enabledPlugins turns a plugin off for
-// that one session, and skillOverrides "name-only" shows a user skill by name without its description.
-// skills/plugins: the project's lists (listSkills, listPlugins + month); part/text: where the chat opens and what it asked.
-// → { skillOverrides, enabledPlugins }. Picked user/project skills "on", the other ones name-only (the index); a plugin
-// goes off only when it is on, not session-map, unused by the project for 30 days (month.count === 0, known), not
-// named in the request and holding none of the picked skills.
-export function chatSkillSettings({ skills = [], plugins = [], part = null, text = '' } = {}) {
-  const picked = pickSkills({ skills, part, text });
-  const pickedNames = new Set(picked.map((k) => k.command));
+// What one chat lists of skills and plugins (pc29, id140). Probed 2026-10-13: --settings enabledPlugins turns a plugin
+// off for that one session, and skillOverrides "name-only" shows a user skill by name without its description.
+// The owner's rule (id140): an on skill runs automatically in every chat — no call needed; an off skill never loads;
+// a plugin goes off only on the owner's switch (rd09), never on the engine's guess.
+// skillsOn: false is the airplane mode (id136): every skill name-only and every plugin off — the program's own plugin
+// never falls, because it is the plane. skillsOff: the owner's per-skill switches (id139): a skill in the list stays
+// name-only whatever the focus picks.
+export function chatSkillSettings({ skills = [], plugins = [], part = null, text = '', skillsOn = true, skillsOff = [] } = {}) {
+  const offNames = new Set((skillsOff ?? []).map(fold));
+  if (!skillsOn) {
+    const skillOverrides = {};
+    for (const k of skills) {
+      if (!k?.name || (k.origin !== 'user' && k.origin !== 'project') || k.enabled === false) continue;
+      skillOverrides[k.name] = 'name-only';
+    }
+    const enabledPlugins = {};
+    for (const p of plugins) {
+      if (p?.id && p.name !== 'session-map') enabledPlugins[p.id] = false;
+    }
+    return { skillOverrides, enabledPlugins };
+  }
+  // The owner's rule (id140): an on skill runs automatically in every chat — no call needed; an off skill never
+  // loads. The focus no longer filters: the switches are the whole control.
   const skillOverrides = {};
   for (const k of skills) {
     if (!k?.name || (k.origin !== 'user' && k.origin !== 'project') || k.enabled === false) continue;
-    skillOverrides[k.name] = pickedNames.has(k.command) ? 'on' : 'name-only';
+    const off = offNames.has(fold(k.name)) || offNames.has(fold(k.command));
+    skillOverrides[k.name] = off ? 'name-only' : 'on';
   }
-  const said = fold(`${text} ${part?.name ?? ''}`);
-  const holding = new Set(picked.map((k) => k.plugin).filter(Boolean));
-  const enabledPlugins = {};
-  for (const p of plugins) {
-    if (!p?.id || !p.name || p.enabled !== true || p.name === 'session-map' || holding.has(p.name)) continue;
-    if (!Number.isInteger(p.month?.count) || p.month.count > 0) continue;
-    if (new RegExp(`(?<![a-z0-9_-])${fold(p.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9_-])`).test(said)) continue;
-    enabledPlugins[p.id] = false;
-  }
-  return { skillOverrides, enabledPlugins };
+  // Plugins: the owner's switch (rd09) is the only thing that turns one off; the engine no longer guesses.
+  return { skillOverrides, enabledPlugins: {} };
 }
 
 export function guardSettings({ snapshot, focus = null }) {
@@ -198,7 +405,7 @@ export function guardSettings({ snapshot, focus = null }) {
     hooks: {
       PreToolUse: [
         { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
-        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
+        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow|Read', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
       ],
       Stop: [{ hooks: book('--stop') }],
       SessionStart: [{ matcher: 'compact', hooks: book('--compact') }],

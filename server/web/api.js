@@ -90,7 +90,6 @@ export const api = {
   chatPermission: (key, requestId, allow, always) => call('POST', `/api/chat/${seg(key)}/permission`, { requestId, allow, always }),
   chatStop: (key) => call('POST', `/api/chat/${seg(key)}/stop`, {}),
   chatMode: (key, mode) => call('POST', `/api/chat/${seg(key)}/mode`, { mode }),
-  chatRun: (key, run) => call('POST', `/api/chat/${seg(key)}/run`, { run }),
   reinforcedLimit: () => call('GET', '/api/settings/reinforced-limit'),
   setReinforcedLimit: (usd) => call('POST', '/api/settings/reinforced-limit', { usd }),
   setProjectBackground: (projectId, always) => call('POST', '/api/settings/project-background', { projectId, always }),
@@ -116,6 +115,10 @@ export const api = {
   setSettingsMode: (mode) => call('POST', '/api/settings/permission-mode', { mode }),
   undoSettingsMode: () => call('DELETE', '/api/settings/permission-mode'),
   setPlugin: (id, enabled) => call('POST', '/api/settings/plugin', { id, enabled }),
+  // The skills' airplane mode (id136): one switch; it reaches the chats opened after it.
+  setSkillsAirplane: (on) => call('PATCH', '/api/settings/skills-airplane', { on }),
+  // One skill's switch (id139): the name or command the owner turned on or off.
+  setSkill: (skill, on) => call('PATCH', '/api/settings/skill', { skill, on }),
   flowExport: (projectId) => call('GET', `/api/arch/${seg(projectId)}/mermaid`),
   flowModel: (projectId) => call('GET', `/api/arch/${seg(projectId)}/model`),
   flowPart: (projectId, partId, onlyLive = false) => call('GET', `/api/arch/${seg(projectId)}/model/part/${seg(partId)}${onlyLive ? '?only=live' : ''}`),
@@ -136,6 +139,9 @@ export const api = {
   aiUsage: () => call('GET', '/api/ai/usage'),
   setAiKey: (provider, key) => call('POST', '/api/settings/ai-helpers', { provider, key }),
   setAiHelper: (body) => call('POST', '/api/settings/ai-helpers', body),
+  brain: () => call('GET', '/api/ai/brain'),
+  setBrain: (body) => call('PATCH', '/api/ai/brain', body),
+  brainConfig: (body) => call('POST', '/api/ai/brain/configure', body),
   removeAiKey: (provider) => call('DELETE', `/api/settings/ai-helpers?provider=${seg(provider)}`),
   // The look-only link (sv04): the owner reads it, makes a new one or turns it off.
   lookKey: () => call('GET', '/api/settings/look-key'),

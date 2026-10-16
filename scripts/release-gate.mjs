@@ -17,8 +17,9 @@ import { resolvePointer } from '../server/foundation/pointers.mjs';
 import { requestsOf } from '../server/web/requests.js';
 import { verifyManifest } from './shots-manifest.mjs';
 import { todayLocal } from './readme-shots.mjs';
+import { runSync } from './sync-agents.mjs';
 
-export const CHECK_IDS = ['versions', 'changelog', 'features', 'links', 'shots', 'invention', 'shots-date', 'ticked', 'tests'];
+export const CHECK_IDS = ['versions', 'changelog', 'features', 'links', 'shots', 'invention', 'shots-date', 'ticked', 'agent-files', 'tests'];
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const REPO = resolve(HERE, '..');
 const READMES = ['README.md', 'README.pt-BR.md'];
@@ -303,6 +304,17 @@ function checkTicked(root) {
   return out;
 }
 
+// ---- agent files ----------------------------------------------------------------------------------------------------
+
+// The specialist agent files follow the architecture map (id158, or68). A project that never generated them has nothing to
+// keep fresh, and one whose map or files cannot be read is not this check's business: only a real drift fails.
+export async function checkAgentFilesFresh(root) {
+  const res = await runSync({ root, check: true }).catch(() => null);
+  if (!res || res.error || res.ok || res.missing.length >= res.files) return [];
+  const drift = [...res.missing, ...res.changed, ...res.stale];
+  return [fail('agent-files', `${drift.length} agent file(s) no longer follow the architecture map (${drift.slice(0, 3).join(', ')}${drift.length > 3 ? ', …' : ''})`, 'run node scripts/sync-agents.mjs')];
+}
+
 // ---- tests ----------------------------------------------------------------------------------------------------------
 
 // Node 20 does not expand a glob by itself, so the files are listed here and passed one by one.
@@ -339,7 +351,7 @@ export async function runGate({ root = REPO, mode = 'check', measure, runTests, 
     ...await checkInvention(measure),
   ];
   if (mode === 'publish') {
-    failures.push(...checkShotsDate(root, today), ...checkTicked(root), ...await checkTests(root, runTests));
+    failures.push(...checkShotsDate(root, today), ...checkTicked(root), ...await checkAgentFilesFresh(root), ...await checkTests(root, runTests));
   }
   return { ok: failures.length === 0, failures, notes };
 }

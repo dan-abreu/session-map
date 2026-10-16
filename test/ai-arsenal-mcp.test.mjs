@@ -121,7 +121,14 @@ test('it speaks MCP: initialize, ping, and -32601 for what it does not know', as
 test('it lists its tools, and the asking one warns that answers are data to verify', async () => {
   await withMcp({}, async ({ mcp }) => {
     const { tools } = (await mcp.rpc('tools/list', {})).result;
-    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'map_add_item', 'map_add_link', 'map_add_part', 'map_add_request', 'map_finish_item', 'map_start_item', 'pick_worker', 'report_result', 'restart_session_map', 'skeleton']);
+    assert.deepEqual(tools.map((t) => t.name).sort(), ['ask_other_ai', 'list_other_ais', 'map_add_item', 'map_add_link', 'map_add_part', 'map_add_request', 'map_finish_item', 'map_start_item', 'merge_other_ai', 'pick_worker', 'report_result', 'restart_session_map', 'run_other_ai', 'skeleton']);
+    const run = tools.find((t) => t.name === 'run_other_ai');
+    assert.deepEqual(run.inputSchema.required.sort(), ['kind', 'provider', 'sensitivity', 'task']);
+    assert.deepEqual(run.inputSchema.properties.provider.enum, ['openai', 'gemini', 'deepseek']);
+    assert.match(run.description, /isolated copy/i);
+    assert.match(run.description, /never merges/i);
+    const merge = tools.find((t) => t.name === 'merge_other_ai');
+    assert.deepEqual(merge.inputSchema.required.sort(), ['accepted', 'runId', 'why']);
     const ask = tools.find((t) => t.name === 'ask_other_ai');
     assert.deepEqual(ask.inputSchema.required.sort(), ['kind', 'prompt', 'sensitivity']);
     assert.deepEqual(ask.inputSchema.properties.kind.enum, ['review', 'bulk', 'code', 'read', 'portuguese', 'reasoning']);
@@ -134,7 +141,7 @@ test('it lists its tools, and the asking one warns that answers are data to veri
     assert.match(d, /verify/i);
     assert.match(d, /secret/i);
     assert.match(d, /\.env/);
-    assert.match(d, /honest/i);
+    assert.match(d, /sensitivity as a label/i);
     assert.match(d, /DeepSeek/);
     assert.match(d, /different (model )?family/i);
     assert.equal(tools.find((t) => t.name === 'list_other_ais').inputSchema.type, 'object');
@@ -198,7 +205,7 @@ test('list_other_ais shows the cap, today\'s spend and each AI in plain words', 
     assert.match(text, /gemini.*paused/i);
     assert.match(text, /deepseek.*switched off/i);
     assert.match(text, /openrouter.*no key/i);
-    assert.match(text, /DeepSeek only.*public/i);
+    assert.match(text, /may take any work/i);
   });
 });
 
@@ -383,7 +390,7 @@ test('the project chat tells the conductor the arsenal exists and how to route',
   const head = projectSections(project, null)[0];
   assert.match(head, /ask_other_ai/);
   assert.match(head, /another (model )?family/i);
-  assert.match(head, /DeepSeek only.*public/i);
+  assert.match(head, /may take any work/i);
 });
 
 test('something else listening on the port gets neither the token nor the prompt: the server must prove itself first', async () => {

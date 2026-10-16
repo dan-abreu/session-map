@@ -185,11 +185,10 @@ const walk = (el, out = []) => {
 const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c === 'string')).join(' ');
 const by = (el, attr, value) => walk(el).find((e) => e.attrs?.[attr] === value);
 
-const ROLES = ['log', 'form', 'input', 'send', 'stop', 'title', 'context', 'dot', 'status', 'live', 'list', 'note', 'close', 'where', 'run', 'runpanel',
-  'menu', 'find', 'tasks', 'attach', 'filepick', 'pending', 'suggest', 'more', 'moremenu', 'tools'];
+const ROLES = ['log', 'form', 'input', 'send', 'stop', 'title', 'context', 'dot', 'status', 'live', 'list', 'note', 'close', 'where', 'brain',
+  'find', 'tasks', 'attach', 'filepick', 'pending', 'suggest', 'more', 'moremenu', 'tools'];
 function sheet() {
   const parts = new Map(ROLES.map((r) => [r, new El()]));
-  parts.get('menu').children = [parts.get('runpanel')];
   parts.get('live').children = [parts.get('status'), parts.get('stop')];
   const root = new El('aside', {}, [parts.get('title'), parts.get('more'), parts.get('moremenu'), parts.get('find'), parts.get('log'), parts.get('live'), parts.get('form')]);
   root.hidden = true;
@@ -260,7 +259,9 @@ test('while a turn runs, its steps say "doing" and one working line with the cur
   sse(streams.at(-1), 'text', { text: 'Ready.' }, 3);
   sse(streams.at(-1), 'turn-end', { costUSD: 0.1 }, 4);
   await settle();
-  assert.equal(part('live').hidden, true, 'gone once the turn ends');
+  assert.equal(part('live').hidden, false, 'the state line stays: it says what the chat is now (pc25)');
+  assert.equal(part('stop').hidden, true, 'no Stop once the turn ended');
+  assert.ok(text(part('status')).includes('chat.finished'), 'finished, with the summary');
 });
 
 test('quick replies show under the last reply only; a click sends that option\'s text, with "or answer in your words" under them', async () => {
@@ -392,85 +393,37 @@ test('closing find in a conversation that is only read here gives the focus to t
   assert.equal(document.activeElement, part('input'), 'where the person can write, back to the box');
 });
 
-// ---- the run menu (pc19) ----
+// ---- how the conversation runs (id146): the brain's line by Send ----
 
-const LIST_RUN = { chats: [], settings: { mode: 'default', downgraded: false }, mine: { model: 'opus', effort: 'high' }, reinforce: { limitUSD: 20, spentUSD: 3 } };
+const LIST_RUN = { chats: [], settings: { mode: 'default', downgraded: false }, reinforce: { limitUSD: 20, spentUSD: 3 } };
 const openPart = (chat) => chat.open({ projectId: 'shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
 const byRun = (el, name) => by(el, 'data-run', name);
 
-test('the run menu has three ways only, one sentence each; nothing else of the old menu is in it', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
+test('the brain\'s line by Send is quiet until a run event, then says the model and the reasoning; the why is in the tooltip', async () => {
+  const { streams } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  byRun(part('run'), 'toggle').attrs.onclick();
-  const ways = walk(part('runpanel')).filter((e) => e.attrs.role === 'radio');
-  assert.deepEqual(ways.map((w) => w.attrs['data-run']), ['path-autonomous', 'path-auto', 'path-manual']);
-  assert.deepEqual(ways.map((w) => w.attrs['aria-checked']), ['true', 'false', 'false']);
-  for (const p of ['autonomous', 'auto', 'manual']) assert.ok(text(byRun(part('runpanel'), `path-${p}`)).includes(`run.pathHint.${p}`));
-  for (const gone of ['limit', 'limit-save', 'self', 'way-maestro', 'way-ultracode', 'way-settings']) assert.equal(byRun(part('menu'), gone), undefined, gone);
+  part('input').value = 'Fix it';
+  part('form').fire('submit');
+  await settle();
+  assert.equal(part('brain').hidden, true, 'nothing before the first run event');
+  sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', brain: { phase: 'build', why: 'money' }, costUSD: 0.1 }, 1);
+  assert.equal(part('brain').hidden, false);
+  const line = text(part('brain'));
+  assert.ok(line.includes('Opus 5.5') && line.includes('run.effort.high') && !line.includes('run.brain.'), line);
+  assert.equal(part('brain').attrs.title, 'chat.brainTitle\nchat.brainWhy(run.brain.money)', 'the why rides in the tooltip');
 });
 
-test('Manual shows the model and the level right under it; the button and the quiet line follow the choice', async () => {
+test('a new conversation sends no run of its own: the Cérebro routes, and Configurações keeps only what is left', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part } = makeChat();
   openPart(chat);
   await settle();
-  byRun(part('run'), 'toggle').attrs.onclick();
-  assert.equal(byRun(part('runpanel'), 'model-haiku'), undefined, 'hidden until Manual');
-  byRun(part('runpanel'), 'path-manual').attrs.onclick();
-  byRun(part('runpanel'), 'model-haiku').attrs.onclick();
-  byRun(part('runpanel'), 'effort-low').attrs.onclick();
-  assert.equal(byRun(part('runpanel'), 'path-manual').attrs['aria-checked'], 'true');
-  assert.ok(text(part('run')).includes('Haiku'), 'Manual\'s button names the model');
-  assert.ok(text(byRun(part('runpanel'), 'line')).includes('Haiku') && text(byRun(part('runpanel'), 'line')).includes('run.effort.low'));
   part('input').value = 'Go';
   part('form').fire('submit');
   await settle();
-  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'fixed', model: 'haiku', effort: 'low' });
-});
-
-test('the three ways are one radio group: one tab stop, the arrows choose as they move, Manual\'s pickers sit outside it', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
-  const { chat, part } = makeChat();
-  openPart(chat);
-  await settle();
-  const panel = part('runpanel');
-  panel.querySelectorAll = () => walk(panel).filter((e) => e.attrs.role === 'radio');
-  byRun(part('run'), 'toggle').attrs.onclick();
-  const ways = () => panel.querySelectorAll();
-  assert.deepEqual(ways().map((w) => w.attrs.tabindex), ['0', '-1', '-1'], 'only the chosen way is a tab stop');
-  ways()[0].focus();
-  const e = panel.fire('keydown', { key: 'ArrowDown' });
-  assert.equal(e.prevented, true);
-  assert.deepEqual(ways().map((w) => w.attrs['aria-checked']), ['false', 'true', 'false'], 'the arrow chose Automatic');
-  assert.equal(document.activeElement, ways()[1], 'and the focus is on it');
-  assert.deepEqual(ways().map((w) => w.attrs.tabindex), ['-1', '0', '-1']);
-  panel.fire('keydown', { key: 'ArrowDown' });
-  assert.equal(ways()[2].attrs['aria-checked'], 'true');
-  const group = walk(panel).find((el) => el.attrs.role === 'radiogroup');
-  assert.ok(byRun(panel, 'model-haiku'), 'Manual shows its pickers');
-  assert.equal(byRun(group, 'model-haiku'), undefined, 'outside the radio group');
-  panel.fire('keydown', { key: 'ArrowUp' });
-  assert.equal(ways()[1].attrs['aria-checked'], 'true', 'up goes back');
-});
-
-test('the quiet line says model · level · what this conversation cost, and the link opens Configurações with this conversation', async () => {
-  server({ [`GET /api/chat/history/${S1}`]: () => history(TURN, { run: { kind: 'autonomous' }, costUSD: 68 }) });
-  const opened = [];
-  const { chat, part } = makeChat({ openSettings: (binding, opener) => opened.push({ binding, opener }) });
-  openOld(chat);
-  await settle();
-  const toggle = byRun(part('run'), 'toggle');
-  toggle.attrs.onclick();
-  const line = text(byRun(part('runpanel'), 'line'));
-  for (const words of ['Opus', 'run.effort.high', 'run.lineCost($68.00)']) assert.ok(line.includes(words), words);
-  byRun(part('runpanel'), 'settings').attrs.onclick();
-  assert.equal(part('menu').hidden, true, 'the menu gives way to the sheet');
-  assert.equal(opened.length, 1);
-  assert.equal(opened[0].opener, toggle, 'focus comes back to the button');
-  assert.equal(opened[0].binding.run().kind, 'autonomous');
-  assert.equal(opened[0].binding, chat.settings(), 'the same conversation the person menu would open');
+  assert.equal('run' in calls.find((c) => c.path === '/api/chat/start').body, false, 'no way, no model chips (id146)');
 });
 
 // ---- Configurações ----
@@ -488,17 +441,17 @@ function makeSettings(extra = {}) {
   return { sheetCtl, dialog, pcModes, saved };
 }
 
-test('Configurações holds what left the run menu: the monthly limit, "may reinforce", the permission mode, every Claude on this PC, and the advanced ways', async () => {
+test('Configurações holds the monthly limit, the permission mode and every Claude on this PC; the ways left with the brain', async () => {
   server({ 'GET /api/chat/list': () => LIST_RUN, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
-  const { chat } = makeChat();
+  const { chat, part } = makeChat();
   openPart(chat);
   await settle();
   const { sheetCtl, dialog, pcModes, saved } = makeSettings();
   await sheetCtl.open(chat.settings());
   assert.equal(dialog.open, true);
-  for (const tag of ['limit', 'limit-save', 'self', 'mode', 'pcmode', 'way-maestro', 'way-ultracode', 'way-settings']) assert.ok(by(dialog, 'data-set', tag), tag);
+  for (const tag of ['limit', 'limit-save', 'mode', 'pcmode']) assert.ok(by(dialog, 'data-set', tag), tag);
+  assert.equal(by(dialog, 'data-set', 'self'), undefined, '"may reinforce on its own" left with the ways');
   assert.ok(text(dialog).includes('run.limitUsed($3.00,$20.00)'), 'the same numbers as the Home card');
-  assert.ok(text(dialog).includes('run.hint.settings(Opus,run.effort.high)'));
 
   const field = by(dialog, 'data-set', 'limit');
   field.value = '30';
@@ -511,31 +464,6 @@ test('Configurações holds what left the run menu: the monthly limit, "may rein
   assert.equal(chat.settings().choice(), 'acceptEdits');
   by(dialog, 'data-set', 'pcmode').attrs.onclick();
   assert.deepEqual(pcModes, ['acceptEdits']);
-
-  by(dialog, 'data-set', 'way-maestro').attrs.onchange();
-  assert.equal(chat.settings().run().kind, 'maestro');
-  by(dialog, 'data-set', 'way-ultracode').attrs.onchange();
-  assert.ok(text(dialog).includes('run.ultra.warn'), 'Ultracode warns about the cost first');
-  assert.equal(chat.settings().run().kind, 'maestro');
-  by(dialog, 'data-set', 'ultra-yes').attrs.onclick();
-  assert.equal(chat.settings().run().kind, 'ultracode');
-});
-
-test('"may reinforce on its own" belongs to Automatic: it switches there, and says why it is fixed elsewhere', async () => {
-  server({ 'GET /api/chat/list': () => LIST_RUN });
-  const { chat, part } = makeChat();
-  openPart(chat);
-  await settle();
-  const { sheetCtl, dialog } = makeSettings();
-  await sheetCtl.open(chat.settings());
-  const self = by(dialog, 'data-set', 'self');
-  assert.equal(self.attrs.disabled, true, 'Autonomous already reinforces on its own');
-  assert.ok(text(dialog).includes('settings.selfAutonomous'));
-  byRun(part('run'), 'toggle').attrs.onclick();
-  byRun(part('runpanel'), 'path-auto').attrs.onclick();
-  sheetCtl.refresh();
-  by(dialog, 'data-set', 'self').attrs.onchange();
-  assert.deepEqual(chat.settings().run(), { kind: 'auto', selfReinforce: true });
 });
 
 test('opened from the person\'s menu with no conversation, Configurações keeps the limit and the PC\'s mode and says where the rest is', async () => {
@@ -572,7 +500,7 @@ test('both sheets: one header line (dot, title, part, ⋯, ×), the working line
     const box = s.slice(s.indexOf('class="chat-box"'), s.indexOf('data-chat="send"'));
     assert.match(box, /data-chat="hints"[^>]*data-i18n-title="chat\.keys"/, `${id}: the hints inside the box, the whole list as the tooltip`);
     // One piece per key, so a narrow sheet drops whole pieces and never cuts one ("/ com…").
-    const hints = /<span class="chat-hints"[^>]*>([\s\S]*?)<\/span>\s*<div class="chat-run"/.exec(box)?.[1] ?? '';
+    const hints = /<span class="chat-hints"[^>]*>([\s\S]*?)<\/span>\s*<span class="chat-cost/.exec(box)?.[1] ?? '';
     assert.deepEqual([...hints.matchAll(/data-i18n="([\w.]+)"/g)].map((m) => m[1]), ['chat.hint.send', 'chat.hint.file', 'chat.hint.command'], id);
     const live = s.slice(s.indexOf('data-chat="live"'), s.indexOf('data-chat="input"'));
     assert.ok(live.includes('data-chat="status"') && live.includes('data-chat="stop"'), `${id}: Stop sits in the working line`);
@@ -617,13 +545,14 @@ test('Configurações is one sheet of the page, opened from the run menu of both
   // The ⋯ of the map's chat gets every action of a conversation, in the spec's order.
   const more = app.slice(app.indexOf('function chatMore('), app.indexOf('// ---- move or rename'));
   const ids = [...more.matchAll(/id: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(ids, ['rename', 'archive', 'open', 'delete']);
+  assert.deepEqual(ids, ['rename', 'archive', 'export', 'open', 'delete']);
   assert.match(app, /about: \(\) =>/);
 });
 
-test('the information about a box opens in place from the ⋯ and folds away entirely while the person talks', () => {
+test('the information about a box opens in place from the ⋯ and folds away its body while the person talks, keeping the tabs strip', () => {
   const css = read('server/web/style.css');
-  assert.match(css, /\.point-info\[data-folded\]\s*\{[^}]*display:\s*none/);
+  assert.match(css, /\.point-info\[data-folded\] \.point-body\s*\{[^}]*display:\s*none/, 'folded: the body gives the room to the chat');
+  assert.doesNotMatch(css, /\.point-info\[data-folded\]\s*\{[^}]*display:\s*none/, 'folded: the strip and the glance line stay, so Resumo, Arquivos… are never lost');
   assert.match(css, /\.point-info\[data-folded\] \+ \.point-split\s*\{[^}]*display:\s*none/);
 });
 
@@ -632,41 +561,65 @@ test('every new word of the chat and Configurações exists in both languages', 
     'chat.about', 'chat.moreNew', 'chat.findClose', 'chat.quick.label', 'chat.quick.or', 'chat.quick.send',
     'chat.live.working', 'chat.live.thinking', 'chat.live.writing', 'chat.live.starting', 'chat.stepsLabel',
     ...['done', 'doing', 'read', 'changed'].flatMap((k) => [`chat.steps.${k}.one`, `chat.steps.${k}.other`]),
-    'run.lineCost', 'run.settingsLink', 'run.advancedNow', 'run.pathLabel',
-    'settings.title', 'settings.lede', 'settings.for', 'settings.limit', 'settings.limitSame', 'settings.chat', 'settings.selfAutonomous',
-    'settings.selfOnlyAuto', 'settings.permissions', 'settings.advanced', 'settings.noChat', 'settings.pc',
+    'chat.brainTitle', 'chat.brainWhy', 'chat.memoryChip',
+    'settings.title', 'settings.lede', 'settings.for', 'settings.limit', 'settings.limitSame', 'settings.chat',
+    'settings.permissions', 'settings.noChat', 'settings.pc',
   ];
   for (const [lang, dict] of Object.entries(LANGS)) for (const k of keys) assert.ok(typeof dict[k] === 'string' && dict[k], `${lang}: ${k}`);
-  assert.equal(LANGS['pt-BR']['run.pathHint.autonomous'], 'Faz tudo até o fim e lista as decisões. Só para se passar do limite do mês.');
-  assert.equal(LANGS['pt-BR']['run.pathHint.auto'], 'Pergunta antes de um trabalho grande.');
-  assert.equal(LANGS['pt-BR']['run.pathHint.manual'], 'Você escolhe o modelo.');
-  assert.equal(LANGS['pt-BR']['run.settingsLink'], 'Limite do mês e permissões…');
+  assert.equal(LANGS['pt-BR']['chat.brainTitle'], 'O cérebro roteia esta conversa: o motor, o modelo e o raciocínio da aba Cérebro');
   assert.equal(LANGS['pt-BR']['chat.quick.or'], 'Ou responda com suas palavras aqui embaixo.');
   assert.deepEqual(['send', 'file', 'command'].map((k) => LANGS['pt-BR'][`chat.hint.${k}`]), ['Enter envia', '@ arquivo', '/ comando']);
 });
 
-test('every action of the ⋯ is also an icon in the header, with its name as tooltip', async () => {
+test('a minimized bar is that session\'s own state: the chat opens whole again', async () => {
+  server({ 'GET /api/chat/list': () => LIST_RUN });
+  const { chat, root } = makeChat();
+  openPart(chat);
+  await settle();
+  root.dataset.min = '1';
+  chat.close();
+  chat.open({ projectId: 'shop', title: 'Checkout', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  assert.equal(root.dataset.min, undefined, 'maximized by default');
+});
+
+test('the title of the header is the rename: one click opens rename or move', async () => {
+  server({ [`GET /api/chat/history/${S1}`]: () => history(TURN) });
+  const done = [];
+  const { chat, part } = makeChat({ more: ACTIONS(done) });
+  chat.open({ projectId: 'shop', title: 'Arrows', subtitle: 'Flow', start: { sessionId: S1 } });
+  await settle();
+  assert.ok(part('title').classes.has('is-renamable'), 'the title reads as the rename');
+  part('title').fire('click');
+  assert.deepEqual(done, [['rename', S1]], 'the same rename the ⋯ offers');
+});
+
+test('the header keeps one clean line: the search icon and the ⋯, with every action inside it (pc34)', async () => {
   server({ [`GET /api/chat/history/${S1}`]: () => history(TURN) });
   const done = [];
   const { chat, part } = makeChat({ more: ACTIONS(done), about: () => () => done.push(['about']), icon: (name) => `icon:${name}` });
   chat.open({ projectId: 'shop', title: 'Arrows', subtitle: 'Flow', start: { sessionId: S1 }, newChat: () => done.push(['new']) });
   await settle();
   const tools = part('tools').children;
-  assert.deepEqual(tools.map((b) => b.attrs['data-tool']), ['about', 'find', 'rename', 'archive', 'open', 'delete', 'new']);
-  assert.ok(tools.every((b) => b.attrs['aria-label'] && b.attrs.title), 'each icon has a name');
-  tools[2].attrs.onclick();
+  assert.deepEqual(tools.map((b) => b.attrs['data-tool']), ['find'], 'one icon only: find in the conversation');
+  part('more').fire('click');
+  const rows = walk(part('moremenu')).filter((e) => e.attrs.role === 'menuitem');
+  assert.deepEqual(rows.map((r) => r.attrs['data-more']), ['about', 'book', 'find', 'rename', 'archive', 'open', 'delete', 'new'], 'every action is one click away');
+  rows.find((r) => r.attrs['data-more'] === 'rename').attrs.onclick();
   assert.deepEqual(done, [['rename', S1]]);
 });
 
-test('each tab of the box information (summary, files…) is an icon in the header that opens it', async () => {
-  server({ [`GET /api/chat/history/${S1}`]: () => history(TURN) });
-  const done = [];
-  const infoTabs = () => ['summary', 'files'].map((id) => ({ id, label: `tab ${id}`, icon: 'file', run: () => done.push(id) }));
-  const { chat, part } = makeChat({ more: ACTIONS([]), infoTabs, icon: (name) => `icon:${name}` });
-  chat.open({ projectId: 'shop', title: 'Arrows', start: { sessionId: S1 } });
-  await settle();
-  const tools = part('tools').children;
-  assert.deepEqual(tools.slice(0, 2).map((b) => b.attrs['data-tool']), ['tab-summary', 'tab-files']);
-  tools[1].attrs.onclick();
-  assert.deepEqual(done, ['files']);
+test('the chat has a tab bar: each thing opens whole, none overlaps the chat (pc34)', () => {
+  const html = read('server/web/index.html');
+  const sheet = html.slice(html.indexOf('<aside id="chat"'), html.indexOf('</aside>', html.indexOf('<aside id="chat"')));
+  assert.match(sheet, /<div class="chat-tabbar" id="chatTabbar"/, 'the bar holds the tabs');
+  assert.match(sheet, /data-chat="min"/, 'the − minimizes the sheet');
+  assert.ok(sheet.indexOf('id="chatTabbar"') < sheet.indexOf('id="pointInfo"'), 'the bar sits right under the header');
+  const css = read('server/web/style.css');
+  assert.match(css, /\.chat \.point-info,\s*\.chat \.point-split\s*\{[^}]*display:\s*none/, 'the information opens only on its own tab');
+  assert.match(css, /\.chat\[data-ctab\^="info-"\] \.point-info\s*\{[^}]*display:\s*flex/, 'its tab shows it whole');
+  assert.match(css, /\.chat\[data-ctab\^="info-"\] \.chat-pane\s*\{[^}]*display:\s*none/, 'the chat gives the room');
+  assert.match(css, /\.chat\[data-ctab="book"\] \.chat-book\s*\{[^}]*max-height:\s*none/, 'the book opens whole too');
+  assert.match(css, /\.chat\[data-min="1"\] > :not\(\.chat-head\)\s*\{[^}]*display:\s*none/, 'the − leaves only the header');
+  assert.match(css, /\.chat\[data-min="1"\]\s*\{[^}]*bottom:\s*12px/, 'minimized, it docks as a slim bar at the bottom');
+  assert.match(read('server/web/app.js'), /function renderChatTabs/, 'the page draws the bar');
 });

@@ -53,6 +53,19 @@ test('a call is one line with only the known fields: never a prompt, an answer o
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
 
+test('the tokens the provider counted ride in the line, only when real (or49)', () => {
+  const smDir = tmp('tokens');
+  try {
+    recordActivity(smDir, entry({ tokensIn: 1234, tokensOut: 56, cacheHit: 1200 }));
+    recordActivity(smDir, entry({ tokensIn: -3, tokensOut: 0, cacheHit: 'x' }));
+    const lines = linesOf(smDir).map((t) => JSON.parse(t));
+    assert.equal(lines[0].tokensIn, 1234);
+    assert.equal(lines[0].tokensOut, 56);
+    assert.equal(lines[0].cacheHit, 1200);
+    assert.ok(!('tokensIn' in lines[1]) && !('tokensOut' in lines[1]) && !('cacheHit' in lines[1]), 'bad values stay out');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
 test('a bad sensitivity is the strictest, a bad source is a chat, a made-up error text is dropped, a key-looking reason is hidden', () => {
   const smDir = tmp('clean');
   try {
@@ -136,13 +149,19 @@ async function seedKeys(smDir, providers = ['openai', 'deepseek', 'gemini'], oth
   writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others } }));
 }
 
+const asJson = (textRun) => async (prompt, o) => {
+  const r = await textRun(prompt, o);
+  return r?.ok ? { ...r, value: { verdict: r.text } } : r;
+};
+
 async function withServer(opts, fn) {
   const dir = tmp('dir');
   const smDir = tmp('sm');
   if (opts.seed) await opts.seed(smDir);
   const app = createApp({
     dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state,
-    helpers: { backend, ...(opts.textRun ? { textRun: opts.textRun } : {}) },
+    // A review asks for the review shape (id142), so the JSON call is faked from the same text answer: no test reaches a real provider.
+    helpers: { backend, ...(opts.textRun ? { textRun: opts.textRun, apiRun: asJson(opts.textRun) } : {}) },
     ...(opts.address ? { addressOf: () => opts.address } : {}),
     ...(opts.demo ? { demo: true, token: 'x'.repeat(64) } : {}),
   });

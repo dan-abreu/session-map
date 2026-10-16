@@ -253,3 +253,24 @@ export function createTranscript({ h, t, time, day, money, imageUrl, icon = null
     todosView,
   };
 }
+
+// pc23: the whole conversation as one markdown file, for the person to keep or share. Neutral labels, so the file reads
+// the same in any tool and in any language; time and day are given by the caller in the page's language.
+export function conversationMarkdown(items, { time = () => '', day = (key) => key } = {}) {
+  const lines = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    if (item.type === 'day') { lines.push(`### ${day(item.day)}`); continue; }
+    const at = item.ts && time(item.ts) ? ` (${time(item.ts)})` : '';
+    if (item.type === 'user' && !item.auto) lines.push(`## You${at}\n\n${String(item.text ?? '').trim()}`);
+    else if (item.type === 'user') lines.push(`## session-map${at}\n\n${String(item.text ?? '').trim()}`);
+    else if (item.type === 'assistant') lines.push(`## Claude${at}\n\n${String(item.text ?? '').trim()}`);
+    else if (item.type === 'question') {
+      const asks = (item.questions ?? []).map((q) => `- ${q.question} → ${typeof item.answers?.[q.question] === 'string' ? item.answers[q.question] : '(no answer)'}`).join('\n');
+      lines.push(`## Question${at}\n\n${asks}`);
+    } else if (item.type === 'permission') lines.push(`- Permission: ${item.toolName ?? ''} — ${item.state ?? ''}`);
+    else if (item.type === 'tool') lines.push(`- Step: ${item.name ?? ''}${item.step?.target ? ` (${item.step.target})` : ''}`);
+    else if (item.type === 'thinking') lines.push('- Thinking');
+  }
+  return `${lines.join('\n\n').trim()}\n`;
+}

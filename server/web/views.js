@@ -1,6 +1,5 @@
 // Pure view logic for the page: no DOM, no fetch, so node:test can load it.
 import { summaryOf } from './alerts.js';
-import { modelName } from './live.js';
 import { inRange, isoDay } from './range.js';
 import { clashKey } from './signals.js';
 import { needsYou } from './now.js';
@@ -132,6 +131,8 @@ const safeBridge = (url) => (typeof url === 'string' && url.startsWith('https://
 
 // Which buttons a conversation offers (desenho-2 § 17, § 20, § 22). write: how to keep talking to it.
 export function chatButtons(chat) {
+  // A DeepSeek conversation runs in the DeepSeek Harness app: it is read here and opened there, never driven from the page.
+  if (chat.engine === 'deepseek') return { open: { enabled: true, reason: null }, close: null, archive: chat.archived ? 'unarchive' : 'archive', write: 'deepseek', phone: false };
   const vscode = chat.entrypoint === 'claude-vscode';
   const phone = safeBridge(chat.bridgeUrl);
   const open = vscode || !chat.live ? { enabled: true, reason: null } : { enabled: false, reason: 'already-open' };
@@ -143,7 +144,7 @@ export function chatButtons(chat) {
   return { open, close, archive: chat.archived ? 'unarchive' : 'archive', write, phone };
 }
 
-const EMPTY_LOG = { sessionId: null, running: false, ended: false, interrupted: false, mode: null, run: null, costUSD: null, check: null, items: [] };
+const EMPTY_LOG = { sessionId: null, running: false, ended: false, interrupted: false, mode: null, run: null, costUSD: null, context: null, check: null, items: [] };
 
 function closeStreaming(items) {
   const last = items.at(-1);
@@ -172,7 +173,7 @@ export function chatLog(log = EMPTY_LOG, evt) {
     case 'history':
       return {
         // running: a turn still under way whose message the history shows, so no replayed message says so (pc13).
-        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, interrupted: data.interrupted === true, running: data.running === true,
+        ...log, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, context: data.context ?? log.context, interrupted: data.interrupted === true, running: data.running === true,
         items: Array.isArray(data.items)
           ? data.items.filter((i) => HISTORY_TYPES.has(i?.type)).map((i) => (i.type === 'assistant' ? { ...i, streaming: false } : marked(i)))
           : data.messages.map((m) => marked({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text, streaming: false, ts: m.ts ?? null })),
@@ -193,7 +194,7 @@ export function chatLog(log = EMPTY_LOG, evt) {
     case 'mode':
       return { ...log, mode: data.mode };
     case 'run':
-      return { ...log, run: data, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD };
+      return { ...log, run: data, costUSD: Number.isFinite(data.costUSD) ? data.costUSD : log.costUSD, context: data.context ?? log.context };
     case 'session':
       return data.state === 'ended'
         ? { ...log, running: false, ended: true, items: closeStreaming(items) }
@@ -259,37 +260,21 @@ export function checkLine(t, check, money) {
   return [...parts, cost].filter(Boolean).join(' · ');
 }
 
-// The run line when the entry brain weighed the turn: "Sonnet · low — a chat" (run.brain.<why>); null when it did not.
+// The run line by Send (id146): "Sonnet · low"; why is the entry brain's reason for the turn ("a chat", run.brain.<why>),
+// kept for the tooltip, and null when the brain did not weigh it.
 export function brainLine(t, { model, effort }, brain) {
-  if (!brain?.why) return null;
-  return t('run.brain.line', { model, effort: effort ?? t('run.modelDefault'), why: t(`run.brain.${brain.why}`) });
+  return { line: [model, effort].filter(Boolean).join(' · '), why: brain?.why ? t(`run.brain.${brain.why}`) : null };
 }
 
-// What the chat header says about how the conversation runs. choice: the run picked (run.mjs shapes); info: the last
-// 'run' event of the server (null before the first); mine: what the person's own Claude settings run.
-const EXPECTED = { autonomous: ['opus', 'high'], auto: ['opus', 'high'], maestro: ['opus', 'high'], ultracode: ['opus', 'xhigh'] };
-// The ways whose conductor ends each reply with the level it works at.
-const LEVELLED = new Set(['autonomous', 'auto', 'maestro']);
-const LEVEL_TONE = { reinforced: 'reinforced', 'ask-reinforce': 'ask' };
-// The same claude process flags: only 'may reinforce on its own' may differ.
-const sameRun = (a, b) => a.kind === b.kind && a.model === b.model && a.effort === b.effort;
-export function runWords(t, { choice, info: last, mine }) {
-  // A run event of the way it ran before (the process ends on a change) speaks only for its cost.
-  const info = last && (!last.run || sameRun(last.run, choice)) ? last : null;
-  const [model, effort] = choice.kind === 'fixed' ? [choice.model, choice.effort] : choice.kind === 'settings' ? [mine?.model, mine?.effort] : EXPECTED[choice.kind];
-  const shownModel = info?.model ?? model;
-  const shownEffort = info?.effort ?? effort;
-  const level = LEVELLED.has(choice.kind) ? info?.level : null;
-  let why = t(`run.why.${choice.kind}`);
-  if (level) why = t(`run.level.${level}`, { why: info.why ?? t('run.level.noReason') });
-  return {
-    way: t(`run.way.${choice.kind}`),
-    model: shownModel ? modelName(shownModel) : t('run.modelDefault'),
-    effort: shownEffort ? t(`run.effort.${shownEffort}`) : null,
-    why,
-    tone: LEVEL_TONE[level] ?? (choice.kind === 'ultracode' ? 'ultracode' : choice.kind),
-    cost: Number.isFinite(last?.costUSD) ? last.costUSD : null,
-  };
+// The memory chip by Send (pc37): what the conversation carries against the program's mark of a heavy one, "48k / 200k",
+// amber from 70 % and red from 90 %. null without a number (another engine, a conversation not read yet).
+const kilo = (n) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`);
+export function contextMeter(context) {
+  const tokens = Number(context?.tokens);
+  const max = Number(context?.max);
+  if (!(tokens > 0) || !(max > 0)) return null;
+  const pct = Math.round((tokens / max) * 100);
+  return { used: kilo(tokens), max: kilo(max), label: `${kilo(tokens)} / ${kilo(max)}`, pct, tone: pct >= 90 ? 'high' : pct >= 70 ? 'warn' : 'ok' };
 }
 
 const PC_MODES = new Set(['default', 'acceptEdits', 'auto']);
@@ -329,4 +314,28 @@ export function stepCounts(items) {
   const tools = items.filter((i) => i.type === 'tool');
   const files = (kind) => new Set(tools.filter((i) => i.step?.kind === kind).map((i) => i.step.target || i.diff?.path).filter(Boolean)).size;
   return { steps: tools.length, read: files('read'), changed: files('edit') };
+}
+
+// The kind tag a specialist's words open with, or null ("[code] fix the header" → 'code'). Pure (id148, or55): the role
+// itself comes from the catalog the page holds (the brain model's agents).
+export function kindTagOf(text) {
+  return /^\s*\[([a-z-]+)\]/.exec(String(text ?? ''))?.[1] ?? null;
+}
+
+// The specialist roles a stretch called on (id148, or55): each Agent step names its kind tag in the description, and the
+// page's role map (the brain model's agents, api.brain) maps the kind to the role. Pure and free: nothing reads the AI.
+// → [{id, n}] sorted by count, roles the map does not know left out (the steps stay plain without the catalog).
+export function stepRoles(items, byKind) {
+  const counts = new Map();
+  for (const i of items) {
+    if (i.type !== 'tool' || (i.name !== 'Agent' && i.step?.kind !== 'agent')) continue;
+    let text = String(i.step?.target ?? '');
+    try {
+      const description = JSON.parse(String(i.input ?? '{}'))?.description;
+      if (typeof description === 'string' && description.trim()) text = description;
+    } catch { /* not JSON: the target already holds the words */ }
+    const role = kindTagOf(text) ? byKind.get(kindTagOf(text)) : null;
+    if (role) counts.set(role.id, (counts.get(role.id) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n }));
 }

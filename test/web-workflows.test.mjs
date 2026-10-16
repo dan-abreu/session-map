@@ -140,6 +140,16 @@ test('workflowView draws the tree: the request, the team with its phase, each he
   assert.equal(opened, 1);
 });
 
+test('the specialist role rides the helper label when the page holds the catalog (id148)', async () => {
+  const { workflowView } = await import('../server/web/workflows.js');
+  const w = flow('wf_a', [agent('a1', { label: '[code] fix the header' }), agent('a2', { label: 'agent a2' })]);
+  const withRoles = workflowView({ ...viewCtx, roleWords: (label) => (label === '[code] fix the header' ? 'wf.roleName:Developer|[code] fix the header' : label) }, w);
+  const labels = find(withRoles, 'wf-agent-label').map((l) => l.text);
+  assert.deepEqual(labels, ['wf.roleName:Developer|[code] fix the header', 'agent a2'], 'the known role rides, the others stay plain');
+  const without = workflowView(viewCtx, w);
+  assert.deepEqual(find(without, 'wf-agent-label').map((l) => l.text), ['[code] fix the header', 'agent a2'], 'no catalog: the labels stay as they came');
+});
+
 // .plain lists are grids with an "auto" track: a long file path grew the track past the panel and the place beside it
 // was cut at the panel's edge (seen on the real state, 2026-10-10). The team's file and commit lists clamp it.
 test('the team tree file and commit lists clamp their column, so a long path ellipsizes inside the panel', () => {

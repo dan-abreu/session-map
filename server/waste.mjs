@@ -20,7 +20,8 @@ export function medianOf(list) {
 
 const r6 = (n) => Math.round(n * 1e6) / 1e6;
 const usdOf = (r) => r.cost?.total ?? 0;
-const contextOf = (r) => (r.input ?? 0) + (r.cacheWrite5m ?? 0) + (r.cacheWrite1h ?? 0) + (r.cacheRead ?? 0);
+// The prompt side of a reply: what was sent, re-read context included. The chat's memory chip (pc37) reads the same sum.
+export const contextOf = (r) => (r.input ?? 0) + (r.cacheWrite5m ?? 0) + (r.cacheWrite1h ?? 0) + (r.cacheRead ?? 0);
 const modelLabel = (m) => String(m ?? 'unknown').replace(/^claude-/, '');
 
 // The figures of one set of lines.

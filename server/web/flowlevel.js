@@ -414,6 +414,7 @@ export function level2Flow(view, { tt = english, live = null, perRow = PER_ROW, 
         evidence: [...(n.declared ?? []), ...(n.detected ?? [])], name: words.label, sub: words.sub, quote: words.quote, hub: hubs.has(n.id), hidden: Boolean(n.hidden),
         tone: piece && live ? state?.tone ?? 'quiet' : null, unsaved: state?.unsaved ?? 0, changedFiles: state?.files ?? 0,
         files: piece ? (n.fileCount ?? 0) + (n.other ?? 0) : null,
+        owner: piece ? (n.owner ?? null) : null, ownerCounts: piece ? (n.ownerCounts ?? { ai: 0, bot: 0, script: 0 }) : null, ownerReasons: piece ? (n.ownerReasons ?? []) : [],
       });
     }
   }
@@ -473,9 +474,13 @@ export const legendKeys = (level, { journey = false } = {}) => (level === '1'
     ? ['step', 'live', 'doing', 'todo', 'done', 'blocks', 'waiting', 'actor', 'svc', 'local']
   : level === '2'
     ? ['live', 'changed', 'quiet', 'unsaved', 'actor', 'svc', 'local', 'declared', 'detected']
+  : level === 'functions'
+    ? ['owner-ai', 'owner-bot', 'owner-script', 'orphan']
     : ['live', 'doing', 'todo', 'done', 'blocks', 'waiting', 'free']);
 
-export const legendWords = (k, tt = english) => tt(['blocks', 'waiting'].includes(k) ? `flow.flag.${k}` : ['declared', 'detected'].includes(k) ? `flow.arrow.${k}` : `flow.tone.${k}`);
+export const legendWords = (k, tt = english) => (k === 'orphan' ? tt('flow.fn.orphan')
+  : ['owner-ai', 'owner-bot', 'owner-script'].includes(k) ? tt(`flow.owner.${k.slice('owner-'.length)}`)
+    : tt(['blocks', 'waiting'].includes(k) ? `flow.flag.${k}` : ['declared', 'detected'].includes(k) ? `flow.arrow.${k}` : `flow.tone.${k}`));
 
 // A journey's name in the page language, filled with the boxes its path took ({start}, {via}, {end}, {node}).
 export function journeyName(model, j, tt = english) {

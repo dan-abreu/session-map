@@ -23,7 +23,7 @@ const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
 const KEY_A = 'a'.repeat(32);
 const KEY_B = 'b'.repeat(32);
-const AUTO = { kind: 'auto', selfReinforce: false };
+const AUTO = { kind: 'talk' }; // the page chat: the brain's Conversa (id146)
 
 const tempDir = () => mkdtempSync(join(tmpdir(), 'sm-teams-'));
 

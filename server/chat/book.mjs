@@ -22,12 +22,17 @@ export function parseLines(text) {
   return out;
 }
 
+// Blocks the tools inject into a prompt (reminders, the browser's instructions, the editor's selection): never the person's words.
+const INJECTED = '(?:system-reminder|browser_instruction|ide_selection|ide_opened_file|ide_diagnostics)';
+const INJECTED_RE = new RegExp(`<(${INJECTED})>[\\s\\S]*?</\\1>`, 'g');
+const INJECTED_OPEN_RE = new RegExp(`<${INJECTED}>[\\s\\S]*$`);
+
 export function promptText(entry) {
   if (entry?.type !== 'user') return '';
   const c = entry.message?.content;
   const raw = typeof c === 'string' ? c
     : Array.isArray(c) ? c.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n') : '';
-  return raw.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
+  return raw.replace(INJECTED_RE, '').replace(INJECTED_OPEN_RE, '').trim();
 }
 
 export function isHumanPrompt(entry) {

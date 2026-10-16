@@ -11,6 +11,7 @@ import { accountSnapshot, buildStatement, detailCsv, rowOut } from './statement.
 import { chatLedger, ledgerRows, outsideLedger, periodLedger, periodOf } from './ledger.mjs';
 import { loadPrices } from './cost.mjs';
 import { wasteSignals } from './waste.mjs';
+import { roleTotals } from './statement.mjs';
 
 const CACHE_FILE = 'statement-cache.json';
 const CACHE_VERSION = 4; // 2: each reply keeps what it did (files, lines); 3: and the lines of each file it read; 4: and the skills it opened
@@ -124,6 +125,8 @@ export function createStatementStore({ projectsDir, smDir, account = () => accou
           readSince: ready.since,
           // The waste signals (or24) for the chosen period, from the same priced lines.
           waste: wasteSignals(ready.st.rows, { from: period.from, to: period.to, titleOf: (id) => ready.st.sessions.get(id)?.title ?? null }),
+          // The spend per specialist (or60), from the same priced lines.
+          specialists: roleTotals(ready.st, { from: period.from, to: period.to }),
           outside: outsideLedger(smDir ? readActivity(smDir) : [], period),
         } : null,
       };

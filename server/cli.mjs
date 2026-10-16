@@ -1,9 +1,11 @@
 #!/usr/bin/env node
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { collect } from './collect.mjs';
 import { claudeDir } from './sources/claude.mjs';
+import { dshDir as defaultDshDir, zstdAvailable } from './sources/deepseek.mjs';
 import { pickLang, translator } from './web/i18n.js';
 import { archTree, listsDone } from './web/tree.js';
 import { clashWords, waitingEntries } from './web/views.js';
@@ -23,7 +25,10 @@ export async function loadState({ port, dir, smDir, fetchFn = fetch, collectFn =
     const res = await fetchFn(`http://127.0.0.1:${port}/api/state`, { signal: AbortSignal.timeout(SERVER_TIMEOUT_MS) });
     if (res.ok) return { state: await res.json(), source: 'server' };
   } catch { /* no server on that port */ }
-  return { state: await collectFn({ dir, smDir, ai: { bin: null } }), source: 'files' };
+  // Without the server, the DeepSeek folder joins when this Node can read its zstd logs.
+  const foundDsh = defaultDshDir();
+  const dshDir = zstdAvailable() && existsSync(foundDsh) ? foundDsh : null;
+  return { state: await collectFn({ dir, smDir, dshDir, ai: { bin: null } }), source: 'files' };
 }
 
 const pickProjects = (state, name) => {

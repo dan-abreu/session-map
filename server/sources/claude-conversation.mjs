@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { costOf, loadPrices } from '../cost.mjs';
 import { log } from '../log.mjs';
+import { contextOf } from '../waste.mjs';
 import { blocksOf, parseLines, relativeTo, stepOf } from './claude.mjs';
 
 const RESULT_MAX = 12_000;
@@ -237,11 +238,11 @@ function grownRead(path, kept, version) {
   }
 }
 
-// → {items, costUSD, version}; items in the order they were written. A reply's own cost sits on its last message
-// (replyCostUSD); helpers are in the conversation's total, not here.
+// → {items, costUSD, contextTokens, version}; items in the order they were written. A reply's own cost sits on its last
+// message (replyCostUSD); helpers are in the conversation's total, not here. contextTokens: what the last reply carried.
 export function readConversation(path, { cwd = '', prices } = {}) {
-  const { items, costUSD, version } = readOnce(path, cwd, prices ?? (shippedPrices ??= loadPrices()));
-  return { items, costUSD, version };
+  const { items, costUSD, contextTokens, version } = readOnce(path, cwd, prices ?? (shippedPrices ??= loadPrices()));
+  return { items, costUSD, contextTokens, version };
 }
 
 // keep: an array that receives every image block, numbered in the same walk that numbers them for the page.
@@ -252,6 +253,8 @@ function createBuilder({ cwd, prices, keep = null }) {
   let images = 0;
   let turn = { usage: new Map(), last: null };
   let closed = 0;
+  // The memory the conversation carries (pc37): the prompt side of the last reply of the chat itself.
+  let memory = null;
   // The message a result() put the open turn's cost on: it loses it if a later line becomes the turn's last.
   let provisional = null;
   const turnCost = () => (turn.last && turn.usage.size ? round6(costOf([...turn.usage.values()], prices).usd) : null);
@@ -288,6 +291,7 @@ function createBuilder({ cwd, prices, keep = null }) {
       const usage = usageOf(entry);
       // Repeated lines of one message carry the same (growing) usage: the last one counts.
       if (usage) turn.usage.set(entry.message.id ?? entry.uuid ?? items.length, usage);
+      if (usage && !entry.isSidechain) memory = contextOf(usage) || memory;
       for (const b of blocksOf(entry)) {
         if (b.type === 'text' && b.text?.trim()) {
           const item = { type: 'assistant', text: b.text, ts, model: entry.message?.model ?? null };
@@ -345,7 +349,7 @@ function createBuilder({ cwd, prices, keep = null }) {
         stamp(turn.last, usd);
         provisional = turn.last;
       }
-      return { items: [...items], costUSD: round6(closed + (usd ?? 0)) };
+      return { items: [...items], costUSD: round6(closed + (usd ?? 0)), contextTokens: memory };
     },
   };
 }

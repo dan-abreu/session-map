@@ -58,6 +58,20 @@ test('counts accepted, refused, waiting and failed; cost per accepted piece; bro
   } finally { clean(smDir); }
 });
 
+test('the tokens ride along and add up per AI (or49)', () => {
+  const smDir = dir([
+    line({ tokensIn: 1000, tokensOut: 100, cacheHit: 900 }),
+    line({ tokensIn: 500, tokensOut: 50 }),
+  ]);
+  try {
+    const u = usageSummary({ smDir, now: NOW });
+    const o = u.byAi.find((x) => x.provider === 'openai');
+    assert.equal(o.tokensIn, 1500);
+    assert.equal(o.tokensOut, 150);
+    assert.equal(o.cacheHit, 900);
+  } finally { clean(smDir); }
+});
+
 test('days: the last 14 local days, oldest first; the bench score and the map review come along', () => {
   const smDir = dir([line({ at: at(-3), costUSD: 0.5 }), line({ at: at(-30), costUSD: 9 }), line({ source: 'map', kind: 'place', provider: 'gemini', model: 'g' })], {
     'bench/routing.json': JSON.stringify({ updatedAt: 'x', entries: [{ kind: 'review', contestant: 'openai:gpt-6.1-sol', accuracy: 0.9, costPerCorrectUSD: 0.01, n: 30 }] }),

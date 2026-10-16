@@ -11,6 +11,7 @@ import { createOutline } from './outline.js';
 import { createDiscover } from './discover.js';
 import { api } from './api.js';
 import { createChat } from './chat.js';
+import { conversationMarkdown, dayName, timeOf } from './transcript.js';
 import { createRunSettings } from './runsettings.js';
 import { createTabs } from './tabs.js';
 import { createFiles } from './files.js';
@@ -32,7 +33,7 @@ import { createAlerts } from './alerts.js';
 import { createAiHelpers } from './aihelpers.js';
 import { applyLook, createLookShare } from './lookshare.js';
 import { createCutPanel } from './cutoff.js';
-import { visibleProject, chatButtons, waitingEntries, waitingSections, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer } from './views.js';
+import { visibleProject, chatButtons, waitingEntries, waitingSections, waitingCounts, waitingKind, clashWords, safeTunnel, pcModeOffer, kindTagOf } from './views.js';
 import { createRangePicker } from './rangepicker.js';
 import { signalCard, kindBlock, kindMark, pointStrip } from './blocks.js';
 import { emptyState } from './empty.js';
@@ -66,6 +67,16 @@ let lang = pickLang(store.get('sm.lang'), navigator.language);
 // "Technical details" (mm11): the original words (branch, commit, token…) in place of the plain ones, per browser.
 let tech = store.get('sm.tech') === '1';
 let t = translator(lang, { tech });
+
+// The engine's vocabulary rule (id126): the page speaks the technical terms by default (config terms: 'technical'),
+// the simple words are the optional mode. The person's own toggle, once set, is saved in the browser and wins.
+function applyTermsDefault() {
+  if (store.get('sm.tech') === null && state) {
+    tech = state.terms === 'technical';
+    t = translator(lang, { tech });
+    document.body.classList.toggle('is-tech', tech);
+  }
+}
 let help = null;
 let tour = null;
 let state = null;
@@ -111,6 +122,25 @@ let liveEntries = []; // the conversations working now in the open project (live
 // The helpers of every team at work on a box of the open project (workflows.js agentDots), and where the map shows them.
 let agentMarks = new Map();
 let dotsShown = new Map();
+// The specialists' catalog (id148, or55): kind → role, from the brain model. The map's helper dots and the workflow
+// trees name the roles from it; empty until it arrives, and nothing waits on it.
+let roleByKind = new Map();
+let rolesAsked = false;
+const roleWordsOf = (label) => {
+  const tag = kindTagOf(label);
+  const role = tag ? roleByKind.get(tag) ?? null : null;
+  const words = label || t('live.agentUnnamed');
+  return role ? t('wf.roleName', { role: lang === 'pt-BR' ? role.labelPt : role.label, label: words }) : words;
+};
+async function loadRoleCatalog() {
+  try {
+    const res = await api.brain();
+    if (!res?.ok) return;
+    const byKind = new Map();
+    for (const r of res.agents ?? []) for (const k of r.kinds ?? []) if (!byKind.has(k)) byKind.set(k, r);
+    roleByKind = byKind;
+  } catch { /* the dots and trees stay plain */ }
+}
 // Conversations that finished since the person last looked at them (mm10): kept across reloads until opened.
 const UNSEEN_KEY = 'sm.unseen';
 const UNSEEN_MAX = 200;
@@ -405,7 +435,7 @@ function freshChip(node) {
 function agentDotsView(node) {
   const dots = dotsShown.get(node.id);
   if (!dots?.length) return null;
-  const words = dots.map((d) => t('wf.dotTitle', { label: d.label || t('live.agentUnnamed'), team: d.workflowName, step: stepWords(t, d.step) || t('chat.busy') }));
+  const words = dots.map((d) => t('wf.dotTitle', { label: roleWordsOf(d.label), team: d.workflowName, step: stepWords(t, d.step) || t('chat.busy') }));
   return h('span', { class: 'bx-agents', title: words.join('\n') },
     dots.slice(0, AGENT_DOTS_MAX).map((d) => h('span', { class: 'bx-agent', style: `--wf-h:${d.hue}`, 'aria-hidden': 'true' })),
     h('span', { class: 'bx-agents-n num', 'aria-hidden': 'true' }, t.count('wf.dotsShort', dots.length)),
@@ -876,7 +906,64 @@ const keepBoxChat = () => {
 
 function setPointTab(tab) {
   pointTab = tab;
+  chat.setTab(`info-${tab}`);
   renderPointDetails();
+  renderChatTabs();
+}
+
+// The tab bar under the chat's header (pc34): the conversation, each tab of the box's information, the conversation
+// book and the terminal — each opens whole, none overlaps the chat.
+function renderChatTabs() {
+  const bar = $('#chatTabbar');
+  if (!bar) return;
+  const node = pointNode && nodeById(tree, pointNode);
+  const id = chat.current();
+  if (!node && !id) { bar.hidden = true; bar.replaceChildren(); return; }
+  const tabs = [{ id: 'chat', label: t('tab.chat') }];
+  if (node) {
+    const { tabs: all, labels } = detailsOf(node);
+    for (const tab of lookMode ? lookTabs(all) : all) tabs.push({ id: `info-${tab}`, pointTab: tab, label: labels?.[tab] ?? t(`ptab.${tab}`) });
+  }
+  if (id) {
+    tabs.push({ id: 'book', label: t('chat.book') });
+    tabs.push({ id: 'terminal', label: t('tab.terminal') });
+  }
+  const ctab = $('#chat').dataset.ctab ?? 'chat';
+  const active = ctab.startsWith('info-') ? ctab : ctab;
+  bar.replaceChildren(...tabs.map((tb) => h('button', {
+    type: 'button', class: `ctab${tb.id === active ? ' is-on' : ''}`, 'data-ctab': tb.id,
+    onclick: () => pickChatTab(tb),
+  }, tb.label)));
+  bar.hidden = false;
+}
+
+function pickChatTab(tb) {
+  if (tb.id === 'chat') { chat.setTab('chat'); return renderChatTabs(); }
+  if (tb.pointTab) {
+    setFolded(false);
+    pointTab = tb.pointTab;
+    chat.setTab(tb.id);
+    renderPointDetails();
+    return renderChatTabs();
+  }
+  if (tb.id === 'book') return chat.openBook();
+  if (tb.id === 'terminal') return openTerminalTab();
+}
+
+// The Terminal tab is the ⋯'s "open": the conversation opens where it lives (a terminal, VS Code, the DeepSeek app).
+function openTerminalTab() {
+  const sessionId = chat.current();
+  if (!sessionId) return;
+  for (const p of state?.projects ?? []) {
+    const row = conversationsOf(p).find((r) => r.sessionId === sessionId);
+    if (!row) continue;
+    const dsh = row.origin === 'deepseek';
+    const vscode = row.origin === 'vscode';
+    if (dsh || vscode || !row.live) {
+      return runAction({ action: 'open', sessionId }, t(dsh ? 'action.openedDeepseek' : vscode ? 'action.openedVscode' : 'action.openedTerminal'));
+    }
+  }
+  return undefined;
 }
 
 function showPoint(node, tab, { folded = false } = {}) {
@@ -887,6 +974,7 @@ function showPoint(node, tab, { folded = false } = {}) {
   $('#pointInfo').hidden = false;
   $('#pointSplit').hidden = false;
   renderPointDetails();
+  renderChatTabs();
 }
 
 function setFolded(folded, { byHand = false } = {}) {
@@ -1062,6 +1150,10 @@ function createArch() {
 function whereOf(row) {
   const open = (done) => () => runAction({ action: 'open', sessionId: row.sessionId }, done);
   const actions = [];
+  if (row.origin === 'deepseek') {
+    actions.push({ label: t('action.openDeepseek'), onclick: open(t('action.openedDeepseek')) });
+    return { note: t('convs.readDeepseek'), actions, canWrite: false };
+  }
   if (row.origin === 'vscode') actions.push({ label: t('action.openVscode'), onclick: open(t('action.openedVscode')) });
   else if (!row.live) actions.push({ label: t('convs.openTerminal'), onclick: open(t('action.openedTerminal')) });
   let note = t('convs.readClosed', { origin: t(`convs.origin.${row.origin}`) });
@@ -1105,18 +1197,40 @@ function chatMore(sessionId) {
     const row = conversationsOf(p).find((r) => r.sessionId === sessionId);
     if (!row) continue;
     const vscode = row.origin === 'vscode';
+    const dsh = row.origin === 'deepseek';
     const archive = row.archived ? 'unarchive' : 'archive';
     return [
       { id: 'rename', label: t('chat.moreRename'), icon: 'rename', run: () => openPlace({ row, project: p }) },
       { id: 'archive', label: t(`action.${archive}`), icon: 'archive', run: () => runAction({ action: archive, sessionId }, t(`action.${archive}d`)) },
-      vscode || !row.live ? {
-        id: 'open', label: vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: vscode ? 'code' : 'terminal',
-        run: () => runAction({ action: 'open', sessionId }, t(vscode ? 'action.openedVscode' : 'action.openedTerminal')),
+      { id: 'export', label: t('chat.moreExport'), icon: 'download', run: () => exportConversation(row) },
+      dsh || vscode || !row.live ? {
+        id: 'open', label: dsh ? t('action.openDeepseek') : vscode ? t('action.openVscode') : t('convs.openTerminal'), icon: dsh ? 'spark' : vscode ? 'code' : 'terminal',
+        run: () => runAction({ action: 'open', sessionId }, t(dsh ? 'action.openedDeepseek' : vscode ? 'action.openedVscode' : 'action.openedTerminal')),
       } : null,
       { id: 'delete', label: t('action.delete'), icon: 'trash', run: () => deleteConversation(row) },
     ].filter(Boolean);
   }
   return [];
+}
+
+// pc23: the conversation as one markdown file, read page by page from the server and saved by the browser, for the person
+// to keep or share. Nothing is written to the project.
+async function exportConversation(row) {
+  const parts = [];
+  let cursor = {};
+  for (let page = 0; page < 400; page++) {
+    const res = await api.chatHistory(row.sessionId, undefined, cursor);
+    if (!res.ok) return toast(errorText(res.error ?? 'generic'));
+    const items = Array.isArray(res.items) ? res.items : [];
+    parts.unshift(...items);
+    const start = Number(res.start) || 0;
+    if (start <= 0 || !items.length) break;
+    cursor = { before: start };
+  }
+  const md = conversationMarkdown(parts, { time: (ts) => timeOf(lang, ts), day: (key) => dayName(t, lang, key) });
+  const name = String(row.title ?? '').replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 80) || 'conversation';
+  saveBlob(new Blob([md], { type: 'text/markdown;charset=utf-8' }), `${name}.md`);
+  toast(t('chat.exported'));
 }
 
 // ---- move or rename a conversation (mm21) ----------------------------------------------------------
@@ -1772,13 +1886,14 @@ function answerChat(c) {
 function chatTools(c) {
   const can = chatButtons(c);
   const part = partById(c.partId);
+  const dsh = c.engine === 'deepseek';
   const actions = [];
-  actions.push(button(t('action.continue'), () => startChat(t('chat.newFrom', { title: c.title }), part ? part.name : '', t('chat.introChild', { title: c.title }), { parentId: c.sessionId, ...(c.workCellId ? { workCellId: c.workCellId } : {}) }), { primary: true }));
+  if (!dsh) actions.push(button(t('action.continue'), () => startChat(t('chat.newFrom', { title: c.title }), part ? part.name : '', t('chat.introChild', { title: c.title }), { parentId: c.sessionId, ...(c.workCellId ? { workCellId: c.workCellId } : {}) }), { primary: true }));
   if (can.write === 'page') actions.push(button(t('action.writeHere'), () => startChat(c.title, t('chat.resuming'), t('chat.introResume'), { sessionId: c.sessionId })));
   if (can.phone) actions.push(h('a', { class: 'btn', href: can.phone, target: '_blank', rel: 'noopener noreferrer' }, t('action.phone')));
-  actions.push(button(c.entrypoint === 'claude-vscode' ? t('action.openVscode') : t('action.open'),
-    () => runAction({ action: 'open', sessionId: c.sessionId }, c.entrypoint === 'claude-vscode' ? t('action.openedVscode') : t('action.openedTerminal')),
-    { disabled: !can.open.enabled, title: can.open.reason ? t(`action.why.${can.open.reason}`) : t('action.fromPhone') }));
+  actions.push(button(dsh ? t('action.openDeepseek') : c.entrypoint === 'claude-vscode' ? t('action.openVscode') : t('action.open'),
+    () => runAction({ action: 'open', sessionId: c.sessionId }, dsh ? t('action.openedDeepseek') : c.entrypoint === 'claude-vscode' ? t('action.openedVscode') : t('action.openedTerminal')),
+    { primary: dsh, disabled: !can.open.enabled, title: can.open.reason ? t(`action.why.${can.open.reason}`) : t('action.fromPhone') }));
   if (can.close) {
     actions.push(button(t('action.stop'), async () => {
       if (!(await confirmAction(t('action.stopConfirm', { title: c.title }), t('action.stop')))) return;
@@ -1801,6 +1916,8 @@ function placeName(p) {
 const wfCtx = () => ({
   h, t, icon, relative, modelName, list: listText, nowMs: Date.parse(state.generatedAt), placeWords: placeName,
   stepWords: (step) => stepWords(t, step),
+  // The specialist's role rides its label (id148, or55): the catalog comes from the brain model, never the AI.
+  roleWords: (label) => roleWordsOf(label),
   onItem: (item) => goTo(item.projectId, { type: 'node', id: item.code ? `i:${item.partId}:${item.code}` : `pt:${item.partId}` }),
   onFile: (f) => {
     if (f.projectId !== project.id) goTo(f.projectId);
@@ -2087,6 +2204,7 @@ function renderNoProjects() {
 }
 
 function renderAll() {
+  applyTermsDefault();
   applyStaticText();
   if (!state) return;
   renderWaiting();
@@ -2139,6 +2257,7 @@ function applyState(next) {
 
 let polling = null;
 function poll() {
+  if (!rolesAsked) { rolesAsked = true; loadRoleCatalog(); }
   if (polling) return polling;
   polling = (async () => {
     const res = await api.state();
@@ -2378,8 +2497,10 @@ function wire() {
   mindmap = createMindmap($('#mindmap'), mapCtx);
   outline = createOutline($('#outline'), mapCtx);
   discover = createDiscover({
-    root: $('#view-discover'), h, t: () => t, lang: () => lang, toast, icon,
-    project: () => (project ? { id: project.id, name: project.name } : null),
+    root: $('#view-discover'), h, t: () => t, lang: () => lang, toast, icon, api,
+    project: () => (project ? { id: project.id, name: project.name, plugins: project.plugins ?? [], skills: project.skills ?? [] } : null),
+    skillsAirplane: () => state?.skillsAirplane === true,
+    skillsOff: () => state?.skillsOff ?? [],
   });
   // Configurações (pc19): one sheet for the run menu of both chats and for the person's menu.
   runSettings = createRunSettings({
@@ -2393,7 +2514,7 @@ function wire() {
     beforeSend: foldForTalk,
     more: chatMore,
     // The box's information, folded away while the person talks, comes back from the ⋯ (pc18).
-    about: () => (pointNode && infoFolded ? () => { setFolded(false, { byHand: true }); $('#pointFold').focus({ preventScroll: true }); } : null),
+    about: () => (pointNode && infoFolded ? () => { setFolded(false, { byHand: true }); chat.setTab(`info-${pointTab}`); renderChatTabs(); $('#pointDetails').focus({ preventScroll: true }); } : null),
     // Each tab of the box's information (summary, tasks, files…) is an icon of the header that opens it.
     infoTabs: () => {
       const node = pointNode && nodeById(tree, pointNode);
@@ -2405,11 +2526,13 @@ function wire() {
       }));
     },
     openSettings: (binding, opener) => runSettings.open(binding, opener),
-    onRunChange: () => runSettings?.refresh(),
     waitingOf: chatWaits,
     onClose: () => {
       pointNode = null;
       if (selection?.type === 'node') selection = null;
+      const bar = $('#chatTabbar');
+      if (bar) { bar.hidden = true; bar.replaceChildren(); }
+      delete $('#chat')?.dataset?.ctab;
       renderMap();
       convs.render();
     },
@@ -2468,7 +2591,7 @@ function wire() {
   $('#pointFold').addEventListener('click', () => setFolded(!infoFolded, { byHand: true }));
   flow = createFlowView({
     h, t: () => t, toast, errorText, relative, money, phone: PHONE, lang: () => lang, icon, commands: chatCommands,
-    openSettings: (binding, opener) => runSettings.open(binding, opener), onRunChange: () => runSettings.refresh(), waitingOf: chatWaits,
+    openSettings: (binding, opener) => runSettings.open(binding, opener), waitingOf: chatWaits,
     project: () => project, tree: () => tree, live: () => marks.live,
     onOpenPart: (partId) => openPartPoint(partId),
     onApplied: () => setTimeout(poll, 600),
@@ -2519,11 +2642,12 @@ function wire() {
       openProject: (id) => { if (id !== project?.id) setProject(id); showView('map'); },
       goTo: (area, sub, id) => goArea(area, sub, id),
       refreshFoundation: readFoundation,
-      // The monthly limit for big work: the same value the run menu by Send sets, now in plain sight (mm46).
+      // The monthly limit for big work: the same value Configurações sets, now in plain sight (mm46).
       limit: { read: () => api.reinforcedLimit(), save: (usd) => api.setReinforcedLimit(usd) },
       currency: () => ({ label: state?.currency?.code === 'USD' ? 'US$' : (state?.currency?.code ?? 'US$'), rate: state?.currency?.rate ?? 1 }),
       toast, errorText,
     },
+    brain: { h, t: (key, vars) => t(key, vars), lang: () => lang, api, toast },
   });
   navbar.setReady(areas.ready());
   $('#view-home').addEventListener('click', (e) => { homeRow = e.target.closest?.('[data-id]')?.dataset.id ?? null; }, true);

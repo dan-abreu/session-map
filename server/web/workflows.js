@@ -142,7 +142,7 @@ export function workflowView(ctx, w, { compact = false, onDetails = null } = {})
     return h('li', { class: `wf-agent at-${aTone}` },
       h('div', { class: 'wf-agent-head' },
         h('span', { class: `wf-state st-${aTone}` }, h('span', { class: 'wf-state-dot', 'aria-hidden': 'true' }), t(`wf.agent.${aTone}`)),
-        h('span', { class: 'wf-agent-label' }, a.label || t('live.agentUnnamed')),
+        h('span', { class: 'wf-agent-label' }, ctx.roleWords ? ctx.roleWords(a.label) : (a.label || t('live.agentUnnamed'))),
         a.model ? h('span', { class: 'wf-agent-model' }, ctx.modelName(a.model)) : null),
       a.place ? h('p', { class: 'wf-agent-place' }, icon('map', 'wf-place-icon'), h('span', {}, [ctx.placeWords(a.place), a.place.path].filter(Boolean).join(' › '))) : null,
       step ? h('p', { class: 'wf-agent-step' }, step) : null,

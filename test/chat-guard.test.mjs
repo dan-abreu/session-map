@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BOOK_HOOK, GUARD_HOOK, NO_FAILED, NO_KIND, NO_MAP_EDIT, NO_SKILL, guardAgent, guardSettings, guardStep, readBrief } from '../server/chat/guard.mjs';
+import { roleLine, roleOf } from '../server/ai/agents.mjs';
 import { SAFETY_REFS } from '../server/chat/safety.mjs';
 import { INTERNALS } from '../server/actions.mjs';
 import { createChatHub } from '../server/chat/hub.mjs';
@@ -20,9 +21,18 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8',
 const bash = (command) => ({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, cwd: process.cwd() });
 
 // Runs the hook as Claude Code does: the step as JSON on stdin, the answer on stdout.
-function runHook(args, input) {
+// The hook reads config.json (the open or strict guard, id154): an empty one by default, never the owner's own.
+const smDirWith = (config) => {
+  const dir = mkdtempSync(join(tmpdir(), 'sm-guard-cfg-'));
+  if (config) writeFileSync(join(dir, 'config.json'), JSON.stringify(config));
+  return dir;
+};
+const OPEN_DIR = smDirWith(null);
+const STRICT_DIR = smDirWith({ guard: { strict: true } });
+
+function runHook(args, input, smDir = OPEN_DIR) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [GUARD_HOOK, ...args], { windowsHide: true });
+    const child = spawn(process.execPath, [GUARD_HOOK, ...args], { windowsHide: true, env: { ...process.env, SESSION_MAP_DIR: smDir } });
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.on('error', reject);
@@ -110,11 +120,11 @@ test('every page chat starts with the guard in its settings; the Autonomous way 
     return settingsOf();
   };
   try {
-    const autonomous = await started();
+    const autonomous = await started({ kind: 'autonomous' });
     assert.ok(autonomous.hooks.PreToolUse[0].hooks[0].command.endsWith('--snapshot'));
     await hub.close();
     writeFileSync(log, '');
-    const manual = await started({ kind: 'auto', selfReinforce: false });
+    const manual = await started({ kind: 'talk' });
     assert.ok(manual.hooks.PreToolUse[0].hooks[0].command.includes('guard-hook.mjs'));
     assert.ok(!manual.hooks.PreToolUse[0].hooks[0].command.includes('--snapshot'));
   } finally {
@@ -132,16 +142,16 @@ test('guardAgent: an agent needs a kind tag and gets its model and effort from t
   assert.equal(why(guardAgent(agent({ model: 'opus', description: 'Revisão de segurança do login' }))), NO_KIND, 'a model chosen by the AI is no kind');
   assert.equal(why(guardAgent(agent({ description: '[dance] fix' }))), NO_KIND, 'an unknown kind');
   assert.equal(why(await guardStep(agent({}))), NO_KIND);
-  const ok = guardAgent(agent({ description: '[code] fix the header', prompt: 'p', model: 'opus', effort: 'max', run_in_background: true }));
+  const ok = guardAgent(agent({ description: '[code] fix the header', prompt: 'fix the header, run the tests', model: 'opus', effort: 'max', run_in_background: true }));
   assert.equal(ok.hookSpecificOutput.permissionDecision, 'allow');
-  assert.deepEqual(set(ok), { description: '[code] fix the header', prompt: 'p', model: 'sonnet', effort: 'medium', run_in_background: true }, 'the AIs own model is overwritten, the other fields stay');
-  assert.deepEqual(set(guardAgent(agent({ description: '[search] where is x', prompt: 'p' }, 'Task'))), { description: '[search] where is x', prompt: 'p', model: 'haiku', effort: 'low' });
+  assert.deepEqual(set(ok), { description: '[code] fix the header', prompt: `${roleLine(roleOf('code'))}\nfix the header, run the tests`, model: 'sonnet', effort: 'medium', run_in_background: true }, 'the AIs own model is overwritten, the other fields stay');
+  assert.deepEqual(set(guardAgent(agent({ description: '[search] where is x', prompt: 'p' }, 'Task'))), { description: '[search] where is x', prompt: `${roleLine(roleOf('search'))}\np`, model: 'haiku', effort: 'low' });
   assert.deepEqual(set(guardAgent(agent({ description: '[security] review login' }))).model, 'opus');
   // One rung up needs the word "failed" in the prompt.
   assert.equal(why(guardAgent(agent({ description: '[code^1] again', prompt: 'redo it' }))), NO_FAILED);
   const up = guardAgent(agent({ description: '[code^1] again', prompt: 'The first try failed: tests red.' }));
   assert.deepEqual([set(up).model, set(up).effort], ['sonnet', 'high']);
-  const up2 = guardAgent(agent({ description: '[code^2] again', prompt: 'Two tries failed.' }));
+  const up2 = guardAgent(agent({ description: '[code^2] again', prompt: 'Two tries failed: tests red again.' }));
   assert.deepEqual([set(up2).model, set(up2).effort], ['opus', 'high']);
   assert.equal(why(guardAgent(agent({ description: '[code^3] x', prompt: 'failed' }))), NO_KIND, 'only ^1 and ^2');
 
@@ -202,21 +212,23 @@ test('guardStep lets the other files through, and the map folder when the way ou
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('the hook as a process denies a map edit on stdout and says nothing for another file', async () => {
+test('the hook as a process: open by default, it lets a map edit through; strict, it denies it and says nothing for another file', async () => {
   const root = mapProject();
   try {
-    const denied = await runHook([], { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'docs/architecture/orders.md' }, cwd: root });
+    const mapEdit = { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'docs/architecture/orders.md' }, cwd: root };
+    assert.equal((await runHook([], mapEdit)).out, '', 'open (id154): no AI is stopped from editing the map');
+    const denied = await runHook([], mapEdit, STRICT_DIR);
     assert.equal(JSON.parse(denied.out).hookSpecificOutput.permissionDecision, 'deny');
-    const other = await runHook([], { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'src/a.mjs' }, cwd: root });
+    const other = await runHook([], { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'src/a.mjs' }, cwd: root }, STRICT_DIR);
     assert.equal(other.out, '');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('guardSettings also holds agents and skills, wires the book hooks and sets no compact window (pc32)', () => {
+test('guardSettings also holds agents, skills and reads, wires the book hooks and sets no compact window (pc32)', () => {
   const s = JSON.parse(guardSettings({ snapshot: false }));
   const second = s.hooks.PreToolUse[1];
-  for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow']) assert.match(name, new RegExp(`^(?:${second.matcher})$`));
-  assert.doesNotMatch('Read', new RegExp(`^(?:${second.matcher})$`));
+  for (const name of ['Agent', 'Task', 'Skill', 'Edit', 'Write', 'MultiEdit', 'Workflow', 'Read']) assert.match(name, new RegExp(`^(?:${second.matcher})$`), 'the guard sees the reads too (id150, or57)');
+  assert.doesNotMatch('Bash', new RegExp(`^(?:${second.matcher})$`));
   const bookCmd = BOOK_HOOK.replaceAll('\\', '/');
   assert.ok(s.hooks.Stop[0].hooks[0].command.includes(bookCmd));
   assert.ok(s.hooks.Stop[0].hooks[0].command.endsWith('--stop'));

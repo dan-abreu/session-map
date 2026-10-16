@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AiQueue, aiRunnerDir, findClaude, isAiRunnerCwd, runClaudeJSON } from '../server/ai/runner.mjs';
+import { readLedger } from '../server/budget.mjs';
+import { normalizePath } from '../server/paths.mjs';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-claude.mjs', import.meta.url));
 const EXE = process.platform === 'win32' ? 'claude.exe' : 'claude';
@@ -138,6 +140,25 @@ test('AiQueue caches by content: the same key never calls claude twice, even aft
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
 
+test('the Cérebro\'s background row rides the map\'s own Claude calls; the legacy model stays the fallback (id146)', async () => {
+  const smDir = tmp();
+  try {
+    const { run, calls } = fakeRun([{ ok: true, value: {}, costUSD: 0.01 }]);
+    const q = new AiQueue({ smDir, bin: 'claude', run, now: () => NOON });
+    await q.ask({ key: 'a', prompt: 'p' });
+    assert.equal(calls.at(-1).opts.model, 'haiku', 'the default');
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { background: { model: 'sonnet', effort: 'low' } } } } }));
+    await q.ask({ key: 'b', prompt: 'p' });
+    assert.equal(calls.at(-1).opts.model, 'sonnet', 'the owner\'s choice');
+    assert.equal(calls.at(-1).opts.effort, 'low');
+    // A choice for another engine never touches the Claude call.
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { background: { provider: 'gemini', model: 'gemini-3.1-flash-lite', effort: 'low' } } } } }));
+    await q.ask({ key: 'c', prompt: 'p' });
+    assert.equal(calls.at(-1).opts.model, 'haiku', 'another engine\'s choice leaves Claude alone');
+    assert.equal('effort' in calls.at(-1).opts, false);
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
 test('AiQueue refuses calls past maxCallsPerHour and lets them through an hour later; failures are not cached', async () => {
   const smDir = tmp();
   try {
@@ -237,4 +258,65 @@ test('each of session-map\'s own Claude calls is noted with its task and cost, f
   } finally {
     rmSync(smDir, { recursive: true, force: true });
   }
+});
+
+test('the map\'s own outside call books the project month too, so the budget bar sees it (or50)', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-month-'));
+  const root = join(tmpdir(), 'proj-shop');
+  try {
+    const others = () => ({ enabled: true, dailyUSD: 5, off: [], keys: ['openai'], models: {} });
+    const apiRun = async () => ({ ok: true, value: { partId: 'orders' }, costUSD: 0.01, provider: 'openai', model: 'gpt-6-luna' });
+    const q = new AiQueue({ smDir, bin: 'claude', apiRun, keyOf: () => 'sk-x', others, now: () => Date.now() });
+    const got = await q.ask({ key: { kind: 'place', id: 'one' }, prompt: 'where?', projectId: 'shop', root, sensitivity: 'internal' });
+    assert.equal(got.ok, true);
+    const months = readLedger(smDir);
+    assert.equal(Object.keys(months).length, 1);
+    const month = Object.values(months)[0];
+    assert.equal(month[normalizePath(root)], 0.01, 'the outside call of the map counts in the monthly budget');
+  } finally {
+    rmSync(smDir, { recursive: true, force: true });
+  }
+});
+
+test('the Cérebro\'s background row names the AI of the map\'s own work (id155); with no key for it, Claude does it', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-row-'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { background: { provider: 'deepseek', model: 'deepseek-v4-pro' } } } } }));
+    const asked = [];
+    const apiRun = async (prompt, o) => { asked.push(`${o.provider}:${o.model}`); return { ok: true, value: { done: true }, costUSD: 0.001 }; };
+    const { run, calls } = fakeRun([{ ok: true, value: {}, costUSD: 0.01 }]);
+    const withKey = new AiQueue({ smDir, bin: 'claude', run, apiRun, keyOf: () => 'sk-x', others: () => ({ enabled: true, dailyUSD: 5, off: [], keys: ['deepseek'], models: {} }), now: () => Date.now() });
+    assert.deepEqual((await withKey.ask({ key: 'row-a', prompt: 'p', sensitivity: 'internal' })).value, { done: true });
+    assert.deepEqual(asked, ['deepseek:deepseek-v4-pro'], 'the row\'s AI and model, not the old engine switch');
+    assert.equal(calls.length, 0);
+    const noKey = new AiQueue({ smDir, bin: 'claude', run, apiRun, keyOf: () => null, others: () => ({ enabled: true, dailyUSD: 5, off: [], keys: [], models: {} }), now: () => Date.now() });
+    await noKey.ask({ key: 'row-b', prompt: 'p', sensitivity: 'internal' });
+    assert.equal(calls.length, 1, 'Claude took it');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});
+
+test('a call can ride the book row instead of the background row, and can refuse the Claude fallback (id156)', async () => {
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-book-'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: {
+      background: { provider: 'gemini', model: 'gemini-3.1-flash-lite' },
+      book: { provider: 'deepseek', model: 'deepseek-flash', effort: 'low' },
+    } } } }));
+    const asked = [];
+    const apiRun = async (prompt, o) => { asked.push(`${o.provider}:${o.model}:${o.effort ?? '-'}`); return { ok: true, value: { titled: true }, costUSD: 0.0004 }; };
+    const { run, calls } = fakeRun([{ ok: true, value: {}, costUSD: 0.01 }]);
+    const opts = { smDir, bin: 'claude', run, apiRun, keyOf: () => 'sk-x', others: () => ({ enabled: true, dailyUSD: 5, off: [], keys: ['deepseek', 'gemini'], models: {} }), now: () => Date.now() };
+    const q = new AiQueue(opts);
+    const book = await q.ask({ key: { kind: 'book', n: 1 }, prompt: 'titles', functionId: 'book', outsideOnly: true, uncapped: true, sensitivity: 'internal' });
+    assert.deepEqual(book.value, { titled: true });
+    assert.deepEqual(asked, ['deepseek:deepseek-flash:low'], 'the book row\'s AI, not the background row\'s Gemini');
+    assert.equal(calls.length, 0);
+
+    // The book row on Claude (or on nothing): nothing outside takes it, and outsideOnly says so instead of calling Claude.
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { background: { provider: 'gemini', model: 'gemini-3.1-flash-lite' } } } } }));
+    const none = await new AiQueue(opts).ask({ key: { kind: 'book', n: 2 }, prompt: 'titles', functionId: 'book', outsideOnly: true, uncapped: true, sensitivity: 'internal' });
+    assert.deepEqual([none.ok, none.error], [false, 'no-outside']);
+    assert.equal(calls.length, 0, 'the caller has its own Claude call');
+    assert.equal(asked.length, 1, 'the background row\'s Gemini was not borrowed for the book');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
 });

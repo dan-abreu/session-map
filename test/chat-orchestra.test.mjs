@@ -320,7 +320,7 @@ test('limits: the orchestrators never take the last 2 places of CHATS_MAX, and o
   await withHub({ orchestra: { now: () => clock } }, async ({ hub, state, smDir }) => {
     const { key: orch, sessionId: orchId, r } = await openOrchestrator(hub, state);
     await r.until((e) => e.type === 'turn-end');
-    for (const text of ['SLOW one', 'SLOW two']) assert.equal((await hub.start({ projectId: PROJECT, partId: 'auth', text, run: { kind: 'auto' } }, state)).status, 200);
+    for (const text of ['SLOW one', 'SLOW two']) assert.equal((await hub.start({ projectId: PROJECT, partId: 'auth', text, run: { kind: 'talk' } }, state)).status, 200);
     parsed(await hub.orchestra.call(orch, 'start_chat', { code: 'au01', instructions: 'SLOW login' }));
     assert.equal(parsed(await hub.orchestra.call(orch, 'start_chat', { code: 'au02', instructions: 'Reset' })).state, 'waiting', '4 open: 2 are the person\'s: it waits in the line');
     // restartList names a chat once its claude has told its session id, which a slow machine may not have done yet.
@@ -712,7 +712,7 @@ test('list_conversations leaves out the live, the driven, the archived and its o
     const { key: orch, sessionId: orchId, r } = await openOrchestrator(hub, state);
     await r.until((e) => e.type === 'turn-end');
     // The person has DONE open in session-map now.
-    const mine = await hub.start({ projectId: PROJECT, sessionId: DONE, text: 'Looking again', run: { kind: 'auto' } }, state);
+    const mine = await hub.start({ projectId: PROJECT, sessionId: DONE, text: 'Looking again', run: { kind: 'talk' } }, state);
     assert.equal(mine.status, 200);
     const { conversations } = parsed(await hub.orchestra.call(orch, 'list_conversations', {}));
     assert.deepEqual(conversations, [{

@@ -11,6 +11,12 @@ test('a system-reminder is stripped from a prompt', () => {
   assert.equal(promptText(user('hello <system-reminder>secret</system-reminder> there')), 'hello  there');
 });
 
+test('other injected blocks are stripped too, even when never closed', () => {
+  assert.equal(promptText(user('<browser_instruction>use the tab</browser_instruction>\nfix the login')), 'fix the login');
+  assert.equal(promptText(user('fix it\n<browser_instruction>cut off')), 'fix it');
+  assert.equal(promptText(user('<browser_instruction>only this</browser_instruction>')), '');
+});
+
 test('tool results and the compact summary do not start chapters', () => {
   const list = [user('one'), asst(say('ok')), result('x'), user('summary', { isCompactSummary: true }), user('two')];
   const chs = chaptersOf(list);
