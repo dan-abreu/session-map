@@ -52,7 +52,7 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 ### Detailed Flow
 
 - [ ] **later:** A single model behind every view `fl07`
-  - Parked on 2026-10-16 (the finish plan): the remaining half (the AI enrichment and the owner's "confirmed") waits for the one-model decision, `fd25`; the model without the AI is built and served (`GET /api/arch/<project>/model`).
+  - Parked on 2026-10-16 (the finish plan): the remaining half (the AI enrichment and the owner's "confirmed") has no owner call yet. The one model itself is done (`fd25`): the Flow's model is what the Foundation's round builds, what `GET /api/foundation/<id>/model` serves and what "Tudo em dia?" reads.
   - One JSON model (nodes, labeled arrows, journeys, a hash of the files of each node); the views are generated from it and mermaid is only the drawing layer (the Structurizr, Ilograph and C4 pattern).
   - Separate "declared" (README and architecture) from "detected" (chats, branches, code), with an "AI" or "confirmed" badge.
   - The AI generates it, caches it in the session-map storage and regenerates only the nodes whose hash changed, per folder, with a cheap model.
@@ -81,13 +81,13 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
   - Refined the same day: the list groups by layer then by part (the layer of each function comes from the model), shows only functions by default (an "Everything" chip adds docs and tests), and each row says what the function is for (first sentence of its opening comment) and how it works (the next sentences, or the part file's own words about it), both masked like the rest of the page.
   - From `id120`.
 - [ ] **later:** Diagram that updates itself `fl11`
-  - Parked on 2026-10-16 (the finish plan): it writes into the project on its own, so it waits for the one-model decision (`fd25`) and for the care mode the owner has not chosen yet.
+  - Parked on 2026-10-16 (the finish plan): it writes into the project on its own, so it waits for the care mode the owner has not chosen for every project (the one model is done, `fd25`).
   - Mode `flow.sync`: `auto` (default), `suggest` or `off`. New part → a box in its layer's `subgraph`; new link (weight 2 or more, repeated evidence) → a dotted "related" arrow; a part that vanished → a box marked "gone?", never erased on its own.
   - Batches at most once an hour, written only inside the mermaid block, each one an activity event ("Flow updated: +1 part, +2 links") with Undo (the previous block is kept in the session-map storage). Once a day the AI swaps "related" for the real reason.
   - `suggest` shows a banner "the Flow may be out of date" and an "Update with the AI" button that opens the studio with the changes.
   - Tests: an idempotent batch, never deletes, undo, respects `off` and `suggest`, never writes outside the block.
 - [ ] **later:** Golden rule: architecture and Flow move together, nothing is born in only one `fl12`
-  - Parked on 2026-10-16 (the finish plan): it needs the single model of `fl07`, which waits for `fd25`.
+  - Parked on 2026-10-16 (the finish plan): the single model it needs is there now (`fd25`); what is left is the writing in both directions, which waits for the care mode the owner has not chosen for every project.
   - The single model (`fl07`) is the source and the two are synced both ways: a new part or feature in the map gives a box and arrows in the Flow; a new box in the Flow gives a part with the skeleton in the architecture.
   - A small task is only an item in the architecture and shows in the Flow as a signal, with no box.
   - Invariant tests: no part without a box, no box without a part (except actors and outside services). Also see `pt04` and `wa10`.

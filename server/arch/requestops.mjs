@@ -13,7 +13,10 @@ const REASON_MAX = 300;
 const ITEM_RE = /^[-*+]\s+\[[ xX]\]\s/;
 const STATUS_RE = /^(\s*[-*+]\s+)(status|situação|situacao)(\s*:\s*)(.*)$/i;
 const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
-const tickOf = (line) => line.replace(/^([-*+]\s+)\[ \]/, '$1[x]');
+// A closed request is ticked and is no longer "in progress": that mark goes (a bold "in progress · important:" keeps its weight).
+const tickOf = (line) => line.replace(/^([-*+]\s+)\[ \]/, '$1[x]')
+  .replace(/\*\*(?:in progress|em andamento)\s*:\*\*\s*/i, '')
+  .replace(/\*\*(?:in progress|em andamento)\s*·\s*/i, '**');
 const dayOf = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 const WORDS = {

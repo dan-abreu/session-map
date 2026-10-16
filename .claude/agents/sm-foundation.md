@@ -26,7 +26,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Without the access a check needs (a token, a network), the line says "not verified", never "failed".
 - Automatic fixes never invent contact details, e-mails or legal text.
 
-Proof: 89 test files cover your part (test/fixtures/repos/acme-lib/test/index.test.js, test/foundation-areas.test.mjs, test/foundation-blocks.test.mjs, test/foundation-care.test.mjs, test/foundation-census.test.mjs, test/foundation-changes-undo.test.mjs, test/foundation-collect.test.mjs, test/foundation-compass.test.mjs, test/foundation-docfix.test.mjs, test/foundation-docsize.test.mjs, …).
+Proof: 91 test files cover your part (test/fixtures/repos/acme-lib/test/index.test.js, test/foundation-areas.test.mjs, test/foundation-blocks.test.mjs, test/foundation-care.test.mjs, test/foundation-census.test.mjs, test/foundation-changes-undo.test.mjs, test/foundation-collect.test.mjs, test/foundation-compass.test.mjs, test/foundation-docfix.test.mjs, test/foundation-docsize.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

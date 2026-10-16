@@ -29,8 +29,7 @@ import { applyImport, deleteDraft, exportMermaid, planImport, programOnly, readD
 import { liveOf, partView, publicView } from './arch/flowinner.mjs';
 import { REVIEW_TO, applyRequestStatus } from './arch/requestops.mjs';
 import { versionText } from './web/statesig.js';
-import { readArch } from './arch/detect.mjs';
-import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
+import { MODEL_VERSION, buildFlowModel, projectArch, readModelCache } from './arch/flowmodel.mjs';
 import { authorize, cookieToken, dropLookKey, isLocal, loadLookKey, loadToken, lookAllows, newLookKey, sameToken } from './auth.mjs';
 import { lookState } from './lookstate.mjs';
 import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
@@ -42,7 +41,6 @@ import { setUserMode, setUserPlugin, undoUserMode, userModeState } from './chat/
 import { reinforcedLimit, reinforcedSpend, setReinforcedLimit } from './chat/run.mjs';
 import { collect, topLevelOf } from './collect.mjs';
 import { fileOwners } from './arch/fileowners.mjs';
-import { loadConfig } from './config.mjs';
 import { findFiles, isSecretsFile, listFiles, mergeBaseOf, readFileForView } from './files.mjs';
 import { readRemoved } from './hidden.mjs';
 import { createFoundationRoute } from './foundation/http/index.mjs';
@@ -779,7 +777,7 @@ export function createApp({
   };
   // The map as it is on disk now, with the relations collect found: the baseline both the preview and apply compare against.
   // A map the state read from the main branch stays refused even if a folder appeared since: apply never guesses.
-  const currentArch = async (project) => (demo || project.arch.source === 'main-branch' ? project.arch : { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch.links ?? [] });
+  const currentArch = async (project) => (demo ? project.arch : projectArch(project, smDir));
   // The single model of the Flow (fl07, fl08): one build per project at a time, in the background (the build yields to
   // the server as it reads), kept in session-map's storage only. The demo has no folder: what its README declares.
   const modelRuns = new Map();

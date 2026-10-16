@@ -30,6 +30,8 @@ named `vendored` in the project's config) and why.
 **Vendored.** Other people's code kept whole in the repository (`server/disciplines`). Listed under `vendored` in
 `.claude/session-map.json`, so the census counts it as a library and the health checks do not judge it as the project's own.
 
+**Model.** What a project is made of, as the page draws it in the Flow: its parts, the people who use it, the outside services, and the arrows between them, each with the lines of the README and of the code it rests on. There is one ([ADR 0006](adr/0006-one-model-the-flows.md)); the refresh round keeps it fresh and "Tudo em dia?" reads it.
+
 **Refresh round.** One pass of the Foundation: read the files, then the blocks (model, versions, guide, health, "Tudo em
 dia?"). It runs when the owner asks and when the program notices the files moved.
 

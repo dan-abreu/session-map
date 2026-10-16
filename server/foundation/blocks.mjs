@@ -1,12 +1,9 @@
 import { statSync } from 'node:fs';
-import { readArch } from '../arch/detect.mjs';
-import { withLocalParts } from '../arch/local.mjs';
-import { loadConfig } from '../config.mjs';
+import { buildFlowModel, projectArch } from '../arch/flowmodel.mjs';
 import { mainBranch } from '../sources/git.mjs';
 import { MODES } from './care.mjs';
 import { recomputeGuide } from './guide.mjs';
 import { healthOf } from './health.mjs';
-import { buildModel } from './model.mjs';
 import { fdPath, readFd, writeFd } from './store.mjs';
 import { runUptodate } from './uptodate.mjs';
 import { versionsOf } from './versions.mjs';
@@ -32,20 +29,14 @@ const sameDoc = (a, b) => JSON.stringify({ ...a, generatedAt: null }) === JSON.s
 export function blockSteps({ now = () => new Date(), clock = Date.now } = {}) {
   return [
     {
-      // fd03: the one model of the code (levels 1 to 3), from the facts, the census and the architecture. The owner's drawing
-      // (model-overrides.json) and the approved claims (claims.json) are laid over it when they exist.
+      // fd03, fd25: the one model of the project is the Flow's (arch/flowmodel.mjs): the round builds it, so it is kept fresh in
+      // session-map's storage (flow-model.json), and the page, "Tudo em dia?" and the route of the Foundation all read that one.
       name: 'model',
       async run(ctx) {
         if (unread(ctx)) return { skipped: 'unread' };
         const { project, smDir } = ctx;
-        const id = project.id;
-        const census = readFd(smDir, id, 'census.json', null);
-        const facts = readFd(smDir, id, 'facts.json', null);
-        if (!census || !facts) return { skipped: 'no-facts' };
-        const arch = withLocalParts(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: await mainBranch(project.root) }), smDir, id);
-        const claims = readFd(smDir, id, 'claims.json', null);
-        const model = buildModel(facts, census, arch, readFd(smDir, id, 'model-overrides.json', {}) ?? {}, { name: project.name, now: now(), ...(Array.isArray(claims?.claims) ? { claims: claims.claims } : {}) });
-        if (!sameDoc(readFd(smDir, id, 'model.json', null), model)) writeFd(smDir, id, 'model.json', model);
+        const arch = await projectArch({ ...project, mainBranch: project.mainBranch ?? await mainBranch(project.root) }, smDir);
+        const model = await buildFlowModel({ root: project.root, arch, smDir, projectId: project.id, source: arch.source });
         return { nodes: model.nodes.length, edges: model.edges.length };
       },
     },

@@ -11,3 +11,4 @@ open) lives in [docs/architecture](../architecture/README.md); the words used he
 | [0003](0003-the-guard-is-open-by-default.md) | The guard is open by default; strict is a choice |
 | [0004](0004-the-chat-never-moves-on-its-own.md) | The main chat's model never moves on its own |
 | [0005](0005-built-is-not-done.md) | Built is not done: a feature is done when something runs it |
+| [0006](0006-one-model-the-flows.md) | One model of the project, and it is the Flow's |

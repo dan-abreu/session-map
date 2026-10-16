@@ -130,3 +130,15 @@ test('applied through the care mode: auto writes and records an undo, look write
     assert.throws(() => applyRequestStatus({ root, arch: a, code: 'id01', to: 'later', care: {} }), TypeError);
   });
 });
+
+test('a closed request is no longer "in progress": the mark goes, a weight written beside it stays', () => {
+  const text = [
+    '## What\'s missing', '',
+    '- [ ] **in progress:** First one `id10`', '  - Asked: 2026-10-01 10:00 — "a"', '  - Status: in progress.',
+    '- [ ] **in progress · important:** Second one `id11`', '  - Asked: 2026-10-01 10:00 — "b"', '  - Status: in progress.',
+    '- [ ] **em andamento:** Terceira `id12`', '  - Pedido: 2026-10-01 10:00 — "c"', '  - Situação: em andamento.', '',
+  ].join('\n');
+  const heads = (to, reason) => ['id10', 'id11', 'id12'].map((code) => set(code, to, reason, text).text.split('\n').find((l) => l.endsWith(`\`${code}\``)));
+  assert.deepEqual(heads('discarded', 'because'), ['- [x] First one `id10`', '- [x] **important:** Second one `id11`', '- [x] Terceira `id12`']);
+  assert.deepEqual(heads('later'), ['- [ ] **in progress:** First one `id10`', '- [ ] **in progress · important:** Second one `id11`', '- [ ] **em andamento:** Terceira `id12`'], 'parking keeps the mark');
+});

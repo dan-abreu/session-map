@@ -23,10 +23,10 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [x] **Claude:** "New idea" chat that proposes the part and writes only after an OK `pc02`
 - [x] **Claude:** Attach an image to a message `pc03`
   - Paste, drop or pick up to four images (PNG, JPG, GIF, WebP); they go to claude as image blocks and show on the message (mm22).
-- [x] **in progress:** The composer rebuilt lean on the brain: the ways menu, the model chips, the Ultracode door and the duplicated context and permissions sections leave; the brain's line stays `pc35`
+- [x] The composer rebuilt lean on the brain: the ways menu, the model chips, the Ultracode door and the duplicated context and permissions sections leave; the brain's line stays `pc35`
   - From `id146`. The Cérebro routes the chat (or39–or42), so the bar keeps the attach, the key hints, the cost chip, the line "Cérebro: engine · model · effort" (the run event's brain) and Send; the menu by Send dies with its paths, chips, context and permissions (the Configurações link stays). `server/web/chat.js`, `views.js`, `index.html`, i18n.
   - Built on 2026-10-15: the composer's bar is attach · hints · cost chip · the brain's line (`data-chat="brain"`, "Sonnet · low — conversa", quiet until the first run event) · Send; the run menu, the chips, the Ultracode warning, Context and Permissions left `chat.js` and `index.html`; `views.js` lost EXPECTED/runWords/runPicks and kept brainLine; Configurações kept the limit, the language, the alerts and the permission mode (selfPart died); the i18n block `run.path*`/`run.way*`/chips left and `chat.brainTitle` came in pt/en; the CSS of the menu left and `.chat-brain` joined the bar. `test/web-chat`, `test/web-chat-around`, `test/web-chat-full`, `test/web-composer`, `test/web-chatfold`, `test/web-i18n` updated and green.
-- [x] **in progress:** The composer's bar keeps only what is needed: a memory chip ("48k / 200k") by the cost, and the brain's line cut to model and level `pc37`
+- [x] The composer's bar keeps only what is needed: a memory chip ("48k / 200k") by the cost, and the brain's line cut to model and level `pc37`
   - From `id157`. The program already read each reply's `usage` (`claude-conversation.mjs`, `turn-check.mjs`) and already had the mark of a heavy conversation (`waste.mjs` `MAX_CONTEXT`, 200k); the chat showed neither. `readConversation` returns `contextTokens` (input + cache written + cache read of the last reply of the chat itself, helpers left out); the hub puts `context: {tokens, max}` on the history (`itemsOf`) and on the `run` event after each turn (`memoryOf` reads the transcript's tail); the page chip (`data-chat="memory"`, `contextMeter` in `views.js`) turns amber from 70 % and red from 90 %. The brain's line is now "Sonnet · low"; the entry brain's why ("a chat") moved to the tooltip. The key hints stay (the owner's choice). DeepSeek conversations give no number, so no chip. `test/web-turn-check`, `web-chat`, `web-chat-around`, `web-chat-full`, `turn-check`, `sources-conversation`, `chat` updated and green.
 
 ### Permissions
@@ -75,7 +75,7 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [x] **Claude:** Actions on every message: edit and resend, regenerate, copy, and code blocks with their own copy `pc21`
   - From `id93`.
   - Done 2026-10-14 (`pc34`): one quiet row on hover under every message — copy (all), edit and send again (the person's own), run the last turn again (the last reply); code blocks keep their own copy. One copy per message: the meta line's copy gives way to the row.
-- [x] **in progress:** The conversation's context in sight: attached files and images as chips, @ files, and a meter of context used and cost `pc22`
+- [x] The conversation's context in sight: attached files and images as chips, @ files, and a meter of context used and cost `pc22`
   - From `id93`.
   - Done 2026-10-14 (`pc34`): the cost as a quiet chip by Send and as the Context section of the menu (cost and images); @ files and the images of each message were already in sight. Left: a meter of context used — the engine does not report tokens used, so the meter waits for an honest number.
   - Done 2026-10-15 (`pc37`): the honest number was in the transcript all along (each reply's `usage`); the meter is the chip "48k / 200k" by Send.

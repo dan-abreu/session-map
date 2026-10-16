@@ -211,7 +211,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: opening a page chat, every control reads in the same style and size, nothing is stacked or duplicated, the missing options (actions on messages, context, history) are there, and the chat looks clean, like the big AI chats.
   - Where it went: `pc34`.
   - Status: done on 2026-10-14 (`pc34`); waiting for the owner to try it after the next restart of session-map.
-- [x] **in progress:** The chat according to the brain: the pre-brain options out of the engine and of the composer, rebuilt lean `id146`
+- [x] The chat according to the brain: the pre-brain options out of the engine and of the composer, rebuilt lean `id146`
   - Asked: 2026-10-15 10:50 — "agora precisamos ajeitar o chat de acordo com o cerebro, como já existe o cerebro agora, ta cheio de opções ali, eu não quero sair criando coisas por cima de coisas, quero um código enxuto, o chat"; 2026-10-15 11:20 — "por mim a gente poderia tirar tudo isso, e refazer do zero e tirar também do motor esse monte de opções que foi criado antes do cerebro"
   - What it means: the Cérebro routes every AI function (or39–or42), so the options the chat kept from before it — the ways menu, the model and reasoning chips, the Ultracode door, the context and permissions sections — leave the composer, and the engine pieces they moved (the ways, the per-chat model choice) are removed; the chat's bottom is rebuilt lean on the brain's line.
   - How to confirm it is done: the composer shows the box, the attach, the hints, the cost chip, the brain's line and Send — no ways menu, no model chips, no duplicated context or permissions; the engine no longer parses or runs the removed ways; the tests pass.
@@ -392,12 +392,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a new terminal chat starts on Sonnet medium; an agent asked for Opus on ordinary code runs on Sonnet in any session; a long terminal chat is summarized at 100k.
   - Where it went: `or34` (with `or33`).
   - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or34`): user defaults Sonnet medium, compaction at 100k, the guard and the book installed for every session on this PC; for other PCs, with the next plugin release; waiting for the owner to try it after the restart of session-map on 2026-10-13.
-- [ ] **in progress:** Smart orchestrator, cheap answerer `id116`
+- [x] Smart orchestrator, cheap answerer `id116`
   - Asked: 2026-10-14 — "eu pedi uma IA mais barata para conversa e me responder, mas está sendo infelizmente muito ruim, pensa pouco, preciso da IA que conversa comigo seja inteligente, mas não quero a mesma IA fazendo tudo, o orquestrador que recebe as minhas mensagens é uma, a mais correta e o que responde seja a mais barata, tem como ser assim?"
   - What it means: Two roles, two models: the one that receives and understands each message is the most correct; the one that writes the reply is the cheapest that still does it well. Today talk is Sonnet at low (server/ai/policy.json:30), so one cheap model does both and thinks little.
   - How to confirm it is done: On the owner's real messages the reply is judged better than Sonnet low alone, the cost per message stays under the agreed ceiling, and the run line says which model understood and which answered.
   - Where it went: `or35`.
-  - Status: new.
+  - Status: discarded (the chat that talks with the owner now runs on the strongest model through the Cérebro (the owner asked on 2026-10-16 whether it was not already so), which answers his complaint that it thought little; the split into two models was never built and nothing waits on it; review of 2026-10-16). Before: new.
 
 - [x] The same options for DeepSeek, GPT, Claude and Gemini, and the work never stops for lack of credit `id122`
   - Asked: 2026-10-14 — "gostaria que o deepseek, gpt, claude e gemini, tenha as mesmas opções"; "porque assim eu posso escolher qual grupo eu posso trabalhar, como trabalhar, porque muita das vezes eu não tenho credito no deepseek ou credito no claude e fazer o trabalho parar porque não tenho token suficiente e não poder realocar os serviços, quero trabalhar pelos meus chats la dentro do session"; "quero que façamos o que conversamos acima, preciso do maximo de economia e qualidade maxima no programa, mas fazendo que a IA pense de forma correta"

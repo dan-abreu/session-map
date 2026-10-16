@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { readArch } from '../server/arch/detect.mjs';
+import { buildFlowModel } from '../server/arch/flowmodel.mjs';
 import { loadConfig } from '../server/config.mjs';
 import { runDocwatch } from '../server/foundation/docwatch.mjs';
 import { healthOf } from '../server/foundation/health.mjs';
@@ -184,7 +185,8 @@ async function readAll(fx) {
   const arch = await readArch(root, config, { mainBranch: 'main' });
   const linesOf = (path) => { const rows = readFileSync(join(root, path), 'utf8').split('\n'); if (rows.at(-1) === '') rows.pop(); return rows; };
   const model = buildModel(facts, census, arch, {}, { name: NAME, linesOf, level4: true });
-  writeFd(smDir, ID, 'model.json', model);
+  // "Tudo em dia?" reads the one model, the Flow's; the doc watcher below still takes the code model as its input.
+  await buildFlowModel({ root, arch, smDir, projectId: ID, source: arch.source });
   const versions = await versionsOf({ root, census, smDir, id: ID, now: new Date(WHEN) });
   await healthOf({ root, smDir, id: ID, now: new Date(WHEN) });
   const found = await runDocwatch({ root, smDir, id: ID, census, facts, model, arch, versions, config, now: () => Date.parse(WHEN) });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { modelCachePath, readModelCache } from '../server/arch/flowmodel.mjs';
 import { HEALTH_GAP_MS, blockSteps, carePiece, healthPiece, uptodatePiece, versionPiece } from '../server/foundation/blocks.mjs';
 import { MIN_GAP_MS, readStep, refreshFoundation } from '../server/foundation/refresh.mjs';
 import { foundationSummary } from '../server/foundation/summary.mjs';
@@ -13,7 +14,7 @@ import { copyFixtureRepo, removeFixtureRepo } from './fixtures/repo-copy.mjs';
 // summary of the page is drawn from them. Before this, the round only read: nothing ran the other blocks.
 
 const ID = 'acme-shop-8324f1';
-const NAMES = ['model.json', 'versions.json', 'profile.json', 'practices.json', 'compass.json', 'health.json', 'uptodate.json'];
+const NAMES = ['versions.json', 'profile.json', 'practices.json', 'compass.json', 'health.json', 'uptodate.json'];
 
 test('a round writes the files of every block, in order, and the page summary has them', async () => {
   const root = copyFixtureRepo('acme-shop');
@@ -23,6 +24,10 @@ test('a round writes the files of every block, in order, and the page summary ha
     assert.equal(out.ran, true);
     assert.deepEqual(out.steps.map((s) => [s.name, s.ok]), [['read', true], ['model', true], ['versions', true], ['guide', true], ['health', true], ['uptodate', true]]);
     for (const name of ['census.json', 'facts.json', 'sections.json', ...NAMES]) assert.ok(existsSync(fdPath(smDir, ID, name)), `${name} was written`);
+    // The one model (fd25) is the Flow's: the round builds it and keeps it where the page and "Tudo em dia?" read it.
+    assert.ok(existsSync(modelCachePath(smDir, ID)), 'the model was built');
+    assert.ok(readModelCache(smDir, ID).model.nodes.some((n) => n.kind === 'part'), 'with the parts of the map');
+    assert.ok(!existsSync(fdPath(smDir, ID, 'model.json')), 'and there is no second model beside it');
     const summary = foundationSummary(smDir, ID);
     assert.ok(Number.isFinite(summary.health.score), 'health score');
     assert.deepEqual(Object.keys(summary.uptodate).sort(), ['confirmed', 'unverified', 'warning']);
@@ -41,6 +46,7 @@ test('a project the reading step could not read is skipped by the blocks, not fa
     const out = await refreshFoundation({ id: ID, name: 'gone', root: join(tmpdir(), 'sm-no-such-folder-xyz') }, smDir, { now: () => 1_000_000 });
     assert.deepEqual(out.steps.map((s) => [s.name, s.ok]), [['read', false], ['model', true], ['versions', true], ['guide', true], ['health', true], ['uptodate', true]]);
     for (const name of NAMES) assert.ok(!existsSync(fdPath(smDir, ID, name)), `${name} is not invented`);
+    assert.ok(!existsSync(modelCachePath(smDir, ID)), 'the model is not invented');
   } finally {
     rmSync(smDir, { recursive: true, force: true });
   }

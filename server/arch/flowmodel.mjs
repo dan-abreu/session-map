@@ -11,6 +11,7 @@ import { lstatSync, readFileSync, statSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import { promisify } from 'node:util';
+import { loadConfig } from '../config.mjs';
 import { isSecretsFile, safeResolve } from '../files.mjs';
 import { lineAt } from '../foundation/lex.mjs';
 import { projectContext, resolveSpec } from '../imports.mjs';
@@ -18,6 +19,7 @@ import { kindOfFile } from '../sources/count.mjs';
 import { brainDir, readJsonFile, writeAtomic } from '../store.mjs';
 import { flowKey, matchParts, parseFlow } from '../web/flow.js';
 import { ownersAllOf } from './attach.mjs';
+import { readArch } from './detect.mjs';
 import { programOnly } from './flow.mjs';
 import { ACTORS, CATALOG_VERSION, actorOfApp, catalogOfLabel, linkLabelKey, serviceById, serviceOf } from './flowcatalog.mjs';
 import { detectJourneys } from './flowjourneys.mjs';
@@ -443,6 +445,14 @@ const headFacts = (text) => {
   }
   return { lead: lines.slice(0, end).join('\n').slice(0, 3000), loop: /setInterval\s*\(/.test(head) };
 };
+
+// The map as the Flow reads it: from the project's folder as it is now, with the relations the state found; a map the state
+// read from the main branch stays as it was read. The page's route and the Foundation's round both build the one model from
+// this, so a build of one is the build of the other.
+export async function projectArch(project, smDir) {
+  if (project.arch?.source === 'main-branch') return project.arch;
+  return { ...(await readArch(project.root, loadConfig(project.root, smDir), { mainBranch: project.mainBranch ?? null })), links: project.arch?.links ?? [] };
+}
 
 export const modelCachePath = (smDir, projectId) => join(brainDir(smDir, projectId), 'flow-model.json');
 export const readModelCache = (smDir, projectId) => readJsonFile(modelCachePath(smDir, projectId), null);

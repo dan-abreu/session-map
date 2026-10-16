@@ -2,6 +2,7 @@
 // buildUptodate runs the 35 lines on it (pure) and answers the document of contract 7. Nothing here asks an AI and
 // nothing is written in the project: the panel only goes to brain/<id>/foundation/uptodate.json.
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readModelCache } from '../arch/flowmodel.mjs';
 import { FILE_MAX, isSecretsFile, safeResolve } from '../files.mjs';
 import { log } from '../log.mjs';
 import { runGit } from '../sources/gitqueue.mjs';
@@ -9,6 +10,7 @@ import { workingTree } from '../sources/git.mjs';
 import { readCare } from './care.mjs';
 import { readDocs } from './docwatch.mjs';
 import { brokenLinks } from './mdlinks.mjs';
+import { linesModelOf } from './modelview.mjs';
 import { readFd, writeFd } from './store.mjs';
 import { LINES, runLine } from './uptodate-lines.mjs';
 
@@ -88,7 +90,7 @@ export async function buildCtx(root, smDir, id, project, { now } = {}) {
   const findings = read('findings.json');
   const ctx = {
     project, census,
-    ledger: read('read-ledger.json'), facts: read('facts.json'), model: read('model.json'),
+    ledger: read('read-ledger.json'), facts: read('facts.json'), model: linesModelOf(readModelCache(smDir, id)?.model, census),
     versions: read('versions.json'), health: read('health.json'), inspection: read('inspection.json'),
     findings: Array.isArray(findings?.findings) ? findings.findings.filter((f) => ['open', 'later', 'accepted'].includes(f.state ?? 'open')) : null,
     docs: null, brokenLinks: null, git: null, care: readCare(smDir, id), now: iso(now),

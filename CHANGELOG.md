@@ -41,6 +41,8 @@ selector and its tabs.
   scripts/cache-share.mjs` prints how much of an agent's first turn comes from the prompt cache (fd29, sv17).
 - The repository carries its own health: SUPPORT, CODEOWNERS, an `.editorconfig`, `.env.example` with
   `docs/configuration.md`, CodeQL, pinned actions with a read-only token, five decision records (`docs/adr/`) and a glossary (fd28).
+- One model of the project, not two: the Flow's. The refresh round builds it, the Foundation's route serves it and "Tudo em dia?"
+  reads it, so six of its lines that judged a thin second model now judge the real one (fd25).
 - Fixed: the OpenAI price page answers again, and a page that fails is not asked at every look.
 
 ## 0.3.0

@@ -23,7 +23,7 @@ Status: done 2026-10-16.
 
 ### Task 3: one model (`fd25`)
 The Foundation's model block (routes empty, `views.mjs`, `enrich.mjs`, `evidence-check.mjs`) and the Flow's model (`arch/flowmodel.mjs`) are two. Decide with the owner: the Flow reads the Foundation's `model.json`, or the block is dropped. Files: `server/foundation/http/model.mjs`, `server/arch/flowmodel.mjs`. Test: `node --test test/foundation-model.test.mjs test/arch-flowmodel-fixtures.test.mjs`.
-Status: waits for the owner.
+Status: done 2026-10-16 (`fd25`), decided by the owner ("melhor juntar"): the Flow's model is the one, the round builds it, the Foundation's route serves it and "Tudo em dia?" reads it; `docs/adr/0006-one-model-the-flows.md`. Nothing was deleted: the old builder and the study on its shape stay with their tests.
 
 ### Task 4: the Foundation's screens are mounted (`fd26`), Versions included
 Files: `server/web/foundationareas.js`, `server/web/areas.js`, `server/web/app.js`. Test: `node --test test/foundation-areas.test.mjs test/web-versionsview.test.mjs test/web-home.test.mjs`, then `node scripts/smoke-browser.mjs --compare` on the running page.
