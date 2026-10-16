@@ -63,13 +63,17 @@ export function weekUseOf(account, nowMs) {
 }
 
 // Read from the file, parsed again only when it changed. Only the weekly figure leaves this function.
-let weekCache = { file: null, mtimeMs: -1, account: null };
+let weekCache = { file: null, key: '', account: null };
 export function readWeekUse(file, nowMs = Date.now()) {
   try {
-    const { mtimeMs } = statSync(file);
-    if (weekCache.file !== file || weekCache.mtimeMs !== mtimeMs) {
+    const st = statSync(file);
+    // mtime alone is not enough: two writes in the same tick of a coarse clock (the CI runners' is) keep the same
+    // mtimeMs, and a cached value would hide the new content. The size joins the key: a rewrite that changes the
+    // content almost always changes the size, so the broken-file case reads again and answers null.
+    const key = `${st.mtimeMs}:${st.size}`;
+    if (weekCache.file !== file || weekCache.key !== key) {
       const parsed = JSON.parse(readFileSync(file, 'utf8'));
-      weekCache = { file, mtimeMs, account: { cachedUsageUtilization: parsed?.cachedUsageUtilization ?? null } };
+      weekCache = { file, key, account: { cachedUsageUtilization: parsed?.cachedUsageUtilization ?? null } };
     }
     return weekUseOf(weekCache.account, nowMs);
   } catch {
