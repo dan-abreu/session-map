@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs';
 import { log } from '../log.mjs';
+import { BLOCK_PIECES } from './blocks.mjs';
 import { fdDir, readFd } from './store.mjs';
 
 // project.foundation in /api/state (contract § 12): light, read from the files the refresh wrote, never recomputed here.
 // Each block appends a piece: (read) => ({ <key>: value }), where read(name) gives a foundation file or null.
-// The piece of block 1 (census, read ledger, coverage) always counts first; PIECES holds what the other blocks add.
+// The piece of block 1 (census, read ledger, coverage) counts first, then the pieces of blocks.mjs ("Tudo em dia?", health,
+// version, care); PIECES holds what anything else adds.
 export const PIECES = [];
 const KEYS = ['census', 'read', 'coverage', 'uptodate', 'health', 'version', 'care'];
 
@@ -24,7 +26,7 @@ export function readPiece(read) {
 }
 
 // null = the project was not read yet: the page says so instead of showing zeros.
-export function foundationSummary(smDir, projectId, { pieces = [readPiece, ...PIECES] } = {}) {
+export function foundationSummary(smDir, projectId, { pieces = [readPiece, ...BLOCK_PIECES, ...PIECES] } = {}) {
   if (!smDir) return null;
   try {
     if (!existsSync(fdDir(smDir, projectId))) return null;

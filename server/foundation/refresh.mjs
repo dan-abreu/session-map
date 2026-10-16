@@ -10,6 +10,7 @@ import { loadConfig } from '../config.mjs';
 import { FILE_MAX, isSecretsFile, safeResolve } from '../files.mjs';
 import { mainBranch } from '../sources/git.mjs';
 import { writeAtomic } from '../store.mjs';
+import { blockSteps } from './blocks.mjs';
 import { censusOf, diffCensus, trimLog } from './census.mjs';
 import { readDocs } from './docwatch.mjs';
 import { extractAll } from './extract/index.mjs';
@@ -21,7 +22,8 @@ import { fdPath, readFd, writeFd } from './store.mjs';
 // The foundation's reading round for one project (index § 1): census -> facts -> model -> health, versions, profile ->
 // up to date. Each block appends its step here, in that order: { name, run(ctx) }. What a step returns lands in
 // ctx.results[name] for the steps after it. The shell itself writes nothing.
-// The reading step of block 1 (readStep, below) always runs first; STEPS holds what the other blocks add after it.
+// The reading step of block 1 (readStep, below) always runs first, then the blocks of blocks.mjs (model, versions, guide,
+// health, "Tudo em dia?"); STEPS holds what anything else adds after them.
 export const STEPS = [];
 export const MIN_GAP_MS = 30_000;
 
@@ -53,7 +55,7 @@ async function runSteps(project, smDir, steps, careMode) {
 }
 
 // careMode: the care mode to use in memory for this round, without writing care.json (the B7 proof runs this way).
-export function refreshFoundation(project, smDir, { steps = [readStep(), ...STEPS], careMode, now = Date.now } = {}) {
+export function refreshFoundation(project, smDir, { steps = [readStep(), ...blockSteps(), ...STEPS], careMode, now = Date.now } = {}) {
   const key = `${smDir}|${project.id}`;
   const reason = refusal(key, now());
   if (reason) return Promise.resolve({ ran: false, reason });
