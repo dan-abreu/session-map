@@ -114,13 +114,16 @@ const LINE_FNS = {
     const parts = ctx.project?.arch?.parts;
     if (!Array.isArray(parts)) return noData();
     const doneWords = /^\s*(?:status|situação)\s*:\s*(?:done|conclu[ií]d[oa]|released in|publicad[oa] na)\b|\b(?:released in|publicad[oa] na)\s+v?\d/i;
+    // An item whose own status line says it is not done ("Status: in progress (the first part was released in v0.2.3…)") is
+    // saying what was released so far, not that it is finished.
+    const notDone = /^\s*(?:status|situação)\s*:\s*(?:in progress|em andamento|accepted|aceito|new|novo|later|depois|discarded|descartado)\b/i;
     const bad = [];
     let seen = 0;
     for (const part of parts) {
       for (const g of part.groups ?? []) {
         for (const it of g.items ?? []) {
           seen++;
-          if (it.status !== 'done' && (it.detail ?? []).some((d) => doneWords.test(d))) {
+          if (it.status !== 'done' && !(it.detail ?? []).some((d) => notDone.test(d)) && (it.detail ?? []).some((d) => doneWords.test(d))) {
             bad.push({ file: part.file ?? null, line: it.line ?? null, code: it.code ?? null, note: 'ticked-missing' });
           }
         }

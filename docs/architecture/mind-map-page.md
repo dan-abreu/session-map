@@ -11,6 +11,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 - `server/web/`
 - `server/cards.mjs`
 - `./DESIGN.md`
+- `./PRODUCT.md`
+- `test/workflow-trace.test.mjs`
 
 ## Rules that must not break
 

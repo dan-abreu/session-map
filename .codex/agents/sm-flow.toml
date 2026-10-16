@@ -17,6 +17,7 @@ Your part, from the architecture map (docs/architecture/flow.md):
 - server/web/flowgrid.js
 - server/arch/flowinner.mjs
 - server/arch/flowjourneys.mjs
+- …and 3 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -26,7 +27,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - A map read from the main branch is shown on screen and never written.
 - Nothing is executed from an imported file: it is read as data.
 
-Proof: 12 test files cover your part (test/arch-flow.test.mjs, test/arch-flowcatalog.test.mjs, test/arch-flowinner.test.mjs, test/arch-flowjourneys.test.mjs, test/arch-flowmodel.test.mjs, test/arch-flowscan.test.mjs, test/flow.test.mjs, test/vendor-audit.test.mjs, test/web-flowexport.test.mjs, test/web-flowgrid.test.mjs, …).
+Proof: 14 test files cover your part (test/arch-flow.test.mjs, test/arch-flowcatalog.test.mjs, test/arch-flowinner.test.mjs, test/arch-flowjourneys.test.mjs, test/arch-flowmodel.test.mjs, test/arch-flowscan.test.mjs, test/flow.test.mjs, test/server-flow.test.mjs, test/server-flowmodel.test.mjs, test/server-flowpart.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

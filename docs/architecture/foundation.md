@@ -16,6 +16,19 @@ Being built (`fd01` to `fd16`): the blocks so far, the knowledge they read, thei
 - `knowledge/`
 - `test/fixtures/repos/`
 - `test/fixtures/repo-copy.mjs`
+- `.claude/session-map.json`
+- `./.editorconfig`
+- `./.env.example`
+- `./SUPPORT.md`
+- `docs/configuration.md`
+- `docs/glossary.md`
+- `docs/adr/`
+- `server/census.mjs`
+- `server/censusroute.mjs`
+- `test/fixtures/claims/`
+- `test/support/`
+- `test/fixtures-model-answer.test.mjs`
+- `test/repo.test.mjs`
 
 ## Rules that must not break
 

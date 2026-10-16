@@ -20,6 +20,10 @@ Your part, from the architecture map (docs/architecture/server.md):
 - server/lookstate.mjs
 - server/newproject.mjs
 - server/restart.mjs
+- test/server.test.mjs
+- test/server-edits.test.mjs
+- test/server-logs.test.mjs
+- …and 9 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -27,7 +31,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Files are served read-only, text only, never `.git` and never `.env`.
 - The token never lands in a captured log: the "listening" line prints the links whole only to an interactive terminal (where the person copies them); a log file gets the key masked (`listeningLinks` in `server/main.mjs`). The `/session-map:map` skill hands the…
 
-Proof: 8 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/auth.test.js, test/actions.test.mjs, test/files.test.mjs, test/log.test.mjs, test/newproject.test.mjs, test/restart.test.mjs, test/server-files.test.mjs, test/server-newproject.test.mjs).
+Proof: 20 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/auth.test.js, test/actions-files.test.mjs, test/actions.test.mjs, test/catalog-install.test.mjs, test/catalog-server.test.mjs, test/files.test.mjs, test/log.test.mjs, test/main-links.test.mjs, test/newproject.test.mjs, test/restart-teams.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

@@ -3,6 +3,7 @@
 // Missing input is never a warning: it is unverified/no-data. A confirmed line always says what was checked.
 // Variables are NAMES only; no value is ever read or kept.
 import { matchParts, parseFlow } from '../web/flow.js';
+import { SYSTEM_VARS, isSamplePath } from './health-ctx.mjs';
 
 // ponytail: a line shows at most 5 pieces of evidence so uptodate.json stays small on a big project; the count is in detail.params.
 const EVIDENCE_MAX = 5;
@@ -218,7 +219,9 @@ function docNames(docs) {
   return out;
 }
 
-const envFacts = (ctx) => (ctx.facts.facts ?? []).filter((f) => f.kind === 'env').map((f) => ({ fact: f, places: placesOf(f) }));
+// A variable only a test or a fixture repository reads or lists is the sample's, and the ones the operating system sets are read, not configured.
+const envFacts = (ctx) => (ctx.facts.facts ?? []).filter((f) => f.kind === 'env').map((f) => ({ fact: f, places: placesOf(f) }))
+  .filter((e) => !SYSTEM_VARS.test(e.fact.id.replace(/^env:/, '')) && !e.places.every((p) => isSamplePath(p.file ?? '')));
 const envDocumented = (id) => (ctx) => {
   if (!ctx.facts || !Array.isArray(ctx.docs)) return unverified(id, 'no-data');
   const read = envFacts(ctx).filter((e) => e.places.some((p) => p.kind === 'code'));

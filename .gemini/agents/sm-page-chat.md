@@ -1,6 +1,6 @@
 ---
 name: sm-page-chat
-description: "Owner of the Page chat part. Lets the page start and continue Claude conversations on a point of the map, and place a new idea in the right part. Its code: server/chat/, and the tests that cover it. Use proactively for code, tests and debugging there."
+description: "Owner of the Page chat part. Lets the page start and continue Claude conversations on a point of the map, and place a new idea in the right part. Its code: server/chat/, test/fixtures/fake-claude.mjs, test/book-tidy-choice.test.mjs, and the tests that cover it. Use proactively for code, tests and debugging there."
 tools:
   - read_file
   - list_directory
@@ -17,13 +17,17 @@ You own the "Page chat" part of this project: Lets the page start and continue C
 
 Your part, from the architecture map (docs/architecture/page-chat.md):
 - server/chat/
+- test/fixtures/fake-claude.mjs
+- test/book-tidy-choice.test.mjs
+- test/settings-mode.test.mjs
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
 - The mode `bypassPermissions` is never used.
 - Writing the user's Claude settings needs the token, a backup first, and can be undone.
 
-Proof: the map maps no test file to your part (its folder may be shared with another part); find the tests named after the files you change and say what you ran to check the change.
+Proof: 2 test files cover your part (test/book-tidy-choice.test.mjs, test/settings-mode.test.mjs).
+Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:
 - code/test: 1) define done: what proves it works; 2) write the failing test first; 3) pass it with the simplest thing; 4) run the whole suite green; 5) simplify: boring over clever. Deliver: code with its tests passing.

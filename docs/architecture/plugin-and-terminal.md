@@ -28,6 +28,7 @@ The `map` command starts the server and prints the links. `board` makes the curr
 - `docs/README.md`
 - `docs/images/`
 - `demo/`
+- `test/skills-plain.test.mjs`
 
 ## Rules that must not break
 

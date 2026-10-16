@@ -20,6 +20,8 @@ Your part, from the architecture map (docs/architecture/architecture-map.md):
 - docs/architecture/README.md
 - test/fixtures/arch-en/
 - test/fixtures/arch-pt/
+- test/registry-rules.test.mjs
+- test/architecture-first.test.mjs
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -27,7 +29,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - A map read from the main branch is shown, and chats are told not to edit it in that folder.
 - A part never loses its items because a line was not understood.
 
-Proof: 14 test files cover your part (test/arch-attach.test.mjs, test/arch-clerk.test.mjs, test/arch-detect.test.mjs, test/arch-fileowners.test.mjs, test/arch-flowmodel-cache.test.mjs, test/arch-flowmodel-fixtures.test.mjs, test/arch-later.test.mjs, test/arch-live.test.mjs, test/arch-local.test.mjs, test/arch-parse.test.mjs, …).
+Proof: 16 test files cover your part (test/arch-attach.test.mjs, test/arch-clerk.test.mjs, test/arch-detect.test.mjs, test/arch-fileowners.test.mjs, test/arch-flowmodel-cache.test.mjs, test/arch-flowmodel-fixtures.test.mjs, test/arch-later.test.mjs, test/arch-live.test.mjs, test/arch-local.test.mjs, test/arch-parse.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

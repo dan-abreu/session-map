@@ -335,3 +335,17 @@ test('evidence is capped so a huge project does not bloat uptodate.json', () => 
   assert.ok(r.evidence.length <= 5);
   assert.equal(r.detail.params.count, 40);
 });
+
+test('a variable only a test or a fixture reads or lists, and one the operating system sets, are not the project\'s', () => {
+  const ctx = okCtx();
+  const base = states(ctx);
+  ctx.facts.facts.push(
+    fact('env:SM_BENCH_PROBE', 'env', 'test/bench.test.mjs', 3, { attrs: { source: 'code' } }),
+    fact('env:FAKE_REPLY', 'env', 'test/fixtures/fake-claude.mjs', 3, { attrs: { source: 'code' } }),
+    fact('env:APP_KEY', 'env', 'test/fixtures/repos/shop/.env.example', 1, { attrs: { source: 'example' } }),
+    fact('env:LOCALAPPDATA', 'env', 'api/src/pay.ts', 9, { attrs: { source: 'code' } }),
+  );
+  assert.deepEqual([states(ctx)['g4.env-documented'], states(ctx)['g4.env-unused']], [base['g4.env-documented'], base['g4.env-unused']]);
+  ctx.facts.facts.push(fact('env:REAL_UNDOCUMENTED', 'env', 'api/src/pay.ts', 10, { attrs: { source: 'code' } }));
+  assert.equal(states(ctx)['g4.env-documented'], 'warning', 'a real variable nobody names still breaks the line');
+});

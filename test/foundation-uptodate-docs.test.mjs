@@ -142,3 +142,13 @@ test('done-ticked also catches "released in" and a request marked done but never
   assert.equal(r.state, 'warning');
   assert.match(JSON.stringify(r.evidence), /r1/);
 });
+
+test('done-ticked leaves alone an item whose own status says it is not finished, even when it names a release', () => {
+  const c = good();
+  const item = c.project.arch.parts[0].groups[0].items[0];
+  item.status = 'todo';
+  item.detail = ['Status: in progress (`fl08` was released in v0.3.0; `fl07` is left)'];
+  assert.notEqual(run('g3.done-ticked', c).state, 'warning', 'a partial release is not a finished item');
+  item.detail = ['Status: done (released in v0.3.0)'];
+  assert.equal(run('g3.done-ticked', c).state, 'warning', 'a done status on an unticked item still is');
+});

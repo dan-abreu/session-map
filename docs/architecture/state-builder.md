@@ -28,6 +28,9 @@ Each conversation also gets its real footprint (`footprint.mjs`): every git repo
 - `server/store.mjs`
 - `server/hidden.mjs`
 - `server/prices.json`
+- `test/changes-collect.test.mjs`
+- `test/changes-tree.test.mjs`
+- `test/orchestra-budget.test.mjs`
 
 ## Rules that must not break
 

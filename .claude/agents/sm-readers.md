@@ -23,13 +23,14 @@ Your part, from the architecture map (docs/architecture/readers.md):
 - server/imports.mjs
 - server/catalog-classify.mjs
 - test/fixtures/claude/
+- …and 6 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
 - Never write outside `~/.claude/session-map/`.
 - Never execute through a shell: `execFile` only.
 
-Proof: 18 test files cover your part (test/archive.test.mjs, test/card.test.mjs, test/catalog-classify.test.mjs, test/catalog.test.mjs, test/changes.test.mjs, test/count.test.mjs, test/git.test.mjs, test/imports.test.mjs, test/limits.test.mjs, test/openspec.test.mjs, …).
+Proof: 22 test files cover your part (test/archive.test.mjs, test/card.test.mjs, test/catalog-classify.test.mjs, test/catalog.test.mjs, test/changes.test.mjs, test/count.test.mjs, test/deepseek-prices.test.mjs, test/git-queue.test.mjs, test/git.test.mjs, test/imports-langs.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

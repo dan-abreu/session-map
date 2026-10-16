@@ -23,14 +23,14 @@ Your part, from the architecture map (docs/architecture/plugin-and-terminal.md):
 - ./CONTRIBUTING.md
 - ./SECURITY.md
 - ./CODE_OF_CONDUCT.md
-- …and 8 more in that section
+- …and 9 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
 - Needs Node 20 or newer and nothing from npm.
 - The hook never blocks the end of a chat.
 
-Proof: 13 test files cover your part (server/disciplines/ponytail/tests/hooks-windows.test.js, server/disciplines/ponytail/tests/hooks.test.js, server/disciplines/ponytail/tests/package.test.js, test/agent-usage.test.mjs, test/cache-share.test.mjs, test/cli.test.mjs, test/config.test.mjs, test/demo-state.test.mjs, test/measure-project.test.mjs, test/package.test.mjs, …).
+Proof: 14 test files cover your part (server/disciplines/ponytail/tests/hooks-windows.test.js, server/disciplines/ponytail/tests/hooks.test.js, server/disciplines/ponytail/tests/package.test.js, test/agent-usage.test.mjs, test/cache-share.test.mjs, test/cli.test.mjs, test/config.test.mjs, test/demo-state.test.mjs, test/measure-project.test.mjs, test/package.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

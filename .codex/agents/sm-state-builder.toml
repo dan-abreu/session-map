@@ -17,7 +17,7 @@ Your part, from the architecture map (docs/architecture/state-builder.md):
 - server/waste.mjs
 - server/placements.mjs
 - server/footprint.mjs
-- …and 6 more in that section
+- …and 9 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -25,7 +25,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - With the AI off, everything still works: chats are placed by the files they touch.
 - A hit plan limit (weekly or 5-hour) holds the background AI back (`setPlanLimits`/`limitHit` in `server/ai/life.mjs`, read by collect every pass): while the account's door is closed, no placement call goes out. The relation sentence and the keyword placement…
 
-Proof: 9 test files cover your part (test/budget.test.mjs, test/collect.test.mjs, test/cost.test.mjs, test/footprint.test.mjs, test/hidden.test.mjs, test/savings.test.mjs, test/statement-route.test.mjs, test/statement.test.mjs, test/waste.test.mjs).
+Proof: 12 test files cover your part (test/budget.test.mjs, test/changes-collect.test.mjs, test/changes-tree.test.mjs, test/collect.test.mjs, test/cost.test.mjs, test/footprint.test.mjs, test/hidden.test.mjs, test/orchestra-budget.test.mjs, test/savings.test.mjs, test/statement-route.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

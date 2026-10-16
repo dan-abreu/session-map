@@ -20,6 +20,9 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 - `server/web/flowgrid.js`
 - `server/arch/flowinner.mjs`
 - `server/arch/flowjourneys.mjs`
+- `test/server-flow.test.mjs`
+- `test/server-flowmodel.test.mjs`
+- `test/server-flowpart.test.mjs`
 
 ## Rules that must not break
 
@@ -80,6 +83,8 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
   - Built on 2026-10-14: the Functions button on the level bar (`server/web/index.html`), the list with the owner chips, the search and the "No box" filter (`renderFunctions` in `server/web/flowview.js`), the owner chip on the inner-view pieces (`decorate`, `fl-owner` classes), the owner legend, and the pt/en words (`flow.fn.*`, `flow.owner.*` in `server/web/i18n.js`). The inner view carries `owner` and `ownerCounts` per piece (inner model version 2, `server/arch/flowinner.mjs`).
   - Refined the same day: the list groups by layer then by part (the layer of each function comes from the model), shows only functions by default (an "Everything" chip adds docs and tests), and each row says what the function is for (first sentence of its opening comment) and how it works (the next sentences, or the part file's own words about it), both masked like the rest of the page.
   - From `id120`.
+- [ ] **later:** The README's drawing leaves out 26 links the code has: pairs of parts that import each other three times or more `fl18`
+  - Found on 2026-10-16, when "Tudo em dia?" began to read the one model (`fd25`): the line `g1.links-imports` warns 28 times, two arrows drawn in the README that no import backs and 26 strong imports (three lines or more) between pairs of parts that the drawing does not show. The drawing is meant to show the main flows, not every import; the Flow's model keeps the 26 as "uses" arrows, hidden until asked. Parked: decide pair by pair whether the drawing gets an arrow, or whether the line's threshold (3) rises. The warning stays, explained here.
 - [ ] **later:** Diagram that updates itself `fl11`
   - Parked on 2026-10-16 (the finish plan): it writes into the project on its own, so it waits for the care mode the owner has not chosen for every project (the one model is done, `fd25`).
   - Mode `flow.sync`: `auto` (default), `suggest` or `off`. New part → a box in its layer's `subgraph`; new link (weight 2 or more, repeated evidence) → a dotted "related" arrow; a part that vanished → a box marked "gone?", never erased on its own.

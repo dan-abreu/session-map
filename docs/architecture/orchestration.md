@@ -12,6 +12,26 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - `server/brain/`
 - `server/ai/` — the arsenal and the engine: `providers.mjs` (the four engines' APIs), `router.mjs` (who takes which kind), `policy.json` + `policy.mjs` (the one model table), `brain.mjs` (the entry weighing), `quota.mjs` + `engine.mjs` + `groups.mjs` + `contract.mjs` + `efforts.mjs` (failover, engine choice, exit contract, per-engine levels), `brainpanel.mjs` + `brainroute.mjs` + `functions.json` (the Cérebro tab), `ask.mjs` and `runner.mjs` (the dispatch), `prices-watch.mjs` (the price pages watch, `or51`)
 - `server/background.mjs`
+- `.claude/agents/`
+- `.codex/agents/`
+- `.gemini/agents/`
+- `./AGENTS.md`
+- `./CLAUDE.md`
+- `docs/superpowers/`
+- `server/audit.mjs`
+- `server/debt.mjs`
+- `server/plans.mjs`
+- `test/agents-catalog.test.mjs`
+- `test/audit.test.mjs`
+- `test/debt.test.mjs`
+- `test/plans.test.mjs`
+- `test/guard-agent-choice.test.mjs`
+- `test/user-hooks.test.mjs`
+- `test/specialist-run.test.mjs`
+- `test/orchestra-priority.test.mjs`
+- `test/disciplines.test.mjs`
+- `test/vendor-audit.test.mjs`
+- `test/prova-aprovar6a.test.mjs`
 
 ## Rules that must not break
 

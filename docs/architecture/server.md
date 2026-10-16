@@ -17,6 +17,18 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - `server/lookstate.mjs`
 - `server/newproject.mjs`
 - `server/restart.mjs`
+- `test/server.test.mjs`
+- `test/server-edits.test.mjs`
+- `test/server-logs.test.mjs`
+- `test/server-look.test.mjs`
+- `test/server-place.test.mjs`
+- `test/server-requests.test.mjs`
+- `test/server-state-etag.test.mjs`
+- `test/main-links.test.mjs`
+- `test/catalog-server.test.mjs`
+- `test/catalog-install.test.mjs`
+- `test/actions-files.test.mjs`
+- `test/restart-teams.test.mjs`
 
 ## Rules that must not break
 

@@ -9,6 +9,9 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 ## Where in the code
 
 - `server/chat/`
+- `test/fixtures/fake-claude.mjs`
+- `test/book-tidy-choice.test.mjs`
+- `test/settings-mode.test.mjs`
 
 ## Rules that must not break
 

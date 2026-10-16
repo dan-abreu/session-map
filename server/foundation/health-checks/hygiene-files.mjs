@@ -5,7 +5,7 @@
 // `ctx.facts` (optional, the `env` facts of fd02) lists the variables read by the code; without it the check
 // only looks at the example file.
 
-import { isSamplePath } from '../health-ctx.mjs';
+import { SYSTEM_VARS, isSamplePath } from '../health-ctx.mjs';
 
 const out = (state, { evidence = [], reason = null, detail = {}, packages } = {}) => {
   const r = { state, evidence, reason, detail };
@@ -101,9 +101,6 @@ function examplesOf(ctx) {
   }
   return { files, found };
 }
-
-// Variables every operating system sets: the project reads them, it does not configure them.
-const SYSTEM_VARS = /^(path|home|user|username|userprofile|appdata|localappdata|systemroot|temp|tmp|tmpdir|shell|pwd|lang|term)$/i;
 
 const factNames = (ctx) => {
   const names = [];

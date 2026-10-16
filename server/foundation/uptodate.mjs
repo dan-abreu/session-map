@@ -9,6 +9,7 @@ import { runGit } from '../sources/gitqueue.mjs';
 import { workingTree } from '../sources/git.mjs';
 import { readCare } from './care.mjs';
 import { readDocs } from './docwatch.mjs';
+import { isFixturePath } from './health-ctx.mjs';
 import { brokenLinks } from './mdlinks.mjs';
 import { linesModelOf } from './modelview.mjs';
 import { readFd, writeFd } from './store.mjs';
@@ -97,7 +98,8 @@ export async function buildCtx(root, smDir, id, project, { now } = {}) {
     apiSpecs: null, localeFiles: null,
   };
   if (!Array.isArray(census?.files) || typeof root !== 'string') return ctx;
-  const { docs } = readDocs(root, census);
+  // The documents of a fixture repository describe a made-up project: its broken links and its variables are not ours.
+  const docs = readDocs(root, census).docs.filter((d) => !isFixturePath(d.path));
   ctx.docs = docs;
   ctx.brokenLinks = brokenLinks(Object.fromEntries(docs.map((d) => [d.path, d.text])), existsIn(root, census));
   ctx.git = await gitState(root);

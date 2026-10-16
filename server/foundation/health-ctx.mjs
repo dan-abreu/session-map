@@ -23,6 +23,11 @@ const MANIFESTS = { 'package.json': 'node', 'composer.json': 'php', 'pubspec.yam
 const SAMPLE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'test', 'tests', 'example', 'examples', 'templates', 'template', 'node_modules', 'vendor']);
 // True for a file that lives in a sample or test folder: what it reads or declares belongs to the sample, not to the project.
 export const isSamplePath = (path) => dirOf(path).split('/').some((s) => SAMPLE_DIRS.has(s.toLowerCase()));
+// The folders of a fixture or a copy of someone else's code: the documents in them describe a made-up or foreign project.
+const FIXTURE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'node_modules', 'vendor']);
+export const isFixturePath = (path) => dirOf(path).split('/').some((s) => FIXTURE_DIRS.has(s.toLowerCase()));
+// Variables every operating system sets: a project reads them, it does not configure them.
+export const SYSTEM_VARS = /^(path|home|user|username|userprofile|appdata|localappdata|systemroot|temp|tmp|tmpdir|shell|pwd|lang|term)$/i;
 const WORKSPACE_FILES = new Set(['pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json']);
 const NOT_CODE_TYPES = new Set(['json', 'yaml', 'md']);
 // Types the census cannot name ('other') that are still source code.

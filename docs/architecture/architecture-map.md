@@ -12,6 +12,8 @@ The convention that makes a project's architecture a folder of plain markdown: a
 - `docs/architecture/README.md`
 - `test/fixtures/arch-en/`
 - `test/fixtures/arch-pt/`
+- `test/registry-rules.test.mjs`
+- `test/architecture-first.test.mjs`
 
 ## Rules that must not break
 

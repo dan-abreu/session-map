@@ -9,6 +9,15 @@ Your part, from the architecture map (docs/architecture/orchestration.md):
 - server/brain/
 - server/ai/
 - server/background.mjs
+- .claude/agents/
+- .codex/agents/
+- .gemini/agents/
+- ./AGENTS.md
+- ./CLAUDE.md
+- docs/superpowers/
+- server/audit.mjs
+- server/debt.mjs
+- …and 12 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -17,7 +26,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Money, accounts, contracts and business priority belong to the owner: a recommendation plus a one-click confirmation.
 - The mode `bypassPermissions` is never used.
 
-Proof: 45 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/helper.test.js, test/agent-engines.test.mjs, test/agent-files.test.mjs, test/agents-run.test.mjs, test/ai-activity.test.mjs, test/ai-arsenal-mcp.test.mjs, test/ai-ask-contract.test.mjs, test/ai-ask-route.test.mjs, test/ai-ask.test.mjs, test/ai-book-route.test.mjs, …).
+Proof: 56 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/helper.test.js, test/agent-engines.test.mjs, test/agent-files.test.mjs, test/agents-catalog.test.mjs, test/agents-run.test.mjs, test/ai-activity.test.mjs, test/ai-arsenal-mcp.test.mjs, test/ai-ask-contract.test.mjs, test/ai-ask-route.test.mjs, test/ai-ask.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:
