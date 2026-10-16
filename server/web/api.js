@@ -119,6 +119,9 @@ export const api = {
   setSkillsAirplane: (on) => call('PATCH', '/api/settings/skills-airplane', { on }),
   // One skill's switch (id139): the name or command the owner turned on or off.
   setSkill: (skill, on) => call('PATCH', '/api/settings/skill', { skill, on }),
+  // The Flow's "The program" level (id130): the interface census and the debt ledger, read from the code.
+  census: () => call('GET', '/api/census/ui'),
+  censusDebt: () => call('GET', '/api/census/debt'),
   flowExport: (projectId) => call('GET', `/api/arch/${seg(projectId)}/mermaid`),
   flowModel: (projectId) => call('GET', `/api/arch/${seg(projectId)}/model`),
   flowPart: (projectId, partId, onlyLive = false) => call('GET', `/api/arch/${seg(projectId)}/model/part/${seg(partId)}${onlyLive ? '?only=live' : ''}`),

@@ -657,7 +657,7 @@ export function createApp({
   // The book's titles and summaries on the AI the Cérebro's book row names (id156): asked by the book's own program.
   const bookRoutes = createBookRoutes({ smDir, demo, token, ai, ...(askAi.bookQueue ? { queue: askAi.bookQueue } : {}) });
   const brainRoutes = demo || !smDir ? null : createBrainRoutes({ smDir, demo, token });
-  const censusRoutes = demo || !smDir ? null : createCensusRoutes({ demo, token });
+  const censusRoutes = demo || !smDir ? null : createCensusRoutes({ demo });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
     if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');

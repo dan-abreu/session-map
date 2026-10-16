@@ -10,7 +10,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
-- The Flow: id45, id46, id47, id48, id49, id50, id120
+- The Flow: id45, id46, id47, id48, id49, id50, id120, id160
 - Clarity and polish: id56, id121, id126
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
@@ -698,3 +698,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the tab opens; the two recurring warnings above show as two grouped rows in plain Portuguese with count and last time; picking a project shows its record (`logs/projects/<id>.jsonl`); the raw JSON line opens on a click; no secret appears; the page tests pass.
   - Where it went: `mm61`.
   - Status: done on 2026-10-16 (`mm61`: the tab reads the program's log and the projects' records; checked on a separate copy of the program with the real log, on a computer and on a phone width).
+- [x] The Flow's "The program" level drawn as a real picture of the page, not a pile of words `id160`
+  - Asked: 2026-10-16 — "quero melhorar fluxo > o programa ta mal feito"
+  - What it means: measured on 2026-10-16 with the running program: the level was a text tree of 14 areas where 18 labels were not words at all ("span", "div", "script", "
+", ".") and 72 parts had no label; the Fluxo area listed "sm.flowLevel", "§§§" and error messages as if they were screens, the Flow's own level buttons were missing (they are written in index.html, which the census never read), the Logs area was empty, the lede said "13 areas" for 14, and opened without the key the level said "Lendo o programa…" for ever (the route answered 401 while every other read of the page is open on this PC). It had no test.
+  - How to confirm it is done: the level draws one room per area (with a room for what every area shares), each with its sections, buttons as chips and texts one click away, a search that finds any word, the real counts on top and the pieces with no words of their own counted but never named; it opens with no key; no label of it is junk and every one is a real text of the page.
+  - Where it went: `mm65`.
+  - Status: done on 2026-10-16 (`mm65`).
