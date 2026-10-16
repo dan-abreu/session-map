@@ -42,12 +42,12 @@ Files: `server/chat/context.mjs`, `server/chat/tidy-words.mjs`. Test: `node --te
 Status: not started.
 
 ### Task 8: measure the Foundation on the owner's projects (`fd11`)
-Files: none (a run). Proof: the coverage numbers of each redone map next to the old map's, written in `docs/architecture/foundation.md`.
+Files: `docs/architecture/foundation.md`, `scripts/measure-foundation.mjs`. Test: `node --test test/foundation-measure.test.mjs`, then a run on each of the owner's projects; the coverage numbers of each redone map next to the old map's go in `docs/architecture/foundation.md`.
 Status: not started.
 
 ### Task 9: the repository health list (35 failing of 91)
-Decide with the owner which items apply to a local plugin (CODEOWNERS, SUPPORT, `.editorconfig`, runtime pin, pinned actions, token permissions, an update bot, SAST, a glossary, ADRs), do those, and mark the rest not applicable in the profile. Files: repository root, `.github/`. Proof: `health.json`.
+Decide with the owner which items apply to a local plugin (CODEOWNERS, SUPPORT, `.editorconfig`, runtime pin, pinned actions, token permissions, an update bot, SAST, a glossary, ADRs), do those, and mark the rest not applicable in the profile. Files: `.editorconfig`, `.github/CODEOWNERS`, `SUPPORT.md`, `.github/workflows/`, `package.json`. Test: `node --test test/foundation-health-accept.test.mjs`, then the score in `health.json` of a new round.
 Status: waits for the owner's scope.
 
 ### Task 10: the release
-Version, CHANGELOG ("Unreleased" is written), README, the gate in `--publish` mode on a clean export, the tag and the push. Proof: the gate and the pushed tag. Status: after tasks 3 to 9; the tag and the push need the owner's OK.
+Version, CHANGELOG ("Unreleased" is written), README, the gate in `--publish` mode on a clean export, the tag and the push. Files: `package.json`, `.claude-plugin/plugin.json`, `CHANGELOG.md`, `README.md`, `README.pt-BR.md`. Test: `node --test test/release-gate.test.mjs`, then `node scripts/release-gate.mjs --publish` on a clean export. Status: after tasks 3 to 9; the tag and the push need the owner's OK.
