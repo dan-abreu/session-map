@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { zstdCompressSync } from 'node:zlib';
+import * as zlib from 'node:zlib';
 import { deepseekCostOf, deepseekPrices, deepseekWindowed, readConversation, readSummary } from '../server/sources/deepseek.mjs';
 
 // The DeepSeek prices in the shape cost.mjs reads: peak rates from the official page (checked 2026-10-14),
@@ -39,9 +39,10 @@ test('deepseekWindowed splits the sum into today, 7 and 30 days, or refuses when
 // The Harness log carries the model in request/context (the assistant messages have none): the readers pick it up and
 // the cost follows at the official prices. A single zstd frame holds the lines, as a real container may.
 const session = (id) => ({ type: 'session', version: 4, id, createdAt: Date.now(), cwd: 'C:/dev/shop', isSeeded: false, delegationDepth: 0, agentPreset: 'standard' });
-const frameOf = (lines) => zstdCompressSync(Buffer.from(lines.map((l) => JSON.stringify(l)).join('\n')));
+// zstd arrived in Node 22.15: on Node 20 the test that needs it is skipped, and the program says so (zstdAvailable).
+const frameOf = (lines) => zlib.zstdCompressSync(Buffer.from(lines.map((l) => JSON.stringify(l)).join('\n')));
 
-test('readSummary and readConversation take the model from request/context and price the usage', () => {
+test('readSummary and readConversation take the model from request/context and price the usage', { skip: typeof zlib.zstdCompressSync !== 'function' && 'zstd needs Node 22.15' }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'sm-dsh-'));
   const path = join(dir, 'session.v4.jsonl.zstd');
   writeFileSync(path, frameOf([
