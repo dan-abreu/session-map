@@ -62,7 +62,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 - [x] **Claude:** Mind map and an outline for phones `mm01`
 - [x] **Claude:** Board as columns of items `mm02`
-- [ ] **detail:** Drag an item to another part `mm03`
+- [ ] **later · detail:** Drag an item to another part `mm03`
+  - Parked on 2026-10-16 (triage): weight detail.
 - [x] Review the four design warnings in the page shell: three thick one-sided coloured borders ("side-tab") and a pulsing dot `mm45`
   - Keep the pulse only where it marks something really live (a conversation working now); soften or remove the side borders. From `id87`.
 - [x] A card at the top of Home: "How much may the AI spend per month on big work", with the value, Save and what was used this month `mm46`
@@ -156,23 +157,29 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Later (ideas, not committed)
 
-- [ ] **detail:** Edit files and folders inside the page (create, rename, delete, save) `mm12`
+- [ ] **later · detail:** Edit files and folders inside the page (create, rename, delete, save) `mm12`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **detail:** A terminal inside the page `mm13`
+- [ ] **later · detail:** A terminal inside the page `mm13`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Needs a native module, which breaks the no-npm rule; decide before starting.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [x] **detail:** Create and drag cards by hand in the Board `mm14`
-- [ ] **detail:** Zoom inside a part: its files as dots tied to the chats and commits that touched them `mm15`
+- [ ] **later · detail:** Zoom inside a part: its files as dots tied to the chats and commits that touched them `mm15`
+  - Parked on 2026-10-16 (triage): weight detail; the Flow level 2 already shows it.
   - "This chat touched these 3 files".
 - [x] **detail:** More mind map exports: Markdown outline, XMind, FreeMind `mm16`
   - draw.io, PlantUML and Graphviz are covered by the Flow part (`fl13`, `fl14`).
-- [ ] **detail:** Discover: recommended for this project, trust badge, hand-picked lists `mm17`
+- [ ] **later · detail:** Discover: recommended for this project, trust badge, hand-picked lists `mm17`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - The AI reads the project's architecture and stack and explains what fits; open a repository and list its skills translated; trust badge from last update, license, issues and an optional audit.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **detail:** Discover for every AI, not only Claude `mm18`
+- [ ] **later · detail:** Discover for every AI, not only Claude `mm18`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - A "Works with" filter (Claude, Codex, Gemini, Cursor, any = MCP); new sources: the official MCP server registry, Gemini CLI extensions, Codex, Cursor rules and SKILL.md skills (check who accepts them).
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **detail:** "Which AI for each task" section (video, image, voice, bulk text, code) `mm19`
+- [ ] **later · detail:** "Which AI for each task" section (video, image, voice, bulk text, code) `mm19`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - What each is good for, price and API. It is the base of the Arsenal idea (`or11`).
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [x] **detail:** Discover updates itself in the background and pages past 50 results per topic `mm20`
@@ -190,7 +197,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Base: files assigned to parts by their paths over `git ls-files`, counted by session-map itself; exact numbers from the census (`fd01`).
   - How to confirm it is done: the root's count equals the number of tracked files minus the ones left out on purpose; every layer equals the sum of its parts; the "no box" number equals the census list of files without an owner.
   - Released in v0.2.3: `server/sources/count.mjs` counts every tracked file line by line (no dependency, recounted at most every 30 s and only the files that changed) and `server/arch/sizes.mjs` gives each file one owner (the deepest path; the first part on a tie). The project panel lists the files with no box and what was left out, by reason; a part's Files tab shows lines per file and the split by kind. What changed in the period inside the Files tab moved to `mm34`; the census (`fd01`) refines the numbers.
-- [ ] **important:** The rest of the real footprint `mm34`
+- [ ] **later · important:** The rest of the real footprint `mm34`
+  - Parked on 2026-10-16 (triage): the tail of footprint work that is already built.
   - What is left of `mm24` and `mm25`: before work starts, the orchestration says "will touch: A, B, C"; a middle level of components between a part and its items (level 2 of `fl09`, also on the mind map); an item that spans parts shows in each, linked; the Files tab of a box marks what changed in the period; on a phone the open conversation covers the map, so its "This conversation · %" chips cannot be seen (show the share in the conversation's Details or on the outline before it opens).
   - How to confirm it is done: an orchestration plan lights the parts it names before the first edit; a part opens into its components with the files of each; an item whose files sit in two parts shows in both with a link; the Files tab with "last 7 days" picked marks the files changed in that week.
 - [x] **Claude:** Walk through the files of a box `mm26`
@@ -198,10 +206,12 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - How to confirm it is done: open a part, expand its tree, open a file: line numbers and colors show; search finds a word; "used by" lists the files that import it; Open in VS Code lands on that line.
   - Released in v0.2.3: the Files tab of a box is a folder tree like the editor's explorer (folders first, single-folder chains on one line, open folders kept while the page lives); a file opens with the code in colors (our own small reader, no dependency), line numbers, search in the file with next and previous, the files it uses and that use it with the line of each (`server/imports.mjs` reads the import lines of JavaScript, TypeScript, CSS and HTML over the saved files) and the libraries it asks for; a click on a line picks it for Open in VS Code. Other languages, new files not yet saved and very long files go on in `mm36`.
   - Released in v0.2.4: the project box's Files tab shows the whole program as a folder tree (every counted file, never a secrets file) and its lists of files with no box and of files left out open the viewer (binaries stay text); a row says "opening…" while it loads, and the code shows before what it uses and what uses it.
-- [ ] **important:** The rest of the Changes tab `mm35`
+- [ ] **later · important:** The rest of the Changes tab `mm35`
+  - Parked on 2026-10-16 (triage): the tail of the Changes tab that is already built.
   - What is left of `mm30`: an edit made by a command the conversation ran (a script, a formatter, `sed`) reads "outside the conversations": tie it to the conversation whose step ran just before the folder changed; the release is looked up for the newest 60 saved changes of a project (older ones read "Saved"); a click on a box's "+N files" chip opens the Changes tab filtered to that part; a file changed and removed before any pass of the server saw its last version (the server was off, or it all happened within seconds) says its previous content was not kept: rebuild it by replaying the conversation's edit steps after the one that wrote it.
   - How to confirm it is done: a conversation that runs a formatter shows those files under its name; a file a conversation wrote, edited and removed while the server was off shows the content it had after the last edit; a change saved months ago and released shows its version; the chip opens the tab with the part already picked.
-- [ ] **detail:** The rest of the walk through the files `mm36`
+- [ ] **later · detail:** The rest of the walk through the files `mm36`
+  - Parked on 2026-10-16 (triage): weight detail.
   - What is left of `mm26`: the files it uses and that use it for other languages (Python, Go and the rest, with the foundation's readers, `fd` series) and for path aliases; a new file not saved yet in "used by"; files of tens of thousands of lines drawn as they scroll instead of in slices of 1,500.
   - How to confirm it is done: a Python file lists its imports; a file just created by a conversation shows in "used by" of what it imports; a 50,000-line file scrolls smoothly to its end.
 - [x] The skills and plugins on the balloons: per project, what is installed (from which repository), on or off and how heavy; per chat and per agent, which skills it opened now and what they weighed `mm52`

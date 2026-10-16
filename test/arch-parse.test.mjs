@@ -84,7 +84,7 @@ test('a bold lead without recognised tokens and a code that is not trailing stay
 
 test('counts: open items by status, items with a person and blockers', () => {
   const p = part(arch('arch-pt', 'docs/arquitetura'), 'vitrine');
-  assert.deepEqual(p.counts, { todo: 5, doing: 1, done: 1, withUser: 2, blocks: 1 });
+  assert.deepEqual(p.counts, { todo: 5, doing: 1, done: 1, later: 0, withUser: 2, blocks: 1 });
 });
 
 test('items outside any group (no ### heading) parse and "Nada em aberto" gives zero', () => {
@@ -184,7 +184,7 @@ test('a table under "O que falta" is read with Portuguese headers and counts lik
     ['ta02', 'Enviar o recibo por e-mail', 'todo', 'com a Ana'],
     ['ta03', 'Revisar o aviso', 'doing', null],
   ]);
-  assert.deepEqual(p.counts, { todo: 1, doing: 1, done: 1, withUser: 1, blocks: 0 });
+  assert.deepEqual(p.counts, { todo: 1, doing: 1, done: 1, later: 0, withUser: 1, blocks: 0 });
 });
 
 test('tables and checklist lines mix in one section; tables elsewhere or without a text column are ignored', () => {

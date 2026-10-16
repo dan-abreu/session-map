@@ -187,7 +187,7 @@ test('collect reads the architecture and hangs chats on its parts: an item code 
     const part = (id) => p.arch.parts.find((x) => x.id === id);
     assert.deepEqual(part('shop').chatIds, [A]);
     assert.deepEqual(part('billing').chatIds, [B]);
-    assert.deepEqual(part('shop').counts, { todo: 3, doing: 0, done: 0, withUser: 1, blocks: 0 });
+    assert.deepEqual(part('shop').counts, { todo: 3, doing: 0, done: 0, later: 0, withUser: 1, blocks: 0 });
 
     const items = p.decisions.filter((d) => d.kind === 'item');
     assert.deepEqual(items.map((i) => [i.partId, i.code, i.text]), [['shop', 'sh01', 'Pick the cart icon']], 'only the item waiting on a person');

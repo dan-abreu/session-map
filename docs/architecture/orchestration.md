@@ -87,7 +87,8 @@ Each project gets one orchestration chat, pinned on top of the conversation list
   - One sentence in `server/ai/stance.mjs`: say which, the facts behind it (numbers, file:line) and what would change your mind; without facts, say so and measure. A yes-man and a contrarian are both wrong.
   - Built on 2026-10-13: the conductor prompts carry it (Autonomous, Automatic, Maestro), the Manual ways get it alone (a fixed model, Ultracode), and `ask_other_ai` puts it before a review or a reasoning prompt; drafts, summaries and labels go as written. "Same as my Claude" stays the person's own setup (on this PC its CLAUDE.md has the rule).
   - From `id107`.
-- [ ] A local model (Ollama) as one more outside AI: off by default, measured by the bench before it is trusted, used only for long logs, READMEs and docs `or28`
+- [ ] **later:** A local model (Ollama) as one more outside AI: off by default, measured by the bench before it is trusted, used only for long logs, READMEs and docs `or28`
+  - Parked on 2026-10-16 (triage): this PC has 1.7 GB of free RAM and the item itself says off by default.
   - Facts on 2026-10-13: this PC has an RTX 5070 Ti Laptop GPU (12 GB) that runs a 7 to 14B model, but 15.5 GB of RAM with 1.7 GB free, and timing tests already flake on the busy PC. Haiku and Gemini Flash already read at about US$ 0.002 per right answer.
   - Its real plus is privacy: nothing leaves the PC, so it may read client data that DeepSeek may not. Never for the structure of code: the Foundation does that exactly (`fd17`).
   - From `id108`.
@@ -247,19 +248,23 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 
 ### Board of roles
 
-- [ ] **The orchestration chat wears the roles of a board** `or09`
+- [ ] **later:** **The orchestration chat wears the roles of a board** `or09`
+  - Parked on 2026-10-16 (triage): the request `id26` is on hold (later).
   - CEO and strategy, Product, Marketing, Finance, Operations and delivery, Technology (the senior conductor), Legal and privacy.
   - Every relevant proposal is analyzed from the angles that apply (value, cost to build and to run, return, timing, positioning, legal risk) and ends with a recommendation. It uses the `pm-product-strategy`, `pm-market-research` and `pm-product-discovery` skills when they fit, plus the real costs session-map already has.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **Business view of the project** `or10`
+- [ ] **later:** **Business view of the project** `or10`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Cost per feature, priority by impact × effort × cost, a delivery roadmap.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 
 ### Later (ideas, not committed)
 
-- [ ] The light compaction: old tool results leave the history, the summary window stays `or52`
+- [ ] **later:** The light compaction: old tool results leave the history, the summary window stays `or52`
+  - Parked on 2026-10-16 (triage): the item itself says it waits for a platform feature.
   - From `id147`. The research (Anthropic, 2025) names clearing old tool outputs the safest form of compaction; it waits on the platform feature — the 100k window stays (`pc32`).
-- [ ] A prompt ceiling per kind for the reviews `or53`
+- [ ] **later:** A prompt ceiling per kind for the reviews `or53`
+  - Parked on 2026-10-16 (triage): the item itself says parked until a real bill justifies it.
   - From `id147`. A guardrail against the 200 KB × fanout 4 peak (`ask.mjs:23-25`), not a savings lever; parked until a real bill justifies it.
 - [x] Every AI with a key at once, picked by the conductor, never by the owner `or14`
   - Done 2026-10-10 (f126b5c): one daily cap for all, per-AI on/off, per-project data class (all the owner's projects are his own; session-map public), the arsenal tools ask_other_ai, list_other_ais, pick_worker and report_result in every chat.
@@ -299,7 +304,8 @@ Each project gets one orchestration chat, pinned on top of the conversation list
 - [x] The prices re-check themselves on a schedule, the check date shown with the prices `or51`
   - From `id147`. Prices checked by hand on 2026-10-10/11; Gemini 3.8 Flash doubles on 2027-01-01; `or15` left the scheduled re-check unbuilt. Add the missing cache-hit rows too (Gemini has none in the catalog).
   - Built on 2026-10-15: `server/ai/prices-watch.mjs` fetches each official price page at most once a day (no keys, no tokens), a change goes out as one alert for the owner to re-check by hand — nothing is parsed into the tables; wired in `main.mjs` (30 s after start, then hourly) with `POST /api/ai/prices/check` and the check dates in `GET /api/ai/others`; 5 tests in `test/ai-prices-watch.test.mjs`. The Gemini cache-hit rows stay with `or54`.
-- [ ] The Gemini discount that is left on the table: its cache-hit price in the catalog and the explicit cache for repeated context `or54`
+- [ ] **later:** The Gemini discount that is left on the table: its cache-hit price in the catalog and the explicit cache for repeated context `or54`
+  - Parked on 2026-10-16 (triage): a small saving, on Gemini only.
   - From `id147`. Gemini caches only through a resource created by hand (`cachedContent`, storage billed hourly); the program's calls never create one, and the catalog has no cacheHit row. Waits for `or49`–`or51` to close.
 
 - [x] **important:** A monthly spending cap by default, so a project never runs with no brake `or20`

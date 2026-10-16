@@ -39,7 +39,8 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 ### Safety
 
 - [x] **Claude:** Token cookie, CSRF header and an action log `sv01`
-- [ ] **important:** HTTPS for the network link without Tailscale `sv02`
+- [ ] **later · important:** HTTPS for the network link without Tailscale `sv02`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 
 ### Reach
@@ -99,7 +100,9 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 - [x] **detail:** "Look only" link: a second key with no chat and no buttons `sv04`
   - To show the live map to another person.
 - [x] **detail:** With the look-only link, the page also hides Home, Conversations and Foundation, whose reads the server already refuses `sv11`
-- [ ] **detail:** The Flow also shows with the look-only link: the page asks for its drawing (`/mermaid`) through a read the look-only key may use `sv12`
-- [ ] **detail:** Team plan in the cloud: a brain shared between machines `sv05`
+- [ ] **later · detail:** The Flow also shows with the look-only link: the page asks for its drawing (`/mermaid`) through a read the look-only key may use `sv12`
+  - Parked on 2026-10-16 (triage): weight detail.
+- [ ] **later · detail:** Team plan in the cloud: a brain shared between machines `sv05`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Validate with an interest list after launch; nothing of it goes into v0.x.
   - Later, by the owner's choice on 2026-10-10 (`op06`).

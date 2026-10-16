@@ -43,7 +43,7 @@ function fit(rows, budget, more) {
 }
 
 function openCount(part) {
-  const items = part.groups.flatMap((g) => g.items).filter((i) => i.status !== 'done');
+  const items = part.groups.flatMap((g) => g.items).filter((i) => i.status !== 'done' && i.status !== 'later');
   const doing = items.filter((i) => i.status === 'doing').length;
   if (!items.length) return 'nothing open';
   return doing ? `${items.length} open, ${doing} in progress` : `${items.length} open`;

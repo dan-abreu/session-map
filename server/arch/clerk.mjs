@@ -313,6 +313,7 @@ export function planStartItem(map, a) {
   if (!f.ok) return f;
   if (f.item.status === 'done') return refuse(`${f.code} is already ticked: nothing to start.`);
   if (f.item.status === 'doing') return { ok: true, edits: [], note: `${f.code} is already marked in progress.` };
+  if (f.item.status === 'later') return refuse(`${f.code} is parked (later): take its "later" mark off first, then start it.`);
   const lines = map.files[f.file].split('\n');
   const line = lines[f.item.startIdx];
   if (!line.trimEnd().endsWith(`\`${f.item.code}\``)) return refuse(`${f.code} is a table row, not a checklist line; the mark cannot be written there by the clerk.`);

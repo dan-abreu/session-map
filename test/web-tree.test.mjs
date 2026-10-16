@@ -73,10 +73,10 @@ test('chatPointOf: the root bubble opens the chats of the whole project; every o
 test('archTree counts done/total, open items with a person and blockers at every level', () => {
   const root = archTree(project());
   const n = (id) => nodeById(root, id);
-  assert.deepEqual(n('pt:shop').counts, { total: 3, done: 0, doing: 0, withUser: 1, blocks: 0 });
-  assert.deepEqual(n('g:pay:Cards').counts, { total: 2, done: 1, doing: 1, withUser: 1, blocks: 1 });
+  assert.deepEqual(n('pt:shop').counts, { total: 3, done: 0, doing: 0, withUser: 1, blocks: 0, later: 0 });
+  assert.deepEqual(n('g:pay:Cards').counts, { total: 2, done: 1, doing: 1, withUser: 1, blocks: 1, later: 0 });
   assert.deepEqual(n('l:back').counts, n('g:pay:Cards').counts);
-  assert.deepEqual(root.counts, { total: 5, done: 1, doing: 1, withUser: 2, blocks: 1 });
+  assert.deepEqual(root.counts, { total: 5, done: 1, doing: 1, withUser: 2, blocks: 1, later: 0 });
 });
 
 test('archTree of a project with no map is only the project', () => {

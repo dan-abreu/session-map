@@ -1402,10 +1402,12 @@ function itemRow(node) {
 
 function itemList(nodes) {
   const items = nodes.flatMap((n) => (n.kind === 'item' ? [n] : n.children));
-  const openOnes = items.filter((n) => n.item.status !== 'done');
+  const openOnes = items.filter((n) => n.item.status !== 'done' && n.item.status !== 'later');
+  const later = items.filter((n) => n.item.status === 'later');
   const done = items.filter((n) => n.item.status === 'done');
   return [
     openOnes.length ? h('ul', { class: 'plain rows items' }, openOnes.map(itemRow)) : h('p', { class: 'muted' }, t('point.allDone')),
+    later.length ? h('details', { class: 'done-items' }, h('summary', {}, t.count('point.laterItems', later.length)), h('ul', { class: 'plain rows items' }, later.map(itemRow))) : null,
     done.length ? h('details', { class: 'done-items' }, h('summary', {}, t.count('point.doneItems', done.length)), h('ul', { class: 'plain rows items' }, done.map(itemRow))) : null,
   ];
 }
@@ -1494,7 +1496,7 @@ function partDetails(node) {
   const part = node.part;
   const c = node.counts;
   const items = itemsOf(node.children);
-  const open = items.filter((n) => n.item.status !== 'done');
+  const open = items.filter((n) => n.item.status !== 'done' && n.item.status !== 'later');
   const chats = shown.chats.filter((x) => x.partId === part.id);
   const cells = linesOn(part);
   const range = activeRange();
@@ -1537,7 +1539,7 @@ function itemDetails(node) {
     const withYou = person ? sigCard(waitingSignal({ decision: { kind: 'item', text: node.label, who: i.who, code: i.code } }), { 'open-item': () => files.open(part.file, null, { line: i.line }) }) : null;
     return [
       h('p', { class: 'meta' },
-        pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)),
+        pill(i.status === 'done' ? 'active' : i.status === 'doing' ? 'waiting' : 'idle', t(`item.status.${i.status}`)), // todo, doing, done, later
         i.who ? h('span', { class: `bx-chip${isPerson(i.who) ? ' is-you' : ''}` }, i.who) : null,
         i.weight ? h('span', { class: `bx-chip${i.weight === 'blocks' ? ' is-blocks' : ''}` }, t(`item.weight.${i.weight}`)) : null,
         i.milestone ? h('span', {}, t('item.milestone', { n: i.milestone })) : null,

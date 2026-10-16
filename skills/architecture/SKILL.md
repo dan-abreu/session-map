@@ -43,6 +43,7 @@ In Portuguese the sections are `## Onde está no código` and `## O que falta`; 
 | The user asks for something new | Add `- [ ] what to do` under "What's missing" / "O que falta" of the right part, in a fitting `###` group, before you start. End it with the next code: the prefix the part's items use, plus the highest number in the folder plus one. |
 | You start it | Put `in progress` (`em andamento`) first in its bold prefix, or add `**in progress:**`. |
 | It is done | Tick it: `- [x]`. |
+| You decide to wait | Put `later` (`mais tarde`) first in its bold prefix, or add `**later:**`, and say why on a line under it. A parked item is out of every count of open work until the mark is taken off. |
 
 **When the `map_*` tools are available** (`map_add_request`, `map_add_item`, `map_start_item`, `map_finish_item`, `map_add_part`, `map_add_link`), write the map only through them: you give the words (request, part, group, title, details) and the clerk writes the lines in order (next code, "From" and "Where it went" lines, index line, a new part's file, table row and flow node together). A direct Edit or Write of a file in the map folder is denied in those chats; if a tool refuses, fix the call instead of editing by hand.
 

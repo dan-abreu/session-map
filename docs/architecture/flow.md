@@ -93,7 +93,8 @@ The Flow tab draws the first mermaid block of the README (layers are `subgraph`s
 
 - [x] **Export in more formats** `fl13`
   - Deterministic, from the diagram model: draw.io (mxGraph XML) and PlantUML (component and deployment), beside the mermaid, SVG, PNG and Markdown ones.
-- [ ] **Import from any format, with the AI filling in** `fl14`
+- [ ] **later:** **Import from any format, with the AI filling in** `fl14`
+  - Parked on 2026-10-16 (triage): nice to have: importing drawings from other tools is not the base.
   - draw.io, PlantUML, Graphviz, Excalidraw, or an image or PDF of a drawing: the AI (the user's own `claude`, a model that sees images) converts it to mermaid and matches each box to a part; the result goes through the same import preview.
   - With `flow.sync: auto` it applies with an event and Undo; with `suggest` it shows the preview. New parts get the convention's skeleton.
   - Limits: 5 MB per file, an allowed list of types, nothing executed from the file (draw.io and Excalidraw read as data).

@@ -189,13 +189,13 @@ export function contextOf(project, node, { draft = '', practices = null, text = 
   if (node.kind === 'group') {
     const group = part.groups.find((g) => g.name === node.group);
     if (!group) return fail(404, 'unknown-group');
-    const open = group.items.filter((i) => i.status !== 'done').slice(0, LIST_MAX).map(itemLine);
+    const open = group.items.filter((i) => i.status !== 'done' && i.status !== 'later').slice(0, LIST_MAX).map(itemLine);
     return { sections: partSections(project, part, { path: [group.name], sections: [`Group: ${group.name || '(no group)'}${open.length ? `\n${open.join('\n')}` : ''}`] }, practices, text), part };
   }
   const found = findItem(part, node);
   if (!found) return fail(404, 'unknown-item');
   const { group, item } = found;
-  const facts = [item.status === 'doing' ? 'in progress' : item.status === 'done' ? 'done' : 'to do', item.who && `with: ${item.who}`, item.weight && `weight: ${item.weight}`, item.milestone && `step ${item.milestone}`].filter(Boolean);
+  const facts = [item.status === 'doing' ? 'in progress' : item.status === 'done' ? 'done' : item.status === 'later' ? 'parked for later (not work for now)' : 'to do', item.who && `with: ${item.who}`, item.weight && `weight: ${item.weight}`, item.milestone && `step ${item.milestone}`].filter(Boolean);
   const lines = [`Item${item.code ? ` \`${item.code}\`` : ''}: ${item.title}`, `State: ${facts.join(' · ')}`, ...item.detail.map((d) => `- ${d}`)];
   return { sections: partSections(project, part, { path: [group.name], sections: [lines.join('\n')] }, practices, text), part };
 }

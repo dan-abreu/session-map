@@ -29,7 +29,8 @@ On first use of a repository without a map, session-map explains what it will do
 
 ### First use of a repository with no map
 
-- [ ] **Offer a map and Flow, with permission, time and cost** `bi01`
+- [ ] **later:** **Offer a map and Flow, with permission, time and cost** `bi01`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Explain, ask, and show the estimate (time and cost) before starting. Ask again only if it passes about US$ 5 (config `bootstrap.maxUSD`); the default is the "complete" study with its estimate visible.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [x] **Study the whole repository by area and write architecture and Flow** `bi02`
@@ -37,7 +38,8 @@ On first use of a repository without a map, session-map explains what it will do
   - A helper per large folder plus a reviewer, reading code, configs, README and docs. Then: the architecture in the standard (layers → parts, fixed sections, the project's language); the Flow at three levels (see `fl08`, `fl09`, `fl10`) with labeled arrows; a check against real files (no part or box without an existing path); a final summary of findings, risks, what is missing and questions for the owner, which land in "Waiting for you".
   - Only what needs a human is "with the owner".
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **Middle path: a draft first, then "Save to project"** `bi03`
+- [ ] **later:** **Middle path: a draft first, then "Save to project"** `bi03`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - It builds on its own, without asking, in the session-map storage. A big "Save to project" button writes the architecture and the Flow; a switch saves automatically; "Redo" and "Erase the map" are there too.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [x] **Exhaustive study with a coverage report** `bi04`
@@ -55,15 +57,19 @@ On first use of a repository without a map, session-map explains what it will do
 
 ### Perfectionist inspection
 
-- [ ] **Inspect every file for everything that is wrong** `bi07`
+- [ ] **later:** **Inspect every file for everything that is wrong** `bi07`
+  - Parked on 2026-10-16 (triage): a feature of its own, not the base.
   - Text: spelling, commas, accents, mixed languages, poor messages. Code: unused, repeated, confusing names, forgotten TODOs, half-done. Defects: unhandled cases, swallowed errors. Security: exposed secrets, wide permissions, personal data. Missing tests. Contradicting documentation, broken links. UI: cut-off text, no label, contrast, phone.
   - Each finding becomes an item on the right part with `file:line`, a weight (grave, important, detail) and "what it is · why it matters · how to fix".
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **"Fix with the AI" and a second check for grave findings** `bi08`
+- [ ] **later:** **"Fix with the AI" and a second check for grave findings** `bi08`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - A button to fix with the AI, in batch for details (grouped). Grave and security findings pass a second, adversarial check before they are shown.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **The picky inspector** `bi09`
+- [ ] **later:** **The picky inspector** `bi09`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Relentless line by line (comma, extra space, inconsistent name, 1 px misalignment, a sentence that could be clearer); repeats rounds until one whole round finds nothing; grave first, details grouped with "fix all".
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **session-map inspects itself before each release** `bi10`
+- [ ] **later:** **session-map inspects itself before each release** `bi10`
+  - Parked on 2026-10-16 (triage): the owner already put it on hold on 2026-10-10 (`op06`).
   - Later, by the owner's choice on 2026-10-10 (`op06`).

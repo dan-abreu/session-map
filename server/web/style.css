@@ -592,6 +592,8 @@ body.no-map .mm-search, body.no-map .mm-changed, body.no-map .mm-rel-btn, body.n
 .bx-status { flex: none; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; border: 1.6px solid var(--idle); background: var(--bg-2); }
 .bx-status.st-doing { border-color: var(--doing); background: conic-gradient(var(--doing) 0 50%, var(--bg-2) 0); }
 .bx-status.st-done { border-color: var(--active); background: var(--active); box-shadow: inset 0 0 0 2px var(--bg-2); }
+.bx-status.st-later { border-style: dashed; }
+.item-row.st-later .ir-title { color: var(--ink-2); }
 .k-item:has(.st-done) .bx-title, .item-row.st-done .ir-title { color: var(--ink-2); }
 
 .bx-people { display: inline-flex; }

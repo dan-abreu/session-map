@@ -1,13 +1,16 @@
 // The architecture as a mind map (desenho-3 § 2): the tree, its layout and what lights its boxes. Pure: no DOM, so
 // node:test can load it, and the desktop map and the phone outline share it.
 
-const EMPTY_COUNTS = () => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0 });
+// later: the parked items (am06). They are not part of the work to do, so they are out of total and of every other count.
+const EMPTY_COUNTS = () => ({ total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, later: 0 });
 const plain = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 export const isPerson = (who) => Boolean(who) && plain(who) !== 'claude';
 
 function itemCounts(item) {
+  if (item.status === 'later') return { total: 0, done: 0, doing: 0, withUser: 0, blocks: 0, later: 1 };
   const open = item.status !== 'done';
   return {
+    later: 0,
     total: 1,
     done: open ? 0 : 1,
     doing: item.status === 'doing' ? 1 : 0,
@@ -243,8 +246,10 @@ export function boardItems(project) {
   const root = archTree(project);
   walk(root, (n) => {
     if (n.kind !== 'item') return;
+    // A parked item is on no column of the board: it is not work to do now.
+    if (!cols[n.item.status]) return;
     const part = project.arch.parts.find((p) => p.id === n.partId);
-    cols[n.item.status === 'done' ? 'done' : n.item.status].push({ nodeId: n.id, part, group: n.group, item: n.item });
+    cols[n.item.status].push({ nodeId: n.id, part, group: n.group, item: n.item });
   });
   const rank = (x) => (x.item.weight === 'blocks' ? 0 : 2) + (isPerson(x.item.who) ? 0 : 1);
   for (const k of ['todo', 'doing']) cols[k] = cols[k].map((x, i) => ({ x, i })).sort((p, q) => rank(p.x) - rank(q.x) || p.i - q.i).map(({ x }) => x);

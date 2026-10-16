@@ -44,6 +44,8 @@ export function parseBold(rest) {
 function classifyToken(raw) {
   const n = norm(raw);
   if (/^(em andamento|in progress|doing)$/.test(n)) return { raw, kind: 'status', value: 'doing' };
+  // Parked (am06): decided to wait. Not open work: it leaves the open counts until the mark is taken off.
+  if (/^(mais tarde|later|parked|estacionad[oa])$/.test(n)) return { raw, kind: 'status', value: 'later' };
   if (/^(bloqueia|blocks?|blocker)\b/.test(n)) return { raw, kind: 'weight', value: 'blocks' };
   if (/^(importante|important)\b/.test(n)) return { raw, kind: 'weight', value: 'important' };
   if (/^(detalhe|detail)\b/.test(n)) return { raw, kind: 'weight', value: 'detail' };
@@ -311,7 +313,7 @@ function parsePart(dir, name, text) {
   const base = name.replace(/\.md$/i, '');
   const groups = regions.filter((r) => r.items.length).map((r) => ({ name: r.name, items: r.items.map(stripScan) }));
   const items = groups.flatMap((g) => g.items);
-  const open = items.filter((i) => i.status !== 'done');
+  const open = items.filter((i) => i.status !== 'done' && i.status !== 'later');
   const role = roleOf(base, items);
   return {
     part: {
@@ -320,7 +322,8 @@ function parsePart(dir, name, text) {
       counts: {
         todo: items.filter((i) => i.status === 'todo').length,
         doing: items.filter((i) => i.status === 'doing').length,
-        done: items.length - open.length,
+        done: items.filter((i) => i.status === 'done').length,
+        later: items.filter((i) => i.status === 'later').length,
         withUser: open.filter((i) => isUserWho(i.who)).length,
         blocks: open.filter((i) => i.weight === 'blocks').length,
       },
