@@ -120,6 +120,18 @@ export async function browserSmoke({ base, token, wait = 5000, port = 9333, shot
         out.areas[`${area}/${sub}`] = { view: area, shown: v.current === sub && (v.size ?? 0) > 20, size: v.size ?? 0, excerpt: v.excerpt ?? '', drawn: 0, rawKeys: v.raw ?? [], complaints: [...new Set([...complaints, ...(v.raw ?? []).map((k) => `text key shown raw: ${k}`)])] };
       }
     }
+    // The Requests tab's review (mm27): opened by a click like a person would, looked at, and left again. No decision is made.
+    if ((!areas || areas.includes('requests')) && out.areas.requests?.shown) {
+      complaints = [];
+      await cdp.send('Page.navigate', { url: `${base}/?view=requests` });
+      await sleep(wait);
+      await cdp.send('Runtime.evaluate', { expression: "document.querySelector('#view-requests .req-review-open')?.click()" });
+      await sleep(Math.round(wait / 2));
+      const probe = await cdp.send('Runtime.evaluate', { returnByValue: true, expression: `(() => { const b = document.querySelector('#view-requests .req-review'); const raw = [...new Set((document.body.innerText.match(/\\b[a-z]+(?:\\.[a-zA-Z0-9-]+){1,3}\\b/g) ?? []).filter((x) => /^(requests|err|tab|nav)\\./.test(x)))]; return { size: b ? b.innerText.length : 0, card: Boolean(b?.querySelector('.req-card')), buttons: b ? [...b.querySelectorAll('button')].map((x) => x.innerText.trim()) : [], raw }; })()` });
+      const v = probe.result?.result?.value ?? {};
+      if (shots) { const png = await cdp.send('Page.captureScreenshot', { format: 'png' }); if (png.result?.data) writeFileSync(join(shots, 'requests-review.png'), Buffer.from(png.result.data, 'base64')); }
+      out.areas['requests/review'] = { view: 'requests', shown: Boolean(v.card) && (v.size ?? 0) > 20, size: v.size ?? 0, excerpt: (v.buttons ?? []).join(' | '), drawn: 0, rawKeys: v.raw ?? [], complaints: [...new Set([...complaints])] };
+    }
     cdp.close();
     return out;
   } finally {

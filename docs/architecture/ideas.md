@@ -422,8 +422,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked: 2026-10-14 18:47 — "pois muda essa regra, eu quero uma regra usando palavras tecnicas e termos tecnicos"; "me manda que vou colocar em outro chat para vascular o programa e resolver isso"
   - What it means: the plain-language rule is inverted **as engine, not as a document**: `terms` is a config key (`technical` by default), the state delivers it and the page translator obeys it — the AI never reads a rule to know how to speak. The simple words become the optional mode. The remaining work is content: fill the technical dictionary for every key (`.dev/execucao/regra-termos-tecnicos.md` is the spec).
   - How to confirm it is done: the page says "agente" (not "ajudante") by default in both languages, the vocabulary test reflects the new rule and the full suite is green.
-  - Where it went: the engine part is built (`terms` in `server/config.mjs`, `state.terms` in `server/collect.mjs`, `applyTermsDefault` in `server/web/app.js`); the rule document is the spec for the vocabulary sweep (`.dev/execucao/regra-termos-tecnicos.md`), which goes to the chat the owner chooses.
-  - Status: in progress (the engine half is built and verified in the live state; the dictionary sweep is handed over).
+  - Where it went: the engine part is built (`terms` in `server/config.mjs`, `state.terms` in `server/collect.mjs`, `applyTermsDefault` in `server/web/app.js`); the rule document is the spec for the vocabulary sweep (`.dev/execucao/regra-termos-tecnicos.md`), which goes to the chat the owner chooses: `mm64`.
+  - Status: in progress (the engine half is built and verified in the live state; the dictionary sweep is handed over and parked as `mm64`).
 - [x] The fine-tooth comb: the complete list of what is engine and what is still reading `id127`
   - Asked: 2026-10-14 19:00 — "o que mais deveria ser motor e é leitura, agora me preocupei"; "faz um pente fino e me mostra uma lista completa do programa e não apenas siso"
   - What it means: one complete list of every behavior rule of the program, classified: motor (code, hooks, config or tests enforce it) or leitura (only prose an AI must read at work time), with the proof for each and, for the reading ones, what would make them motor.
@@ -527,27 +527,27 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: the installed test skills; each promotion or removal gets its own item.
   - Status: descartado (2026-10-15: os candidatos instalados — skills-janitor e fable-method — foram reprovados pelo dono antes do teste, por poucas estrelas, e removidos junto com os mercados; o método fica registrado para os próximos candidatos: só entra skill com comunidade provada).
   - Status: em andamento (as quatro juntas soldadas e testadas; o dono vê os nomes e números no Cérebro após o reinício).
-- [ ] Nothing is done without being projected in the architecture first `id129`
+- [x] Nothing is done without being projected in the architecture first `id129`
   - Asked: 2026-10-14 19:33 — "virou documento dentro da arquitutura isso tem que ser fundamental nada é feito sem ser projetado primeiro na arquitetura"
   - What it means: the fundamental rule of the program, written into the architecture's own constitution (docs/architecture/README.md "How to keep this true") and held by a motor: every request becomes an item first, every piece of work starts as an item in its part, and every file of the program must be covered by a mention in the architecture — code that was never projected cannot exist (`test/architecture-first.test.mjs`).
   - How to confirm it is done: the rule is written in the README, the test is green, and from now on any work that starts without its item is visible as an unprojected file failing the suite.
-  - Where it went: the rule in the README; the motor in `test/architecture-first.test.mjs`.
-  - Status: in progress (written and enforced; waiting for the owner to see it hold).
+  - Where it went: the rule in the README; the motor in `test/architecture-first.test.mjs`; the item `am07`.
+  - Status: done on 2026-10-16 (the rule is in the README and the test is green on the working tree; confirmed with `am07`). Before: in progress.
 
 ### This registry
 
-- [ ] **in progress:** Confirm in the tool that every request was captured precisely `id65`
+- [x] Confirm in the tool that every request was captured precisely `id65`
   - Asked: 2026-10-09 16:36 — "mas como isso vai ficar bem especifico? voce está desenhando tudo isso da maneira correta? sao muitas coisas que estou falando com voce, porque sao coisas do meu dia a dia, eu quero confirmar na ferramenta que está sendo criada e eu muito meticuloso, gosto de perfeccionimos"
   - What it means: this part: one item per request with the owner's words, dates, meaning, a check, the destination item and the status; and, in the tool, a tab to review it, plus a check that no request in a conversation was left without an item.
   - How to confirm it is done: every request the owner made in the conversations up to 2026-10-09 has an item here pointing to a real code; the "requests that did not become an item" line of `fd07` reads zero.
   - Where it went: this part; the tab `mm27`; the conversations check in `fd07`.
-  - Status: in progress (this registry written on 2026-10-09; the tab is `mm27`).
+  - Status: done on 2026-10-16 (the Requests tab lists every request with its work and, since `mm27`, reviews them one by one; "Tudo em dia?" line g8 reads zero: no open request is without an item). Before: in progress.
 - [ ] An Ideas area to review ideas, see whether they were done, keep or delete them `id66`
   - Asked: 2026-10-09 16:38 — "precisamos de uma area de ideias, assim podemos rever elas e ver se foram executadas então, assim podemos apagar ou manter de acordo com o fluxo do programa"
   - What it means: an Ideas tab with each idea's life (new, accepted, in progress, done, later, discarded), a review mode (keep, later, discard), filters, ideas marked done by the watcher with the proof, and reminders for ideas left untouched.
   - How to confirm it is done: see `mm27`.
-  - Where it went: `mm27`.
-  - Status: accepted.
+  - Where it went: `mm27`; the filters and the reminder are `mm63`.
+  - Status: in progress (the review with Keep, Later, Discard and Close is built, `mm27`; the filters by date and part and the reminder are parked as `mm63`). Before: accepted.
 - [x] The map is built from the code files, not from the markdown docs `id67`
   - Asked: 2026-10-09 16:45 — "percebi que ta pegando so os arquivos md para editar, mas não é isso, é os arquivos com codigos"
   - What it means: the model comes from the code files (census, extractors, import graph); the architecture markdown becomes an output generated and checked against the code, with file:line evidence.
@@ -571,7 +571,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a playful, simple-graphics view where each project is a place (a neighbourhood or an office), the agents and subagents working right now are the people walking and the cars driving, and the city grows as the project grows; maybe later shared with other people who use session-map.
   - How to confirm it is done: to be defined once the design is agreed (brainstorming started on 2026-10-11).
   - Where it went: not yet; first the design.
-  - Status: new (on 2026-10-11 the owner only wants to think it through and check if it is viable: "eu não quero fazer ainda nada").
+  - Status: later (parked in the review of 2026-10-16: on 2026-10-11 the owner only wanted to think it through and check if it is viable: "eu não quero fazer ainda nada"). Before: new.
 - [ ] **in progress:** A complete, professional chat, like Claude's, Copilot's, ChatGPT's, Gemini's and Cursor's, choosing the other AIs freely `id93`
   - Asked: 2026-10-11 — "não gostei do chat, precisamos dele mais completo igual é o chat do claud, chat do copillot, chat do gpt, chat do gemini, chat do curse, aqui ta muito limitado e o programa acaba que se torna muito limitado, eu tenho varias APIS de outras IAs e nao tenho como ordenar as que eu quero usar sem travas alem de outras coisas as opções ter termos mais profissionais do que termos do jeito que está o chat tem que sem bem profissional mesmo"; 2026-10-11 — "C, quero que as pessoas tenham independencia também de escolher qual IA quer para orquestrar, me ajuda deixar bem profissional esse chat e toda a engrenagem"; 2026-10-11 — "jeito 1, mas acho que ja da pra usar a nova cada do programa ne?"; 2026-10-11 — "acho que ultra code quem decide é o orquestrador, dependendo da atividade … tem que ser bem mais organizado o que é orquestrador o que é automatico o que é o nivel das ias e modelos, porque estamos fazendo para pessoas que trabalham manualmente e pessoas que trabalham sem entender … teve uma vez que estourei tudo, porque a IA fica nivel alto o tempo todo ou ultra code … quero bem organizado, quero com termos profissionais, mas facil entendimento"; 2026-10-11 — "eu queria que visse a fundo mesmo, desse uma pesquisada como poderiamos encaixar as coisas de uma maneira de facil entendimento, organizada, limpa, com termos corretos, quando tiver duvida abre um pequeno dialogo falando o que aquela ferramente faz quando para o mouse em cima, mas com textos profissionais e nao alto tipo \"para quem entende\" o programa nao fica profissional"; 2026-10-11 — "pode segiur"; 2026-10-11 — "eu gostei muito de tudo, mas acho que na questão dos niveis, poderia ter o automatico, porque eu quero que o programa consiga entender no automatico o nivel de tudo, fazendo as coisas em alta qualidade e o maximo de economia, sempre quem usa vibe coding quer isso, então é bom ter os niveis mas ter o nivel automático também para pessoas leigas"; 2026-10-11 — "no automatico até isso pode ser usando sozinho, mas a IA tem quer ser muito meticulosa para fazer isso sozinha, sem alucinacoes, mas acoes que realmente precisam desse nivel de qualidade"; 2026-10-11 — "também que a IA entenda o contexto do chat e refaça os titulos automaticamente"
   - What it means: the page chat gets the features people expect from the big AI chats, the owner picks and orders the AIs he wants to use (his keys) without the automatic limits deciding for him, and the chat's options use professional terms.

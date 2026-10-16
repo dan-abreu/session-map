@@ -27,6 +27,7 @@ import { archiveAll, archivedPath, deleteArchived, readArchived, readIndex, sear
 import { readConversation, readImage } from './sources/claude-conversation.mjs';
 import { applyImport, deleteDraft, exportMermaid, planImport, programOnly, readDraft, writeDraft } from './arch/flow.mjs';
 import { liveOf, partView, publicView } from './arch/flowinner.mjs';
+import { REVIEW_TO, applyRequestStatus } from './arch/requestops.mjs';
 import { versionText } from './web/statesig.js';
 import { readArch } from './arch/detect.mjs';
 import { MODEL_VERSION, buildFlowModel, readModelCache } from './arch/flowmodel.mjs';
@@ -90,8 +91,11 @@ const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
   'look-only': 409, 'needs-confirm': 409, 'already-applied': 409, 'changed-since': 409, 'too-big': 413, 'write-failed': 500,
+  // a decision on a request (mm27)
+  'unknown-request': 404, 'already-closed': 409, 'not-finished': 409, 'reason-needed': 400, 'bad-status': 400, busy: 409,
 };
 const FLOW_TEXT_MAX = 60_000;
+const REQUEST_CODE_RE = /^[a-z]{1,4}(?:-[a-z]{1,8})?\d{1,4}$/i;
 // The Flow's model (fl07): a build younger than this is answered as it is; a GET waits this long for a build before it
 // answers with the last model it has, marked building.
 const MODEL_FRESH_MS = 5000;
@@ -874,6 +878,19 @@ export function createApp({
       const out = applyImport({ root: project.root, arch: await currentArch(project), text: flowText(body), skip, care: { id: project.id, smDir } });
       const status = out.ok ? 200 : FLOW_ERRORS[out.error] ?? 400;
       logAction(smDir, { action: 'flow-apply', projectId: project.id, count: out.changed ? out.files.length : 0, mode: out.status }, status);
+      fresh();
+      return send(res, status, out);
+    }
+    // A decision on one request of the registry, from the Requests tab's review (mm27): Later, Discard or Close. The
+    // project's own care mode decides whether it is written; the click is the accept, like Apply above.
+    if (req.method === 'POST' && route === 'request') {
+      if (demo) throw new HttpError(403, 'demo');
+      const body = await readBody(req);
+      if (typeof body?.code !== 'string' || !REQUEST_CODE_RE.test(body.code) || !REVIEW_TO.includes(body.to)) throw new HttpError(400, 'bad-request');
+      if (body.reason !== undefined && typeof body.reason !== 'string') throw new HttpError(400, 'bad-request');
+      const out = applyRequestStatus({ root: project.root, arch: await currentArch(project), code: body.code, to: body.to, reason: body.reason, care: { id: project.id, smDir } });
+      const status = out.ok ? 200 : FLOW_ERRORS[out.error] ?? 400;
+      logAction(smDir, { action: 'request-status', projectId: project.id, code: body.code, to: body.to, mode: out.status }, status);
       fresh();
       return send(res, status, out);
     }

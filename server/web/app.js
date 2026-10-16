@@ -2621,7 +2621,7 @@ function wire() {
     h, t: () => t, lang: () => lang, icon, state: () => state, project: () => project, range: () => activeRange(), rangeButton: () => rangePicker.button(),
     dialog: $('#fileDialog'), files, go: goTo, toast, errorText, number: numText, relative,
   });
-  requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem });
+  requestsView = createRequestsView({ h, t: () => t, icon, lang: () => lang, state: () => state, project: () => project, openItem: openRequestItem, api, toast, errorText, look: () => lookMode });
   aiHelpers = createAiHelpers({ dialog: $('#aiHelpersDialog'), h, t: () => t, lang: () => lang, api, toast, errorText, projects: () => (state?.projects ?? []).map((p) => ({ id: p.id, name: p.name, root: p.root })), openers: [] });
   // The look-only link (sv04), made and turned off by the owner from the help menu.
   const lookShare = createLookShare({

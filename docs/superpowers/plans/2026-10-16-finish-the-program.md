@@ -31,7 +31,7 @@ Status: done 2026-10-16 — ten views on four areas; every area and sub-page dra
 
 ### Task 5: the Requests tab reviews (`mm27`)
 Keep / Later / Discard for each request, and "can close" computed from the items. Files: `server/web/requestsview.js`, `server/web/requests.js`. Test: `node --test test/web-requests.test.mjs`.
-Status: not started.
+Status: done 2026-10-16 (`mm27`, `mm63`). The review is one button on the Requests tab; each decision changes only that request's status line through the clerk's care operation (`server/arch/requestops.mjs`), so the project's care mode and the undo apply. A project whose care mode is not chosen writes nothing and says where to change it. Filters by date and part and the idle-request reminder are parked as `mm63`.
 
 ### Task 6: the whole program works (`or67`)
 The rows that are declared and not wired, and the restart of the server. Files: `server/ai/brainpanel.mjs`, `server/ai/functions.json`. Test: `node --test test/brainpanel.test.mjs`.

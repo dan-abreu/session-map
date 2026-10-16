@@ -1165,6 +1165,14 @@ button.req-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 
 .req-note { color: var(--ink-2); }
 .req-confirm { flex-basis: 100%; }
 .req-confirm p { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+/* The review (mm27): one request at a time, with its decision bar under it. */
+.req-review-open { margin-left: auto; }
+.req-review-body { display: grid; gap: 16px; max-width: 720px; margin-top: 16px; }
+.req-review-count { margin: 0; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-2); }
+.req-review-can { margin: 0; padding: 8px 12px; border-radius: var(--r-md); background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-sm); font-weight: 600; }
+.req-review-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.req-reason-field { flex: 1 1 280px; }
+.req-reason-field input { width: 100%; }
 .col-empty { margin: 4px 2px; color: var(--ink-2); font-size: var(--fs-sm); }
 .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .card-btn {

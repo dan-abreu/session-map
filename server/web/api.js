@@ -124,6 +124,8 @@ export const api = {
   flowPart: (projectId, partId, onlyLive = false) => call('GET', `/api/arch/${seg(projectId)}/model/part/${seg(partId)}${onlyLive ? '?only=live' : ''}`),
   flowPreview: (projectId, text) => call('POST', `/api/arch/${seg(projectId)}/mermaid/preview`, { text }),
   flowApply: (projectId, text, skip) => call('POST', `/api/arch/${seg(projectId)}/mermaid/apply`, { text, skip }),
+  // A decision on one request from the Requests tab's review (mm27): to is later, discarded (needs a reason) or done.
+  requestStatus: (projectId, code, to, reason) => call('POST', `/api/arch/${seg(projectId)}/request`, { code, to, ...(reason ? { reason } : {}) }),
   flowDraft: (projectId) => call('GET', `/api/arch/${seg(projectId)}/draft`),
   flowSaveDraft: (projectId, text) => call('PUT', `/api/arch/${seg(projectId)}/draft`, { text }),
   flowDiscard: (projectId) => call('DELETE', `/api/arch/${seg(projectId)}/draft`),

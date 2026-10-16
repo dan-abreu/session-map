@@ -33,6 +33,8 @@ The convention that makes a project's architecture a folder of plain markdown: a
 - [x] **detail:** Tables in a part file as items `am03`
 - [x] The "later" mark: an item that was decided to wait is parked, out of the open counts `am06`
   - From the triage of 2026-10-16: 61 open tasks were really 24 to do and 28 waiting, and the map counted all of them as open. `later` (`mais tarde`, `parked`, `estacionado`) in the bold prefix of an item (`**later:**`, `**later · detail:**`) gives it the state `later`: `server/arch/parse.mjs` counts it apart (`counts.later`) and keeps it out of `todo`, `withUser` and `blocks`; the tree (`server/web/tree.js`) leaves it out of `total` and off the board; the point list folds it under "N for later" (`server/web/app.js`); a chat is not offered it as work (`server/chat/context.mjs`, `server/chat/project.mjs`); the clerk refuses to start it and drops the mark when it is ticked (`server/arch/clerk.mjs`). Taking the mark off brings it back. `test/arch-later.test.mjs` (5) plus the extended parse and tree tests; the skill and the convention say it.
+- [x] Nothing is done without being projected in the architecture first: the rule is in the README and a test holds it `am07`
+  - From `id129` (2026-10-14). The rule is written in "How to keep this true" of `docs/architecture/README.md`; the motor is `test/architecture-first.test.mjs`, which fails the suite for any file of the program that no part of the architecture mentions by its own path or by a folder. Confirmed on 2026-10-16: the test is green on the working tree, and the files added that day (`server/arch/requestops.mjs`, `scripts/measure-project.mjs`, `scripts/cache-share.mjs`) each have their item before their code.
 
 ### Writing
 

@@ -11,13 +11,26 @@ export function filterRequests(list, f = {}) {
     && (!words || [r.code, r.title, r.meaning, ...r.asked.map((a) => a.words), ...r.went.map((w) => w.title)].join(' ').toLowerCase().includes(words)));
 }
 
-// ctx: h, t (translator getter), icon, lang(), state(), project(), openItem(projectId, code).
+// The review (mm27): the open requests one at a time. What can be closed comes first, then what has no work yet, then what is
+// being done, then what was parked. rows: [{p, r}]; decided: the "project:code" keys already decided in this review.
+const REVIEW_STATES = new Set(['planned', 'doing', 'later']);
+const REVIEW_ORDER = (r) => (r.unconfirmed ? 0 : r.noActivity ? 1 : r.state === 'doing' ? 2 : r.state === 'planned' ? 3 : 4);
+export const reviewKey = (p, r) => `${p.id}:${r.code}`;
+export function reviewQueue(rows, decided = new Set()) {
+  return rows
+    .filter(({ p, r }) => (REVIEW_STATES.has(r.state) || r.unconfirmed) && !decided.has(reviewKey(p, r)))
+    .map((row, at) => ({ ...row, at }))
+    .sort((a, b) => REVIEW_ORDER(a.r) - REVIEW_ORDER(b.r) || a.at - b.at)
+    .map(({ at, ...row }) => row);
+}
+
+// ctx: h, t (translator getter), icon, lang(), state(), project(), openItem(projectId, code), api, toast, errorText, look().
 const QUOTE_SHORT = 160;
 
 export function createRequestsView(ctx) {
   const { h } = ctx;
   const t = () => ctx.t();
-  const pick = { scope: null, filter: 'all', query: '' };
+  const pick = { scope: null, filter: 'all', query: '', review: false, decided: new Set(), discarding: false, busy: false, reason: '' };
 
   const when = ({ date, time }) => {
     if (!date) return '';
@@ -78,6 +91,60 @@ export function createRequestsView(ctx) {
         r.confirm ? h('details', { class: 'req-confirm' }, h('summary', {}, tt('requests.confirm')), h('p', {}, r.confirm)) : null) : null);
   }
 
+  // One decision: the server writes the registry through the project's care mode, and the request leaves the queue.
+  async function decide(root, p, r, to, reason) {
+    if (pick.busy) return;
+    pick.busy = true;
+    render(root);
+    const res = await ctx.api.requestStatus(p.id, r.code, to, reason);
+    pick.busy = false;
+    if (!res.ok) {
+      ctx.toast(res.error === 'look-only' ? t()('requests.review.look') : ctx.errorText(res.error));
+      return render(root);
+    }
+    pick.decided.add(reviewKey(p, r));
+    pick.discarding = false;
+    pick.reason = '';
+    ctx.toast(t()(`requests.review.saved.${to}`, { code: r.code }));
+    render(root);
+  }
+
+  function renderReview(root, all, chosen, scope) {
+    const tt = t();
+    const queue = reviewQueue(all, pick.decided);
+    const current = queue[0] ?? null;
+    const leave = () => { pick.review = false; pick.discarding = false; pick.reason = ''; render(root); };
+    const next = () => { pick.decided.add(reviewKey(current.p, current.r)); pick.discarding = false; pick.reason = ''; render(root); };
+    const { p, r } = current ?? {};
+    const button = (cls, label, onclick, extra = {}) => h('button', { type: 'button', class: `btn ${cls}`.trim(), disabled: pick.busy, onclick, ...extra }, label);
+    const bar = current ? h('div', { class: 'req-review-bar', role: 'group', 'aria-label': tt('requests.review') },
+      pick.discarding
+        ? [h('label', { class: 'dv-field req-reason-field' }, h('span', {}, tt('requests.review.reason')),
+          h('input', { type: 'text', class: 'req-reason', name: 'req-reason', maxlength: '300', value: pick.reason, 'aria-required': 'true',
+            oninput: (e) => { pick.reason = e.target.value; go.disabled = pick.busy || !pick.reason.trim(); },
+            onkeydown: (e) => { if (e.key === 'Enter' && pick.reason.trim()) decide(root, p, r, 'discarded', pick.reason); } })),
+        button('danger', tt('requests.review.reasonGo'), () => decide(root, p, r, 'discarded', pick.reason), { disabled: pick.busy || !pick.reason.trim(), class: 'btn danger req-reason-go' }),
+        button('', tt('requests.review.cancel'), () => { pick.discarding = false; pick.reason = ''; render(root); })]
+        : [r.unconfirmed ? button('primary', tt('requests.review.close'), () => decide(root, p, r, 'done')) : null,
+          button(r.unconfirmed ? '' : 'primary', tt('requests.review.keep'), next),
+          r.state === 'later' ? null : button('', tt('requests.review.later'), () => decide(root, p, r, 'later')),
+          button('danger-quiet', tt('requests.review.discard'), () => { pick.discarding = true; render(root); })]) : null;
+    let go = null;
+    root.replaceChildren(h('div', { class: 'view-wrap wide req-review' },
+      h('div', { class: 'view-head' }, h('h2', {}, tt('requests.review')), scope,
+        h('button', { type: 'button', class: 'btn', onclick: leave }, tt('requests.review.exit'))),
+      h('p', { class: 'view-lede' }, tt('requests.review.lede')),
+      current
+        ? h('div', { class: 'req-review-body' },
+          h('p', { class: 'req-review-count num' }, tt('requests.review.count', { n: pick.decided.size + 1, total: pick.decided.size + queue.length })),
+          h('ul', { class: 'plain req-cards' }, card(p, r, chosen === '*')),
+          r.unconfirmed ? h('p', { class: 'req-review-can' }, tt('requests.review.canClose')) : null,
+          bar)
+        : emptyState({ h, icon: ctx.icon }, { art: 'check', title: tt('requests.review.empty.title'), text: tt('requests.review.empty.text') })));
+    go = root.querySelector('.req-reason-go');
+    if (pick.discarding) root.querySelector('.req-reason')?.focus();
+  }
+
   function render(root) {
     const tt = t();
     const state = ctx.state();
@@ -102,6 +169,7 @@ export function createRequestsView(ctx) {
       chip('later', tt('requests.state.later')), chip('done', tt('requests.state.done')), chip('dropped', tt('requests.state.dropped')));
     const search = h('input', { type: 'search', class: 'req-search', placeholder: tt('requests.search'), 'aria-label': tt('requests.search'), value: pick.query,
       oninput: (e) => { pick.query = e.target.value; drawList(); } });
+    if (pick.review) return renderReview(root, all, chosen, scope);
     const body = h('div', { class: 'req-groups' });
     function drawList() {
       const shown = new Set(filterRequests(list, {
@@ -118,7 +186,8 @@ export function createRequestsView(ctx) {
     }
     drawList();
     root.replaceChildren(h('div', { class: 'view-wrap wide' },
-      h('div', { class: 'view-head' }, h('h2', {}, tt('requests.title')), scope),
+      h('div', { class: 'view-head' }, h('h2', {}, tt('requests.title')), scope,
+        list.length && !ctx.look?.() ? h('button', { type: 'button', class: 'btn req-review-open', onclick: () => { pick.review = true; pick.discarding = false; render(root); } }, tt('requests.review')) : null),
       h('p', { class: 'view-lede' }, tt('requests.lede')),
       h('p', { class: 'view-note req-outside' }, tt('requests.outside')),
       list.length ? h('div', { class: 'req-tools' }, chips, search) : null,
@@ -127,7 +196,8 @@ export function createRequestsView(ctx) {
 
   // A poll redraws the tab only when nothing is being typed in its search.
   const refresh = (root) => {
-    if (root.contains(document.activeElement) && document.activeElement?.classList.contains('req-search')) return;
+    if (root.contains(document.activeElement) && (document.activeElement?.classList.contains('req-search') || document.activeElement?.classList.contains('req-reason'))) return;
+    if (pick.busy) return;
     render(root);
   };
 
