@@ -134,6 +134,17 @@ async function walkFolder(root, readDir) {
   return { paths, hiddenDep };
 }
 
+// Other people's code kept inside the repository (a vendored package that is not in a folder named vendor): the owner
+// names its folders in the project's config (`vendored`), and every file under them is left out as a library, like
+// node_modules. Without it a vendored package is judged as if the project had written it: its README links, its
+// package.json, its missing lockfile.
+export function vendoredPrefixes(list) {
+  if (!Array.isArray(list)) return [];
+  const clean = (s) => s.trim().replaceAll('\\', '/').replace(/^\.?\/+/, '').replace(/\/+$/, '');
+  return [...new Set(list.filter((s) => typeof s === 'string').map(clean).filter((s) => s && !s.split('/').includes('..')))];
+}
+export const isVendored = (path, prefixes) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
+
 // A file that is not opened (a library, a generated file, a binary, a secret): size and time only.
 const leftOut = (path, kind, st) => ({
   path, type: typeOf(path), kind, included: false, reason: kind, bytes: st.size, chars: null, words: null, lines: null,
@@ -155,13 +166,14 @@ function countedRow(path, type, kind, buf, st, owner) {
   };
 }
 
-function rowOf(root, path, prevRow, owner, readFile) {
+function rowOf(root, path, prevRow, owner, readFile, vendored = []) {
   const abs = join(root, path);
   let st;
   try { st = lstatSync(abs); } catch { return null; }
   // A link could point outside the project and a folder is a submodule: neither is a file of this project.
   if (!st.isFile()) return null;
   if (isSecretsFile(path)) return leftOut(path, 'secret', st);
+  if (isVendored(path, vendored)) return leftOut(path, 'dep', st);
   const kind = kindOfFile(path);
   if (kind === 'dep' || kind === 'generated' || kind === 'binary') return leftOut(path, kind, st);
   if (prevRow && prevRow.bytes === st.size && prevRow.mtime === iso(st.mtimeMs) && (prevRow.included || prevRow.reason === 'binary')) {
@@ -223,15 +235,16 @@ const usable = (prev) => (prev && prev.version === 1 && Array.isArray(prev.files
 
 // root: the project folder. prev: the last census (or null). owners: Map<path, partId|null> from the caller.
 // readFile and readDir are injectable so a test can prove which files were opened and which folders were walked.
-export async function censusOf(root, prev, { owners = new Map(), readFile = readFileSync, readDir = readdir, now = new Date() } = {}) {
+export async function censusOf(root, prev, { owners = new Map(), readFile = readFileSync, readDir = readdir, now = new Date(), vendored = [] } = {}) {
   const before = usable(prev);
+  const vendor = vendoredPrefixes(vendored);
   const was = new Map((before?.files ?? []).map((f) => [f.path, f]));
   const { paths, hiddenDep } = await listFiles(root, readDir);
   const files = [];
   for (const [i, path] of paths.entries()) {
     // Every file is read in one go; between batches the server answers the page, or a big project freezes it.
     if (i > 0 && i % BREATHE_EVERY === 0) await new Promise((r) => setImmediate(r));
-    const row = rowOf(root, path, was.get(path), owners.get(path) ?? null, readFile);
+    const row = rowOf(root, path, was.get(path), owners.get(path) ?? null, readFile, vendor);
     if (row) files.push(row);
   }
   files.sort(byCodeUnit);

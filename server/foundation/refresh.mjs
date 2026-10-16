@@ -95,12 +95,12 @@ function ownersFor(census, arch, topLevel) {
 
 // The owners come from the list of files and the list comes from the census, so the census is taken once with the owners
 // of the last round and, only if some file's owner moved, once more (every row reused, nothing reread) with the new ones.
-async function censusWithOwners(root, prev, arch, topLevel, at) {
+async function censusWithOwners(root, prev, arch, topLevel, at, vendored = []) {
   const known = new Map((prev?.files ?? []).map((f) => [f.path, f.owner ?? null]));
-  const first = await censusOf(root, prev, { owners: known, now: at });
+  const first = await censusOf(root, prev, { owners: known, now: at, vendored });
   const fresh = ownersFor(first, arch, topLevel);
   if (first.files.every((f) => !f.included || (f.owner ?? null) === fresh.get(f.path))) return first;
-  const second = await censusOf(root, first, { owners: fresh, now: at });
+  const second = await censusOf(root, first, { owners: fresh, now: at, vendored });
   // against the last round the rev moves once, however many passes it took
   if (!Number.isInteger(prev?.rev) || first.rev > prev.rev) second.rev = first.rev;
   return second;
@@ -165,9 +165,10 @@ export function readStep({ now = () => new Date(), optional = {}, readText } = {
       if (tooWide(root)) throw new Error('too-wide');
       const id = project.id;
       const at = now();
-      const arch = withLocalParts(await readArch(root, loadConfig(root, smDir), { mainBranch: await mainBranch(root) }), smDir, id);
+      const config = loadConfig(root, smDir);
+      const arch = withLocalParts(await readArch(root, config, { mainBranch: await mainBranch(root) }), smDir, id);
       const prev = readFd(smDir, id, 'census.json', null);
-      const census = await censusWithOwners(root, prev, arch, topLevelOf(root), at);
+      const census = await censusWithOwners(root, prev, arch, topLevelOf(root), at, config.vendored);
       const moved = !Number.isInteger(prev?.rev) || census.rev !== prev.rev;
       if (moved) {
         appendLog(smDir, id, diffCensus(prev, census));

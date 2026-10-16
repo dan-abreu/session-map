@@ -204,6 +204,7 @@ Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is 
   - `autoFetchMinutes`: runs `git fetch` that often so branches pushed from other machines show up. Off by default.
   - `ai`: `{ "enabled": false }` here turns the AI off for that project only.
 
+  - `vendored`: folders of other people's code kept inside the project (for example `["server/disciplines"]`). The Foundation counts them as libraries, like `node_modules`, and does not judge them as the project's own code.
 
 ## Contributing
 

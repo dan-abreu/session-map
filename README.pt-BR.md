@@ -204,6 +204,7 @@ As configurações da máquina ficam em `~/.claude/session-map/config.json`. Tod
   - `autoFetchMinutes`: roda `git fetch` nesse intervalo, para os ramos enviados de outras máquinas aparecerem. Desligado por padrão.
   - `ai`: `{ "enabled": false }` aqui desliga a IA só naquele projeto.
 
+  - `vendored`: pastas com código de outras pessoas guardado dentro do projeto (por exemplo `["server/disciplines"]`). A Fundação as conta como bibliotecas, como o `node_modules`, e não as julga como código do próprio projeto.
 
 ## Contribuir
 

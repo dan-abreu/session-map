@@ -33,6 +33,8 @@ export function loadConfig(root, smDir) {
   for (const key of GLOBAL_KEYS) if (user[key] !== undefined) config[key] = user[key];
   // Hand-written files: a wrong type here would otherwise throw on every poll.
   if (typeof config.roadmap !== 'string') delete config.roadmap;
+  // Folders of other people's code kept in the repository (`vendored`): a list of strings, or nothing.
+  if (config.vendored !== undefined && !(Array.isArray(config.vendored) && config.vendored.every((s) => typeof s === 'string'))) delete config.vendored;
   const d = config.decisions;
   if (d !== undefined && (typeof d?.heading !== 'string' || typeof d?.pendingWhen !== 'string')) delete config.decisions;
   return config;
