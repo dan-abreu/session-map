@@ -43,7 +43,7 @@ Status: measured and closed 2026-10-16, no change to the code that spends. `sv17
 
 ### Task 8: measure the Foundation on the owner's projects (`fd11`)
 Files: `docs/architecture/foundation.md`, `scripts/measure-foundation.mjs`. Test: `node --test test/foundation-measure.test.mjs`, then a run on each of the owner's projects; the coverage numbers of each redone map next to the old map's go in `docs/architecture/foundation.md`.
-Status: not started.
+Status: measured 2026-10-16 (`fd29`, `scripts/measure-project.mjs`): cverino 99 % and surigo 90 % of the code understood, dnd_mmorpg has no code. `fd11` stays parked for the owner: none of the three has a map to compare with, making one writes into his repositories (`bi06`), and the outside test is his to arrange.
 
 ### Task 9: the repository health list (35 failing of 91)
 Decide with the owner which items apply to a local plugin (CODEOWNERS, SUPPORT, `.editorconfig`, runtime pin, pinned actions, token permissions, an update bot, SAST, a glossary, ADRs), do those, and mark the rest not applicable in the profile. Files: `.editorconfig`, `.github/CODEOWNERS`, `SUPPORT.md`, `.github/workflows/`, `package.json`. Test: `node --test test/foundation-health-accept.test.mjs`, then the score in `health.json` of a new round.
