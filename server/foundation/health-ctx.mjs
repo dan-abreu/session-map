@@ -21,6 +21,8 @@ const SUBJECTS_MAX = 200;
 const MANIFESTS = { 'package.json': 'node', 'composer.json': 'php', 'pubspec.yaml': 'dart' };
 // A manifest under one of these is a sample or a test case, not a package of the project.
 const SAMPLE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'test', 'tests', 'example', 'examples', 'templates', 'template', 'node_modules', 'vendor']);
+// True for a file that lives in a sample or test folder: what it reads or declares belongs to the sample, not to the project.
+export const isSamplePath = (path) => dirOf(path).split('/').some((s) => SAMPLE_DIRS.has(s.toLowerCase()));
 const WORKSPACE_FILES = new Set(['pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json']);
 const NOT_CODE_TYPES = new Set(['json', 'yaml', 'md']);
 // Types the census cannot name ('other') that are still source code.
@@ -81,7 +83,7 @@ export function packagesOf(paths, readText) {
     const kind = MANIFESTS[baseOf(path)];
     if (!kind) continue;
     const dir = dirOf(path);
-    if (dir.split('/').some((s) => SAMPLE_DIRS.has(s.toLowerCase()))) continue;
+    if (isSamplePath(path)) continue;
     const text = readText(path);
     if (typeof text !== 'string') continue;
     const parsed = PARSERS[kind](text);

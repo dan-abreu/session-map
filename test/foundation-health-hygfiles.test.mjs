@@ -80,6 +80,23 @@ test('env_example: a variable read in code and absent from the example fails lis
   assert.equal(run('hygiene.env_example', files, { facts: [env('PORT')] }).state, 'pass');
 });
 
+test('env_example and config_doc: what a test or a fixture repository reads or declares is the sample, not the project', () => {
+  const at = (file, name, refs = []) => ({ ...env(name), file, refs: refs.map((r) => ({ file: r })) });
+  const files = { '.env.example': 'PORT=3000\n', 'test/fixtures/repos/shop/.env.example': 'SHOP_SECRET=\n' };
+  const facts = [at('src/server.js', 'PORT'), at('test/fixtures/repos/shop/api.ts', 'SHOP_URL'), at('test/run.test.mjs', 'TEST_KNOB')];
+  const r = run('hygiene.env_example', files, { facts });
+  assert.equal(r.state, 'pass', JSON.stringify(r));
+  assert.deepEqual(r.evidence.map((e) => e.file), ['.env.example'], 'the example file of a fixture repository is not the project\'s');
+  // A variable that real code also reads still counts, even when its first mention is in a test.
+  const both = run('hygiene.env_example', files, { facts: [at('test/run.test.mjs', 'API_URL', ['src/api.js'])] });
+  assert.deepEqual([both.state, both.detail.names], ['fail', ['API_URL']]);
+  // The variables the operating system sets are read, not configured.
+  assert.equal(run('hygiene.env_example', files, { facts: [at('src/a.js', 'HOME'), at('src/a.js', 'LOCALAPPDATA'), at('src/a.js', 'SystemRoot')] }).state, 'pass');
+  // config_doc looks only at the real example file too.
+  const doc = run('hygiene.config_doc', { ...files, 'README.md': 'PORT is where it listens.\n' });
+  assert.equal(doc.state, 'pass', JSON.stringify(doc));
+});
+
 test('env_example: the real .env is never read', () => {
   const ctx = fakeHealthCtx({ files: { '.env.example': 'A=1\n', '.env': 'A=sk_live_zzzzzzzzzzzzzzzz\n' } });
   const seen = [];

@@ -6,3 +6,10 @@ updates:
       interval: "monthly"
     commit-message:
       prefix: "chore"
+  # No package has dependencies today (a rule of the project); the entry keeps the day one is added from going unwatched.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"

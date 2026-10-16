@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { AREAS } from '../server/web/nav.js';
+import { findChrome } from './shot-browser.mjs';
 
 // The smoke test of the page in a real browser (finish plan, definition of done 5): it opens the running map in a headless
 // Chrome or Edge, goes to each area of the top bar and of "More", waits for it to draw, and writes down what the browser
@@ -36,8 +37,9 @@ export function compare(before, after) {
 }
 
 async function launch(port, profile) {
-  const exe = BROWSERS.find((p) => existsSync(p));
-  if (!exe) throw new Error('no Chrome or Edge found');
+  // CHROME_PATH wins (and a wrong one is an error, never a silent other browser); else Chrome where it usually is, else Edge.
+  const exe = process.env.CHROME_PATH ? findChrome() : (findChrome() ?? BROWSERS.find((p) => existsSync(p)));
+  if (!exe) throw new Error(process.env.CHROME_PATH ? `CHROME_PATH=${process.env.CHROME_PATH} does not exist` : 'no Chrome or Edge found');
   const child = spawn(exe, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore', windowsHide: true });
   for (let i = 0; i < 80; i++) {
     try { if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) return child; } catch { /* not up yet */ }

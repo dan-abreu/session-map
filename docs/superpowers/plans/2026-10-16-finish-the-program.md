@@ -47,7 +47,7 @@ Status: not started.
 
 ### Task 9: the repository health list (35 failing of 91)
 Decide with the owner which items apply to a local plugin (CODEOWNERS, SUPPORT, `.editorconfig`, runtime pin, pinned actions, token permissions, an update bot, SAST, a glossary, ADRs), do those, and mark the rest not applicable in the profile. Files: `.editorconfig`, `.github/CODEOWNERS`, `SUPPORT.md`, `.github/workflows/`, `package.json`. Test: `node --test test/foundation-health-accept.test.mjs`, then the score in `health.json` of a new round.
-Status: waits for the owner's scope.
+Status: quick wins done 2026-10-16 (`fd27`, `fd28`): 33 → 37 of 91 pass; the rest are items that do not apply to a local plugin, waiting for the owner's scope (mark them not-applicable or build them).
 
 ### Task 10: the release
 Version, CHANGELOG ("Unreleased" is written), README, the gate in `--publish` mode on a clean export, the tag and the push. Files: `package.json`, `.claude-plugin/plugin.json`, `CHANGELOG.md`, `README.md`, `README.pt-BR.md`. Test: `node --test test/release-gate.test.mjs`, then `node scripts/release-gate.mjs --publish` on a clean export. Status: after tasks 3 to 9; the tag and the push need the owner's OK.

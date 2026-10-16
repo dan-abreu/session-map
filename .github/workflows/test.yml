@@ -1,5 +1,8 @@
 name: test
 on: [push, pull_request]
+# The suite only reads the code: the token can do nothing else.
+permissions:
+  contents: read
 jobs:
   test:
     strategy:
@@ -9,10 +12,11 @@ jobs:
         node: [20, 24]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      # Actions are pinned to the commit of a release (the tag is in the comment): a moved tag cannot change what runs here.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0 # the tags too: the versions test reads session-map's latest release tag
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ matrix.node }}
       - run: node --test test/*.test.mjs

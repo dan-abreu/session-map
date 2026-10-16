@@ -1,3 +1,10 @@
 .dev/
 node_modules/
 .session-map-runs/
+
+# Secrets never go in git
+.env
+.env.*
+!.env.example
+*.pem
+*.key

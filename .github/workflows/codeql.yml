@@ -1,0 +1,27 @@
+name: codeql
+# The code scanning of GitHub: it reads the JavaScript for known kinds of defect and lists them in the Security tab.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: github/codeql-action/init@d0bae162f31f17dd92c46ccdc4dfee5710f8dc67 # v3
+        with:
+          languages: javascript-typescript
+          # The vendored packages (server/disciplines) are other people's code and are scanned by their own projects.
+          config: |
+            paths-ignore:
+              - server/disciplines
+      - uses: github/codeql-action/analyze@d0bae162f31f17dd92c46ccdc4dfee5710f8dc67 # v3

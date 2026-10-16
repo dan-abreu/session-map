@@ -16,7 +16,7 @@ const okMeasure =async () => ({ ok: true, failures: [] });
 const okTests = async () => ({ ok: true });
 
 // A copy of the real repository, so each test breaks one thing in it and nothing else.
-const COPY = ['README.md', 'README.pt-BR.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'LICENSE', 'package.json', '.claude-plugin', 'skills', 'docs', 'server', 'hooks', 'scripts/release-features.json'];
+const COPY = ['README.md', 'README.pt-BR.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'LICENSE', 'package.json', '.claude-plugin', 'skills', 'docs', 'server', 'hooks', 'scripts/release-features.json', '.env.example'];
 const made = [];
 function copyRepo() {
   const root = mkdtempSync(join(tmpdir(), 'sm-gate-'));

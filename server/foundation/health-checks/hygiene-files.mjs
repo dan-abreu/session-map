@@ -5,6 +5,8 @@
 // `ctx.facts` (optional, the `env` facts of fd02) lists the variables read by the code; without it the check
 // only looks at the example file.
 
+import { isSamplePath } from '../health-ctx.mjs';
+
 const out = (state, { evidence = [], reason = null, detail = {}, packages } = {}) => {
   const r = { state, evidence, reason, detail };
   if (packages) r.packages = packages;
@@ -81,7 +83,7 @@ function looksReal(name, value) {
 
 // The template files with their variable names and the lines that carry a real-looking value (line numbers only).
 function examplesOf(ctx) {
-  const files = ctx.list('').filter((p) => EXAMPLE_RE.test(baseOf(p)));
+  const files = ctx.list('').filter((p) => EXAMPLE_RE.test(baseOf(p)) && !isSamplePath(p));
   const found = [];
   for (const path of files) {
     const text = ctx.read(path);
@@ -100,12 +102,17 @@ function examplesOf(ctx) {
   return { files, found };
 }
 
+// Variables every operating system sets: the project reads them, it does not configure them.
+const SYSTEM_VARS = /^(path|home|user|username|userprofile|appdata|localappdata|systemroot|temp|tmp|tmpdir|shell|pwd|lang|term)$/i;
+
 const factNames = (ctx) => {
   const names = [];
   for (const f of Array.isArray(ctx.facts) ? ctx.facts : []) {
     if (f?.kind !== 'env' || f.attrs?.source === 'example') continue;
+    // A variable only read by a test or a fixture repository is the sample's, not the project's.
+    if (isSamplePath(f.file ?? '') && (f.refs ?? []).every((r) => isSamplePath(r.file ?? ''))) continue;
     const name = f.name ?? String(f.id ?? '').replace(/^env:/, '');
-    if (name) names.push(name);
+    if (name && !SYSTEM_VARS.test(name)) names.push(name);
   }
   return names;
 };
