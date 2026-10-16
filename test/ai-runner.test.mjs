@@ -320,3 +320,24 @@ test('a call can ride the book row instead of the background row, and can refuse
     assert.equal(asked.length, 1, 'the background row\'s Gemini was not borrowed for the book');
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
+
+// The book's titles and summaries for six chapters do not fit the default 1024 tokens: asked of DeepSeek they came back cut
+// ("answer-cut") every time, were paid, and Claude did the work after it. The book gets room; a short job keeps the default.
+test('the book job asks for room for its answer, and a background job keeps the default', async () => {
+  const { ANSWER_TOKENS } = await import('../server/ai/runner.mjs');
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-room-'));
+  try {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: {
+      background: { provider: 'gemini', model: 'gemini-3.1-flash-lite' },
+      book: { provider: 'deepseek', model: 'deepseek-flash' },
+    } } } }));
+    const sizes = [];
+    const apiRun = async (prompt, o) => { sizes.push([o.provider, o.maxTokens ?? null]); return { ok: true, value: { ok: 1 }, costUSD: 0.0004 }; };
+    const { run } = fakeRun([{ ok: true, value: {}, costUSD: 0.01 }]);
+    const q = new AiQueue({ smDir, bin: 'claude', run, apiRun, keyOf: () => 'sk-x', others: () => ({ enabled: true, dailyUSD: 5, off: [], keys: ['deepseek', 'gemini'], models: {} }), now: () => Date.now() });
+    await q.ask({ key: { kind: 'book', n: 1 }, prompt: 'titles', functionId: 'book', outsideOnly: true, uncapped: true, sensitivity: 'internal' });
+    await q.ask({ key: { kind: 'place', n: 1 }, prompt: 'where', sensitivity: 'internal' });
+    assert.deepEqual(sizes, [['deepseek', ANSWER_TOKENS.book], ['gemini', null]]);
+    assert.ok(ANSWER_TOKENS.book >= 2048);
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});

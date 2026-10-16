@@ -22,6 +22,9 @@ const CACHE_MAX = 1000;
 // The Cérebro's "background" row may name these for the map's own Claude calls (id146): anything else falls back.
 const CLAUDE_MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable']);
 const EFFORT_WORDS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+// How long an answer a job may need. The default (1024 tokens) fits a short label, not the titles and summaries of six chapters in
+// Portuguese: asked of DeepSeek it came back cut every time, the call was paid, and Claude did the work after it.
+export const ANSWER_TOKENS = { book: 4096 };
 const VSCODE_EXT_RE = /^anthropic\.claude-code-(\d+)\.(\d+)\.(\d+)/;
 
 export const aiRunnerDir = (smDir) => join(smDir, 'ai-runner');
@@ -464,7 +467,7 @@ export class AiQueue {
         if (ticket) {
           const t0 = this.#now();
           let res;
-          try { res = await this.#apiRun(prompt, { provider, model, key, schemaHint, ...(useEffort ? { effort: useEffort } : {}) }); } catch { res = { ok: false, error: 'helper-threw', costUSD: estimateUSD }; }
+          try { res = await this.#apiRun(prompt, { provider, model, key, schemaHint, ...(ANSWER_TOKENS[functionId] ? { maxTokens: ANSWER_TOKENS[functionId] } : {}), ...(useEffort ? { effort: useEffort } : {}) }); } catch { res = { ok: false, error: 'helper-threw', costUSD: estimateUSD }; }
           const paid = Number.isFinite(res?.costUSD) ? res.costUSD : estimateUSD;
           ticket.settle(paid, projectId);
           this.#bookMonth(root, paid);
