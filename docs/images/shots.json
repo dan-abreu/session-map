@@ -1,22 +1,22 @@
 {
-  "version": "0.3.0",
-  "date": "2026-10-11",
+  "version": "0.4.0",
+  "date": "2026-10-16",
   "tool": "scripts/readme-shots.mjs",
   "images": {
     "en-help.webp": {
-      "sha": "610e108378257eda29f453580e611cedf6d42cf3115977f1342642198e0f2673",
+      "sha": "bfab1ff1815e836b866355e903148bf5471549de34a9b3faafb5a2f5a0ca8213",
       "width": 1440,
       "height": 900,
       "lang": "en"
     },
     "en-map.webp": {
-      "sha": "72b7598194059c73228cc871350c58dbb2999ff81b22d0418bc5153e97e31a79",
+      "sha": "b867a472afca9356b868941ff6dc66da9cc450452df51f018758ae31a6fcdf8c",
       "width": 1440,
       "height": 900,
       "lang": "en"
     },
     "en-part.webp": {
-      "sha": "3d32fa7736e85c884954c074584e10dceb65cd8dad3b27d2421f3f4099b61a06",
+      "sha": "31153e57d03b96459d4be1cf5b0f6f7b74fecbf896735b8098278de86c1a0365",
       "width": 1440,
       "height": 900,
       "lang": "en"
@@ -28,31 +28,31 @@
       "lang": "en"
     },
     "en-tour.webp": {
-      "sha": "161bd7d3b227e8d5d98223355863bba2c9831ea2d00b1c4757c88f923f2679d8",
+      "sha": "ed3b60f175b7a2e24527366c14090d93030c7a87b8be30a86b96186f3e9a920a",
       "width": 1440,
       "height": 900,
       "lang": "en"
     },
     "en-waiting.webp": {
-      "sha": "31df5f80c11842e8ac4911d6daf8a93c843c6f07f6941d25716ed342e0dd9c50",
+      "sha": "ee51d8bb99ad5a3dbe8ec839f945e26dfda19ce8d072aa79e8a599dc95c3c8c2",
       "width": 1440,
       "height": 900,
       "lang": "en"
     },
     "pt-help.webp": {
-      "sha": "5c93d3ffbc0ea74c256b0c14827af5a3a164fce93915fd1952e38d409881f752",
+      "sha": "5d6724ca11cf09a2f7b38f77d4d5c03aca635e8b4dad2d897dce7f5838b62da3",
       "width": 1440,
       "height": 900,
       "lang": "pt-BR"
     },
     "pt-map.webp": {
-      "sha": "1f1a14d053cc32eafa4fd991648b299bae3628964446da0c8f5ffcd7c6eb0df8",
+      "sha": "5f0a554fc3e37e93f197478afe197372dc130aa902f551b2803bad6f65e1f3c3",
       "width": 1440,
       "height": 900,
       "lang": "pt-BR"
     },
     "pt-part.webp": {
-      "sha": "3e52cd6140312ab5d0ab1bccc2335e6c747a2d9f550e2b4ee0e09a647dbe5ff8",
+      "sha": "14e7a2e65768871dd88d0be38996fff9606c9be3c8f767a91fc44d052eab06d9",
       "width": 1440,
       "height": 900,
       "lang": "pt-BR"
@@ -64,13 +64,13 @@
       "lang": "pt-BR"
     },
     "pt-tour.webp": {
-      "sha": "32f9d8832e41ff240b1c28961e7bfbfe104ae6ed47434c500e646f74ae99200a",
+      "sha": "d5e4995acea99a5a5205ef5c765bb3f8fabac737e916bec0cbd68ab772134763",
       "width": 1440,
       "height": 900,
       "lang": "pt-BR"
     },
     "pt-waiting.webp": {
-      "sha": "3c7c77c2dcbb3ff01407a73b093f4d3f3c57db9cec14f4f18bb166352c8c2c55",
+      "sha": "b69f878290827c28c5f93228eb96aeae3aa7af7c9e329171413700d3baea52a1",
       "width": 1440,
       "height": 900,
       "lang": "pt-BR"

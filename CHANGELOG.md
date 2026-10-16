@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
-The economy engine closes its last loops, the map's own bills stop leaking, and the page chat gets its professional
-selector and its tabs.
+The program reads each project on its own and says what is wrong in it: the Foundation's checks and screens are on the
+page, one model of the project feeds the Flow and "Tudo em dia?", and the Requests tab reviews your requests one by
+one. Under it, the economy engine closes its last loops, the idle server costs about half the CPU, and the page chat
+gets its professional header and tabs.
 
 - The page chat, repaginated (pc34): one clean header — the title renames on a click, the search in the conversation,
   ⋯, minimize (docks the chat as a slim bar at the bottom) and close — and a tab bar under it (Chat · Resumo ·
