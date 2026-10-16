@@ -51,3 +51,12 @@ Status: quick wins done 2026-10-16 (`fd27`, `fd28`): 33 → 37 of 91 pass; the r
 
 ### Task 10: the release
 Version, CHANGELOG ("Unreleased" is written), README, the gate in `--publish` mode on a clean export, the tag and the push. Files: `package.json`, `.claude-plugin/plugin.json`, `CHANGELOG.md`, `README.md`, `README.pt-BR.md`. Test: `node --test test/release-gate.test.mjs`, then `node scripts/release-gate.mjs --publish` on a clean export. Status: after tasks 3 to 9; the tag and the push need the owner's OK.
+
+## Result of 2026-10-16 (each line of the definition of done, measured)
+
+1. **Everything built is switched on:** the reachability walk of the comb finds 5 runtime modules the running program does not reach, each named with its reason in `or67` (the old Foundation builder and its study joined them with `fd25`); nothing was deleted.
+2. **The checklist speaks for itself:** "Tudo em dia?" went from 17 warnings to 4: the drawing against the imports (explained, `fl18`) and three about git (22 commits not pushed, and the branches of other chats' worktrees that touch the same files: the owner's). 13 lines are not verified and each says why (no data, not applicable, no token). The repository health list is 37 of 91; the rest do not apply to a local plugin (`fd28`).
+3. **Nothing open without a reason:** 8 open items, all the owner's (bi06, op01, op03, op04, op08, op09, op18, rd04); 9 parked with their reason; 0 requests with every item ticked and the registry still open.
+4. **The suite is green on a clean clone of the commit:** 4 760 tests, 4 754 pass, 0 fail, 6 skipped by design (commit `98a5d15`). The release gate in `--publish` mode is not run: it needs the version and the pictures of the release.
+5. **The live program is verified:** the server was restarted by the agreed restart on the final code; the page and its 37 reads, and every area, sub-page and the Requests review in a real browser, read nothing lost against the baselines taken before the changes; the idle server costs about 15 % of a core.
+6. **A release:** not made. It waits for the owner (version, the pictures, the tag and the push); the remote `main` also has 3 commits this clone does not, so the push needs them brought in first.
