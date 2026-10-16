@@ -45,21 +45,21 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### The picture of the project
 
-- [ ] Lines inside a part, showing what is tied to what `id16`
+- [x] Lines inside a part, showing what is tied to what `id16`
   - Asked: 2026-10-09 06:12 — "Dentro das próprias celulas tem as linhas mostrando uma coisa ligada na outra?"; 2026-10-09 06:14 — "Sim"
   - What it means: inside one part, its components (screens, routes, modules, files) and the real links between them, not only links between parts.
   - How to confirm it is done: a double click on a part opens its inner view with components and labeled arrows taken from the code; a component lights while a chat edits one of its files.
   - Where it went: `fl09`, `mm15`, the middle level in `mm34` (it was part of `mm24`).
-  - Status: accepted.
+  - Status: done on 2026-10-16 except two parked tails (`mm15`, `mm34`; parked in the triage of 2026-10-16). Before: accepted.
 
 ### The model, the orchestration and other AIs
 
-- [ ] Other AIs through their APIs, with Claude as conductor (the Arsenal) `id22`
+- [x] Other AIs through their APIs, with Claude as conductor (the Arsenal) `id22`
   - Asked: 2026-10-09 08:27 — "tem como colocar para colocar APIs de outras IA, assim voce fica como orquestrador e usa outras IAs naquilo que elas são boas, assim o projeto acaba ficando mais barato"; 2026-10-09 08:31 — "porque tem IA´s que são boas com videos, outras com outras coisas assim por diante, o programa com o arsenal completo, e com os repositorios corretos e skills corretas, teriamos um negocio legal para ajudar a fazer um projeto e rodar uma empresa"; 2026-10-09 08:44 — "sim"; 2026-10-10 — "quero que faça agora com urgencia, a questão de colocar as API de outras IA de deixar bem organizado, como falamos no plano"; 2026-10-10 — "acho que voce não entendeu bem, quero que use todas as IA que tiver API ao mesmo tempo e voce orquestrando e nao eu escolhendo quais voce vai usar"; 2026-10-10 — "eu quero que voce seja o orquestrador, essas IA vão entrar para voce como sub agentes para as tarefas, você ver a atividade, toma a melhor decisão e encimanha as IA para fazer os trabalhos"; 2026-10-10 — "quero que entenda como um orquestrador, que você vai ter essas IA, vai ter os modelos do claude e o nivel do claude,você tem que sozinho entender o nivel que deve ser feito e tomar as melhores decisões e saber onde usar as IA´s contando com voce e modelos."
   - What it means: Claude conducts and calls the AI that is best for each job (video, image, voice, bulk text, code) with the right repositories and skills already chosen; session-map is the panel showing each business area, what is being done, by which AI and at what cost.
   - How to confirm it is done: with a second provider's key set, a bulk task is sent to it, its cost shows next to the Claude cost, and the result is reviewed by Claude before it is accepted.
   - Where it went: `or11`, `or12`, `sb07`, `mm19`; the routing research in `or05`; `or14`, `or16`, `or04`, `or15`, `or19`.
-  - Status: in progress. Done by 2026-10-10: keys, providers, one daily cap (US$ 5), the dispatcher over every AI with a key (`or14`), the arsenal tools in every chat (`or11`, first piece), the bench (`or12`), the panel by real use (`or16`), the conductor that knows the whole arsenal with Fable (`or04`, in progress). Left: the teams really using the other AIs (`or19`), watching versions and growing the bench (`or15`), budgets and priority (`or07`, `or08`), the other AIs working on files (step 4 of `id93`).
+  - Status: done on 2026-10-16 except `mm19` (parked in the triage of 2026-10-16). Before: in progress. Done by 2026-10-10: keys, providers, one daily cap (US$ 5), the dispatcher over every AI with a key (`or14`), the arsenal tools in every chat (`or11`, first piece), the bench (`or12`), the panel by real use (`or16`), the conductor that knows the whole arsenal with Fable (`or04`, in progress). Left: the teams really using the other AIs (`or19`), watching versions and growing the bench (`or15`), budgets and priority (`or07`, `or08`), the other AIs working on files (step 4 of `id93`).
 - [ ] **in progress:** Finish the orchestration plan, then keep refining it without forgetting anything `id97`
   - Asked: 2026-10-11 — "quero finalizar o plano que traçamos e depois vamos refinando sem esquecer acrescentando isso em solicitacoes para nao esquecee"
   - What it means: close what is left of the plan traced on 2026-10-10 (quality and economy with Claude as the conductor of every AI), and keep every refinement written here and in its part so none is lost between conversations.
@@ -84,12 +84,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: without pressing Update, the catalog date moves forward daily; a topic with more than 50 repositories shows them all; the "Works with: Gemini" filter shows only entries that declare it.
   - Where it went: `mm20`, `mm18`, `mm17`.
   - Status: later.
-- [ ] An impeccable senior conductor, not a cheap one `id25`
+- [x] An impeccable senior conductor, not a cheap one `id25`
   - Asked: 2026-10-09 13:53 — "agora ele tem que ser um orquestrador impecavel, para nao gastar atoa, colocar as IAs no lugar certo no nivel certo, assim nenhum projeto vai estourar limites de tokens porque está trabalhando com sseion mao"; 2026-10-09 13:54 — "nao economico, mas sim impecavel, senior, orquestrador, inteligente"; 2026-10-10 — "eu quero que essa engenharia seja perfeita mesmo, para da alta qualidade e economia, para não ser algo que vá atrapalhar mais do que ajudar, então a engenharia do session-map tem que ser perfeita para isso, para fazer os projetos até de alta complexidade, com qualidade altissa nivel industrial e profissional e uma economia no bolso máxima, assim vou conseguir garantir um produto de qualidade e baixo custo"
   - What it means: quality first and saving as a consequence: understand, look at the architecture and Flow, break down and order the work, pick the model the task needs, ask for a second opinion, call nothing done without proof, learn from mistakes per kind of task, route by kind, keep context lean, a monthly budget, a priority queue, and watch the plan's weekly limit.
   - How to confirm it is done: a test request shows the plan, the model picked per step with its reason, a review step and the proof before "done"; a project past 80% of its budget gets an alert; a weekly-limit warning in a history holds the non-urgent work.
   - Where it went: `or04`, `or05`, `or06`, `or07`, `or08`, `wa09`.
-  - Status: accepted.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: accepted.
 - [ ] A board of roles: think like a CEO `id26`
   - Asked: 2026-10-09 13:55 — "estrategista, marketeiro, financeiro, todos os termos que voce possa pesquisar e entender como um CEO, que vai definir todas as coisas, pensando em dinheiro, pensando em projeto, pensando em entrega, pensando em tudo emsmo"
   - What it means: the orchestration chat weighs each relevant proposal as CEO, Product, Marketing, Finance, Operations, Technology and Legal would (value, cost to build and run, return, timing, positioning, legal risk) and ends with a recommendation; decisions on money, accounts and business priority stay with the owner.
@@ -102,25 +102,25 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: a strategy decision is written (audience, first slice, how it earns) and an interest list exists after the launch.
   - Where it went: `sv05`, `or11`.
   - Status: later (thinking aloud).
-- [ ] Trained agents: the orchestrator calls the right specialist, held rigid by the engine, for every AI `id152`
+- [x] Trained agents: the orchestrator calls the right specialist, held rigid by the engine, for every AI `id152`
   - Asked: 2026-10-15 12:55 — "eu percebi que agora no cerebro, como estão separados os agentes, podemos explorar essa area, quero ter agentes treinados, tipo arquitetura, o orquestrador vai chamar aquele agente, é para código o orquestrador vai chamar aquele agente, então vai acabar que é para deixar os agentes mais organizados e aptos a fazem as coisas melhor e com mais qualidade, colocando rigidez, mas não através de documentos lidos, mas motor. da pra fazer isso? e esses agentes têm que servir para todas as IA, o que me diz, como podemos fazer isso?"
   - O que significa: cada especialidade vira um agente definido no motor (arquitetura, código, teste, tela, depuração, revisão, documentação, busca): um catálogo onde cada papel tem sua função (a linha do Cérebro), seu modelo e nível (já da política), as ferramentas que pode usar, as skills que pode abrir e a porta de saída (contrato, testes, revisão). O orquestrador chama o papel pela etiqueta de tipo; a rigidez é do motor, nunca de um documento lido; e o mesmo papel serve a qualquer IA com chave.
   - Como conferir: o Cérebro mostra os agentes um por um (motor, modelo, nível e portas); um agente `[code]` que não passa os testes não entrega; um `[money]` sem o dono não age; o mesmo papel roda em qualquer IA e responde no mesmo contrato.
   - Onde foi: `or55` (o plano: `docs/superpowers/plans/2026-10-15-specialist-agents.md`).
-  - Situação: em andamento (o item `or55` aberto e construído em 2026-10-15: catálogo, motor, guarda e a seção no Cérebro, com testes verdes).
-- [ ] Train the specialists to senior level, researched first `id149`
+  - Situação: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (o item `or55` aberto e construído em 2026-10-15: catálogo, motor, guarda e a seção no Cérebro, com testes verdes).
+- [x] Train the specialists to senior level, researched first `id149`
   - Asked: 2026-10-15 13:20 — "mas eu quero que você deixei ele bem treinados mesmo, nivel senior. Prefiro que até pesquise antes para treina-los"
   - O que significa: os 9 especialistas do catálogo (`or55`) ganham o treino de nível sênior — mas primeiro a pesquisa: as melhores práticas de engenharia de agentes (Anthropic e fontes de 2026) vão para as notas no repositório, e daí sai o que cada papel ganha: um método de trabalho sênior fixo (do catálogo), portas de entrada na guarda (o brief vago é negado, como a porta do dinheiro) e o método visível no Cérebro — rigidez sempre pelo motor, nunca por leitura solta.
   - Como conferir: as notas de pesquisa existem com as fontes; o dono aprova o que entra; cada papel mostra seu método no Cérebro e um brief sem o ingrediente sênior é negado na hora.
   - Onde foi: `or56` (o plano: `docs/superpowers/plans/2026-10-15-senior-training.md`).
-  - Situação: em andamento (construído em 2026-10-15: os nove métodos sênior no catálogo, a linha do papel com o método, as quatro portas de entrada na guarda e o método no Cérebro — 56 testes verdes nas suítes tocadas).
-- [ ] The agents economical by law: everything motor, reading little before working `id150`
+  - Situação: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (construído em 2026-10-15: os nove métodos sênior no catálogo, a linha do papel com o método, as quatro portas de entrada na guarda e o método no Cérebro — 56 testes verdes nas suítes tocadas).
+- [x] The agents economical by law: everything motor, reading little before working `id150`
   - Asked: 2026-10-15 13:36 — "eu quero que os agentes sejam econômicos, então tem que ser tudo motor, porque se eles forem ler meio mundo de coisa antes de trabalhar vai me sair é caro"
   - O que significa: a economia dos agentes vira lei no motor, não conselho — mas sem capar a capacidade: o brief é limitado **por papel** (os trabalhadores ficam com o limite enxuto; o revisor, o planejador e o arquiteto levam mais, porque o trabalho deles é carregar contexto), o agente não relê o mapa nem as regras **exceto o arquiteto e o planejador, cujo trabalho é o mapa** (o maestro leu uma vez; o brief leva o capítulo, `or23`/`or32`), e não lê arquivo grande inteiro — fatia com offset/limit ou usa o índice (`id101`). A guarda passa a enxergar a ferramenta Read para segurar essas portas; brief ilegível falha aberto.
   - Como conferir: um brief acima do limite do papel é negado antes de nascer; dentro do agente, ler `docs/architecture`/`docs/standard`/`CLAUDE.md` ou um arquivo inteiro acima de 64 KB é negado na hora (o arquiteto e o planejador leem o mapa e os padrões); o maestro continua lendo livremente; os testes da guarda provam cada porta e cada exceção.
   - Onde foi: `or57` (o plano: `docs/superpowers/plans/2026-10-15-agents-economy.md`).
-  - Situação: em andamento (construído em 2026-10-15: o limite do brief, as portas de leitura e o matcher com Read — 45 testes verdes nas suítes da guarda).
-- [ ] All the engines: the ones of the AIs and the ones the program still misses — the whole plan of this conversation, nothing left behind `id151`
+  - Situação: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (construído em 2026-10-15: o limite do brief, as portas de leitura e o matcher com Read — 45 testes verdes nas suítes da guarda).
+- [x] All the engines: the ones of the AIs and the ones the program still misses — the whole plan of this conversation, nothing left behind `id151`
   - Asked: 2026-10-15 14:52 — "então vamos fazer os motores"; 2026-10-15 14:56 — "vamos fazer todos os motores das IA e o motores do programa que falta, vamos completar esse plano que tem nessa conversa sem deixar nada pra traz"
   - O que significa: duas frentes, uma por vez: (A) os motores internos que faltam — a porta de saída por papel no OK do motor (o turnCheck lê os papéis que trabalharam no turno e cobra a prova de cada um: plano para o planejador, testes para quem escreve código), o maestro alinhado aos papéis (o bloco curto dos nove papéis no prompt do condutor) e o gasto por agente/papel no painel (agregação mecânica do extrato, sem IA); (B) os motores das outras IAs (etapa 4 do `id93`) — o executor que faz o mesmo papel rodar em DeepSeek, OpenAI e Gemini editando arquivos numa cópia isolada, com detecção dos CLIs oficiais, as mesmas portas do papel aplicadas pelo programa antes e depois, e o Cérebro mostrando qual motor edita arquivos hoje.
   - Como conferir: o OK do motor mostra os papéis que trabalharam e o que falta para cada um; o condutor escreve briefs que passam de primeira; o painel mostra quanto cada papel gastou; um agente roda em outra IA numa cópia isolada, passa pelas mesmas portas e o resultado volta com testes e revisão.
@@ -135,12 +135,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: open a long VS Code conversation on the page and compare side by side with Claude Code: same messages in the same order, same times, same formatting; its row carries the "VS Code" badge.
   - Where it went: `mm22`, `mm23`, `mm04`, `mm33`; claude.ai conversations `rd04`.
   - Status: in progress (`mm22`, reading every conversation like Claude Code with the full composer, and `mm33`, the list that shows at a glance where each chat comes from and what it is doing, are released in v0.2.3; `mm23` is open; `rd04` waits for the owner's OK).
-- [ ] **in progress:** After a crash or a restart, the conversations that were working are easy to bring back; delete or archive conversations; the list split by state `id82`
+- [x] After a crash or a restart, the conversations that were working are easy to bring back; delete or archive conversations; the list split by state `id82`
   - Asked: 2026-10-10 — "seria bom fica explicito as conversas que estavam trabalhando, quando o servidor cair ou pc reiniciar, fica facil voltar o serviço, pode ficar no painel, também ter a opçao de deletar as conversas ou arquivar elas, e também separar as converas pelas opções de \"esperando você\", essas coisas eu nao sei todas"; 2026-10-10 — "Sim, pode reforçar."
   - What it means: when the server falls or the PC restarts, a panel lists the conversations that were working at that moment, from any origin, with Continue on each and Continue all; a conversation can be archived (hidden, comes back) or deleted from session-map (asks for confirmation; the conversation file itself stays on the PC, so Claude Code still has it); the conversation list can be filtered by state: Working, Waiting for you, Cut off, Finished, Archived.
   - How to confirm it is done: restart the server while two chats work: on opening the map, the panel shows both with Continue; Continue all brings both back; archive one and it leaves the list and comes back in Archived; delete one, confirm, and it is gone from the map; a click on "Waiting for you" shows only those.
   - Where it went: `mm43`.
-  - Status: in progress (`mm43` built on 2026-10-10 with a reinforced team: the Cut off panel with Continue and Continue all, Delete from session-map with confirmation next to Archive, the state filters with counts; waiting for the next version; deleting the conversation file on the PC too was not chosen and stays out).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (`mm43` built on 2026-10-10 with a reinforced team: the Cut off panel with Continue and Continue all, Delete from session-map with confirmation next to Archive, the state filters with counts; waiting for the next version; deleting the conversation file on the PC too was not chosen and stays out).
 
 ### Files, terminal and the first use of a repository
 
@@ -159,12 +159,12 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### The Flow
 
-- [ ] Export and import in any format, with the AI filling the Flow in `id45`
+- [x] Export and import in any format, with the AI filling the Flow in `id45`
   - Asked: 2026-10-09 10:12 — "tem outros formatos ou mmd é o mais usando?"; 2026-10-09 12:54 — "ai eu exporto no formato que eu quero ou importo quando eu quiser, mas depois que a IA ela ler o formato ela mesmo preenche sozinha o FLOW"
   - What it means: export as SVG, PNG, Markdown, draw.io and PlantUML beside `.mmd`; import draw.io, PlantUML, Graphviz, Excalidraw, or an image or PDF of a drawing, which the AI turns into the Flow and matches to the parts.
   - How to confirm it is done: each export opens in its own tool; importing a draw.io file and a photo of a sketch both reach the import preview with each box matched to a part or marked new.
   - Where it went: `fl06`, `fl13`, `fl14`.
-  - Status: accepted.
+  - Status: done on 2026-10-16 except `fl14`, the import from other drawing tools (parked in the triage of 2026-10-16). Before: accepted.
 - [ ] A fluid Flow: the AI builds it from the project, it opens without a key and keeps itself current `id46`
   - Asked: 2026-10-09 12:33 — "eu nao entendi como resolve isso aqui, era pra ser fluido, tem o projeto a IA ela constroi o fluxo grama e depois transforma em mmd ou qualquer formato que a pessoa queira exporta"; 2026-10-09 12:54 — "e também em flow para ver como está o diagrama do trabalho, isso tem que ser automatico"; 2026-10-09 13:00 — "ainda nao vejo o flow funcionando"
   - What it means: the Flow opens on this PC without asking for the key; a project with an architecture but no diagram shows an automatic draft at once, with "Improve with the AI" and "Save to project"; the diagram then updates itself.
@@ -190,12 +190,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: invariant tests pass (no part without a box, no box without a part except actors and outside services); asking a chat for a new feature changes both the part files and the diagram in the same turn.
   - Where it went: `fl12`, `pt04`, `wa10`.
   - Status: accepted.
-- [ ] Architecture and Flow at industry level, using what open source already does well `id50`
+- [x] Architecture and Flow at industry level, using what open source already does well `id50`
   - Asked: 2026-10-09 15:30 — "tem algum repositorio que podemos aproveitar para colocar isso no nosso programa?"; 2026-10-09 16:17 — "outra coisa acho que o programa até está indo muito bem mas esquecemos do foco que a arquitetura e o fluxo também tem que ser muito bem feito, se for preciso procura repositorio que faça isso"
   - What it means: the research found no open project that builds a verified C4 model from code; the plan copies the method of the best ones (facts from a parser, AI only enriching, every fact marked extracted or inferred with its file and line, incremental update by hash) and calls a few tools as options.
   - How to confirm it is done: the architecture-core pipeline is built and every node and arrow in the model carries its origin and evidence.
   - Where it went: `fd03`, `fd02`.
-  - Status: accepted.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: accepted.
 
 ### Clarity and polish
 
@@ -231,64 +231,64 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: an inspection of every file for text, code, defects, security, tests, documentation and UI problems, each finding an item with file and line, weight and "what · why · how to fix"; rounds until one finds nothing; grave findings checked twice; session-map inspected before each release.
   - How to confirm it is done: on a test repository with planted mistakes (a wrong comma, an unused function, a secret, a broken link), every one becomes an item with its file and line; the report lists what was checked.
   - Where it went: `bi07`, `bi08`, `bi09`, `bi10`.
-  - Status: accepted.
+  - Status: later (parked in the triage of 2026-10-16: the inspector `bi07` to `bi10` waits). Before: accepted.
 - [ ] Understand the programs first: an exhaustive foundation before new features `id59`
   - Asked: 2026-10-09 14:54 — "acho que arquitetura montada ficou muito generica, não detalhou bem tudo o que tem no programa, por isso está acontecendo, como tudo deve ser documentado então acaba que ele documentou por cima e nao minunciosamente detalhes e também a mesma coisa com session, como vou fazer para uma ferramente sair reamente trabalhavel nivel de industria dessa forma?"; 2026-10-09 14:58 — "claro que a prioridade é entender os programas, como vai orquestrar em cima de algo inefieciente?"; 2026-10-10 04:53 — "preciso da fundação primeiro mas voce fica me entregando pedacos dela"; 2026-10-10 04:54 — "preciso de tudo e nao so uma parte"
   - What it means: after the polish package, new features freeze and the foundation comes first: exact facts from the code by deterministic extractors, the AI only explaining and grouping, coverage measured; then the maps are redone and measured; only then the orchestration chat.
   - How to confirm it is done: the Foundation part's items are ticked and the redone maps show their measured coverage before `or01` starts.
   - Where it went: `fd01`, `fd02`, `fd03`, `fd04`, `fd05`, `fd06`, `fd07`, `fd08`, `fd09`, `fd10`, `fd11`, `fd12`, `fd13`, `fd14`, `fd15`, `op02` (the whole foundation in one delivery, not in pieces).
   - Status: in progress (the whole foundation approved by the owner on 2026-10-10 as one delivery, with the project box showing the whole repository, id77).
-- [ ] **in progress:** A census letter by letter, number by number `id60`
+- [x] A census letter by letter, number by number `id60`
   - Asked: 2026-10-09 15:01 — "o que deve ser feito é se nao tiver documentação para tal coisa e ele enxergar e criar a documentação, mas sim fazer um vasculho completo, letra por letra, numero por numero de cada arquivo, computar isso e deixar isso organizado, programa tem 1000 letras, 100 linhas, 10 arquivos, 2 pastas, assim vamos ter certeza que ele não deixou passar nada,"
   - What it means: a count without AI of characters, words and lines of every file, summed per folder, part and total; the AI's reading checked against the same counts; every file with an owner; missing documentation written from the code.
   - How to confirm it is done: see `fd01`.
   - Where it went: `fd01`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** Stop the AI from hallucinating when it reads `id61`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] Stop the AI from hallucinating when it reads `id61`
   - Asked: 2026-10-09 15:51 — "essa questão de leitura de dados é bem forte, uma IA em leitura alucina muito como fazer para ela não fazer isso, realmente entregar o que é proposto?"
   - What it means: seven rules: facts only from deterministic tools; a closed vocabulary of ids; a file-and-line citation checked for every claim; reading with the text present; two readers and an adversarial check on important points; visible badges (confirmed, AI interpretation, not found); accuracy measured on repositories with an answer key.
   - How to confirm it is done: see `fd04`.
   - Where it went: `fd04`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
 
 ### Everything up to date and professional
 
-- [ ] **in progress:** Nothing outdated, anywhere, in real time `id62`
+- [x] Nothing outdated, anywhere, in real time `id62`
   - Asked: 2026-10-09 16:28 — "percebi que o readme esta defasado, mesmo depois das atualizações, imagens e etc. Agora nao quero que foque apenas no readme, mas sim em tudo, nada pode ficar desafasado o que esse programa precisa é deixar tudo atualizado na integra em tempo real, organizado sem deixar passar nada e não esquecer de nada"
   - What it means: session-map refuses to publish a release with stale screenshots, mismatched versions, a missing changelog section, a README that cites what does not exist, broken links or unticked done items; and for any project a watcher flags documentation that no longer matches the code.
   - How to confirm it is done: see `fd05` and `fd06`.
   - Where it went: `fd05`, `fd06`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** "Tudo em dia?" must really mean everything `id63`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] "Tudo em dia?" must really mean everything `id63`
   - Asked: 2026-10-09 16:29 — "mas nesse teu tudo em dia o que voce está colocando?, tudo mesmo?"
   - What it means: an official checklist of eight groups, each line marked confirmed, warning or not verified, proving what was checked.
   - How to confirm it is done: see `fd07`.
   - Where it went: `fd07`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** Everything a professional repository needs, and versions in sight `id64`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] Everything a professional repository needs, and versions in sight `id64`
   - Asked: 2026-10-09 16:30 — "tudo o que um repositorio profissional precisa, eu nao sou profissional, além disso eu nao sei as versoes dos programas que estou trabalhando nao esta bem aparente, não foque em apenas em algo que eu digo, pegue a ideia por completo"; 2026-10-09 16:31 — "mas voce pesquisou para falar isso pra mim é só isso mesmo?"
   - What it means: a repository health score from a researched checklist of 91 items in 8 categories; the version of each project's code (and of what runs live, when configured) always in sight; a Projects home page with all of it.
   - How to confirm it is done: see `fd08`, `fd09` and `fd10`.
   - Where it went: `fd08`, `fd09`, `fd10`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** Docs kept at a professional size, with exact pointers to the code `id70`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] Docs kept at a professional size, with exact pointers to the code `id70`
   - Asked: 2026-10-09 ~17:20 — paraphrased (the exact words were not recorded): keep the documents at a professional size and point to the exact place in the code.
   - What it means: session-map warns when a document grows past a researched size, offers to split it by topic without losing a line, and points to code by path and symbol, with the line worked out when it is opened.
   - How to confirm it is done: see `fd13`.
   - Where it went: `fd13`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** The rules apply to everything in the program, and tips never touch the person's repository unless accepted `id71`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] The rules apply to everything in the program, and tips never touch the person's repository unless accepted `id71`
   - Asked: 2026-10-09 ~17:30 — paraphrased (the exact words were not recorded): the rules must apply to everything in the program; tips must not touch the person's repository unless accepted, and must be automatic for people who do not know.
   - What it means: one care mode per project (Automatic, Suggest, Look only) that governs every feature that writes; in Suggest nothing is written without an OK, in Automatic everything is done and logged with Undo.
   - How to confirm it is done: see `fd14`.
   - Where it went: `fd14`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
-- [ ] **in progress:** Every idea executed at a professional level, without the owner having to learn it all `id72`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
+- [x] Every idea executed at a professional level, without the owner having to learn it all `id72`
   - Asked: 2026-10-09 ~18:30 — paraphrased (the exact words were not recorded): he does not want to learn everything; he wants his ideas executed at a professional level, not an amateur one, and felt the earlier summaries were shallow.
   - What it means: a deep specification of what happens to every idea, from "I want this" to live, selling and maintained, in 14 stages (product, design, code, tests, security and LGPD, release, operation and costs, documentation, brand, marketing and video, sales and support, legal, finance, work with AI), each with its steps, roles, models, tools, checks, the owner's decisions and sources; session-map walks every idea through it and proves each step.
   - How to confirm it is done: see `fd15`.
   - Where it went: `fd15`.
-  - Status: in progress (part of the foundation delivery started on 2026-10-10).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (part of the foundation delivery started on 2026-10-10).
 - [ ] Open session-map like a program: one click, without VS Code `id86`
   - Asked: 2026-10-10 20:05 — "se fizesse .exe desse programa não ficaria melhor?"; 2026-10-10 20:12 — "podia ser em pwa né? como é web, mas ai quando clica ja abre tudo? porque toda vez tenho que entrar no vscode pra abrir o programa"; 2026-10-10 20:21 — "adciona isso como solicitação para ver mais tarde"
   - What it means: the map turns on by itself when the owner logs in to Windows, hidden, with a watcher that turns it back on when it falls or freezes; the page becomes an installable app (PWA: icon in the Start menu and taskbar, its own window) that shows "the map is turning on…" until the server answers. Not an .exe: an unsigned .exe is blocked by Windows and antivirus, signing costs about US$ 200–400 a year, and updates would stop coming with the plugin.
@@ -296,16 +296,16 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `pt07`.
   - Status: later (the owner asked to look at it later).
 
-- [ ] **in progress:** Professional logs of everything, easy for other AIs to read `id125`
+- [x] Professional logs of everything, easy for other AIs to read `id125`
   - Asked: 2026-10-14 18:34 — "acho que precisamos de um logs. logs de tudo, de forma profissional, assim fica facil outras IA acessar registros, porque por mais que voce esqueça de fazer algo o log vai identificar o que foi feito, no programa e no programa dos outros"
   - What it means: session-map keeps a professional, machine-readable record of everything: its own events in one JSONL log with a documented schema (one file per day, pruned after 30 days, secrets masked) and one record per project of what happened there, so any AI can read what was done — in this program and in the programs of others — even when the AI that did it forgot to say.
   - How to confirm it is done: the logs folder holds one file per day for the program and one per project, every line valid against `logs/schema.json` and no secret in any file; `GET /api/logs` and `GET /api/logs/projects/<id>` answer with the newest lines behind the key.
   - Where it went: `sv19`, `wa11`.
-  - Status: built on main on 2026-10-14 (`sv19`, `wa11`: the program's daily log and the per-project records, with the read routes behind the key); the file sink turns on with the next restart of session-map; waiting for the owner to try it.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-14 (`sv19`, `wa11`: the program's daily log and the per-project records, with the read routes behind the key); the file sink turns on with the next restart of session-map; waiting for the owner to try it.
 
 ### What it costs
 
-- [ ] **in progress:** A detailed statement of every cent spent, like a bank statement, for compliance `id98`
+- [x] A detailed statement of every cent spent, like a bank statement, for compliance `id98`
   - Asked: 2026-10-11 18:10 — "quero com urgencia, urgencia mesmo,valores detalhados como se fosse um extrato de cada coisinha que é feita, preciso saber de tudo, valor que gasta na entrada, valor que gasta na saida, cada chat, preciso de um extrato bem organizado, como se fosse um compliance, acabei de colocar 100 dolares e sumiu, quero saber, agente tal leu 1000 palavras ou arquivo gastou x de tal conversa , tal dia, tal hora, detalhados em custos, mas quero que veja os preço reais, você tem acesso tem isso disponivel na internet e também para você"; 2026-10-11 18:55 — "tu ta doido macho eu quero isso no programa"
   - What it means: a statement with one line per reply of every chat and every agent: day and hour, which chat, who answered, what it read (words, files) and did, tokens and dollars spent on input and on output, at the real prices checked online; sums by day, chat and agent; and where the credit that vanished went.
   - How to confirm it is done: in session-map, Costs tab, section "Detailed statement" (or Documents/Extrato-Claude/extrato.html and extrato-detalhado.csv): each reply has its own line with date, hour, chat, agent, input and output in tokens and dollars; the page shows the account's own extra-usage counter and the hours the limits were hit.
@@ -313,85 +313,85 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Asked again: 2026-10-11 20:10 — "você colocou também além das conversas os agentes independetes do programa consultando, relendo verificando, mostrar quantas linhas leu, custo das atividades que fez, os documentos que leu, sei que é complexo, mas preciso do que é complexo visivel de forma pratica e facil"
   - Asked again: 2026-10-11 20:15 — "eu te peço uma contabilidade tu me da uma redação, rapaz pesquisa antes, como faz contabilidade de IA"
   - Where it went: `sb08`, `sb09`, `sb10`, `sb11`, `sb12`.
-  - Status: built on main on 2026-10-11, the last layout (`sb12`) as AI cost tools keep their books; its server part waits for the next restart of session-map (another chat asked for none until its teams finish); waiting for the owner to try it.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-11, the last layout (`sb12`) as AI cost tools keep their books; its server part waits for the next restart of session-map (another chat asked for none until its teams finish); waiting for the owner to try it.
 
-- [ ] **in progress:** Agents re-read everything, every skill gets opened and everything runs on Claude high: refine it to spend little with high quality `id105`
+- [x] Agents re-read everything, every skill gets opened and everything runs on Claude high: refine it to spend little with high quality `id105`
   - Asked: 2026-10-13 — "os agentes estão lendo tudo de uma vez, cada agente ele reler tudo de novo para cumprir a tarefa, também acontece que tem um snow ball no programa, voce ta acionando todas as skills os agentes fazem a mesma coisa, reler tudo antes de começar a trabalhar, precisamos refinar"; and "voce não esta classificando corretamente as IA, todas estão trabalhando com o claude nivel HIGH ... nao falou pra mim que as skill instaladas estão fazendo um gasto gigante ... Eu quero que voce tenha o poder de dizer e tomar decisoes de forma critica pensando no melhor para o projeto e não apenas concordando com as minhas ideias"
   - What it means: measure where the tokens really go, remove what makes the snowball (rules that open every skill, Opus by default, too many agents per workflow, every agent starting from zero) and speak up with numbers instead of agreeing.
   - How to confirm it is done: a week later, the share of Opus agents, the agents per workflow and the skills opened per agent are clearly lower, with the tests still passing and the reviews still holding.
   - Where it went: `or23`, `or24`.
-  - Status: built on main on 2026-10-13 (`or23`, `or24` measured: the waste section on the Costs tab); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or23`, `or24` measured: the waste section on the Costs tab); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] Economy by the engine, not by asking: an OK at the end of each task, a book index for skills, plugins and long conversations, planning by itself `id106`
+- [x] Economy by the engine, not by asking: an OK at the end of each task, a book index for skills, plugins and long conversations, planning by itself `id106`
   - Asked: 2026-10-13 — "quero como sistema, na engrenagem, da OK, na finalização das tarefas, Fazer o conceito de um livro que vem o indice, com capitulos e subcapitulos, para as skills e plugins"; "quando eu falo planejar voce ja sabe ... ou quando estamos conversando poderia ser automaticamente um planejamento"; "em conversas longas o proprio sistema criar um sistema igual de livro, assim não precisa ler a conversa toda ... ler apenas o que for necessario"
   - What it means: the savings rules live in session-map's engine (settings and hooks it hands each chat), not in text the AI may ignore; skills, plugins and long conversations are read through an index and only the needed chapter; planning talk opens in plan mode by itself.
   - How to confirm it is done: a chat with an Opus agent for ordinary code is stopped by the engine; a long chat goes on from its index; a new chat lists only skill names plus the few that fit; a planning message opens in plan mode; each finished request shows OK or what is missing.
   - Where it went: `or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`.
-  - Status: built on main on 2026-10-13 (`or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or25`, `or26`, `pc26`, `pc27`, `pc28`, `pc29`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
 - [x] An AI that agrees or disagrees on data, in the engine, whichever AI it is `id107`
   - Asked: 2026-10-13 — "voce pode concorda comigo ou discorda, veja ai por favor, quero que na engrenagem, eu não quero uma IA que concorda, não importa qual, quero uma IA consciente que concorde e discorde baseada em dados"
   - What it means: every AI session-map talks to (Claude in any way a chat runs, and the outside AIs when they judge) takes a stance from the facts and shows them, instead of agreeing to please.
   - How to confirm it is done: start a chat in any way and bring an idea the numbers contradict: the answer says it disagrees, with the numbers; ask an outside AI for a review: the request it receives starts with the same rule.
   - Where it went: `or27`.
-  - Status: built on main on 2026-10-13 (`or27`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or27`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] Cheap layers first: exact skeletons of the code, a local model for heavy reading, the paid model only for decisions `id108`
+- [x] Cheap layers first: exact skeletons of the code, a local model for heavy reading, the paid model only for decisions `id108`
   - Asked: 2026-10-13 — four images from the owner's research with his brother: Ollama making "Interface Skeletons" (imports, types, signatures, no bodies), semantic changelogs in JSON, extraction of variables and dependencies; "AST determinístico + Ollama cirúrgico"; model cascading (cheap or local models read and sort, the frontier model only decides and writes the hard code). And: "tem mais uma imagem, mas voce colocou limitador de imagens nao sei por qual motivo, quero colocar mais uma imagem".
   - What it means: structure comes from exact readers (free, no mistakes), summaries of long text from the cheapest model that is good enough, and the paid model gets the skeleton plus the exact lines, never the whole repository.
   - Verdicts with data: skeletons yes, but from the Foundation, not from a model (measured 88 to 94% smaller); changelogs yes, but from the facts before and after, without AI; variables and dependencies already read (names and versions), the code's own `process.env` is new; a local model only as an optional, measured provider; ten images per message.
   - How to confirm it is done: an agent answers about a file by reading its skeleton and a few lines; the turn's OK lists what changed; a message takes ten images.
   - Where it went: `fd17`, `or26`, `or28`, `pc30`.
-  - Status: built on main on 2026-10-13 (`fd17`, `pc30`, `or26`); `or28` (a local model) left for later: Ollama is not installed and the PC had 1.7 GB of RAM free; waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 except `or28`, the local model (parked in the triage of 2026-10-16: this PC has 1.7 GB of free RAM). Before: built on main on 2026-10-13 (`fd17`, `pc30`, `or26`); `or28` (a local model) left for later: Ollama is not installed and the PC had 1.7 GB of RAM free; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] The entry is not Opus at high: plan first with the cheapest that is good enough, then build with the right model per task, by law in the engine `id109`
+- [x] The entry is not Opus at high: plan first with the cheapest that is good enough, then build with the right model per task, by law in the engine `id109`
   - Asked: 2026-10-13 — "tem um problema a entrada, que nivel é? Qual modelo de IA, que nivel da IA ... a OPUS e Fable com certeza iria pensar melhor que o sonnet, mas as vezes nao por apenas está conversando, e o que deve exitir de lei na engrenagem antes de começar sair fazendo qualquer coisa é traçar um plano com a mais barata organizar a ideia e depois construir usando as IA e modelos de acordo com a tarefa ... estava jogando tudo no nivel HIGH e usando opus, e voce ainda me dizia que estava usando o modelo mais fraco, mas por traz os agentes eram sempre os mais caros"
   - What it means: the engine, not the AI, picks the model and effort of each phase: talk cheap, plan with a mid model and a short strong review when it matters, build per task; and it shows the person which model and level each phase really used.
   - How to confirm it is done: a new chat that only talks runs on Sonnet at low and says so; a large request gets a written plan before any code, with each task's model; the statement shows the real model of the chat and of every agent.
   - Where it went: `or29`, `or30` (with `pc27`, `pc28`, `or25`).
-  - Status: built on main on 2026-10-13 (`or29`, `or30`: Sonnet at medium planned 8/8); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or29`, `or30`: Sonnet at medium planned 8/8); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] A thinking brain at the entry and the exit: the cheapest model weighs each message, asks a little when needed, and hands it to a stronger model only when the work is big `id110`
+- [x] A thinking brain at the entry and the exit: the cheapest model weighs each message, asks a little when needed, and hands it to a stronger model only when the work is big `id110`
   - Asked: 2026-10-13 — "poxa a gente nao consegue colocar a entrada e saida como um cerebro pensante? tipo, recebi essa mensagem, é uma mensagem barata, nossa recebi essa mensagem é um projeto grande preciso dar mais atenção, podemos fazer começnado com o mais barato, ele faz umas perguntas para ter ideia do nivel da conversa e dali mudar para a IA mais e modelo mais desenvolvido?"
   - What it means: a router before every turn: free rules, then a cheap model when unsure, a couple of questions only for big unclear work, then the right model; it also steps down when the talk gets small.
   - How to confirm it is done: "oi, tudo bem?" runs on the cheapest and says so; "quero um sistema de pagamentos" asks one or two questions, then plans on a stronger model; the page shows the model of each turn and why.
   - Where it went: `or31` (with `or29`, `or30`).
-  - Status: built on main on 2026-10-13 (`or31`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or31`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] The book system for skills, plugins, agents and long conversations: see what is installed and used, read a thing once for all agents, and a conversation that keeps its own short chapters `id111`
+- [x] The book system for skills, plugins, agents and long conversations: see what is installed and used, read a thing once for all agents, and a conversation that keeps its own short chapters `id111`
   - Asked: 2026-10-13 — "eu gostaria de saber quais skills e plugins instalados por repositorios, quais estão sendo usadas no momento que pode ser nos balões, um metodo de que uma skill ja foi lida, nem todos os agente precisam ler novamente ... aqui ta acontecendo que os 150 agentes vao ler novamente as mesma atividade isso gera um snowball sem tamanho e também o indice nas conversas, a conversa vai passando dos limites, vai se criando indices, com capitulos mais curtos dentro da propria conversa diminuindo o custo da conversa, teria como isso tudo acontecer?"
   - What it means: the balloons show the skills and plugins of each project and what each chat and agent opened; the conductor reads once and hands chapters, agents never re-read by default; a long conversation shrinks itself into chapters.
   - How to confirm it is done: a balloon lists its skills with their weight; a workflow of ten agents shows the skill opened once, by the conductor; a long chat shows its chapters and its cost per turn going down after a chapter closes.
   - Where it went: `mm52`, `or32`, `pc28`.
-  - Status: built on main on 2026-10-13 (`mm52`, `or32`, `pc28`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`mm52`, `or32`, `pc28`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] The balloons and the items' status made by a mechanism of the program, not by an AI that can forget `id112`
+- [x] The balloons and the items' status made by a mechanism of the program, not by an AI that can forget `id112`
   - Asked: 2026-10-13 — "questões de balões criações não era para depender da IA, você pode errar isso deveria ser mecanismo do programa, eu nao sei falar os termos mas deveria ser um robo, um sistema alguma coisa assim, não simplesmente um arquivo .md"
   - What it means: what is being worked on and what is built is read from the facts (live chats and agents, branches, commits), so the map is right even when an AI forgets to write the mark.
   - How to confirm it is done: start an agent on an item without touching the plan file: its balloon shows "working now" within a minute; merge a feat commit naming an item: it shows "built, not ticked".
   - Where it went: `sb13`.
-  - Status: built on main on 2026-10-13 (`sb13`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`sb13`); waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] The balloons, the files and the flow are made by a robot in a correct order, whatever is created `id113`
+- [x] The balloons, the files and the flow are made by a robot in a correct order, whatever is created `id113`
   - Asked: 2026-10-13 — "mesma coisa para os balões e arquivos, tem que ser um robo, não importa se cria novos balões, também serve para o fluxo e nao importa o que é criado, mas tem que seguir uma ordem correta"
   - What it means: nothing on the map is hand-written by an AI any more: a robot writes requests, items, codes, new parts and flow links in a fixed order and refuses what breaks it; the AI only says what the words mean.
   - How to confirm it is done: ask for something new in a chat: the request, its item with the next code, the part and the flow change appear in that order without the AI editing a file; an AI that tries to edit a plan file by hand is stopped and pointed to the robot.
   - Where it went: `am04` (with `sb13`, `or26`).
-  - Status: built on main on 2026-10-13 (`am04`): map edits in page chats go through the clerk; waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`am04`): map edits in page chats go through the clerk; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] A robot and one well-made document decide which model and level runs, not the AI's choice `id114`
+- [x] A robot and one well-made document decide which model and level runs, not the AI's choice `id114`
   - Asked: 2026-10-13 — "precisamos criar um robo, um documento alguma coisa que não depende apenas de voce fazer a escolha do liga e desliga, porque voce soube o que era, mas no documento já tem um padrao, e estão seguindo esse padrao e esse documento esta mal feito de mais, voce não fez com profissionalismo"
   - What it means: the model and effort of every agent and every phase come from one policy file with its evidence, applied by the engine; the AI only declares the kind of task.
   - How to confirm it is done: an agent started as "[code] ..." with opus/high runs as Sonnet medium anyway; one without a kind is refused; the policy page shows the same table the engine uses, with where each row's number came from.
   - Where it went: `or33`.
-  - Status: built on main on 2026-10-13 (`or33`): the guard sets each agent's model from the policy; waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or33`): the guard sets each agent's model from the policy; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 
-- [ ] **in progress:** Rules in code, central, not in CLAUDE.md, which fails `id115`
+- [x] Rules in code, central, not in CLAUDE.md, which fails `id115`
   - Asked: 2026-10-13 — "não tem uma forma ou arquivo ou documento para criar isso de forma mais centrealizada baseada em codigopara nao depender so do claud md, porque eu trabalho com claude.md a um tempo e falha muito, nao podemos ter falhas"
   - What it means: what must never fail is enforced by code and settings every session obeys (defaults, hooks, the policy file); CLAUDE.md keeps only how to talk to the owner.
   - How to confirm it is done: a new terminal chat starts on Sonnet medium; an agent asked for Opus on ordinary code runs on Sonnet in any session; a long terminal chat is summarized at 100k.
   - Where it went: `or34` (with `or33`).
-  - Status: built on main on 2026-10-13 (`or34`): user defaults Sonnet medium, compaction at 100k, the guard and the book installed for every session on this PC; for other PCs, with the next plugin release; waiting for the owner to try it after the restart of session-map on 2026-10-13.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or34`): user defaults Sonnet medium, compaction at 100k, the guard and the book installed for every session on this PC; for other PCs, with the next plugin release; waiting for the owner to try it after the restart of session-map on 2026-10-13.
 - [ ] **in progress:** Smart orchestrator, cheap answerer `id116`
   - Asked: 2026-10-14 — "eu pedi uma IA mais barata para conversa e me responder, mas está sendo infelizmente muito ruim, pensa pouco, preciso da IA que conversa comigo seja inteligente, mas não quero a mesma IA fazendo tudo, o orquestrador que recebe as minhas mensagens é uma, a mais correta e o que responde seja a mais barata, tem como ser assim?"
   - What it means: Two roles, two models: the one that receives and understands each message is the most correct; the one that writes the reply is the cheapest that still does it well. Today talk is Sonnet at low (server/ai/policy.json:30), so one cheap model does both and thinks little.
@@ -399,24 +399,24 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `or35`.
   - Status: new.
 
-- [ ] The same options for DeepSeek, GPT, Claude and Gemini, and the work never stops for lack of credit `id122`
+- [x] The same options for DeepSeek, GPT, Claude and Gemini, and the work never stops for lack of credit `id122`
   - Asked: 2026-10-14 — "gostaria que o deepseek, gpt, claude e gemini, tenha as mesmas opções"; "porque assim eu posso escolher qual grupo eu posso trabalhar, como trabalhar, porque muita das vezes eu não tenho credito no deepseek ou credito no claude e fazer o trabalho parar porque não tenho token suficiente e não poder realocar os serviços, quero trabalhar pelos meus chats la dentro do session"; "quero que façamos o que conversamos acima, preciso do maximo de economia e qualidade maxima no programa, mas fazendo que a IA pense de forma correta"
   - What it means: the four engines interchangeable in the arsenal with the same options; working groups the owner picks; and when one engine runs out of credit, the dispatcher re-routes by itself to the next one in line (balance read from the API where it exists, quota errors, a pre-flight cost check), so the work never stops for lack of tokens — it waits for the owner only when the whole level is empty.
   - How to confirm it is done: with DeepSeek empty, a bulk job goes to Gemini or GPT by itself and the map shows who did it; the owner's group choice re-orders the AIs per kind of work; the DeepSeek sessions open in session-map like Claude's (delivered by the other conversation on 2026-10-14).
   - Where it went: `or36`, `or37`; the DeepSeek sessions in the map: the other conversation's delivery of 2026-10-14 (`server/sources/deepseek.mjs`).
-  - Status: built on main on 2026-10-14 (`or36`, the engine: quota pauses with a cooldown, pre-flight against the balance, the four working groups, wired into the ask tool and the background runner; `or37`, the worker's exit contract with status and confidence, the cap of two climbs per task and the checker of another family for dubious bulk answers; 107 tests green). Left for new items: the group selector and the "sem crédito" badge on the page, the daily balance refresh, per-project groups; waiting for the owner to try it after the next restart of session-map.
-- [ ] **in progress:** The list of what only Claude does, and a choice for it in the map `id123`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-14 (`or36`, the engine: quota pauses with a cooldown, pre-flight against the balance, the four working groups, wired into the ask tool and the background runner; `or37`, the worker's exit contract with status and confidence, the cap of two climbs per task and the checker of another family for dubious bulk answers; 107 tests green). Left for new items: the group selector and the "sem crédito" badge on the page, the daily balance refresh, per-project groups; waiting for the owner to try it after the next restart of session-map.
+- [x] The list of what only Claude does, and a choice for it in the map `id123`
   - Asked: 2026-10-14 — "tem varias coisas que só o claude faz ainda, varias funções, preciso que deixei isso também a escolha e a vista no session, porque tipo, se eu estou sem o claude agora, o livro não está sendo atualizado"; "Mas eu não sei tudo sobre o que o claude fez que só ele faz, tem como fazer esse levantamento?"
   - What it means: an inventory of every function that depends on Claude alone (the chat engine, the brain, the book, hooks, skills, costs, subagents, permissions), what each engine already has, and what it takes to turn each one into a choice visible in the map — so the program keeps working (book, costs, triage) without Claude.
   - How to confirm it is done: the levantamento exists (`.dev/execucao/levantamento-claude-only.md`) and the feasible items get their own items, one by one: the book from the DeepSeek log, the DeepSeek price table, the brain by API.
   - Where it went: `or38`; each remaining fix becomes its own item as the DeepSeek Harness exposes the pieces (CLI, hooks).
-  - Status: in progress (the levantamento is written; `or38` built the three fixes that do not wait: the book from the DeepSeek log, the DeepSeek cost, and the per-function engine choice with its selectors in the Other AIs dialog; the rest — chat engine, hooks, MCP, permissions — waits on the DeepSeek Harness).
-- [ ] The Cérebro tab: every AI function in sight, with its engine, level and order chosen there `id124`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (the levantamento is written; `or38` built the three fixes that do not wait: the book from the DeepSeek log, the DeepSeek cost, and the per-function engine choice with its selectors in the Other AIs dialog; the rest — chat engine, hooks, MCP, permissions — waits on the DeepSeek Harness).
+- [x] The Cérebro tab: every AI function in sight, with its engine, level and order chosen there `id124`
   - Asked: 2026-10-14 — "tem como fazer uma aba tipo do brain do programa (use termos mais profissionais), apontando tudo e tudo como funciona e eu escolher onde cada IA vai ser chamada e posso escolher o nivel dela, assim os chats vão andar naquela ordem e colocando explicando em um quadro o nivel de cada IA, valor dela, para que serve para qual mais aptidão ela tem"; "posso escolher qual IA vai trabalhar nas funções exatas, mas tem que colocar realmente todas as funções que precisa de IA"; "me da ideias de como melhorar e também fazer o desenho para eu ver como ficaria"
   - What it means: a new tab, the program's brain panel: the model matrix (level, price, aptitudes, measured results, balance per AI), the routing of EVERY function that uses AI (engine + reasoning level + order, editable), the order a chat walks, and the automatic rules — all mechanical, decided by scripts, never by a prompt.
   - How to confirm it is done: the tab lists every AI function with its engine and level selectors; a change is saved in the config and the chats walk the new order; each model card shows its price, its aptitudes and its measured numbers.
   - Where it went: the design in `.dev/prints/brain-tab-mockup.html` (2026-10-14); the build in `or39`, `or40`, `or41`, `or42`.
-  - Status: built on main on 2026-10-14 (`or39`: the tab with the matrix, the 16 AI functions with engine/model/level selectors saved in the config, the chat's order and the rules; `or40`: the agents and teams rows plus the configuration chat; `or41`: each engine's own reasoning levels, verified against the makers' docs and real calls, applied to each API; `or42`: the guard reads the Cérebro's choices for every agent). Left for new items: the Simulate button, the per-project choices, the brain's Haiku call by API; waiting for the owner to try it after the next restart of session-map.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-14 (`or39`: the tab with the matrix, the 16 AI functions with engine/model/level selectors saved in the config, the chat's order and the rules; `or40`: the agents and teams rows plus the configuration chat; `or41`: each engine's own reasoning levels, verified against the makers' docs and real calls, applied to each API; `or42`: the guard reads the Cérebro's choices for every agent). Left for new items: the Simulate button, the per-project choices, the brain's Haiku call by API; waiting for the owner to try it after the next restart of session-map.
 
 - [ ] **in progress:** The page speaks with technical words and terms by default `id126`
   - Asked: 2026-10-14 18:47 — "pois muda essa regra, eu quero uma regra usando palavras tecnicas e termos tecnicos"; "me manda que vou colocar em outro chat para vascular o programa e resolver isso"
@@ -424,13 +424,13 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the page says "agente" (not "ajudante") by default in both languages, the vocabulary test reflects the new rule and the full suite is green.
   - Where it went: the engine part is built (`terms` in `server/config.mjs`, `state.terms` in `server/collect.mjs`, `applyTermsDefault` in `server/web/app.js`); the rule document is the spec for the vocabulary sweep (`.dev/execucao/regra-termos-tecnicos.md`), which goes to the chat the owner chooses.
   - Status: in progress (the engine half is built and verified in the live state; the dictionary sweep is handed over).
-- [ ] **in progress:** The fine-tooth comb: the complete list of what is engine and what is still reading `id127`
+- [x] The fine-tooth comb: the complete list of what is engine and what is still reading `id127`
   - Asked: 2026-10-14 19:00 — "o que mais deveria ser motor e é leitura, agora me preocupei"; "faz um pente fino e me mostra uma lista completa do programa e não apenas siso"
   - What it means: one complete list of every behavior rule of the program, classified: motor (code, hooks, config or tests enforce it) or leitura (only prose an AI must read at work time), with the proof for each and, for the reading ones, what would make them motor.
   - How to confirm it is done: the list exists (`.dev/execucao/pente-fino-motor-vs-leitura.md`), every "Rules that must not break" of the 15 parts is classified with proof, and the remaining reading-only rules have their own items.
   - Where it went: the audit document (`.dev/execucao/pente-fino-motor-vs-leitura.md`); the engine-side gaps became `or43` (built: the money gate, the registry rules and the vendored audit); what remains is the Bootstrap part's own backlog (`bi01`–`bi03`, `bi05`, `bi07`).
-  - Status: in progress (the complete list is final — 68 rules, 64 motor; the four leftovers all carry `bi*` items in the Bootstrap part).
-- [ ] **in progress:** The blueprint of the program, down to the last outlet `id128`
+  - Status: done on 2026-10-16 except `bi01`, `bi03` and `bi07` (parked in the triage of 2026-10-16). Before: in progress (the complete list is final — 68 rules, 64 motor; the four leftovers all carry `bi*` items in the Bootstrap part).
+- [x] The blueprint of the program, down to the last outlet `id128`
   - Asked: 2026-10-14 19:27 — "acho que o fluxo não mostra todas as funções desenhadas do sistema, o que cada botão deveria fazer e se está funcionando se precisa arrumar, um desenho completo do programa mostrando cada função até uma, mas não perdendo o fluxo geral"; "é como se fosse a planta baixa de um projeto arquitetonico que mostra até onde tem institor, você consegue me ajudar assim, mostrando cada milimetro do projeto, um desenho visual do programa"
   - What it means: two mechanical drawings of the program: (1) the blueprint of the engine (each part is a room with its files, functions, installations and health from the tests) and (2) the map of the interface (each area of the page — Início, Biblioteca, Descobrir, Mapa, Fluxo, Solicitações, Conversas, Mudanças… — with its screens, sections, buttons and boxes, down to the last one, with the page's real texts). Both generated by scripts from the code, never by an AI's opinion.
   - How to confirm it is done: both drawings exist (`.dev/prints/planta-baixa-session-map.html` and `.dev/prints/mapa-da-interface.html`), every area and every part is present with its inner items, and each regenerates with one command.
@@ -442,85 +442,85 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: inside the Fluxo, the level "O programa" opens the tree of the 13 areas with their inner items; the data comes from `GET /api/census/ui`; the external files become just exports of the same census.
   - Where it went: `mm57` (the page), the census module (`server/census.mjs`), the route (`server/censusroute.mjs`) and the view (`server/web/programview.js`).
   - Status: feito (2026-10-14: o nível "O programa" dentro do Fluxo serve a árvore das 13 áreas — 1096 itens — do próprio sistema, verificado ao vivo em `GET /api/census/ui`).
-- [ ] **in progress:** Delivery discipline has a motor; the skills hold the bridge until it covers everything `id131`
+- [x] Delivery discipline has a motor; the skills hold the bridge until it covers everything `id131`
   - Asked: 2026-10-14 20:15 — "percebi que voce é muito acelerado, tem como fazermos uma engrenagem para voce se ater aos detalhes"; "tem que haver um motor, se ainda não houver as skills devem ser usadas"
   - What it means: no "done" without mechanical proof. The motor: the ritual of delivery (`ritual-de-entrega` in `~/.dsh/skills`), the live-proof script (`node .dev/execucao/prova-viva.mjs` — the running server's routes and served files checked, never assumed), the existing gates (tests, release gate, `id129` architecture-first). The bridge until the motors cover everything: the installed skills are used — architecture, board, grilling before medium+ work, and the superpowers plugin for plans before builds.
   - How to confirm it is done: every delivery in this front runs `prova-viva` green before the "pronto"; the superpowers skills are installed and activated; the ritual names all three motors.
   - Where it went: `op12`; the skill in `~/.dsh/skills/ritual-de-entrega`; the plugin in `~/.claude/plugins/superpowers`.
-  - Status: em andamento (o motor está de pé — o ritual com a prova viva mecânica verde 6/6; a superpowers já estava instalada e ligada pelo diretório oficial; o clone à mão foi removido; a ativação por projeto existe na página, `rd09`/`mm52`).
-- [ ] **in progress:** A button that turns the downloaded skills on and off `id132`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (o motor está de pé — o ritual com a prova viva mecânica verde 6/6; a superpowers já estava instalada e ligada pelo diretório oficial; o clone à mão foi removido; a ativação por projeto existe na página, `rd09`/`mm52`).
+- [x] A button that turns the downloaded skills on and off `id132`
   - Asked: 2026-10-14 20:16 — "tem que ter m botão que liga e desliga as skills que baixar de repositorios do git"
   - What it means: a one-click switch per skill/plugin downloaded from a git repository, per project. The button exists (the plugin switch `rd09`, one click per plugin with a confirmation, saved into the user's settings; the project's list with on/off is `mm52`) — the fine-tooth found the superpowers already installed and on, and removed a redundant hand-made clone. What remains: confirm the button in the page's own view and leave the toggling to the owner.
   - How to confirm it is done: the live project list shows each plugin with its switch; the owner flips one and the next chat obeys.
   - Where it went: `op13` (the verification and the cleanup).
-  - Status: in progress (waiting for the owner to see the switch in the page).
-- [ ] **in progress:** Superpowers as an engine, not a skill `id133`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (waiting for the owner to see the switch in the page).
+- [x] Superpowers as an engine, not a skill `id133`
   - Asked: 2026-10-14 20:26 — "tem como pegar o superpower virar um motor dentro do session, sem precisar ser skill?"
   - What it means: the 15 disciplines of the superpowers collection become session-map engines — robots that apply the rule, never a text an AI reads per task. The mapping (`.dev/execucao/superpowers-no-motor.md`) shows 11 already motor, 2 motor parcial and 2 reading. The owner's decision (2026-10-14 20:26): superpowers is the refined method and stays as skills; the engine does not copy it crudely — it is only the door that checks the refined artifact was used (`or44`: the plan under `docs/superpowers/plans/` for 3+ agent workflows, and the `[review]` agent for code workflows).
   - How to confirm it is done: the two doors exist with their tests, the mapping is complete, and no superpowers discipline is left as reading-only.
   - Where it went: `op14` (the mapping); `or44` (the plans engine and the two doors).
-  - Status: em andamento (o motor de planos e as duas portas construídos e testados — 34 verdes, prova viva 6/6; resta a visão de planos na página quando o dono pedir).
-- [ ] **in progress:** Ponytail inside the system, not as a skill `id134`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (o motor de planos e as duas portas construídos e testados — 34 verdes, prova viva 6/6; resta a visão de planos na página quando o dono pedir).
+- [x] Ponytail inside the system, not as a skill `id134`
   - Asked: 2026-10-14 20:38 — "quero ponytail também também já dentro do sistema, é uma skill quero ela sendo parte do sistema e não uma skill"
   - What it means: the ponytail discipline (the lazy senior dev: the ladder of "does it need to exist", the shortcut comments, the review, the intensity levels) becomes part of the program's engine. Much of it already is the program's DNA (the ladder's frugality is zero-npm and the policy; the reviews are the checker and the doors; the levels are the Cérebro's efforts; the "say what you skipped" is the worker's contract). The missing piece is built: the debt ledger — the engine harvests the `shortcut:`/`ponytail:` comments from the code into a living book, so "later" never becomes "never".
   - How to confirm it is done: `GET /api/census/debt` answers with every deferred comment (file, line, text), the level "O programa" shows the "Dívidas" section, and a new shortcut comment appears there without anyone re-running anything.
   - Where it went: `or45` (the harvest and the ledger, mais a linha "skipped" no contrato) and the mapping in `.dev/execucao/superpowers-no-motor.md`.
   - Status: feito (2026-10-14: o caderno colheu 45 dívidas reais na primeira rodada, a seção "Dívidas" desenha no nível "O programa", a linha "skipped" entrou no contrato; 38 testes verdes, prova viva 7/7).
-- [ ] **in progress:** Ponytail and superpowers installed and used as part of the engine `id135`
+- [x] Ponytail and superpowers installed and used as part of the engine `id135`
   - Asked: 2026-10-14 20:44 — "quero que baixe e instale o ponytail e o superpower e use como parte motor do session-map"
   - What it means: both plugins installed through the official channels, appearing in the program's plugin list with their on/off switch, and their disciplines running as the engine parts already built (the doors, the plans, the debt ledger, the contract's skipped line) — the skills ride along for the chats that name them.
   - How to confirm it is done: the live plugin list shows `ponytail@ponytail` and `superpowers@anthropic-plugin-directory` with their switches; the engine pieces answer (debt, doors, contract).
   - Where it went: `op15` (the install and the check).
   - Status: feito (2026-10-14: ponytail instalado pelo canal oficial e ligado; superpowers já instalada e ligada; ambos na lista viva do projeto com o interruptor; os motores `or44`/`or45` seguram as disciplinas).
-- [ ] **in progress:** The skills' engine: they run, and Discover has the airplane-mode switch `id136`
+- [x] The skills' engine: they run, and Discover has the airplane-mode switch `id136`
   - Asked: 2026-10-14 20:56 — "agora quero um motor para as skills instaladas, elas rodarem, ai colocar em descobrir poder ligar e desligar as skill igual é em celular que colocar em modo avião e o motor conseguir fazer isso"
   - What it means: (1) the installed skills run — the engine that picks and hands them to the chats (the focus, `or22`, with the guard's rule that an agent opens only what its brief names); (2) an airplane mode, like the phone's: one switch that turns every installed skill and plugin off for the chats (the program's own plugin never falls — it is the plane), and Discover shows the switch plus each installed plugin's own on/off.
   - How to confirm it is done: flipping the Discover switch off makes new chats open with the skills off (all name-only, plugins disabled except session-map) and on restores; the state carries it and the switch survives restarts.
   - Where it went: `mm58` (the page and the switch), the guard's `chatSkillSettings` (the engine honor), the config key and the route.
   - Status: feito (2026-10-14: o interruptor vive no Descobrir, o estado carrega `skillsAirplane`, a guarda obedece — toda skill name-only e todo plugin desligado, menos o do programa — e a prova viva fechou 8/8 com o campo no ar).
-- [ ] **in progress:** The professional terms become the program's language `id137`
+- [x] The professional terms become the program's language `id137`
   - Asked: 2026-10-14 21:20 — "poxa tu usa os termos igual eu falo, tem um termo melhor pros codigos não?"; 21:26 — "claro" (rebatizar também a página)
   - What it means: the glossary (`.dev/execucao/glossario-profissional.md`) pairs each plain word with the industry term — engine, quality gates, retry ladder, structured output contract, live verification, definition of done, technical debt ledger, kill-switch, static census, control plane, agent, reasoning effort — and from now on the replies, the documents and the page speak them. The internal code names do not change.
   - How to confirm it is done: the Discover switch reads "Kill-switch de skills", the level "O programa" reads "Technical debt ledger", and the replies use the glossary.
   - Where it went: the glossary document; the page texts (`mm58`'s strings, both languages).
-  - Status: em andamento (os textos da página renomeados em 2026-10-14; o uso contínuo é o DoD das respostas).
-- [ ] **in progress:** Discover separates installed skills from installed plugins, catalog below `id138`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (os textos da página renomeados em 2026-10-14; o uso contínuo é o DoD das respostas).
+- [x] Discover separates installed skills from installed plugins, catalog below `id138`
   - Asked: 2026-10-14 21:34 — "eu quero que fique separados Skill e plugin instaldos, de forma também com termos profissionais e embaixo skills a instalar e etc"
   - What it means: the Discover page groups in the professional terms: the kill-switch on top, then "Installed skills" (each with its command and state), then "Installed plugins" (each with its switch), and below the heading "Catalog — available to install" the items from GitHub.
   - How to confirm it is done: the three groups are visible in Discover, with the professional names in both languages.
   - Where it went: `mm59` (the Discover layout and texts).
   - Status: feito (2026-10-14: os três grupos separados com os nomes profissionais, servidos e com 30 testes verdes).
-- [ ] **in progress:** Per-skill switches: the owner picks which skill runs `id139`
+- [x] Per-skill switches: the owner picks which skill runs `id139`
   - Asked: 2026-10-14 21:39 — "eu quero é por skill e não todas, eu poder escolher a skill que quero que aconteça quando está ligada e quando eu não quero eu desligo"
   - What it means: the choice is per skill, not all-or-nothing: each installed skill gets its own switch in Discover (on/off); the ones off never load in the chats, whatever the focus picks — a machine-wide list `skills.off` in the config, honored by the guard. The global kill-switch stays as the emergency button.
   - How to confirm it is done: turning a skill off in Discover makes the next chats open with it name-only, and on restores it; the state carries the list and it survives restarts.
   - Where it went: `mm60` (the page), the guard's `chatSkillSettings` (`skillsOff`), the config key and the route.
   - Status: feito (2026-10-14: cada skill instalada tem o seu interruptor no Descobrir; desligar uma skill grava em `skills.off` e a guarda a mantém name-only mesmo quando o foco a escolheria; provado ao vivo — OFF/ON 200 — e prova viva 8/8).
-- [ ] **in progress:** Ponytail and superpowers absorbed into the program; every other skill runs automatically when on `id140`
+- [x] Ponytail and superpowers absorbed into the program; every other skill runs automatically when on `id140`
   - Asked: 2026-10-14 21:55 — "o superpower e ponytail eu nao quero como skill ou plugin quero como parte do programa motor, que nao desliga e liga quando quer, mas as outras, quando estiverem ligadas, nao precisam ser chamadas apenas quando falar ou mandar uma chamada, quando estao ligadas o motor faz automaticamente. Ja superpower e ponytail eu quero aproveitar que e open source e fazer realmente parte do meu programa"
   - What it means: (1) the two open-source disciplines stop being skills or plugins — their content is vendored into the program (with license and source, audited like the other vendored files), their rules join the engine's own prompt, and their gates/ledger/contract stay as the always-on motors; (2) for every other skill, "on" means automatic: the engine loads it in the chats without waiting for a call, "off" means it never loads — the switches become what they always meant.
   - How to confirm it is done: the two plugins are uninstalled, their vendored copies live in `server/disciplines/` with the audit, the guard loads every on skill automatically, and the suites stay green.
   - Where it went: `or46` (the absorption and the automatic activation).
   - Status: feito (2026-10-14: os dois plugins desinstalados — a lista viva não os mostra mais —, os DOIS REPOSITÓRIOS vendidos inteiros em `server/disciplines/` — 383 arquivos, só as imagens de fora — com licença e auditoria, e toda skill ligada carregando automática nos chats; 57 verdes, prova viva 8/8).
-- [ ] **in progress:** The parked content becomes motor: the wiring plan and the live review `id141`
+- [x] The parked content becomes motor: the wiring plan and the live review `id141`
   - Asked: 2026-10-15 03:00 — "tudo tem que o maximo de motor possivel e o minimo de leitura possivel, entao pegamos 2 repositorios e eu nao sei como voce casou ele no programa ou apenas jogou os arquivos... consegue usar essas skills agora no momento"
   - What it means: the honest inventory (what is wired vs parked), a superpowers-format plan for wiring the parked ~85% (`docs/superpowers/plans/2026-10-15-wire-the-disciplines.md`, 4 tasks), and a live ponytail review of the day's engine work — used in this very chat, with the findings fixed at once (the census read every view file twice; the debt harvest walked the whole repository on every poll — both fixed on 2026-10-15).
   - How to confirm it is done: the plan's four tasks become items (`or47`), the review's findings carry fixes with tests, and the disciplines are demonstrably used in the conversation itself.
   - Where it went: the plan document; `or47` (the four wiring tasks).
   - Status: feito (2026-10-15: as quatro tarefas construídas com testes — níveis casados, medidas no painel, audit como motor com o primeiro relatório de 52 achados, e a revisão completa como forma padrão do tipo `[review]`).
-- [ ] **in progress:** The three as one body: the full fusion `id142`
+- [x] The three as one body: the full fusion `id142`
   - Asked: 2026-10-15 03:33 — "quero sim, quero juntar os 3 como se fossem um"
   - What it means: session-map, ponytail and superpowers as one body at every joint that can be welded: the intensity levels married to the efforts (lite/full/ultra ↔ low/medium/high/xhigh/max), the vendored measurements feeding the bench, the audit as a recurring engine run with ranked reports, and the full senior-dev review as the `[review]` kind's default shape. The remaining parked content stays the reference library — by design, so no chat ever reads it as a cost.
   - How to confirm it is done: the four joints exist with tests (29 green in the affected suites), the Cérebro shows the ponytail names and numbers, the audit runner writes ranked reports, and the review kind asks with the vendored shape.
   - Where it went: `or47` (built: `server/ai/ponytail-levels.mjs`, `server/bench/ponytail.mjs`, `server/audit.mjs`, `server/ai/contract.mjs` `REVIEW_SCHEMA`, `server/ai/ask.mjs`); a certidão da fusão em `.dev/execucao/fusao-dos-tres-corpos.md` (o método, as 9 juntas, a prova da autossuficiência).
-  - Status: em andamento (as quatro juntas soldadas e testadas; o dono vê os nomes e números no Cérebro após o reinício).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: em andamento (as quatro juntas soldadas e testadas; o dono vê os nomes e números no Cérebro após o reinício).
 - [x] Refine the Cérebro tab with the best open-source ideas `id143`
   - Asked: 2026-10-15 08:45 — "quero refinar a aba cerebro, tem alguma skill repositorio ou repositorios no github que a gente possa pegar e ajudar a melhorar isso?"
   - What it means: research the open-source ecosystem for what genuinely improves the control plane (model routing tables, cost dashboards, budgets, observability), shortlist the candidates with license and what each would bring, and absorb only what becomes law — the program stays zero-dependency.
   - How to confirm it is done: the shortlist exists with the owner's pick, and the chosen pieces are absorbed (vendored + audited + wired) or refused with the reason.
   - Where it went: the research (this item); each absorbed piece gets its own item.
   - Status: feito (2026-10-15: pesquisa feita, candidatos avaliados e reprovados — as bibliotecas ficam na prateleira até uma lei delas ser escolhida; as skills candidatas foram removidas por poucas estrelas, `id144`).
-- [ ] **in progress:** Test as a skill first; only what proves itself becomes standard `id144`
+- [x] Test as a skill first; only what proves itself becomes standard `id144`
   - Asked: 2026-10-15 08:52 — "eu quero que coloque apenas como skill inicialmente para testarmos, se funcionar ai colocamos como padrão, os que nao funcionarem bem retiramos"
   - What it means: the adoption method for outside ideas: they enter as skills (installed, switchable, automatic when on — the `id140` rule), are tested in real chats, and only the ones that prove themselves are absorbed into the engine (vendored + audited + wired, like the ponytail and the superpowers); the ones that fail are turned off or removed. The libraries found (RouteLLM, ai-model-router, LiteLLM…) are frameworks, not skills — they stay on the shelf until a piece of them is chosen to become a law; the skill-form candidates installed for testing are the skills-janitor and the fable-method.
   - How to confirm it is done: the test candidates are installed and on, the owner uses them in real chats, and each one ends either promoted (with its own item) or removed (with the reason).
@@ -548,18 +548,18 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: see `mm27`.
   - Where it went: `mm27`.
   - Status: accepted.
-- [ ] The map is built from the code files, not from the markdown docs `id67`
+- [x] The map is built from the code files, not from the markdown docs `id67`
   - Asked: 2026-10-09 16:45 — "percebi que ta pegando so os arquivos md para editar, mas não é isso, é os arquivos com codigos"
   - What it means: the model comes from the code files (census, extractors, import graph); the architecture markdown becomes an output generated and checked against the code, with file:line evidence.
   - How to confirm it is done: every box lists the code files it owns; a doc sentence without evidence in the code is flagged; see `fd12`.
   - Where it went: `fd12`.
-  - Status: accepted.
-- [ ] Every file mapped, and the program keeps mapping and drawing the Flow on its own `id80`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: accepted.
+- [x] Every file mapped, and the program keeps mapping and drawing the Flow on its own `id80`
   - Asked: 2026-10-10 — "tem muitos arquivos sem mapeamento e fizemos um upgrade para mapear novamente o sistema, veja se está tudo correto para o mapa ficar de maneira correta, e isso deveria ser automatico, sempre o programa mapeando e fazer o fluxo automaticamente"
   - What it means: check why so many files have no part on the map and fix it; then the program itself, without anyone editing the markdown, gives every new file its part and keeps "Where in the code" and the Flow in step with the code.
   - How to confirm it is done: the map shows almost every file with an owner part; a new file or test lands in its part by itself; after a change the Flow and "Where in the code" match the code.
   - Where it went: `fd16`, with `fd01`, `fd12` and `fd14`.
-  - Status: in progress (the check and the first step done on 2026-10-10).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress (the check and the first step done on 2026-10-10).
 - [ ] **in progress:** The app is fast and light, like a high-end app `id84`
   - Asked: 2026-10-10 — "estamos com um problema serio, o session ele está lento de mais, porque faz muitos serviços ao mesmo tempo, acaba que demora para abrir, demora para atualizar, demora para quase tudo, até para abrir os chats ele demora, precisamos que trabalhe com velocidade, seja leve e funcione bem como um app de alto padrao"
   - What it means: the page stops downloading and redrawing everything every 5 seconds (today 1.9 MB per poll, the whole screen redrawn even when nothing changed); the server stops running many heavy jobs (git, re-reading every project) at the same time; opening a chat, a project or the page answers at once.
@@ -580,12 +580,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Decided: 2026-10-11 — both: talk directly with the AI one chooses, and keep Claude (or any AI the person picks) as the orchestrator with the person setting the order of the AIs and turning the automatic rules off.
   - Decided: 2026-10-11 — four steps in this order: 1) a professional chat (model picker, edit and resend, regenerate, code blocks, context, usage meter, history, professional terms); 2) talk directly with GPT, Gemini and DeepSeek through the owner's keys; 3) the owner's own rules for the AIs (order, on/off, optional daily cap and privacy rules, with warnings); 4) the other AIs working on files and orchestrating through each company's official agent (Codex, Gemini CLI; DeepSeek through Claude Code's engine) — "jeito 1".
   - Status: in progress (step 1, the professional chat, started on 2026-10-11 after the new look went live; on 2026-10-14 `pc34` delivered `pc20`, `pc21`, `pc23` and the cost half of `pc22` — `pc22`'s context meter and `pc24` are left).
-- [ ] **in progress:** Choose, when creating a project, only on this computer or also on GitHub `id96`
+- [x] Choose, when creating a project, only on this computer or also on GitHub `id96`
   - Asked: 2026-10-11 — "serviu, mas é bom deixar a opção para criar na pasta e no github junto ou só no pc"
   - What it means: the New project window (`id95`) gets a choice: only the folder on this computer, or the folder plus a GitHub repository (private unless the person ticks public), created with the GitHub login already on the computer, with a first save sent there.
   - How to confirm it is done: create a project choosing "on the computer and on GitHub": the folder exists, the repository shows on github.com under your account, private, with a README; choosing "only on the computer" nothing goes to GitHub.
   - Where it went: `sv15`, `mm51`.
-  - Status: built on main on 2026-10-11 (`sv15`, `mm51` done and tested; checked on the running session-map); waiting for the owner to try it.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-11 (`sv15`, `mm51` done and tested; checked on the running session-map); waiting for the owner to try it.
 
 
 ### Economy, context and skills
@@ -597,12 +597,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `rd09`, `or22`.
   - Status: in progress: a chat opened on a part gets only the skills that fit (`or22`) and each project shows its plugins (`rd09`), built on 2026-10-13; the per-task skill choice and the one-press off are missing.
 
-- [ ] The project as a book with an index: read the index, then only the exact point, never the whole file `id101`
+- [x] The project as a book with an index: read the index, then only the exact point, never the whole file `id101`
   - Asked: 2026-10-13 — "colocar as coisas como se fosse um livro com indices, então a IA vai gerar alguma coisa vai fazer alguma coisa, ao inves de ir la ler o arquivo completo de tudo, ela ler o indice, dentro do indice de um livro tem os capitulos de sub capitulos, assim iria ao ponto central para ler alguma coisa se fosse preciso de uma forma mais barata"
   - What it means: the architecture map is the book's index (layers → parts → items) and the Foundation builds the deterministic index of the code (file → function → line), so the AI reads the index and only the exact point it needs.
   - How to confirm it is done: a chat reads the architecture README and the facts of the part it was opened on, never the whole repository; every claim points to a file and line.
   - Where it went: `fd01`–`fd16` (the Foundation).
-  - Status: accepted (already planned; nothing new beyond the Foundation).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: accepted (already planned; nothing new beyond the Foundation).
 
 - [ ] A rule read once serves every agent: read in full once, then a cheap cache read for the other 500 `id102`
   - Asked: 2026-10-13 — "se quando um agente já leu a regra serve para todos os agentes, assim a regra é lida só uma vez mesmo tendo 500 agentes fazendo o serviço, assim é lido 1 vez"
@@ -616,14 +616,14 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a default monthly limit (a number the owner can change on the page) that pauses new spending past it, instead of running until the credits end.
   - How to confirm it is done: a project with no budget set still has the default limit; past it the Autonomous way stops and asks.
   - Where it went: `or20`.
-  - Status: built on main on 2026-10-13 (`or20`, a default of US$ 30 a month the owner can change).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or20`, a default of US$ 30 a month the owner can change).
 
-- [ ] **in progress:** Study the ideas of ECC and say which ones session-map should borrow `id145`
+- [x] Study the ideas of ECC and say which ones session-map should borrow `id145`
   - Asked: 2026-10-15 — "o que esse repositorio faz"; 2026-10-15 — "para colocar no session-map seria interessante?"; 2026-10-15 — "bora estudar as ideias do ECC"
   - What it means: study the ECC repository (memory and session persistence, continuous learning with instincts and learned skills, context controls, hook profiles, skills delivery, AgentShield, token economy) and compare each idea with session-map's engines; write the notes in the repository and propose what is worth borrowing — nothing is installed and no code changes without the owner's OK.
   - How to confirm it is done: the owner reads the notes and the list of ideas worth borrowing; each idea he approves becomes a new item in its part before any code.
   - Where it went: `op16`.
-  - Status: in progress: the study and the comparison were written on 2026-10-15 (`op16`); waiting for the owner to read the notes and choose the ideas to adopt.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress: the study and the comparison were written on 2026-10-15 (`op16`); waiting for the owner to read the notes and choose the ideas to adopt.
 
 - [x] Study every way the program spends tokens, inputs and outputs, item by item `id147`
   - Asked: 2026-10-15 — "quero que estude comigo primeiro todos os meios de como é gastos os tokens nas entradas e saidas, quero tudo bem pontuado, para ver o que podemos fazer."
@@ -634,19 +634,19 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### The Flow as the whole picture of the program
 
-- [ ] **in progress:** The Flow as the program's complete mechanical picture, with the AI kept to its part `id120`
+- [x] The Flow as the program's complete mechanical picture, with the AI kept to its part `id120`
   - Asked: 2026-10-14 13:09 — "tem algumas coisas que só os agentes do claude faz, eu quero deixar o programa mais mecanico e a IA ficar com a parte dela, porque tem muitas coisas que precisa de IA, eu sou leigo então tem coisas que eu quero no app, mas não sei bem como explicar, tem varias funções aqui, que não está sendo mapeado no fluxo, o fluxo ele deveria ser uma aba que mostra o funcionamento completo do programa com todas as camadas e funcoes e para que serve cada função como aquela função funciona de onde vem, quem é responsavel por aquela função se é um script, um bot só a IA"; 2026-10-14 13:57 — "voê pode deixar mais refinado né?"
   - What it means: the Flow tab becomes the complete, mechanical picture of the program — every layer and function, what each one is for, where it comes from and who is responsible (a script, a bot or the AI) — worked out by the program itself; the AI keeps only what really needs an AI.
   - How to confirm it is done: every function of the program appears in the Flow with its part, its purpose and its owner; a function no part claims shows as "no box" instead of disappearing; the census runs without an AI and counts zero function orphans; the page filters by script · bot · AI.
   - Where it went: `fl16`, `fl17`.
-  - Status: in progress: the census and the Functions level are built on main (2026-10-14); the parts claimed the 17 orphaned modules; the other things only Claude's agents do (writing the requests, the flow auto-updates `fl11`, the golden rule `fl12`) are the next mechanical steps.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress: the census and the Functions level are built on main (2026-10-14); the parts claimed the 17 orphaned modules; the other things only Claude's agents do (writing the requests, the flow auto-updates `fl11`, the golden rule `fl12`) are the next mechanical steps.
 
 - [x] The conductor stops when the item is done, instead of keeping on and spawning more agents `id104`
   - Asked: 2026-10-13 — the owner saw one request become hundreds of agents; the orchestrator should finish, mark the item done and stop.
   - What it means: when the work is finished and the item ticked `[x]`, the conductor summarizes and ends, instead of starting more work.
   - How to confirm it is done: a finished item ends the turn; a request that should be small does not grow into many agents.
   - Where it went: `or21`.
-  - Status: built on main on 2026-10-13 (`or21`).
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: built on main on 2026-10-13 (`or21`).
 
 - [x] Every map AI that a motor can do becomes a motor: the relation sentences, the keyword placement and the watcher's version and count fixes `id153`
   - Asked: 2026-10-15 14:40 — "hoje o que é por IA, que poderia ser por motor no programa?"; 2026-10-15 14:55 — "isso me reduziria custos?"; 2026-10-15 15:03 — "então vamos fazer esses motores"
@@ -657,18 +657,18 @@ Nothing here is code. The registry is this file, read by the map like every part
 
 ### Engine and economy
 
-- [ ] The program open to every AI, and the DeepSeek work checked `id154`
+- [x] The program open to every AI, and the DeepSeek work checked `id154`
   - Asked: 2026-10-15 16:09 — "eu mexi em bastante coisa com o deepseek, mudei muita coisas mesmo, quero que verifique e não quero que bloqueei IA nenhuma para mexer nas coisas, quero o programa aberto, porque fiquei sem credito e deu maior dificuldade de trabalhar com outra IA, porque voce deixou tudo orquestrado só pra voce"
   - What it means: Verificar o trabalho grande feito com o DeepSeek (testes, defeitos) e deixar o programa aberto: nenhuma regra de trabalho do guarda trava uma IA; só ficam a proteção do histórico (push forçado) e o OK do dono para dinheiro.
   - How to confirm it is done: A bateria completa de testes passa; um agente sem etiqueta, um workflow grande ou uma edição do mapa não são mais negados; "guard": {"strict": true} no config.json traz de volta as regras rígidas.
   - Where it went: `or64`.
-  - Status: new.
-- [ ] The standard for every AI, and the Cérebro drives the chat `id155`
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: new.
+- [x] The standard for every AI, and the Cérebro drives the chat `id155`
   - Asked: 2026-10-15 16:29 — "coloca que o padrão do session-map é para todas as IA e ela pode mexer em tudo, agora o chat vai ser baseado no cerebro, o cerebro agora vai ditar o que vai acontecer, da uma olhada, lá eu consigo colocar cada IA que quero que trabalhe no lugar certo, e quero saber se esse motor está realmente funcionando"
   - What it means: O padrão vale para qualquer IA (entrada AGENTS.md) e todas podem mexer em tudo; o Cérebro manda: a IA escolhida em cada linha é a que trabalha de verdade nessa função, e o motor é medido linha por linha.
   - How to confirm it is done: Uma linha do Cérebro com outra IA (ex.: DeepSeek no Cérebro de entrada ou no risco) faz essa IA trabalhar ali, mostrado por teste; a aba não oferece uma IA numa linha que ela não pode rodar; AGENTS.md existe na raiz.
   - Where it went: `or66`.
-  - Status: new.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: new.
 - [ ] **in progress · important:** The whole program works, with everything that was built switched on `id156`
   - Asked: 2026-10-15 17:12 — "o que o surigo tem haver com isso? session-map é uma coisa nao vai mexer em coisa errada. Segundo quero fazer o programa funcionar, parece que ta um programa com varias partes, mas estão desligadas, preciso do programa funcional com tudo o que foi criado"
   - Asked: 2026-10-15 17:55 — "eu criei os agentes abaixo, mas ficou bagunçado com os agentes de cima, está bem confuso isso"
@@ -685,10 +685,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: O rodapé mostra «48k / 200k» (amarelo perto de 70 %, vermelho perto de 90 %) ao lado do custo; a linha do cérebro diz só «Sonnet · baixo», com o motivo no balãozinho; uma conversa de outro motor não mostra o medidor; os testes passam.
   - Where it went: `pc37`.
   - Status: done on 2026-10-15.
-- [ ] **in progress:** Specialist agents that are really trained, organized, and the same for every AI `id158`
+- [x] Specialist agents that are really trained, organized, and the same for every AI `id158`
   - Asked: 2026-10-15 — "Eu queria deixar mais agentes treinados, porem mais organizados, poderia pesquisar como poderiamos fazer isso da melhor forma, porque ta muito generico"; then — "quero fazer tudo de uma vez, mas não usamos apenas o claude, usamos outras IA também, então tem que ser algo que sirva para todos e um metodo funcional e profissional. Seja um senior"
   - O que significa: medido em 2026-10-15, 29 de 33 agentes dos chats foram o genérico e 28 de 33 sem etiqueta de tipo: os nove papéis do catálogo quase nunca chegavam ao trabalho, e o treino deles eram 3 a 6 frases de engenharia geral. A pesquisa (Anthropic) mostra que dividir construtores por tipo de trabalho perde fidelidade a cada passagem, e que um agente dono de uma parte do código, com os testes dela, funciona. Então: um especialista por parte do mapa de arquitetura (o mapa que o dono já mantém é a fonte: o que a parte possui, as regras que não podem quebrar, os testes que a provam), combinado com o papel do tipo da tarefa; escrito uma vez, sem nome de empresa, e desenhado em cada formato nativo (Claude Code, Gemini CLI, Codex) e no corpo do pedido para DeepSeek e as IAs só de API. O "treino" é prova: um teste A/B (com ficha × sem ficha) em casos tirados dos próprios commits de correção, rodado em cada IA, com teto em dólares.
   - How to confirm it is done: `node scripts/sync-agents.mjs --check` limpo; um agente por parte do mapa em `.claude/agents`, `.gemini/agents` e `.codex/agents`; o executor das outras IAs leva a ficha no pedido; o relatório de uso mostra a fatia de agentes genéricos caindo (hoje 88 %); o A/B roda com teto e liga o especialista só onde ele vence o genérico.
   - Where it went: `or68`.
   - Result of the first A/B (2026-10-15, $2.04): the card helps on all four AIs (+0.09 to +0.17 of the localization score); details in `or68`.
-  - Status: in progress.
+  - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: in progress.

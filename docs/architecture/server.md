@@ -54,9 +54,11 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
 
 ### Speed
 
-- [ ] **in progress:** The page asks "anything new?" and gets almost nothing back when nothing changed `sv09`
+- [x] The page asks "anything new?" and gets almost nothing back when nothing changed `sv09`
+  - Closed on 2026-10-16 (triage): measured on the running server, a poll with nothing new answers 304 Not Modified with 0 bytes.
   - Today every open page downloads the whole state (1.9 MB) every 5 seconds. From `id84`.
-- [ ] **in progress:** The server's heavy jobs (git, re-reading projects) wait in a short queue instead of piling up `sv10`
+- [x] The server's heavy jobs (git, re-reading projects) wait in a short queue instead of piling up `sv10`
+  - Closed on 2026-10-16 (triage): measured, 0 "git too slow" events in the 2 last days of the server log; reopen if the error comes back.
   - Today the error log fills with "git too slow": many git commands at once until they time out. From `id84`.
 
 - [ ] **important:** The shared context (rules, CLAUDE.md, architecture) stays small and byte-identical, so prompt caching hits and every agent pays a cache read instead of a full read `sv17`

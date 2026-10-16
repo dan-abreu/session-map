@@ -32,18 +32,21 @@ On first use of a repository without a map, session-map explains what it will do
 - [ ] **Offer a map and Flow, with permission, time and cost** `bi01`
   - Explain, ask, and show the estimate (time and cost) before starting. Ask again only if it passes about US$ 5 (config `bootstrap.maxUSD`); the default is the "complete" study with its estimate visible.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **Study the whole repository by area and write architecture and Flow** `bi02`
+- [x] **Study the whole repository by area and write architecture and Flow** `bi02`
+  - Dropped on 2026-10-16 (triage): superseded by the Foundation (`fd01` to `fd17`), which reads the code exactly and without AI.
   - A helper per large folder plus a reviewer, reading code, configs, README and docs. Then: the architecture in the standard (layers → parts, fixed sections, the project's language); the Flow at three levels (see `fl08`, `fl09`, `fl10`) with labeled arrows; a check against real files (no part or box without an existing path); a final summary of findings, risks, what is missing and questions for the owner, which land in "Waiting for you".
   - Only what needs a human is "with the owner".
   - Later, by the owner's choice on 2026-10-10 (`op06`).
 - [ ] **Middle path: a draft first, then "Save to project"** `bi03`
   - It builds on its own, without asking, in the session-map storage. A big "Save to project" button writes the architecture and the Flow; a switch saves automatically; "Redo" and "Erase the map" are there too.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **Exhaustive study with a coverage report** `bi04`
+- [x] **Exhaustive study with a coverage report** `bi04`
+  - Dropped on 2026-10-16 (triage): superseded by the Foundation census (`fd01`), which inventories every file.
   - An inventory of all files (`git ls-files`), each assigned to a part, coverage in % and the list of orphans; a checklist per part (screens and features, routes and services, data and entities, outside integrations, automatic jobs, configs and secrets by name only, tests and test gaps, half-done things).
   - A completeness critic runs in rounds until one round finds nothing; the project's issues and board cards are imported as items.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
-- [ ] **Reading rule: 100% of the files, with a ledger** `bi05`
+- [x] **Reading rule: 100% of the files, with a ledger** `bi05`
+  - Dropped on 2026-10-16 (triage): superseded by the Foundation census (`fd01`), which reads every file letter by letter.
   - Every file read in full (big ones in chunks, all of them), recorded per file (hash and "read in full") in a read ledger in the session-map storage. The report shows "100% read" or what is missing and runs more rounds until closed; afterwards only what changed (by hash) is read again.
   - Left out on purpose and listed in the report: third-party dependencies, generated files (build, dist, lockfiles) and binaries (images, video, fonts). Estimate first; Sonnet helpers, Opus review.
   - Later, by the owner's choice on 2026-10-10 (`op06`).
