@@ -82,3 +82,33 @@ test('listPlugins returns each installed plugin with a friendly name', () => {
     assert.equal(plugins[1].enabled, false);
   } finally { cleanup(claude, root); }
 });
+
+// The server lists every skill at each look: a SKILL.md that did not change is not read again, one that did is.
+test('a skill file is read again only when its size or time changes', async () => {
+  const { utimesSync, writeFileSync: write } = await import('node:fs');
+  const claude = mkdtempSync(join(tmpdir(), 'sm-sk-cache-'));
+  const root = mkdtempSync(join(tmpdir(), 'sm-sk-cache-r-'));
+  try {
+    skill(join(claude, 'skills'), 'one', 'name: one\ndescription: First words');
+    const file = join(claude, 'skills', 'one', 'SKILL.md');
+    const at = new Date('2026-10-01T10:00:00Z');
+    utimesSync(file, at, at);
+    const first = listSkills(root, claude, { pluginList: [] }).find((s) => s.name === 'one');
+    assert.equal(first.description, 'First words');
+    // Same size, same time: what is on disk is not looked at again, so the kept answer is the one given.
+    write(file, '---\nname: one\ndescription: Other words\n---\nbody\n');
+    utimesSync(file, at, at);
+    assert.equal(listSkills(root, claude, { pluginList: [] }).find((s) => s.name === 'one').description, 'First words');
+    // A new time is a change: it is read.
+    utimesSync(file, new Date('2026-10-01T10:00:05Z'), new Date('2026-10-01T10:00:05Z'));
+    const changed = listSkills(root, claude, { pluginList: [] }).find((s) => s.name === 'one');
+    assert.equal(changed.description, 'Other words');
+    assert.equal(changed.fullBytes, Buffer.byteLength('---\nname: one\ndescription: Other words\n---\nbody\n'));
+    // A skill taken away is gone from the list.
+    rmSync(join(claude, 'skills', 'one'), { recursive: true, force: true });
+    assert.equal(listSkills(root, claude, { pluginList: [] }).some((s) => s.name === 'one'), false);
+  } finally {
+    rmSync(claude, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});

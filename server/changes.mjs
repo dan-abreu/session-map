@@ -338,15 +338,34 @@ const isSave = (c) => (c.kind === 'commit' || c.kind === 'merge') && c.hash && A
 // the file, and released when a version carries that one. What the folder holds and no conversation explains becomes a
 // row of its own, made by hand or by another tool.
 export function changeRows({ events, worktree = [], commits = [], tagOf = new Map(), ownersOf, nowIso }) {
-  const saves = commits.filter(isSave).sort((a, b) => a.ts.localeCompare(b.ts));
+  // The saves are read once (their time as a number, their files as a set), and the first one at or after a change is found by
+  // halving, not by walking every save for every change: a month of changes meets hundreds of saves.
+  const saves = commits.filter(isSave).sort((a, b) => a.ts.localeCompare(b.ts)).map((c) => ({ commit: c, at: Date.parse(c.ts), files: new Set(c.files) })).filter((x) => Number.isFinite(x.at));
+  // Halving needs the saves in time order; times written with other offsets can break that, and then every save is walked.
+  const inOrder = saves.every((x, i) => i === 0 || saves[i - 1].at <= x.at);
+  const firstAtOrAfter = (at) => {
+    if (!inOrder) return 0;
+    let lo = 0;
+    let hi = saves.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (saves[mid].at >= at) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  };
   const rows = events.map((e) => {
     const at = Date.parse(e.ts);
-    const save = saves.find((c) => Date.parse(c.ts) >= at && c.files.includes(e.path));
+    let save = null;
+    for (let i = firstAtOrAfter(at); i < saves.length; i++) if (saves[i].at >= at && saves[i].files.has(e.path)) { save = saves[i].commit; break; }
     const tag = save ? tagOf.get(save.hash) ?? null : null;
     return { ...e, state: tag ? 'released' : save ? 'saved' : 'pending', ...(save ? { hash: save.hash } : {}), ...(tag ? { tag } : {}) };
   });
+  // The rows a conversation made and nothing saved yet, by file: the folder's unsaved files meet them here.
+  const pendingByPath = new Map();
+  for (const r of rows) if (r.state === 'pending' && r.sessionId) (pendingByPath.get(r.path) ?? pendingByPath.set(r.path, []).get(r.path)).push(r);
   for (const w of worktree) {
-    const mine = rows.filter((r) => r.state === 'pending' && r.path === w.path && r.sessionId);
+    const mine = pendingByPath.get(w.path) ?? [];
     if (mine.length) {
       for (const r of mine) {
         r.inFolder = true;

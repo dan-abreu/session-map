@@ -86,3 +86,14 @@ test('dailyCost: the cost of each local day, so any range can be summed later (m
   assert.deepEqual(dailyCost(rows, prices), { '2026-10-03': 25, '2026-10-08': 10 }, 'an unpriced model adds no day');
   assert.deepEqual(dailyCost([], prices), {});
 });
+
+test('priceKeyFor gives the same key every time, keeps no answer across tables, and the longest key still wins', async () => {
+  const { priceKeyFor } = await import('../server/cost.mjs');
+  const a = { 'claude-opus-5': { input: 1 }, 'claude-opus-5-5': { input: 2 } };
+  assert.equal(priceKeyFor('claude-opus-5-5-20261001', a), 'claude-opus-5-5');
+  assert.equal(priceKeyFor('claude-opus-5-5-20261001', a), 'claude-opus-5-5');
+  assert.equal(priceKeyFor('claude-opus-5-1', a), 'claude-opus-5');
+  assert.equal(priceKeyFor('gpt-6', a), null);
+  const b = { 'claude-opus-5': { input: 1 } };
+  assert.equal(priceKeyFor('claude-opus-5-5-20261001', b), 'claude-opus-5', 'another table is answered on its own');
+});

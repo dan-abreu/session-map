@@ -10,11 +10,18 @@ export function loadPrices(overrides = {}) {
 }
 
 // "claude-opus-5-5-20261001" matches key "claude-opus-5-5"; the longest key wins over "claude-opus-5".
+// A look prices every message of a month of conversations, with a handful of model names: each name is matched once per table.
+const keysKept = new WeakMap();
+
 export function priceKeyFor(model, prices) {
+  let kept = keysKept.get(prices);
+  if (!kept) keysKept.set(prices, kept = new Map());
+  if (kept.has(model)) return kept.get(model);
   let best = null;
   for (const key of Object.keys(prices)) {
     if ((model === key || model.startsWith(`${key}-`)) && (best === null || key.length > best.length)) best = key;
   }
+  kept.set(model, best);
   return best;
 }
 

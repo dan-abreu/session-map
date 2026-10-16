@@ -78,9 +78,25 @@ const bestByFile = (files, arch, topLevel) => bestOf(files, arch, topLevel).filt
 const inPartOrder = (arch, ids) => arch.parts.map((p) => p.id).filter((id) => ids.has(id));
 
 // One owner per file, so the sizes add up (mm25): the part with its deepest path, the first in map order on a tie, or null.
+// The answer is a pure function of the files and of what the parts claim, and the server asks it again at every look with the
+// same ones (the whole census, every few seconds): the last few answers are kept under a key made of both.
+const OWNERS_KEPT = 8;
+const ownersKept = new Map();
+
 export function ownersOf(files, arch, { topLevel } = {}) {
-  const owners = bestOf(files, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids)[0] : null));
-  return ownersOfTests(files, owners);
+  const key = JSON.stringify([arch.parts.map((p) => [p.id, p.codePaths, p.file]), topLevel ? [...topLevel].sort() : null, files]);
+  const kept = ownersKept.get(key);
+  if (kept) return [...kept];
+  // The changes of a month name the same files again and again (an edit per line of work): each file is worked out once, and the
+  // answer for a path is the same wherever it appears in the list.
+  const distinct = [...new Set(files)];
+  const owners = bestOf(distinct, arch, topLevel).map((best) => (best ? inPartOrder(arch, best.ids)[0] : null));
+  const resolved = ownersOfTests(distinct, owners);
+  const byPath = new Map(distinct.map((file, i) => [file, resolved[i]]));
+  const answer = files.map((file) => byPath.get(file));
+  ownersKept.set(key, answer);
+  if (ownersKept.size > OWNERS_KEPT) ownersKept.delete(ownersKept.keys().next().value);
+  return [...answer];
 }
 
 // Every part holding a file's deepest path, in map order ([] for none): a folder two parts share belongs to both. The

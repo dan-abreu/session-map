@@ -184,3 +184,33 @@ test('itemByCodes: the item of the chat\'s part it cited last is the tip being w
   assert.equal(itemByCodes([], arch, 'orders'), null);
   assert.equal(itemByCodes([{ code: 'or01', n: 1 }], arch, null), null);
 });
+
+// The server asks who owns every file of the census at each look, with the same files and the same parts: the answer is kept,
+// and it is never the same object, so a caller cannot change what the next one gets.
+test('ownersOf gives the same answer the second time, a copy of it, and a new one when the files or the parts change', async () => {
+  const { ownersOf } = await import('../server/arch/attach.mjs');
+  const files = ['apps/web/src/checkout/pay.ts', 'apps/api/src/billing/invoice.ts', 'apps/web/src/home.ts', 'README.md', 'test/checkout-pay.test.mjs'];
+  const first = ownersOf(files, SHOP);
+  assert.deepEqual(first, ['checkout', 'billing', 'web', null, 'checkout']);
+  first[0] = 'changed by a caller';
+  assert.deepEqual(ownersOf(files, SHOP), ['checkout', 'billing', 'web', null, 'checkout'], 'a caller cannot change the kept answer');
+  assert.deepEqual(ownersOf([...files, 'apps/api/src/index.ts'], SHOP).at(-1), 'api', 'another list of files is answered afresh');
+  const moved = archOf(part('web', ['apps/web']), part('checkout', ['apps/web/src/checkout/']), part('billing', ['apps/web']), part('api', ['apps/api']));
+  assert.equal(ownersOf(files, moved)[1], 'api', 'a part that claims other paths changes the answer');
+  assert.deepEqual(ownersOf(files, SHOP, { topLevel: new Set(['apps']) }), ['checkout', 'billing', 'web', null, 'checkout']);
+});
+
+test('ownersOf answers a path the same wherever it appears in the list, and repeats cost one answer per distinct path', async () => {
+  const { ownersOf } = await import('../server/arch/attach.mjs');
+  const once = ownersOf(['apps/web/src/checkout/pay.ts', 'apps/api/src/billing/invoice.ts', 'test/checkout-pay.test.mjs', 'README.md'], SHOP);
+  const many = ownersOf(['apps/web/src/checkout/pay.ts', 'README.md', 'apps/api/src/billing/invoice.ts', 'apps/web/src/checkout/pay.ts', 'test/checkout-pay.test.mjs', 'README.md', 'test/checkout-pay.test.mjs'], SHOP);
+  assert.deepEqual(many, ['checkout', null, 'billing', 'checkout', 'checkout', null, 'checkout']);
+  assert.deepEqual([many[0], many[2], many[4], many[1]], [once[0], once[1], once[2], once[3]]);
+  // A month of edits: forty thousand entries over a few hundred files is answered at once.
+  const names = Array.from({ length: 400 }, (_, i) => `apps/web/src/checkout/part${i}.ts`);
+  const long = Array.from({ length: 40_000 }, (_, i) => names[i % 400]);
+  const t = Date.now();
+  const owners = ownersOf(long, SHOP);
+  assert.ok(owners.every((o) => o === 'checkout'));
+  assert.ok(Date.now() - t < 2000, `took ${Date.now() - t} ms`);
+});

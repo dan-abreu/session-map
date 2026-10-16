@@ -159,3 +159,39 @@ test('what changed in the last minutes, per part: distinct files and lines, for 
   assert.deepEqual(fresh, { files: 3, lines: 22, parts: { shop: { files: 1, lines: 6 }, billing: { files: 1, lines: 15 } } });
   assert.equal(freshOf(rows, Date.parse('2026-10-10T13:00:00.000Z')), null, 'nothing recent, nothing lit');
 });
+
+// The saves of a project are met by every change of a month: the first save at or after a change that holds its file is found
+// by halving. It must pick the same save as walking them all, on any data.
+test('changeRows picks the same save as the plain walk, on a month of random changes and saves', async () => {
+  const { changeRows } = await import('../server/changes.mjs');
+  let seed = 7;
+  const rnd = (n) => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed % n; };
+  const files = Array.from({ length: 40 }, (_, i) => `src/f${i}.js`);
+  const T0 = Date.parse('2026-09-20T00:00:00Z');
+  const commits = Array.from({ length: 300 }, (_, i) => ({
+    kind: i % 11 === 0 ? 'merge' : 'commit', hash: `h${i}`, ts: new Date(T0 + i * 3_600_000 + rnd(1000)).toISOString(),
+    files: Array.from({ length: 1 + rnd(5) }, () => files[rnd(40)]),
+  }));
+  commits.push({ kind: 'tag', hash: 'x', ts: new Date(T0).toISOString() }, { kind: 'commit', hash: 'nofiles', ts: new Date(T0).toISOString() });
+  const events = Array.from({ length: 3000 }, (_, i) => ({ id: `e${i}`, ts: new Date(T0 + rnd(320 * 3_600_000)).toISOString(), kind: 'edit', path: files[rnd(40)], added: 1, removed: 0, sessionId: rnd(3) ? 's1' : null }));
+  const tagOf = new Map(commits.filter((c) => c.hash?.startsWith('h')).filter((_, i) => i % 7 === 0).map((c) => [c.hash, `v0.${c.hash}`]));
+  const sorted = commits.filter((c) => (c.kind === 'commit' || c.kind === 'merge') && c.hash && Array.isArray(c.files)).sort((a, b) => a.ts.localeCompare(b.ts));
+  const naive = events.map((e) => {
+    const at = Date.parse(e.ts);
+    const save = sorted.find((c) => Date.parse(c.ts) >= at && c.files.includes(e.path));
+    const tag = save ? tagOf.get(save.hash) ?? null : null;
+    return [e.id, tag ? 'released' : save ? 'saved' : 'pending', save?.hash ?? null, tag];
+  });
+  const rows = changeRows({ events, commits, tagOf, ownersOf: (paths) => paths.map(() => null), nowIso: '2026-10-16T00:00:00Z' });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const [id, state, hash, tag] of naive) {
+    const r = byId.get(id);
+    assert.deepEqual([r.state, r.hash ?? null, r.tag ?? null], [state, hash, tag], id);
+  }
+  assert.ok(naive.some((n) => n[1] === 'saved') && naive.some((n) => n[1] === 'pending') && naive.some((n) => n[1] === 'released'), 'the data meets every state');
+  // The folder's unsaved files meet the pending rows a conversation made, by file.
+  const withTree = changeRows({ events, commits: [], worktree: [{ path: files[0], kind: 'edit', added: 3, removed: 1 }, { path: 'new.txt', kind: 'add', added: 2, removed: 0 }], ownersOf: (paths) => paths.map(() => null), nowIso: '2026-10-16T00:00:00Z' });
+  assert.ok(withTree.some((r) => r.id === 'wt:new.txt'), 'a file no conversation touched is a row of its own');
+  assert.ok(!withTree.some((r) => r.id === `wt:${files[0]}`), 'a file a conversation changed is not a second row');
+  assert.ok(withTree.filter((r) => r.path === files[0] && r.sessionId).every((r) => r.inFolder === true));
+});

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { log } from '../log.mjs';
 import { normalizePath } from '../paths.mjs';
@@ -33,6 +33,34 @@ function frontmatter(text) {
   return out;
 }
 
+// What a SKILL.md says, kept by its size and time: the server lists every skill of every project at each look, and a
+// file that did not change is not read again (a plugin's folder is listed twice in a look).
+const SKILL_FILES_KEPT = 600;
+const skillFiles = new Map();
+
+function skillFileOf(path) {
+  let st;
+  try {
+    st = statSync(path);
+  } catch {
+    return null;
+  }
+  const kept = skillFiles.get(path);
+  if (kept && kept.size === st.size && kept.mtimeMs === st.mtimeMs) return kept;
+  let text;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+  const fm = frontmatter(text);
+  const read = { size: st.size, mtimeMs: st.mtimeMs, name: fm.name ?? '', description: fm.description ?? '', fullBytes: Buffer.byteLength(text) };
+  skillFiles.delete(path);
+  skillFiles.set(path, read);
+  if (skillFiles.size > SKILL_FILES_KEPT) skillFiles.delete(skillFiles.keys().next().value);
+  return read;
+}
+
 function readSkillsDir(dir, origin, plugin, enabled) {
   let entries;
   try {
@@ -43,24 +71,19 @@ function readSkillsDir(dir, origin, plugin, enabled) {
   const skills = [];
   for (const e of entries) {
     if (!e.isDirectory() && !e.isSymbolicLink()) continue;
-    let text;
-    try {
-      text = readFileSync(join(dir, e.name, 'SKILL.md'), 'utf8');
-    } catch {
-      continue;
-    }
-    const fm = frontmatter(text);
-    const name = fm.name || e.name;
+    const file = skillFileOf(join(dir, e.name, 'SKILL.md'));
+    if (!file) continue;
+    const name = file.name || e.name;
     skills.push({
       name,
-      description: (fm.description ?? '').slice(0, DESCRIPTION_MAX),
+      description: file.description.slice(0, DESCRIPTION_MAX),
       origin,
       plugin,
       enabled,
       command: plugin ? `/${plugin}:${name}` : `/${name}`,
       // Weight (mm52): the name and description ride along with every request; SKILL.md is read in full when opened.
-      listingBytes: Buffer.byteLength(name) + Buffer.byteLength(fm.description ?? ''),
-      fullBytes: Buffer.byteLength(text),
+      listingBytes: Buffer.byteLength(name) + Buffer.byteLength(file.description),
+      fullBytes: file.fullBytes,
     });
   }
   return skills;
