@@ -88,6 +88,10 @@ Being built (`fd01` to `fd16`): the blocks so far, the knowledge they read, thei
   - 7, git: unsaved or unpushed changes, idle or already merged branches, clashes, issues and board cards ↔ items. 8, conversations: decisions not yet written in the architecture or docs, requests that did not become an item.
   - Left out for now (optional later): the live server's version endpoint and outside accounts.
   - How to confirm it is done: the panel shows all eight groups for a project with every line in one of the three states; breaking one thing per group in a test project turns exactly that line to warning; a request left in a conversation without an item shows in group 8.
+- [ ] **important:** The reading round runs every block: model, health, versions, profile and "Tudo em dia?" are steps of the refresh, in that order `fd20`
+  - From `id63`, found in the comb of 2026-10-16. `STEPS` in `server/foundation/refresh.mjs` is empty (a test even holds it empty), so the round only reads: on this repository `brain/<id>/foundation` holds `census.json`, `facts.json` and `sections.json` and never `model.json`, `profile.json` or `uptodate.json`; `runUptodate` has no caller.
+  - Run by hand on 2026-10-16 it takes 0.4 s and gives 35 lines: 29 "not verified", because the blocks it reads were never produced, and 6 warnings that are real (499 files with no owner part, a broken link, 40 documented and 20 unused environment variables, 19 files not committed, 4 commits not pushed).
+  - How to confirm it is done: a refresh of the project writes `model.json`, `health.json`, `versions.json`, `profile.json` and `uptodate.json`; the Home shows the lines of "Tudo em dia?" in their states, not "not verified"; a step that fails does not stop the others (`test/foundation-refresh-shell.test.mjs` holds the shell).
 
 ### A professional repository
 
