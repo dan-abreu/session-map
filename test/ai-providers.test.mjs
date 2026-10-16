@@ -120,7 +120,7 @@ test('the default models are the current cheap ones, never a retired or only-for
 
 test('OpenAI: prices per model, the request goes to the OpenAI endpoint with a Bearer key, and the key stays out of the result', async () => {
   assert.deepEqual(PROVIDERS.openai.pricesUSDPerMTok, { 'gpt-6-luna': { in: 0.1, out: 0.5 }, 'gpt-6.1-sol': { in: 2, out: 10 }, 'gpt-6-astra': { in: 10, out: 50 } });
-  assert.equal(PROVIDERS.openai.priceSource, 'https://openai.com/api/pricing/');
+  assert.equal(PROVIDERS.openai.priceSource, 'https://developers.openai.com/api/docs/pricing');
   assert.equal(costOf('openai', 'gpt-6-luna', 1_000_000, 1_000_000), 0.6);
   assert.equal(costOf('openai', 'gpt-6.1-sol', 1_000_000, 1_000_000), 12);
   assert.equal(costOf('openai', 'gpt-6-astra', 1_000_000, 1_000_000), 60);

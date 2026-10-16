@@ -77,7 +77,7 @@ test('a look inside the day skips every page; two looks inside the minute share,
   }
 });
 
-test('a failed page is logged as a short error and nothing is saved for it; the rest go on', async () => {
+test('a failed page is logged as a short error and kept out for a day, with no price saved for it; the rest go on', async () => {
   const smDir = tmp();
   try {
     const fetchFn = async (url) => {
@@ -88,8 +88,16 @@ test('a failed page is logged as a short error and nothing is saved for it; the 
     const out = await watch.run();
     assert.equal(out.alerts.length, 0);
     const view = pricesView(smDir);
-    assert.equal(view[PRICE_SOURCES[0].id], undefined, 'no entry for the failed one');
+    assert.deepEqual(Object.keys(view[PRICE_SOURCES[0].id]), ['failedAt'], 'only the day of the failure is kept for the failed one');
     assert.ok(view[PRICE_SOURCES[1].id].checkedAt);
+    let asked = 0;
+    const counting = createPricesWatch({ smDir, fetchFn: async (url) => { if (url === PRICE_SOURCES[0].url) asked++; return { ok: false, status: 503, text: async () => 'down' }; }, now: () => NOW + 60 * 60 * 1000 });
+    const again = await counting.run();
+    assert.equal(asked, 0, 'an hour later the failed page is not asked again');
+    assert.ok(again.skipped.some((s) => s.id === PRICE_SOURCES[0].id && s.why === 'failed'));
+    const nextDay = createPricesWatch({ smDir, fetchFn: async (url) => { if (url === PRICE_SOURCES[0].url) asked++; return { ok: true, status: 200, text: async () => PAGE_A }; }, now: () => NOW + 25 * 60 * 60 * 1000 });
+    await nextDay.run();
+    assert.equal(asked, 1, 'a day later it is');
   } finally {
     rmSync(smDir, { recursive: true, force: true });
   }

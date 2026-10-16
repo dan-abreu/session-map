@@ -89,7 +89,7 @@ export const PROVIDERS = Object.freeze({
       'gpt-6.1-sol': { in: 2, out: 10 },
       'gpt-6-astra': { in: 10, out: 50 },
     },
-    priceSource: 'https://openai.com/api/pricing/',
+    priceSource: 'https://developers.openai.com/api/docs/pricing',
     priceCheckedOn: CHECKED_ON,
     // Checked against the API on 2026-10-10: every gpt-6 model refuses max_tokens (HTTP 400), Luna takes reasoning
     // 'none', Sol and Astra start at 'low' and take only the default temperature. null: the field is left out.

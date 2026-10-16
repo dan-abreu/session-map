@@ -24,7 +24,7 @@ export const PRICE_SOURCES = Object.freeze([
 const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const sha1 = (text) => createHash('sha1').update(text).digest('hex');
 
-// The clean state: {checks: {id: {hash, checkedAt, changedAt?}}}. Anything that does not fit is dropped, so a broken
+// The clean state: {checks: {id: {hash, checkedAt, changedAt?, failedAt?}}}. Anything that does not fit is dropped, so a broken
 // file degrades to "no knowledge", never to a wrong alert.
 export function pricesWatchState(raw) {
   const checks = {};
@@ -35,6 +35,7 @@ export function pricesWatchState(raw) {
     if (typeof e.hash === 'string' && /^[0-9a-f]{40}$/.test(e.hash)) entry.hash = e.hash;
     if (Number.isFinite(Date.parse(e.checkedAt))) entry.checkedAt = e.checkedAt;
     if (Number.isFinite(Date.parse(e.changedAt))) entry.changedAt = e.changedAt;
+    if (Number.isFinite(Date.parse(e.failedAt))) entry.failedAt = e.failedAt;
     if (Object.keys(entry).length) checks[s.id] = entry;
   }
   return { checks };
@@ -101,11 +102,17 @@ export function createPricesWatch({ smDir, fetchFn = globalThis.fetch, now = Dat
     const alerts = [];
     for (const s of PRICE_SOURCES) {
       const prev = checks[s.id];
-      const last = prev?.checkedAt ? Date.parse(prev.checkedAt) : -Infinity;
-      if (!force && at - last < DAY_MS) { skipped.push({ id: s.id, why: 'fresh' }); continue; }
+      // A page that answered is not asked again for a day; a page that failed is not asked again for a day either (a page
+      // that refuses us would otherwise be asked, and logged, at every look).
+      const last = Math.max(prev?.checkedAt ? Date.parse(prev.checkedAt) : -Infinity, prev?.failedAt ? Date.parse(prev.failedAt) : -Infinity);
+      if (!force && at - last < DAY_MS) { skipped.push({ id: s.id, why: prev?.failedAt && Date.parse(prev.failedAt) === last ? 'failed' : 'fresh' }); continue; }
       checked.push(s.id);
       const got = await fetchPage(s, fetchFn);
-      if (!got.ok) { log('warn', 'ai-prices-failed', { provider: s.id, error: got.error }); continue; }
+      if (!got.ok) {
+        log('warn', 'ai-prices-failed', { provider: s.id, error: got.error });
+        checks[s.id] = { ...(prev ?? {}), failedAt: new Date(at).toISOString() };
+        continue;
+      }
       const hash = sha1(got.text);
       const stamp = new Date(at).toISOString();
       checks[s.id] = {
