@@ -1133,7 +1133,7 @@ ${prompt}`;
     const start = end === total && isIndex(from) && from > 0 && from <= total ? resendStart(all, from) : pageStart(all, end);
     // The read is shared with the next ask: new objects, never edits to its items.
     const items = all.slice(start, end).map((i) => (i.type === 'user' ? { ...i, text: personsWords(i.text) } : i));
-    return { items, start, total, version: read.version, ...(read.contextTokens > 0 ? { context: { tokens: read.contextTokens, max: MAX_CONTEXT } } : {}) };
+    return { items, start, total, version: read.version, ...(read.olderCut ? { olderCut: true } : {}), ...(read.contextTokens > 0 ? { context: { tokens: read.contextTokens, max: MAX_CONTEXT } } : {}) };
   }
 
   // What a page that reopens a page conversation shows: the transcript, minus the turns a running process still

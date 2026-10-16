@@ -116,10 +116,41 @@ const questionsOf = (input) => (Array.isArray(input?.questions) ? input.question
   options: (Array.isArray(q.options) ? q.options : []).filter((o) => o && typeof o.label === 'string').map((o) => ({ label: o.label, description: typeof o.description === 'string' ? o.description : '' })),
 }));
 
+// A conversation of hundreds of megabytes cannot be one string (Node stops at about 512 MB) and would block the server for
+// seconds: past this size only its newest part is read, from the first whole line on, so it opens at once on what was said last
+// (pc15). The older part stays in the file; the page is told (olderCut).
+let tailMax = 192 * 1024 * 1024;
+export const setTailMax = (bytes) => { tailMax = bytes; reads.clear(); };
+
+function readTail(path, size) {
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.alloc(tailMax);
+    let got = 0;
+    while (got < tailMax) {
+      const n = readSync(fd, buf, got, tailMax - got, size - tailMax + got);
+      if (!n) break;
+      got += n;
+    }
+    const cut = buf.indexOf(0x0a);
+    const tail = cut < 0 || cut + 1 >= got ? Buffer.alloc(0) : buf.subarray(cut + 1, got);
+    // Where the file was when it was read: a later ask goes on from there, as for a whole read.
+    return Object.assign(tail, { fileSize: size });
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function readRaw(path) {
   try {
+    const gz = path.endsWith('.gz');
+    const size = gz ? 0 : statSync(path).size;
+    if (size > tailMax) {
+      log('warn', 'read-tail', { path, size });
+      return readTail(path, size);
+    }
     const raw = readFileSync(path);
-    return path.endsWith('.gz') ? gunzipSync(raw) : raw;
+    return gz ? gunzipSync(raw) : raw;
   } catch (err) {
     if (err.code !== 'ENOENT') log('warn', 'read-failed', { path, code: err.code });
     return null;
@@ -205,8 +236,8 @@ function wholeRead(path, cwd, prices, version) {
   const builder = createBuilder({ cwd, prices, keep: images });
   const raw = readRaw(path);
   if (raw) builder.add(parseLines(raw.toString('utf8')));
-  const seam = raw?.length && !path.endsWith('.gz') && raw[raw.length - 1] === 0x0a ? seamOf(raw, raw.length) : null;
-  return { version, cwd, prices, images, ...builder.result(), builder, seam };
+  const seam = raw?.length && !path.endsWith('.gz') && raw[raw.length - 1] === 0x0a ? seamOf(raw, raw.fileSize ?? raw.length) : null;
+  return { version, cwd, prices, images, ...builder.result(), builder, seam, cut: raw?.fileSize !== undefined };
 }
 
 // A conversation still being written grows by whole lines: only the new ones are parsed, never the whole file again on
@@ -230,7 +261,7 @@ function grownRead(path, kept, version) {
     // Half a line still being written is left to a whole read, which takes it as it always did.
     if (got !== buf.length || !buf.subarray(0, seam.tail.length).equals(seam.tail) || buf[buf.length - 1] !== 0x0a) return null;
     kept.builder.add(parseLines(buf.subarray(seam.tail.length).toString('utf8')));
-    return { version, cwd: kept.cwd, prices: kept.prices, images: kept.images, ...kept.builder.result(), builder: kept.builder, seam: seamOf(buf, size) };
+    return { version, cwd: kept.cwd, prices: kept.prices, images: kept.images, ...kept.builder.result(), builder: kept.builder, seam: seamOf(buf, size), cut: kept.cut };
   } catch {
     return null;
   } finally {
@@ -241,8 +272,8 @@ function grownRead(path, kept, version) {
 // → {items, costUSD, contextTokens, version}; items in the order they were written. A reply's own cost sits on its last
 // message (replyCostUSD); helpers are in the conversation's total, not here. contextTokens: what the last reply carried.
 export function readConversation(path, { cwd = '', prices } = {}) {
-  const { items, costUSD, contextTokens, version } = readOnce(path, cwd, prices ?? (shippedPrices ??= loadPrices()));
-  return { items, costUSD, contextTokens, version };
+  const { items, costUSD, contextTokens, version, cut } = readOnce(path, cwd, prices ?? (shippedPrices ??= loadPrices()));
+  return { items, costUSD, contextTokens, version, ...(cut ? { olderCut: true } : {}) };
 }
 
 // keep: an array that receives every image block, numbered in the same walk that numbers them for the page.

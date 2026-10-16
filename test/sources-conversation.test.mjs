@@ -329,3 +329,35 @@ test('a transcript read in pieces as it grew reads the same as one read whole', 
     assert.equal(pieces.costUSD, once.costUSD);
   });
 });
+
+// pc15: a conversation of hundreds of megabytes (one of the owner's is 894 MB) cannot be one string and would block the
+// server: past a size only its newest part is read, from the first whole line, and the page is told.
+test('a transcript past the size limit opens on its newest part, from a whole line, and says the older part was cut', async () => {
+  const { appendFileSync } = await import('node:fs');
+  const { setTailMax } = await import('../server/sources/claude-conversation.mjs');
+  const filler = 'x'.repeat(300);
+  const entries = [];
+  for (let i = 0; i < 40; i++) entries.push(i % 2 === 0 ? human(i % 60, `question ${i} ${filler}`) : assistant(i % 60, `m${i}`, [{ type: 'text', text: `answer ${i} ${filler}` }]));
+  withTranscript(entries, (path) => {
+    setTailMax(4000);
+    try {
+      const cut = readConversation(path, { prices: PRICES });
+      assert.equal(cut.olderCut, true);
+      assert.ok(cut.items.length > 2 && cut.items.length < 20, `kept ${cut.items.length} of 40`);
+      assert.match(cut.items.at(-1).text, /^answer 39 /, 'the newest is there');
+      assert.match(cut.items[0].text, /^(question|answer) \d+ /, 'it starts on a whole message, not on the stub of a line');
+      // A conversation that goes on being written is read from where the last read stopped, as before.
+      appendFileSync(path, `${JSON.stringify(human(41, 'one more'))}\n`);
+      const grown = readConversation(path, { prices: PRICES });
+      assert.equal(grown.items.at(-1).text, 'one more');
+      assert.equal(grown.olderCut, true);
+      assert.equal(grown.items.length, cut.items.length + 1, 'nothing was read twice');
+      setTailMax(10 * 1024 * 1024);
+      const whole = readConversation(path, { prices: PRICES });
+      assert.equal(whole.items.length, 41);
+      assert.equal(whole.olderCut, undefined, 'a small enough one is read whole and says nothing');
+    } finally {
+      setTailMax(192 * 1024 * 1024);
+    }
+  });
+});
