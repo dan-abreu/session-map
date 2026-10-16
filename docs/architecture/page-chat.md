@@ -82,8 +82,9 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 - [x] **Claude:** Conversation history like the big chats: search, pin, rename and export `pc23`
   - From `id93`.
   - Done 2026-10-14 (`pc34`): the sheet's list searches its titles, pins conversations on top (a session-map list, like archive: `server/actions.mjs` pin and unpin) and the ⋯ exports the whole conversation as one markdown file; rename or move was already there. History's own search and state filters came with `mm33`.
-- [ ] **in progress:** Titles written by the AI from the conversation, rewritten when the topic moves, never over a title the person set `pc24`
+- [x] Titles written by the AI from the conversation, rewritten when the topic moves, never over a title the person set `pc24`
   - From `id93`.
+  - Closed on 2026-10-16 (checked in the code): `server/chat/book-tidy.mjs` asks the cheap AI for the conversation's title with the chapters and rewrites it only when the AI says the subject changed (`subjectChanged`); `server/sources/claude.mjs` reads it from `tidy.json`; and `server/collect.mjs` `titleOf` puts the title the person set (`placements`) before it, so the person's own title is never overwritten. 12 conversations have a `tidy.json` on this PC.
 
 ### The chat, redesigned again (2026-10-14)
 
@@ -111,8 +112,9 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Released in v0.2.4.
   - Headings inside a reply stay close to the text size (1.15, 1.08 and 1 times the text), with tight margins.
   - How to confirm it is done: open a project chat; only the title line sits above the messages; the button by Send opens its menu and Esc or a click outside closes it; a reply with headings reads like the rest of the text, a step bolder.
-- [ ] **in progress:** A chat opens at once: its newest messages first, the older ones as you scroll up `pc15`
+- [x] A chat opens at once: its newest messages first, the older ones as you scroll up `pc15`
   - From `id84`.
+  - Closed on 2026-10-16 (measured): it was built on 2026-10-14 (`hub.mjs` `itemsOf` pages by `before`/`from`, `chat.js` asks the older page near the top, `api.chatHistory` takes the cursor) and was never ticked. On the real server this conversation (82 MB) opens in 0.7 s with a 140 KB first page of its newest items. The one conversation that did not open was an 894 MB one, `pc38`.
 - [x] An autonomous way: one prompt and the chat works to the end, deciding on its own and listing its decisions `pc16`
   - From `id89`. It stops only to spend past the monthly limit (the owner's choice on 2026-10-10); publishing and deleting it does on its own; everything else it decides, writes down and goes on.
   - Built on 2026-10-11 (`server/chat/run.mjs`, `hub.mjs`, `safety.mjs`, `guard.mjs`): Autonomous is the default of every new chat, runs in Claude Code's own `auto` permission mode, a permission that reaches session-map is left for the owner ("Ficou para você"), AskUserQuestion is answered "decide yourself", a force push is refused in every way (relay and a PreToolUse hook), and a git snapshot under `refs/session-map/safety` is taken at each turn and before a destructive command. Reaches the page with the next version.
@@ -158,3 +160,6 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 
 - [x] **DeepSeek:** A DeepSeek conversation opens on the page read-only, and continues in the DeepSeek app `pc33`
   - From `id119`. `transcriptOf` in `server/chat/hub.mjs` also finds the DeepSeek log (`sessions/<project>/<session-id>/session.v4.jsonl.zstd`, the newest generation), and `itemsOf` dispatches to the right `readConversation` by the file's suffix. A DeepSeek row comes with `chattable: false`, so `start` refuses to drive one with a claude process (the `409 live-chat` backstop) and the sheet shows it read-only with **Open in DeepSeek** — the same read-only flow a VS Code conversation uses. Images and helper transcripts stay Claude-only for now.
+- [x] A conversation of hundreds of megabytes opens on its newest part and says the older part was cut `pc38`
+  - Found on 2026-10-16 while measuring `pc15`: one of the owner's conversations is 894 MB (surigo, US$ 4 228), and asking for it answered `500 internal`, because a file read as one string stops at about 512 MB. `server/sources/claude-conversation.mjs` now reads a transcript larger than 192 MB from its last 192 MB, starting at the first whole line (`readTail`), keeps the position so a conversation that goes on being written is read from where the last read stopped, and `server/chat/hub.mjs` adds `olderCut: true` to the page it answers. The cost on the page was never taken from this read, so it stays right. Measured: the 894 MB one opens with its newest 100 of 1 381 items; a 128 MB tail reads in 0.3 s. Transcripts up to 192 MB (this one, 82 MB) are read whole as before. The page does not yet say "older part not shown" (`olderCut` is ignored for now).
+  - Proof: `test/sources-conversation.test.mjs` (the tail read, the growth after it, a small one read whole).

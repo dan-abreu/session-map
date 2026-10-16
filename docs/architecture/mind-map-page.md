@@ -55,8 +55,9 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
 
 ### Speed
 
-- [ ] **in progress:** A new state redraws only the parts of the screen that changed, never the whole page `mm44`
+- [x] A new state redraws only the parts of the screen that changed, never the whole page `mm44`
   - Today every poll redraws the map, the conversations, Live and the open area, even when nothing changed. From `id84`.
+  - Closed on 2026-10-16 (measured): a `MutationObserver` on the live page for 17 seconds, three polls each, all answered 304 (nothing new): 0 changes in Home, Map, Requests, Changes, Health, Costs, Conversations and Flow in most windows. The exception is by design, written in `poll()` of `app.js`: a new minute redraws the mind map (about 185 changes) and the conversation list (21) so the relative times and working marks keep aging, once a minute, not once per poll. The 304 answer of the state poll (`sv09`) is what keeps the rest still. A redraw of the hidden map while another area is open is the one waste left, and it is a minute apart.
 
 ### Views
 
@@ -94,7 +95,8 @@ Plain ES modules and a vendored `d3` for zoom and drag, no build step. Clicking 
   - Applies to every origin (VS Code, terminal, map) and to archived conversations, including ones Claude Code already deleted.
   - The chat composer: pasted, dropped or picked images, `@` file mentions and `/` commands (the project's skills); "thinking" and the task list with the current step; edits as before/after diffs, accepted or rejected in the permission card; stop (also Esc); plan mode; model and mode picker; Enter, Shift+Enter, Esc, arrow up for the last message; copy buttons on replies and code.
   - Where: `server/sources/claude-conversation.mjs` reads it, `server/web/transcript.js` and `md.js` draw it, the same in the chat sheet and in History.
-- [ ] **important:** The rest of the chat experience `mm23`
+- [ ] **later:** The rest of the chat experience `mm23`
+  - Parked on 2026-10-16 (the finish plan): the owner said on 2026-10-16 that the program already has everything he wants; these four chat pieces wait until he misses one.
   - History opens an archived conversation in the same chat sheet, with search and jump (today it reads in its own pane, with the same drawing but no search bar).
   - Answer Claude's multiple-choice questions from the page in a page chat, and attach files that are not images (today only images; a project file is pointed at with `@`).
   - The built-in `/` commands of Claude Code that work in a page chat, beside the skills.

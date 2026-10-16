@@ -48,7 +48,8 @@ The server compares each session's state from one read to the next and turns the
 
 - [x] **Watch the plan's weekly limit** `wa09`
   - Read the limit warnings in the histories (such as "hit your weekly limit" and the reset time) and hold what is not urgent.
-- [ ] **Warn about new code outside the map and the Flow** `wa10`
+- [ ] **later:** Warn about new code outside the map and the Flow `wa10`
+  - Parked on 2026-10-16 (the finish plan): part of the golden rule `fl12`, parked with it.
   - "New feature outside the map: add it?"; in `flow.sync` mode `auto` it adds it. Part of the golden rule in `fl12`.
 
 ### The projects' records

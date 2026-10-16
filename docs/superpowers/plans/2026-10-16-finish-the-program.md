@@ -35,7 +35,7 @@ Status: done 2026-10-16 (`mm27`, `mm63`). The review is one button on the Reques
 
 ### Task 6: the whole program works (`or67`)
 The rows that are declared and not wired, and the restart of the server. Files: `server/ai/brainpanel.mjs`, `server/ai/functions.json`. Test: `node --test test/brainpanel.test.mjs`.
-Status: not started.
+Status: done 2026-10-16 (`or67`). The server was restarted by the agreed restart and the two smoke tests read it clean. The five runtime modules the running program does not reach are named with their reason in `or67`; none was deleted.
 
 ### Task 7: prompt-cache economy (`sv17`) and the tidier (`pc36`)
 Files: `server/chat/context.mjs`, `server/chat/tidy-words.mjs`. Test: `node --test test/chat-context.test.mjs`. Proof of the gain: the share of cache read in `node scripts/agent-usage.mjs`'s companion measure after a day of use.
