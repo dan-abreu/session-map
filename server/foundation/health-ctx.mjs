@@ -9,6 +9,7 @@ import { isSecretsFile, safeResolve } from '../files.mjs';
 import { log } from '../log.mjs';
 import { normalizePath } from '../paths.mjs';
 import { readJsonFile } from '../store.mjs';
+import { dependencyDirsOf } from '../sources/count.mjs';
 import { findDoc } from './health-find.mjs';
 import { effectiveProfile } from './profile.mjs';
 
@@ -20,11 +21,15 @@ const TAGS_MAX = 500;
 const SUBJECTS_MAX = 200;
 const MANIFESTS = { 'package.json': 'node', 'composer.json': 'php', 'pubspec.yaml': 'dart' };
 // A manifest under one of these is a sample or a test case, not a package of the project.
-const SAMPLE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'test', 'tests', 'example', 'examples', 'templates', 'template', 'node_modules', 'vendor']);
-// True for a file that lives in a sample or test folder: what it reads or declares belongs to the sample, not to the project.
-export const isSamplePath = (path) => dirOf(path).split('/').some((s) => SAMPLE_DIRS.has(s.toLowerCase()));
-// The folders of a fixture or a copy of someone else's code: the documents in them describe a made-up or foreign project.
-const FIXTURE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'node_modules', 'vendor']);
+// (A folder named vendor is not in this list: it is a library only where the project's files show it, sources/count.mjs.)
+const SAMPLE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'test', 'tests', 'example', 'examples', 'templates', 'template', 'node_modules']);
+// The folders that hold tests and made-up projects. Nothing else is guessed from a name: a project may keep its real product in
+// a folder called examples or vendor.
+const TEST_DIRS = new Set(['fixtures', '__fixtures__', 'testdata', 'test', 'tests', '__tests__']);
+// True for a file that lives in a test or fixture folder: what it reads or declares belongs to the test, not to the project.
+export const isSamplePath = (path) => dirOf(path).split('/').some((s) => TEST_DIRS.has(s.toLowerCase()));
+// The folders of a made-up project: the documents in them describe something else, with links broken on purpose.
+const FIXTURE_DIRS = new Set(['fixtures', '__fixtures__', 'testdata']);
 export const isFixturePath = (path) => dirOf(path).split('/').some((s) => FIXTURE_DIRS.has(s.toLowerCase()));
 // Variables every operating system sets: a project reads them, it does not configure them.
 export const SYSTEM_VARS = /^(path|home|user|username|userprofile|appdata|localappdata|systemroot|temp|tmp|tmpdir|shell|pwd|lang|term)$/i;
@@ -83,12 +88,13 @@ const PARSERS = { node: parseNode, php: parseComposer, dart: parsePubspec };
 // `dir` is '' for the root. A manifest that does not parse is left out: the checks then see one package fewer, not an error.
 export function packagesOf(paths, readText) {
   const out = [];
+  const deps = dependencyDirsOf(paths);
   let workspaces = false;
   for (const path of [...paths].sort()) {
     const kind = MANIFESTS[baseOf(path)];
     if (!kind) continue;
     const dir = dirOf(path);
-    if (isSamplePath(path)) continue;
+    if (dir.split('/').some((seg, i, all) => SAMPLE_DIRS.has(seg.toLowerCase()) || (seg.toLowerCase() === 'vendor' && deps.has(all.slice(0, i + 1).join('/').toLowerCase())))) continue;
     const text = readText(path);
     if (typeof text !== 'string') continue;
     const parsed = PARSERS[kind](text);

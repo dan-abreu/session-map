@@ -12,3 +12,4 @@ open) lives in [docs/architecture](../architecture/README.md); the words used he
 | [0004](0004-the-chat-never-moves-on-its-own.md) | The main chat's model never moves on its own |
 | [0005](0005-built-is-not-done.md) | Built is not done: a feature is done when something runs it |
 | [0006](0006-one-model-the-flows.md) | One model of the project, and it is the Flow's |
+| [0007](0007-each-project-is-its-own-world.md) | Each project is its own world: what is kept, where it is written, how a folder is judged |

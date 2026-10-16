@@ -27,13 +27,31 @@ export const LEFT_OUT = ['dep', 'generated', 'binary'];
 
 // What a tracked file is, from its path alone: 'dep' | 'generated' | 'binary' (left out of the sums), or 'test' | 'doc' |
 // 'screen' | 'code'.
-export function kindOfFile(path) {
+// A folder named "vendor" is not always a library: in a delivery app it is where the vendors' screens live. It holds installed
+// libraries when it shows the marks of a package manager (Composer's autoload.php or composer/installed.json, Go's
+// modules.txt); the list of the project's files says so, never the name alone. → the set of such folders (lowercase paths).
+const AMBIGUOUS_DEP_DIRS = new Set(['vendor', 'vendors']);
+const DEP_MARKS = new Set(['autoload.php', 'composer/installed.json', 'modules.txt']);
+export function dependencyDirsOf(paths) {
+  const out = new Set();
+  for (const path of paths) {
+    const segments = String(path).replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean);
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (AMBIGUOUS_DEP_DIRS.has(segments[i]) && DEP_MARKS.has(segments.slice(i + 1).join('/'))) out.add(segments.slice(0, i + 1).join('/'));
+    }
+  }
+  return out;
+}
+
+// deps: what dependencyDirsOf found in the project's files. With it, a folder named vendor is a library only if it is in
+// deps; without it (a caller that has no list of files) the name decides, as it always did.
+export function kindOfFile(path, { deps } = {}) {
   const segments = String(path).replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean);
   const name = segments.at(-1) ?? '';
   const dirs = segments.slice(0, -1);
   const dot = name.lastIndexOf('.');
   const ext = dot > 0 ? name.slice(dot + 1) : '';
-  if (dirs.some((d) => DEP_DIRS.has(d))) return 'dep';
+  if (dirs.some((d, i) => DEP_DIRS.has(d) && (!AMBIGUOUS_DEP_DIRS.has(d) || deps === undefined || deps.has(dirs.slice(0, i + 1).join('/'))))) return 'dep';
   if (dirs.some((d) => GENERATED_DIRS.has(d)) || LOCKFILES.has(name) || GENERATED_RE.test(name)) return 'generated';
   if (BINARY_EXT.has(ext)) return 'binary';
   if (dirs.some((d) => TEST_DIRS.has(d)) || TEST_RE.test(name)) return 'test';
@@ -73,8 +91,10 @@ async function count(root, memo) {
   const files = [];
   const left = { dep: [], generated: [], binary: [] };
   const seen = new Map();
-  for (const path of [...(await trackedFiles(root, memo))].sort()) {
-    let kind = kindOfFile(path);
+  const tracked = [...(await trackedFiles(root, memo))].sort();
+  const deps = dependencyDirsOf(tracked);
+  for (const path of tracked) {
+    let kind = kindOfFile(path, { deps });
     if (LEFT_OUT.includes(kind)) {
       left[kind].push(path);
       continue;

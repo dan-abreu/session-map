@@ -15,7 +15,7 @@ import { loadConfig } from '../config.mjs';
 import { isSecretsFile, safeResolve } from '../files.mjs';
 import { lineAt } from '../foundation/lex.mjs';
 import { projectContext, resolveSpec } from '../imports.mjs';
-import { kindOfFile } from '../sources/count.mjs';
+import { dependencyDirsOf, kindOfFile } from '../sources/count.mjs';
 import { brainDir, readJsonFile, writeAtomic } from '../store.mjs';
 import { flowKey, matchParts, parseFlow } from '../web/flow.js';
 import { ownersAllOf } from './attach.mjs';
@@ -470,9 +470,9 @@ function codeTypeOf(path) {
 
 // What the Flow reads: code and screens (never a test, a fixture, a library, a generated file or a secret), and the
 // few manifests that say what the program is.
-function roleOf(path) {
+function roleOf(path, deps) {
   if (isSecretsFile(path)) return null;
-  const kind = kindOfFile(path);
+  const kind = kindOfFile(path, { deps });
   if (kind === 'dep' || kind === 'generated' || kind === 'binary' || kind === 'test' || kind === 'doc') return null;
   const lower = path.toLowerCase();
   const name = lower.split('/').pop();
@@ -574,7 +574,9 @@ export async function buildFlowModel({
   const cache = smDir && projectId ? usable(readModelCache(smDir, projectId)) : null;
   const all = await listPaths(root, maxFiles);
   const fileSet = new Set(all);
-  let wanted = all.map((path) => ({ path, role: roleOf(path) })).filter((x) => x.role).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // A folder named vendor is a library only where the project's files show it (sources/count.mjs).
+  const deps = dependencyDirsOf(all);
+  let wanted = all.map((path) => ({ path, role: roleOf(path, deps) })).filter((x) => x.role).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   if (wanted.length > maxFiles) {
     notes.push('too-many-files');
     wanted = [...wanted.filter((x) => x.role !== 'code'), ...wanted.filter((x) => x.role === 'code')].slice(0, maxFiles);
@@ -721,8 +723,8 @@ export async function buildFlowModel({
   // The census (fl16): every function of the program, the part that owns it ([] = none claims it, an orphan) and its
   // owner; roles the Flow does not read are still listed, with role null, so the page can filter them itself.
   const census = allPaths.map((path) => {
-    const kind = kindOfFile(path);
-    const role = roleOf(path);
+    const kind = kindOfFile(path, { deps });
+    const role = roleOf(path, deps);
     const partIds = ownersAllOf([path], program, { topLevel })[0] ?? [];
     const known = fileOwner.get(path);
     const owner = known ?? classifyFile({ path, type: codeTypeOf(path), text: headOf(path), imports: [], signals: [], isHook: false });

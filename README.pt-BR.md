@@ -204,7 +204,7 @@ As configurações da máquina ficam em `~/.claude/session-map/config.json`. Tod
   - `roadmap`: um arquivo Markdown, relativo ao projeto, cujas linhas `[x]`/`[ ]` (ou ✅/⬜) viram marcos. `decisions` lê, sob o título chamado `heading`, as linhas que contêm `pendingWhen` como decisões esperando por você.
   - `autoFetchMinutes`: roda `git fetch` nesse intervalo, para os ramos enviados de outras máquinas aparecerem. Desligado por padrão.
   - `ai`: `{ "enabled": false }` aqui desliga a IA só naquele projeto.
-  - `vendored`: pastas com código de outras pessoas guardado dentro do projeto (por exemplo `["server/disciplines"]`). A Fundação as conta como bibliotecas, como o `node_modules`, e não as julga como código do próprio projeto.
+  - `vendored`: pastas com código de outras pessoas guardado dentro do projeto (por exemplo `["server/disciplines"]`). A Fundação as conta como bibliotecas, como o `node_modules`, e não as julga como código do próprio projeto. Uma pasta comum chamada `vendor` só é biblioteca onde os arquivos do projeto mostram Composer ou Go; nos outros projetos ela é código do próprio projeto (as telas de fornecedor de um app de entregas, por exemplo), então liste aqui o código de terceiros que você guarda com um nome comum.
 
 
 ## Contribuir

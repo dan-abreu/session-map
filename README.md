@@ -204,7 +204,7 @@ Machine-wide settings live in `~/.claude/session-map/config.json`. Every key is 
   - `roadmap`: a Markdown file, relative to the project, whose `[x]`/`[ ]` (or ✅/⬜) lines become milestones. `decisions` reads the lines under the heading named `heading` that contain `pendingWhen` as decisions waiting for you.
   - `autoFetchMinutes`: runs `git fetch` that often so branches pushed from other machines show up. Off by default.
   - `ai`: `{ "enabled": false }` here turns the AI off for that project only.
-  - `vendored`: folders of other people's code kept inside the project (for example `["server/disciplines"]`). The Foundation counts them as libraries, like `node_modules`, and does not judge them as the project's own code.
+  - `vendored`: folders of other people's code kept inside the project (for example `["server/disciplines"]`). The Foundation counts them as libraries, like `node_modules`, and does not judge them as the project's own code. A plain folder named `vendor` is a library only where the project's files show Composer or Go; in any other project it is the project's own code (a delivery app's vendor screens, for example), so list third-party code you commit under a plain name here.
 
 
 ## Contributing

@@ -43,6 +43,10 @@ selector and its tabs.
   `docs/configuration.md`, CodeQL, pinned actions with a read-only token, five decision records (`docs/adr/`) and a glossary (fd28).
 - One model of the project, not two: the Flow's. The refresh round builds it, the Foundation's route serves it and "Tudo em dia?"
   reads it, so six of its lines that judged a thin second model now judge the real one (fd25).
+- Each project is its own world, and it is tested: a round writes nothing in any repository and keeps its files under the project's
+  id; a decision on a request touches only that project's registry; nothing climbs out of a project's folder (sv26).
+- A folder named "vendor" is a library only where the project's own files show Composer or Go; before, a delivery app's
+  "vendor" app (459 files) was dropped from the census, the sizes and the Flow as other people's code (fd30).
 - Fixed: the OpenAI price page answers again, and a page that fails is not asked at every look.
 
 ## 0.3.0

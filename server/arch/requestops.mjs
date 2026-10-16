@@ -3,7 +3,7 @@
 // after "Before", and nothing is ever deleted. The change is one care operation (fd14), so the project's care mode decides
 // whether it is written and an undo is recorded. Pure but for the one read of the registry file.
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { requestsOf } from '../web/requests.js';
 import { applyOp } from '../foundation/care.mjs';
 import { RECENT_MS } from './livemark.mjs';
@@ -81,7 +81,9 @@ export function requestStatusOp({ root, arch, code, to, reason, now = Date.now, 
   if (to === 'later' && request.state === 'later') return { ok: true, op: null };
   const part = arch.parts.find((p) => p.id === request.partId);
   const file = part?.file;
-  const path = file ? join(root, file) : null;
+  // The registry is a file of this project: a link in the map that climbs out of the folder is never followed.
+  const inside = typeof file === 'string' && !isAbsolute(file) && !/^[a-z]:/i.test(file) && !file.split(/[\\/]/).includes('..');
+  const path = inside ? join(root, file) : null;
   if (!path || !existsSync(path)) return { ok: false, error: 'bad-path' };
   // A chat may be writing the registry right now: never write over it.
   if (recent(path)) return { ok: false, error: 'busy' };

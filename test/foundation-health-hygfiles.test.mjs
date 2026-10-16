@@ -164,3 +164,11 @@ test('license_check: a tool in a manifest, a licenses table, or a workflow passe
   assert.equal(run('hygiene.license_check', { LICENSE: 'MIT' }).state, 'fail');
   assert.equal(run('hygiene.license_check', { '.github/workflows/ci.yml': 'run: npx licensee detect\n' }).state, 'pass');
 });
+
+test('only a test or a fixture folder is a sample: a project may keep its real product in examples, or in a vendor folder', () => {
+  const at = (file, name) => ({ ...env(name), file, refs: [] });
+  const files = { '.env.example': 'PORT=3000\n' };
+  const facts = [at('src/server.js', 'PORT'), at('examples/demo/app.js', 'DEMO_URL'), at('apps/vendor/lib/main.js', 'VENDOR_API')];
+  const r = run('hygiene.env_example', files, { facts });
+  assert.deepEqual([r.state, r.detail.names], ['fail', ['DEMO_URL', 'VENDOR_API']], 'their variables are the project\'s and are named nowhere');
+});

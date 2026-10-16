@@ -7,7 +7,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isSecretsFile } from '../files.mjs';
 import { log } from '../log.mjs';
-import { kindOfFile, lineCount } from '../sources/count.mjs';
+import { dependencyDirsOf, kindOfFile, lineCount } from '../sources/count.mjs';
 import { runGit } from '../sources/gitqueue.mjs';
 import { lex } from './lex.mjs';
 
@@ -166,7 +166,7 @@ function countedRow(path, type, kind, buf, st, owner) {
   };
 }
 
-function rowOf(root, path, prevRow, owner, readFile, vendored = []) {
+function rowOf(root, path, prevRow, owner, readFile, vendored = [], deps = undefined) {
   const abs = join(root, path);
   let st;
   try { st = lstatSync(abs); } catch { return null; }
@@ -174,7 +174,7 @@ function rowOf(root, path, prevRow, owner, readFile, vendored = []) {
   if (!st.isFile()) return null;
   if (isSecretsFile(path)) return leftOut(path, 'secret', st);
   if (isVendored(path, vendored)) return leftOut(path, 'dep', st);
-  const kind = kindOfFile(path);
+  const kind = kindOfFile(path, { deps });
   if (kind === 'dep' || kind === 'generated' || kind === 'binary') return leftOut(path, kind, st);
   if (prevRow && prevRow.bytes === st.size && prevRow.mtime === iso(st.mtimeMs) && (prevRow.included || prevRow.reason === 'binary')) {
     return prevRow.included ? { ...prevRow, kind, owner } : leftOut(path, 'binary', st);
@@ -240,11 +240,13 @@ export async function censusOf(root, prev, { owners = new Map(), readFile = read
   const vendor = vendoredPrefixes(vendored);
   const was = new Map((before?.files ?? []).map((f) => [f.path, f]));
   const { paths, hiddenDep } = await listFiles(root, readDir);
+  // A folder named vendor is a library only where the files show it (kindOfFile); a git-less folder keeps the name rule.
+  const deps = paths.some((p) => /(^|\/)vendors?\//i.test(p)) ? dependencyDirsOf(paths) : undefined;
   const files = [];
   for (const [i, path] of paths.entries()) {
     // Every file is read in one go; between batches the server answers the page, or a big project freezes it.
     if (i > 0 && i % BREATHE_EVERY === 0) await new Promise((r) => setImmediate(r));
-    const row = rowOf(root, path, was.get(path), owners.get(path) ?? null, readFile, vendor);
+    const row = rowOf(root, path, was.get(path), owners.get(path) ?? null, readFile, vendor, deps);
     if (row) files.push(row);
   }
   files.sort(byCodeUnit);

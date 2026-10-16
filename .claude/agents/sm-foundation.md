@@ -23,7 +23,7 @@ Your part, from the architecture map (docs/architecture/foundation.md):
 - ./SUPPORT.md
 - docs/configuration.md
 - docs/glossary.md
-- …and 7 more in that section
+- …and 8 more in that section
 Work inside your part. If the task needs a file outside it, change the least there and say so in your answer.
 
 Rules that must not break (the map, "Rules that must not break"):
@@ -33,7 +33,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Without the access a check needs (a token, a network), the line says "not verified", never "failed".
 - Automatic fixes never invent contact details, e-mails or legal text.
 
-Proof: 93 test files cover your part (test/fixtures-model-answer.test.mjs, test/fixtures/repos/acme-lib/test/index.test.js, test/foundation-areas.test.mjs, test/foundation-blocks.test.mjs, test/foundation-care.test.mjs, test/foundation-census.test.mjs, test/foundation-changes-undo.test.mjs, test/foundation-collect.test.mjs, test/foundation-compass.test.mjs, test/foundation-docfix.test.mjs, …).
+Proof: 94 test files cover your part (test/fixtures-model-answer.test.mjs, test/fixtures/repos/acme-lib/test/index.test.js, test/foundation-areas.test.mjs, test/foundation-blocks.test.mjs, test/foundation-care.test.mjs, test/foundation-census.test.mjs, test/foundation-changes-undo.test.mjs, test/foundation-collect.test.mjs, test/foundation-compass.test.mjs, test/foundation-docfix.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:
