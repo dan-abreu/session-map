@@ -604,12 +604,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Where it went: `fd01`–`fd16` (the Foundation).
   - Status: done on 2026-10-16 (every item it became is ticked; closed in the triage of 2026-10-16). Before: accepted (already planned; nothing new beyond the Foundation).
 
-- [ ] A rule read once serves every agent: read in full once, then a cheap cache read for the other 500 `id102`
+- [x] A rule read once serves every agent: read in full once, then a cheap cache read for the other 500 `id102`
   - Asked: 2026-10-13 — "se quando um agente já leu a regra serve para todos os agentes, assim a regra é lida só uma vez mesmo tendo 500 agentes fazendo o serviço, assim é lido 1 vez"
   - What it means: the fixed block (rules, CLAUDE.md, architecture) stays small and byte-identical across agents, so prompt caching reads it in full once and every other agent pays only the cache read (about 1 to 2% of a full read).
   - How to confirm it is done: the shared prefix is identical across the agents of one project; the cost shows the cheap cache read after the first full read.
-  - Where it went: `sv17`.
-  - Status: accepted.
+  - Where it went: `sv17`; the life of the cache is `sv18` (parked).
+  - Status: done on 2026-10-16. Measured: when another agent of the same model started in the five minutes before, 74 % of the agents found the shared start in the cache; the start is identical, and what is lost is the cache expiring after five minutes between agents (`node scripts/cache-share.mjs`).
 
 - [x] A monthly spending cap by default, so the project never runs with no brake `id103`
   - Asked: 2026-10-13 — the owner asked for maximum economy and to close the leak (a single chat reached thousands of dollars); session-map proposed a default monthly cap the owner can change, and the owner approved.

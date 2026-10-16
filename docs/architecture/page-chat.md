@@ -150,8 +150,9 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
   - Done 2026-10-14: `autoCompactWindow` removed from `guardSettings` in `server/chat/guard.mjs` (the Stop and SessionStart hooks of the book stay); `BOOK_WINDOW` is gone. Raising the window instead (200k or more) was not tried: Claude Code accepts 100k as the least, the fixed start would still be 40% of a 200k window, and the lesson of the routing change is to change one thing at a time and measure it.
   - From `id118`.
   - From `id117`.
-- [ ] The tidier spends by phase: Sonnet medium only when the turn is plan or build; talk and trivial pass the message as written `pc36`
+- [x] The tidier spends by phase: Sonnet medium only when the turn is plan or build; talk and trivial pass the message as written `pc36`
   - From `id147`. `tidy-words.mjs` rewrites every message ≥15 words with Sonnet medium (~US$0.02 each) and doubles the message in the prompt. Waits for the `or35` bench result before any change: if talk keeps a strong model, the tidier may be dropped there; if it moves down, the tidier gains value.
+  - Closed on 2026-10-16 (measured, nothing changed): at most 120 tidied messages in the 7 days of transcripts (lines carrying the marker), about US$ 0.02 each, so under US$ 3 a week. The phase the entry brain gives before the model runs is rule-based and falls to `talk` for a long dictated message with no work verb or file name (`rulesOf`, `server/ai/brain.mjs`), which is exactly the message the tidier is there to break down; skipping `talk` would save cents and risk the owner's own way of writing. `or35` kept the chat on one strong model (`docs/adr/0004-the-chat-never-moves-on-its-own.md`), so the bench the item waited for no longer decides it. Reopen if the weekly number grows (count the marker `[session-map: the person's own words, kept as written]` in the transcripts).
 
 ### The second engine
 

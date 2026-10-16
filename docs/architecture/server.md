@@ -62,10 +62,14 @@ Reads need nothing from `127.0.0.1` (the state, the Flow drawing and its draft, 
   - Closed on 2026-10-16 (triage): measured, 0 "git too slow" events in the 2 last days of the server log; reopen if the error comes back.
   - Today the error log fills with "git too slow": many git commands at once until they time out. From `id84`.
 
-- [ ] **important:** The shared context (rules, CLAUDE.md, architecture) stays small and byte-identical, so prompt caching hits and every agent pays a cache read instead of a full read `sv17`
+- [x] **important:** The shared context (rules, CLAUDE.md, architecture) stays small and byte-identical, so prompt caching hits and every agent pays a cache read instead of a full read `sv17`
   - Read in full once, then paid as a cheap cache read by every other agent of the same project. The prefix must be stable and shared, not rebuilt per chat or per agent.
   - Measured on 2026-10-13 (waste signals, `or24`, last 7 days): of the tokens an agent took in on its first turn, only 18% were paid as cache read and 82% as cache write (6.1M read against 28.1M written over 877 agents), so identical prefixes do not yet clearly hit the cache; not ticked.
+  - Measured again on 2026-10-16 (`node scripts/cache-share.mjs`, last 7 days, 545 agents), and the 2026-10-13 reading was corrected: the start IS identical. When another agent of the same model had started in the five minutes before, 74 % of the agents found the shared start in the cache (371 agents); when none had, 20 % did (174 agents). The 82 % written was the cache expiring between agents (Claude Code writes the five-minute cache for them: 0 one-hour writes), not a prefix that changes. Nothing in session-map's own code was found to break the prefix; the rest is Claude Code's system prompt and tools, which differ by agent type and model. `server/ai/cache-share.mjs`, `test/cache-share.test.mjs` (3).
+  - The one lever left is the cache's life, parked as `sv18`.
   - From `id102`.
+- [ ] **later:** Ask Claude Code for the one-hour cache for the agents it starts, try it on one project and measure `sv18`
+  - Claude Code has `ENABLE_PROMPT_CACHING_1H` (v2.1.108; the release notes and the issue tracker disagree on whether it works for every kind of login, and nothing found says if it reaches subagents). A write to the one-hour cache costs about twice the base input price, against 1.25 times for five minutes, so it pays only when agents of a project come back within the hour: the first turn of 174 of 545 agents found a cold cache. Parked because it changes what the owner spends and its effect on subagents is unknown: try it on one project for a day with `node scripts/cache-share.mjs`, keep it if the cold share falls and the cost does not rise.
 ### Restart
 
 - [x] A chat that needs to restart session-map agrees on the moment with the other chats, and every chat goes on by itself afterwards `sv13`
