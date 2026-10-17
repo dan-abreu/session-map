@@ -271,6 +271,26 @@ export function createBrainView(ctx) {
     return [why.length > 24 ? why : '', chat, note].filter(Boolean).map((s) => h('p', { class: 'br-does' }, s));
   }
 
+  // The switch "Cérebro obrigatório" (id176): on, the program holds the rows of work (guard.mjs, runroute.mjs); off, the
+  // table is told to the chat as advice.
+  function obeySection() {
+    const on = model.obey === true;
+    return h('section', { class: 'br-obey' },
+      h('h2', { class: 'br-sec' }, t('brain.obeyTitle')),
+      h('button', {
+        type: 'button', class: `btn small-btn${on ? ' is-on' : ''}`, 'aria-pressed': on ? 'true' : 'false', 'data-brain': 'obey',
+        onclick: async () => {
+          const res = await api.setBrain({ obey: !on });
+          if (res.ok) {
+            model = res;
+            toast(t('brain.saved'));
+            if (rootEl) { await render(rootEl); rootEl.querySelector('[data-brain="obey"]')?.focus(); }
+          } else toast(t('brain.saveFailed', { why: res.error ?? '—' }));
+        },
+      }, on ? t('brain.obeyOn') : t('brain.obeyOff')),
+      h('p', { class: 'br-hint' }, t('brain.obeyHint')));
+  }
+
   // The program's own functions: what decides, talks and works in the background. A row with no call of its own is not drawn.
   function programSection() {
     const order = ['chat', 'brain', 'opinion', 'background', 'book'];
@@ -468,6 +488,7 @@ export function createBrainView(ctx) {
     root.replaceChildren(h('div', { class: 'dv-wrap br-view' },
       h('h1', { class: 'br-title' }, t('brain.title')),
       h('p', { class: 'dv-lede' }, t('brain.sub')),
+      obeySection(),
       programSection(),
       agentsSection(),
       aisSection(),

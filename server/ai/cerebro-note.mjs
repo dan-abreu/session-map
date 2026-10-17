@@ -1,4 +1,4 @@
-import { AI_FUNCTIONS, effectiveFunctionsOf } from './brainpanel.mjs';
+import { AI_FUNCTIONS, effectiveFunctionsOf, obeyOf } from './brainpanel.mjs';
 import { enginesStatus } from './agent-engines.mjs';
 import { KINDS } from './policy.mjs';
 
@@ -11,7 +11,9 @@ import { KINDS } from './policy.mjs';
 // The rows of work the chat itself routes. The engine rows (the entry brain, the map's bulk work, the book) are run by
 // the program, never by the chat, so they are not told.
 const WORK_ROWS = new Set(['plan', 'gather', 'docs', 'code', 'screen', 'debug', 'review', 'opinion', 'risk', 'agents']);
-const NOTE_MAX = 2000;
+const NOTE_MAX = 2600;
+// The Cérebro obeyed (id176): told first, so the talk hands the work over instead of meeting the guard's refusals.
+export const OBEY_LINE = "The owner set the Cérebro to obey, and the program holds it: you do not edit code files yourself (the edit is refused). Code, screen and debug work goes to the AI of its row (run_other_ai when that AI is not Claude, an agent tagged [code], [screen] or [debug] when it is); merge_other_ai has the program review the delivery with the Review row's AI and merges only on its yes; a refusal comes back with the defects, for the same AI to fix. Plans, specs and other text you still write yourself.";
 // An agent gets its specialist (method, delivery) and the owner's model and level only when its description starts with
 // its kind: the Agentes list of the tab is true only if the chat is told this.
 export const TAG_LINE = `When you start an agent, begin its description with its kind in brackets, like [code] or [review] (kinds: ${KINDS.join(', ')}): session-map then gives that agent its specialist's method and the model and level the owner chose for it.`;
@@ -30,7 +32,8 @@ export function cerebroNote({ ai, status } = {}) {
     .filter((f) => WORK_ROWS.has(f.id))
     .map((f) => ({ f, c: choices[f.id] }))
     .filter(({ c }) => c?.provider && c.provider !== 'auto' && c.provider !== 'claude');
-  if (!named.length) return TAG_LINE;
+  const head = obeyOf(ai) ? [OBEY_LINE, TAG_LINE] : [TAG_LINE];
+  if (!named.length) return head.join('\n');
   const engines = status ?? probe();
   const edits = (p) => ['worktree', 'claude-base'].includes(engines?.[p]?.edits);
   // Rows on the same AI, model and level read as one line, so a table with many rows stays short.
@@ -46,7 +49,7 @@ export function cerebroNote({ ai, status } = {}) {
   const rows = [...groups].map(([how, g]) => `- ${g.ids.join(', ')}${g.kinds.length ? ` (${g.kinds.join(', ')})` : ''}: ${how}`);
   // The rows come last: if the note is ever cut at NOTE_MAX, only the tail of the table is lost, never an instruction.
   const lines = [
-    TAG_LINE,
+    ...head,
     'The owner\'s Cérebro is his own table of which AI does each kind of work; it is the order, not a hint.',
     'Every row not listed below runs on Claude: do it yourself or with your own agents.',
     'To hand a row\'s work to its AI: run_other_ai (kind, provider, a task that names its proof) where it says "edits files": it works in an isolated copy. Check the diff, have it reviewed by another family than the author (a [review] agent on Claude, or ask_other_ai), then merge_other_ai. Where it says "answers only", ask_other_ai for a draft or an opinion that you apply and test yourself.',

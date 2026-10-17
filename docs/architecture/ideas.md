@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170, id171, id174
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170, id171, id174, id176
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -795,3 +795,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the "Precisa de você" group of the conversation list showed every project's waiting conversations whatever the scope (mm49), so the session-map's three showed on Cverino too. Under "Este projeto" it now holds the open project's alone, and its chip counts them; "Todos os projetos" keeps every one. The amber pill at the top still counts every project.
   - Proof: `test/web-convlist-inbox.test.mjs` (the scope tests); full suite green.
   - Status: done on 2026-10-17.
+- [x] The Cérebro in charge: the talk does not do the work the table gives another AI, and the program reviews before it keeps it `id176`
+  - Asked: 2026-10-17 — "pelo o que eu percebi o motor está sem rigidez e a IA invade outras coisas e nao obedece o que foi estabelecido", and he chose "Obrigatório" for the question "Quer que eu deixe o Cérebro obrigatório, de modo que a IA da conversa não consiga fazer sozinha o trabalho que a sua tabela mandou para outra IA?"
+  - What it means: watched live on 2026-10-17, a page chat on DeepSeek was told the table (code to DeepSeek flash high, review by Claude), had `run_other_ai` in its tools, and still wrote the selos code itself on v4-pro: 25 files, 0 hand-overs, 0 reviews. The rows the program runs (the talk, the book, the bulk work) obeyed; the rows of work were only advice. A switch on the Cérebro tab, "Cérebro obrigatório", makes them an order the program holds; off, nothing changes.
+  - How to confirm it is done: switch on; in a page chat ask for a code change: the chat's own edit of a code file is refused with the row's AI named, the work goes through `run_other_ai` to that AI, and `merge_other_ai` merges only after the program's review (an activity line of kind `review`); a refused review comes back with the defects.
+  - Where it went: `or77`.
+  - Status: done on 2026-10-17 (`or77`).

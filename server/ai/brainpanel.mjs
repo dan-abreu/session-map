@@ -67,6 +67,10 @@ function readLevels(smDir) {
 
 // The per-function choices of the config: ai.others.functions = { id: {provider?, model?, effort?} }. The model must
 // belong to the chosen provider's catalog; broken values are dropped: the default of the function stays.
+// The switch "Cérebro obrigatório" (id176): on, the talk hands the rows of work to the AI the table names and the program
+// reviews before it merges (guard.mjs, runroute.mjs). Off, the table is told to the talk as before.
+export const obeyOf = (ai) => ai?.others?.obey === true;
+
 export function functionsOf(ai) {
   const raw = isObject(ai?.others?.functions) ? ai.others.functions : {};
   const out = {};
@@ -108,6 +112,11 @@ export function mergeFunctionChoice(ai, patch = {}) {
   const { others, ...rest } = isObject(ai) ? ai : {};
   const { functions, ...o } = isObject(others) ? others : {};
   const next = { ...functionsOf(ai) };
+  // The Cérebro obeyed (id176): the owner's switch that makes the rows of work an order the program holds.
+  if (patch.obey !== undefined) {
+    if (typeof patch.obey !== 'boolean') return { ok: false, error: 'bad-obey' };
+    if (patch.obey) o.obey = true; else delete o.obey;
+  }
   const given = patch.functions;
   if (given !== undefined) {
     if (!isObject(given)) return { ok: false, error: 'bad-functions' };
@@ -313,5 +322,5 @@ export function panelModel({
     return failed?.size && Array.isArray(f.levelOptions) ? { ...f, levelOptions: f.levelOptions.filter((l) => !failed.has(l)) } : f;
   };
 
-  return { ok: true, matrix, functions: functions.map(withTested), agents: agents.map((a) => (a.row ? { ...a, row: withTested(a.row) } : a)), agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
+  return { ok: true, obey: obeyOf(ai), matrix, functions: functions.map(withTested), agents: agents.map((a) => (a.row ? { ...a, row: withTested(a.row) } : a)), agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
 }

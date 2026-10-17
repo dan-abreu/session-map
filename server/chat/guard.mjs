@@ -58,6 +58,11 @@ export function readGuardOpen(dir) {
   return readConfig(dir)?.guard?.strict !== true;
 }
 
+// The switch "Cérebro obrigatório" of the Cérebro tab (id176), read at each step like the strict mode.
+export function readObey(dir) {
+  return readConfig(dir)?.ai?.others?.obey === true;
+}
+
 // The engine's hold on agents (or25, or32, or33): the AI only says what kind of task an agent does, by the tag that starts
 // its description ("[code] fix the header"); the model and effort come from server/ai/policy.json, set here with
 // updatedInput (proved on 2026-10-13: the subagent ran on the model the hook wrote, not the one the call asked for).
@@ -253,6 +258,95 @@ export function guardAgent(input, { brief = readBrief, functions = {}, open = fa
   return null;
 }
 
+// The Cérebro obeyed (id176): with the owner's switch on, the talk writes no code itself. The code row's work goes to the AI
+// the table names (run_other_ai), or to a [code] agent when the row is on Claude, and the program reviews it before it merges
+// (runroute.mjs). Watched live on 2026-10-17: told the table, a talk on DeepSeek wrote 25 files itself, handed nothing over
+// and had nothing reviewed. Inside an agent the work is the hand-over itself, so only the talk's own steps are held; a
+// plan, a spec or any text file stays the talk's.
+export const CODE_FILE_RE = /\.(?:[cm]?[jt]sx?|py|css|scss|sass|less|html?|vue|svelte|astro|go|rs|java|kts?|scala|cs|php|rb|sql|sh|ps1|psm1|prisma|graphql|gql|c|cc|cpp|h|hpp|swift|dart|lua|ipynb)$/i;
+export const OBEY_ROWS = new Set(['code', 'screen', 'debug']);
+// A row's choice with the general rule over it (brainpanel's effectiveFunctionsOf, without its imports: this runs per step).
+function obeyRow(functions, id) {
+  const all = isObject(functions?.agents) ? functions.agents : null;
+  if (all && typeof all.provider === 'string' && all.provider !== 'auto') return all;
+  return isObject(functions?.[id]) ? functions[id] : null;
+}
+const onOther = (row) => typeof row?.provider === 'string' && row.provider !== 'auto' && row.provider !== 'claude';
+const whoOf = (row) => [row.provider, row.model, row.effort].filter((x) => typeof x === 'string' && x && x !== 'auto').join(' ');
+export const NO_OWN_CODE = (row) => (onOther(row)
+  ? `session-map: the owner's Cérebro is set to obey: code is written by ${whoOf(row)}, not by the talk. Hand it over with run_other_ai (kind code, provider ${row.provider}, a task that names its proof); the program reviews it before it merges.`
+  : "session-map: the owner's Cérebro is set to obey: the talk writes no code itself. Hand it to an agent whose description starts with [code] (or [screen], [debug]); the delivery is reviewed before it is kept.");
+export const NO_CLAUDE_AGENT = (kind, row) => `session-map: the owner's Cérebro is set to obey: [${kind}] work is done by ${whoOf(row)}, not by a Claude agent. Hand it over with run_other_ai (kind ${kind}, provider ${row.provider}).`;
+// The shell ways of writing a code file, by their TARGET (reviewed 2026-10-17: a word like "tee" or "copy" next to any code
+// path held a test run with a log or a grep for a word): a redirection, sed/perl -i, tee, the last path of cp/mv, curl -o,
+// dd of=, touch, a formatter's --write/--fix, git checkout/restore of a path, git apply/patch, PowerShell's writers, a
+// one-line script that writes a named file. Quoted text is words, not targets, except a script's own write call. A
+// program that writes files when it runs cannot be seen from its command line: that stays a documented limit.
+const SEGMENT_SPLIT_RE = /\|\||&&|;|\||\n/;
+const QUOTED_RE = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
+const REDIRECT_RE = />>?\|?\s*([^\s\x22\x27;|&<>]+)/g;
+const SCRIPT_WRITE_RE = /(?:writeFileSync|appendFileSync|writeFile|WriteAllText|WriteAllLines|AppendAllText|write_text|write_bytes)\(\s*['"\x60]([^'"\x60]+)['"\x60]|open\(\s*['"]([^'"]+)['"]\s*,\s*['"][wax]/g;
+const HEREDOC_RE = /<<-?\s*['"]?(\w+)['"]?[\s\S]*?\n\1\b/g;
+const isCode = (p) => CODE_FILE_RE.test(String(p ?? '').replace(/^['"]|['"]$/g, ''));
+const argsOf = (words) => words.filter((w) => !w.startsWith('-'));
+function segmentTarget(words) {
+  const [verb, ...rest] = words;
+  const v = String(verb ?? '').toLowerCase();
+  const plain = argsOf(rest);
+  if ((v === 'sed' || v === 'perl') && rest.some((w) => /^-[a-zA-Z]*i/.test(w) || w === '--in-place')) return plain.find(isCode) ?? null;
+  if (v === 'tee' || v === 'touch') return plain.find(isCode) ?? null;
+  if (['cp', 'mv', 'copy', 'move', 'copy-item', 'move-item', 'install', 'rsync'].includes(v)) return isCode(plain.at(-1)) ? plain.at(-1) : null;
+  if (['set-content', 'add-content', 'out-file', 'new-item', 'sc', 'ac'].includes(v)) {
+    const at = rest.findIndex((w) => /^-(?:path|filepath|literalpath)$/i.test(w));
+    const target = at >= 0 ? rest[at + 1] : plain[0];
+    return isCode(target) ? target : null;
+  }
+  if (v === 'curl' || v === 'wget') {
+    const at = rest.findIndex((w) => w === '-o' || w === '--output' || w === '-O' || w === '--output-document');
+    return at >= 0 && isCode(rest[at + 1]) ? rest[at + 1] : null;
+  }
+  if (v === 'dd') return rest.map((w) => /^of=(.+)$/.exec(w)?.[1]).find(isCode) ?? null;
+  if (rest.some((w) => w === '--write' || w === '--fix' || w === '-w' && /prettier|gofmt/.test(v))) return plain.find(isCode) ?? null;
+  if (v === 'patch') return 'a patch';
+  if (v === 'git') {
+    const sub = plain[0];
+    if (sub === 'apply' || sub === 'am') return 'a patch';
+    if ((sub === 'checkout' || sub === 'restore') && rest.includes('--')) return rest.slice(rest.indexOf('--') + 1).find(isCode) ?? null;
+  }
+  return null;
+}
+export function shellWritesCode(command) {
+  const raw = String(command ?? '').replace(HEREDOC_RE, (m) => m.split('\n')[0]);
+  for (const m of raw.matchAll(SCRIPT_WRITE_RE)) if (isCode(m[1] ?? m[2])) return m[1] ?? m[2];
+  // Quoted text becomes a placeholder: its words and arrows are not commands or targets.
+  const text = raw.replace(QUOTED_RE, (q) => (isCode(q.slice(1, -1)) && !/[\s<>=]/.test(q.slice(1, -1)) ? q.slice(1, -1) : 'Q'));
+  for (const m of text.matchAll(REDIRECT_RE)) if (isCode(m[1])) return m[1];
+  for (const seg of text.split(SEGMENT_SPLIT_RE)) {
+    const words = seg.trim().split(/\s+/).filter(Boolean);
+    while (words.length && /^(?:sudo|env|xargs|npx|command|&)$/.test(words[0])) words.shift();
+    const hit = segmentTarget(words);
+    if (hit) return hit;
+  }
+  return null;
+}
+export const NO_TAG_OBEY = 'session-map: the owner\'s Cérebro is set to obey: start the agent\'s description with its kind, e.g. [code], [review], [search], so the table can send the work to its AI.';
+export function guardObey(input, { functions = {} } = {}) {
+  if (input?.agent_id) return null;
+  const tool = String(input?.tool_name ?? '');
+  const ti = input?.tool_input ?? {};
+  if (MAP_EDIT_TOOLS.has(tool) || tool === 'NotebookEdit') return isCode(ti.file_path ?? ti.notebook_path ?? ti.path) ? deny(NO_OWN_CODE(obeyRow(functions, 'code'))) : null;
+  if (AGENT_TOOLS.has(tool)) {
+    const tag = TAG_RE.exec(String(ti.description ?? ''));
+    // An untagged agent could do the code row's work unseen: with a row on another AI, the kind must be said.
+    if (!tag) return [...OBEY_ROWS].some((id) => onOther(obeyRow(functions, id))) ? deny(NO_TAG_OBEY) : null;
+    const id = FUNCTION_ROWS.get(tag[1]);
+    const row = id && OBEY_ROWS.has(id) ? obeyRow(functions, id) : null;
+    return onOther(row) ? deny(NO_CLAUDE_AGENT(tag[1], row)) : null;
+  }
+  if (tool === 'Bash' || tool === 'PowerShell') return shellWritesCode(commandOf(tool, ti)) ? deny(NO_OWN_CODE(obeyRow(functions, 'code'))) : null;
+  return null;
+}
+
 // The map is written by its clerk (am04): a page chat does not Edit, Write or MultiEdit a markdown file of the project's
 // map folder (docs/arquitetura, docs/architecture or docs/arch, the folders arch/detect.mjs looks in); the map_* tools
 // do it in a fixed order. Only page chats carry this hook, so the person's own edits and terminal chats are untouched.
@@ -331,7 +425,12 @@ export function guardWorkflow(input, { read = readFileSync, limit = POLICY.limit
 // mapEdit: hold map edits to the clerk only where its tools exist (a page chat); the --user copy runs everywhere else.
 // open (id154, the hook reads it from config.json with readGuardOpen): no work rule stops a step; the routing, the
 // snapshot, the force push and the money OK stay.
-export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env, mapEdit = true, functions = {}, open = false } = {}) {
+export async function guardStep(input, { snapshotOn = false, snapshot = takeSnapshot, waitMs = SNAPSHOT_WAIT_MS, brief, env, mapEdit = true, functions = {}, open = false, obey = false } = {}) {
+  // The Cérebro obeyed (id176): the owner's switch holds whether the rest of the guard is open or strict.
+  if (obey) {
+    const own = guardObey(input, { functions });
+    if (own) return own;
+  }
   if (!open) {
     // Inside an agent, the role's tools hold first (id148, or55): an inner Agent, Task or Workflow is on no role's list.
     if (input?.agent_id && GATED_TOOLS.has(input?.tool_name)) {
@@ -405,7 +504,7 @@ export function guardSettings({ snapshot, focus = null }) {
     hooks: {
       PreToolUse: [
         { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
-        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|Workflow|Read', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
+        { matcher: 'Agent|Task|Skill|Edit|Write|MultiEdit|NotebookEdit|Workflow|Read', hooks: [{ type: 'command', command, timeout: HOOK_TIMEOUT_S }] },
       ],
       Stop: [{ hooks: book('--stop') }],
       SessionStart: [{ matcher: 'compact', hooks: book('--compact') }],
