@@ -341,3 +341,36 @@ test('the book job asks for room for its answer, and a background job keeps the 
     assert.ok(ANSWER_TOKENS.book >= 2048);
   } finally { rmSync(smDir, { recursive: true, force: true }); }
 });
+
+// 2026-10-17, watched live: the Cérebro's background row said DeepSeek flash, yet "where does this idea go" (kind 'place')
+// went to Gemini, OpenAI or DeepSeek as the old router spread it (81 OpenAI, 40 Gemini, 3 DeepSeek in the log). The row
+// is the owner's order for the map's bulk work too (id174, or76): its AI, model and level, with room for the thinking.
+test('the map\'s bulk work (place) obeys the Cérebro\'s background row: its AI, model and level; on Claude, Claude does it', async () => {
+  const { ANSWER_TOKENS, REASONING_ROOM, aiKeyHash } = await import('../server/ai/runner.mjs');
+  const { reviewPicks } = await import('../server/ai/review.mjs');
+  const keys = [];
+  for (let i = 0; keys.length < 3; i++) if (!reviewPicks(aiKeyHash({ kind: 'place', n: i }))) keys.push({ kind: 'place', n: i });
+  const smDir = mkdtempSync(join(tmpdir(), 'sm-runner-place-'));
+  try {
+    const write = (background) => writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { background } } } }));
+    const asked = [];
+    const apiRun = async (prompt, o) => { asked.push([o.provider, o.model, o.effort ?? null, o.maxTokens ?? null]); return { ok: true, value: { partId: 'p' }, costUSD: 0.0006 }; };
+    const { run, calls } = fakeRun([{ ok: true, value: { partId: 'c' }, costUSD: 0.001 }]);
+    // Every AI has a key and the old router would rather pick another: the row still wins.
+    const opts = { smDir, bin: 'claude', run, apiRun, keyOf: () => 'sk-x', others: () => ({ enabled: true, dailyUSD: 5, off: [], keys: ['openai', 'gemini', 'deepseek'], models: {} }), now: () => Date.now() };
+
+    write({ provider: 'deepseek', model: 'deepseek-flash', effort: 'high' });
+    assert.deepEqual((await new AiQueue(opts).ask({ key: keys[0], prompt: 'where', sensitivity: 'internal' })).value, { partId: 'p' });
+    assert.deepEqual(asked, [['deepseek', 'deepseek-flash', 'high', REASONING_ROOM]], 'the row\'s AI, model and level, with room to think');
+    assert.ok(REASONING_ROOM >= 4096 && ANSWER_TOKENS.book > 4096, 'a thinking level ate 4096 tokens in the live book calls');
+
+    write({ provider: 'gemini', model: 'gemini-3.1-flash-lite' });
+    await new AiQueue(opts).ask({ key: keys[1], prompt: 'where', sensitivity: 'internal' });
+    assert.deepEqual(asked[1], ['gemini', 'gemini-3.1-flash-lite', null, null], 'no level asked: no extra room, the default answer size');
+
+    write({ provider: 'claude', model: 'haiku' });
+    await new AiQueue(opts).ask({ key: keys[2], prompt: 'where', sensitivity: 'internal' });
+    assert.equal(asked.length, 2, 'no outside AI for a row on Claude');
+    assert.equal(calls.length, 1, 'Claude did it');
+  } finally { rmSync(smDir, { recursive: true, force: true }); }
+});

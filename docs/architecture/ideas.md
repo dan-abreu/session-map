@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170, id171
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170, id171, id174
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -774,6 +774,12 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Limits: in a talk on OpenAI or Gemini the program's own tools work (read, edit, run commands in the project), but session-map's tools, Claude's helpers and pasted pictures do not; a conversation keeps the AI it began on.
   - Where it went: `or75`.
   - Status: done on 2026-10-17 (`or75`).
+- [x] The Cérebro obeyed everywhere it was watched: the map's bulk work follows the background row, and the book's answer is not cut `id174`
+  - Asked: 2026-10-17 — "quero que monitore se está chamando as API, se ta fucionando mesmo o cerebro" and, after the report, "pode corrigir logo"
+  - What it means: a live watch of the program while the owner used it (every call to another AI, the model each answer came from, its tokens and cost) found two defects. (1) "Where does this idea go" (the map's bulk work, kind `place`) ignored the Cérebro's background row: the old router spread it by quality per dollar (81 calls to OpenAI, 40 to Gemini, 3 to DeepSeek in the log, while the row said DeepSeek flash). (2) The book's titles and summaries had room for 4096 tokens, and a thinking level spends that room too: on DeepSeek v4-pro at max, 7 of 12 summaries came back cut at exactly 4096, each one paid (about US$ 0.017) and none redone.
+  - How to confirm it is done: with the background row on DeepSeek flash, the activity log shows every `place` call on `deepseek/deepseek-flash` (Claude still re-asks a sample); with the row on Claude, Claude answers; no `book` call ends in `answer-cut` at 4096.
+  - Where it went: `or76`.
+  - Status: done on 2026-10-17 (`or76`).
 - [x] Each project's conversations only in that project `id172`
   - Asked: 2026-10-17 — "as conversas no sessiom está misturando a conversa de um projeto com o outro,a caba que eu nao sei o que realmente está acontecendo"
   - What it means: the session-map was built inside the Cverino folder on 2026-10-08..10, so two of its conversations (`9d919bf9`, `3d5c6af5`) were listed under Cverino, and Cverino's Claude memory kept two session-map notes that every Cverino conversation read. The two conversations were moved to session-map (placements.json), the notes left Cverino's memory (the mission went to session-map's, the old history log to `.dev/historia/`). A code defect showed on the way: a page chat the owner moved to another project was still listed in the old one from page-chats.json, and from there shown as a visitor in the new one; now a conversation whose transcript is read is listed only where its transcript is grouped.

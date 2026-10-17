@@ -24,8 +24,11 @@ const CACHE_MAX = 1000;
 // or a full id; anything else falls back.
 const EFFORT_WORDS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 // How long an answer a job may need. The default (1024 tokens) fits a short label, not the titles and summaries of six chapters in
-// Portuguese: asked of DeepSeek it came back cut every time, the call was paid, and Claude did the work after it.
-export const ANSWER_TOKENS = { book: 4096 };
+// Portuguese: asked of DeepSeek it came back cut every time, the call was paid, and Claude did the work after it. At 4096 a
+// thinking level ate the room (2026-10-17: v4-pro at max, 7 of 12 cut at exactly 4096, each paid): the room counts the
+// thinking too, so the book gets 16384. A short job thinking at a level gets REASONING_ROOM.
+export const ANSWER_TOKENS = { book: 16384 };
+export const REASONING_ROOM = 8192;
 const VSCODE_EXT_RE = /^anthropic\.claude-code-(\d+)\.(\d+)\.(\d+)/;
 
 export const aiRunnerDir = (smDir) => join(smDir, 'ai-runner');
@@ -164,6 +167,13 @@ const tokensOf = (res) => ({
   ...(Number.isFinite(res?.tokensOut) && res.tokensOut > 0 ? { tokensOut: res.tokensOut } : {}),
   ...(Number.isFinite(res?.tokensCacheHit) && res.tokensCacheHit > 0 ? { cacheHit: res.tokensCacheHit } : {}),
 });
+
+// The level the row asks for and the room its thinking needs: a thinking model counts its reasoning in the answer's room.
+const answerRoom = (effort, functionId) => {
+  const thinks = typeof effort === 'string' && effort && effort !== 'off';
+  const maxTokens = ANSWER_TOKENS[functionId] ?? (thinks ? REASONING_ROOM : undefined);
+  return { ...(maxTokens ? { maxTokens } : {}), ...(effort ? { effort } : {}) };
+};
 
 // Background calls to the user's own claude: one at a time, capped per hour, cached by content in smDir/ai-cache.json.
 // others: () => othersSettings(...) ({enabled, dailyUSD, off, models, keys}), read on every call; with apiRun and keyOf
@@ -359,12 +369,22 @@ export class AiQueue {
       && !isQuotaPaused(quota, p) && this.#spentToday(p, now) + this.#held(p) < s.dailyUSD);
   }
 
-  // Where a new job goes: {provider, model} of an outside AI, or null for Claude. Claude conducts: with any other AI
-  // available the bulk goes to them, spread by quality per dollar and how busy each is; Claude checks and catches.
+  // Where a new job goes: {provider, model, effort?} of an outside AI, or null for Claude. The Cérebro's background row
+  // is the owner's order for the map's bulk work too (id174): its AI, model and level; on Claude, or on an AI with no
+  // key, Claude does it. #answerOutside still checks the row's AI (off, paused, credit, cap) and Claude still reviews a
+  // sample. Only with no row (or 'auto') the bulk is spread by quality per dollar and how busy each AI is.
   #target(kind, sensitivity) {
     if (!HELPER_KINDS.has(kind)) return null;
     const s = this.#settings();
     if (!s) return null;
+    const row = this.#functionChoice('background');
+    const named = typeof row?.provider === 'string' && row.provider !== 'auto' ? row.provider : null;
+    if (named) {
+      if (named === 'claude' || !providerOf(named) || !(s.keys ?? []).includes(named)) return null;
+      const model = typeof row.model === 'string' && row.model ? row.model : bulkModelOf(named, s.models);
+      const effort = typeof row.effort === 'string' && row.effort !== 'auto' && levelsOf(named, model).includes(row.effort) ? row.effort : null;
+      return { provider: named, model, ...(effort ? { effort } : {}) };
+    }
     const routed = route({ kind, sensitivity, available: this.#usable(s, kind, this.#now()), stats: this.#stats(), models: s.models });
     const candidates = applyGroup(routed, this.#group(), { kind }).candidates;
     if (!candidates.length) return null;
@@ -389,7 +409,7 @@ export class AiQueue {
   // A thrown error is not logged: its message could quote the request, key included.
   async #askOutside(target, key, prompt, schemaHint) {
     try {
-      return await this.#apiRun(prompt, { provider: target.provider, model: target.model, key, schemaHint });
+      return await this.#apiRun(prompt, { provider: target.provider, model: target.model, key, schemaHint, ...answerRoom(target.effort) });
     } catch {
       return { ok: false, error: 'helper-threw' };
     }
@@ -405,7 +425,7 @@ export class AiQueue {
     if (!s || !(s.keys ?? []).includes(provider) || (s.off ?? []).includes(provider) || pausedFor(this.#state.helper, provider, kind)) return viaClaude();
     const key = await Promise.resolve(this.#keyOf(provider)).catch(() => null);
     if (!key) return viaClaude();
-    const estimateUSD = estimateCostUSD(provider, target.model, prompt, undefined, schemaHint);
+    const estimateUSD = estimateCostUSD(provider, target.model, prompt, answerRoom(target.effort).maxTokens, schemaHint);
     const flight = preflight(this.#quota(), provider, estimateUSD);
     if (!flight.ok) {
       log('warn', 'ai-helper-fallback', { provider, error: `quota-${flight.reason}` });
@@ -462,13 +482,14 @@ export class AiQueue {
           : s.models?.[provider] ?? providerOf(provider)?.defaultModel ?? null;
         const eff = chosen?.effort;
         const useEffort = typeof eff === 'string' && eff && eff !== 'auto' && levelsOf(provider, model).includes(eff) ? eff : null;
-        const estimateUSD = estimateCostUSD(provider, model, prompt, undefined, schemaHint);
+        const room = answerRoom(useEffort, functionId);
+        const estimateUSD = estimateCostUSD(provider, model, prompt, room.maxTokens, schemaHint);
         const flight = preflight(this.#quota(), provider, estimateUSD);
         const ticket = flight.ok ? this.reserveOutside(provider, estimateUSD, s.dailyUSD) : null;
         if (ticket) {
           const t0 = this.#now();
           let res;
-          try { res = await this.#apiRun(prompt, { provider, model, key, schemaHint, ...(ANSWER_TOKENS[functionId] ? { maxTokens: ANSWER_TOKENS[functionId] } : {}), ...(useEffort ? { effort: useEffort } : {}) }); } catch { res = { ok: false, error: 'helper-threw', costUSD: estimateUSD }; }
+          try { res = await this.#apiRun(prompt, { provider, model, key, schemaHint, ...room }); } catch { res = { ok: false, error: 'helper-threw', costUSD: estimateUSD }; }
           const paid = Number.isFinite(res?.costUSD) ? res.costUSD : estimateUSD;
           ticket.settle(paid, projectId);
           this.#bookMonth(root, paid);
