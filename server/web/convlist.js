@@ -351,6 +351,10 @@ export function createConvList(ctx) {
       }, icon('more', 'cv-move-icon')));
   }
 
+  // That box is wider than the time it replaces, so the line says how many characters its cost has and the time's column
+  // holds back as much on hover (style.css .cv-line:hover .cv-when): the title ends before the box, not under it.
+  const hoverRoom = (e) => (e.row.costUSD != null ? `--cv-cost-ch:${ctx.money(e.row.costUSD).length}` : null);
+
   // An activity chat of the orchestrator: one line under it, its mark, title and time; item and model in its tooltip.
   function kidView(e) {
     const tt = ctx.t();
@@ -362,7 +366,7 @@ export function createConvList(ctx) {
     const tone = toneOf(row);
     const mark = tone === 'busy' ? null : KID_ICON[tone] ?? 'check';
     return h('li', { class: 'cv-item cv-kid' },
-      h('div', { class: 'cv-line' },
+      h('div', { class: 'cv-line', style: hoverRoom(e) },
         h('button', {
           type: 'button', class: `cv-row tone-${tone}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`, 'data-session': row.sessionId,
           'aria-current': current ? 'true' : null, title: [title, job].filter(Boolean).join('\n'), onclick: () => ctx.onOpen(e),
@@ -389,7 +393,7 @@ export function createConvList(ctx) {
     const other = e.home ?? (group === 'needs' && (scope === 'all' || e.project.id !== ctx.project()?.id) ? e.project : null);
     const need = e.need ? (e.need.text ?? tt(e.need.key)) : '';
     const orch = isOrchestrator(row);
-    const line = h('div', { class: 'cv-line' },
+    const line = h('div', { class: 'cv-line', style: hoverRoom(e) },
       h('button', {
         type: 'button', class: `cv-row tone-${group === 'needs' ? 'waiting' : toneOf(row)}${state === 'unseen' ? ' is-unseen' : ''}${current ? ' is-current' : ''}`,
         'data-session': row.sessionId, 'aria-current': current ? 'true' : null,

@@ -2249,7 +2249,7 @@ body.is-empty .convs { display: none; }
   opacity: 0; pointer-events: none; transition: opacity var(--dur-fast);
 }
 .cv-line:hover .cv-hov, .cv-line:has(:focus-visible) .cv-hov { opacity: 1; pointer-events: auto; }
-.cv-line:hover .cv-when, .cv-line:has(:focus-visible) .cv-when { visibility: hidden; }
+.cv-line:hover .cv-when, .cv-line:has(:focus-visible) .cv-when { min-width: calc(var(--cv-cost-ch, 0) * 1ch + 20px); visibility: hidden; }
 .cv-cost { padding: 0 2px; font-size: var(--fs-2xs); font-weight: 600; color: var(--ink-2); }
 .cv-move {
   display: grid; place-items: center; width: 24px; height: 22px;
@@ -2261,7 +2261,7 @@ body.is-empty .convs { display: none; }
 .cv-move-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 @media (hover: none) {
   .cv-hov { top: auto; bottom: 6px; opacity: 1; pointer-events: auto; }
-  .cv-line:hover .cv-when, .cv-line:has(:focus-visible) .cv-when { visibility: visible; }
+  .cv-line:hover .cv-when, .cv-line:has(:focus-visible) .cv-when { min-width: 0; visibility: visible; }
   .cv-row, .cv-kids .cv-kid .cv-row { padding-right: 34px; }
   .cv-kid .cv-cost { display: none; }
 }

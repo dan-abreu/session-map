@@ -316,6 +316,16 @@ test('cost and ⋯ wait in a box shown on hover or focus, in place of the time',
   assert.match(css, /@media \(hover: none\) \{[^}]*\.cv-hov \{[^}]*opacity: 1/, 'a touch screen shows them always');
 });
 
+test('the box is wider than the time, so the line holds back room for its cost and the title ends before the box', async () => {
+  const { list } = await draw(stateOf([conv('a', { costUSD: 3.1 }), conv('b', { costUSD: null })]));
+  const [withCost, noCost] = withClass(list, 'cv-line');
+  assert.match(withCost.attrs.style, /--cv-cost-ch:\s*\d+/, 'the line says how many characters its cost has');
+  assert.ok(!noCost.attrs.style, 'no cost, nothing to hold back');
+  const css = readFileSync(new URL('../server/web/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.cv-line:hover \.cv-when, \.cv-line:has\(:focus-visible\) \.cv-when \{[^}]*min-width: calc\(var\(--cv-cost-ch/, 'the time column keeps that room on hover');
+  assert.match(css, /\.cv-line:hover \.cv-when, \.cv-line:has\(:focus-visible\) \.cv-when \{ min-width: 0; visibility: visible/, 'a touch screen shows the time, so it keeps no room');
+});
+
 test('"All projects" keeps one card per project under Needs you, which stays one group for every project', async () => {
   const state = mixed();
   const notes = state.projects[1];
