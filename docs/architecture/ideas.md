@@ -11,7 +11,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
-- Clarity and polish: id56, id121, id126, id161, id162
+- Clarity and polish: id56, id121, id126, id161, id162, id163
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115, id116
@@ -717,3 +717,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: resting the pointer on any card, the title ends with its ellipsis about 8 px before the cost; on a touch screen nothing changes.
   - Where it went: `mm68`.
   - Status: done on 2026-10-16 (`mm68`, commit ce51341).
+- [x] The projects are the ones inside his projects folder (C:/dev), not everything Claude ever ran in `id163`
+  - Asked: 2026-10-16 — "danie é meu sistema do computador, porque ta lendo tudo, era só pra ser os projetos dentro diretorio especifico, ta no c:/dev, ta lendo o c:/ todo"
+  - What it means: measured on 2026-10-16: the program does not walk the disk; it lists every folder where a Claude conversation ever ran (Claude's own history), and his Windows user folder was one: 4 conversations and 54% of the 30-day cost (US$ 3,489 of 6,439), shown as a project like `cverino`. A new setting, `projectsRoot` in `config.json`, names the folder he keeps his projects in; the folders outside it wait behind the "other folders" row of the picker (`id161`). Set to his projects folder on his PC.
+  - How to confirm it is done: with `"projectsRoot": "C:/dev"`, the picker lists only what is inside C:/dev (session-map, cverino, surigo, dnd_mmorpg) and "danie" waits behind the row with the reason "fora da pasta dos seus projetos"; without the setting nothing changes; the cost still counts.
+  - Where it went: `mm69`.
+  - Status: done on 2026-10-16 (`mm69`; checked by running the collector on his real history with the setting: `danie` is "outside", the four projects are not). The running server needs its restart.

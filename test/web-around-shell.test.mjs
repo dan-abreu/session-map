@@ -196,7 +196,7 @@ test('the folders that are not projects the owner keeps wait behind one row, wit
   } finally { globalThis.document = real; }
   for (const lang of ['en', 'pt-BR']) {
     const t = translator(lang);
-    for (const key of ['project.othersHide', 'project.scratch.gone', 'project.scratch.temp', 'project.scratch.tool']) assert.notEqual(t(key), key, `${lang}: ${key} is written`);
+    for (const key of ['project.othersHide', 'project.scratch.gone', 'project.scratch.temp', 'project.scratch.tool', 'project.scratch.outside']) assert.notEqual(t(key), key, `${lang}: ${key} is written`);
     assert.match(t.count('project.others', 2), /^2 /, lang);
   }
 });

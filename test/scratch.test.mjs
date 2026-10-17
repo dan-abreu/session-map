@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scratchWhy } from '../server/scratch.mjs';
+import { projectsRootsOf, scratchWhy } from '../server/scratch.mjs';
 
 const TMP = 'C:\\Users\\danie\\AppData\\Local\\Temp';
 const here = () => true;
@@ -27,4 +27,22 @@ test('a project the owner keeps is never put away: his repositories, his home fo
   // A folder merely starting like the temp one is not inside it.
   assert.equal(why(`${TMP}-keep\\site`), null);
   assert.equal(why('C:/dev/my.project/app'), null);
+});
+
+test('with a folder named for his projects, what sits outside it is put away, his home folder first (id163)', () => {
+  const within = ['C:/dev'];
+  const outside = (root, exists = here) => scratchWhy(root, { exists, tmp: TMP, within });
+  assert.equal(outside('C:\\Users\\danie'), 'outside');
+  assert.equal(outside('D:/work/shop'), 'outside');
+  assert.equal(outside('c:/dev-old/site'), 'outside', 'a name that only starts like it is not inside it');
+  assert.equal(outside('C:/dev'), null);
+  assert.equal(outside('c:\\DEV\\cverino'), null, 'case and slashes do not matter');
+  assert.equal(outside('C:/dev/session-map/.dev/sandbox-real'), 'tool', 'a tool folder says what it is even inside it');
+  assert.equal(outside('C:/dev/gone', () => false), 'gone');
+  // Without the setting nothing is outside: it is anywhere, as it always was.
+  assert.equal(why('C:\\Users\\danie'), null);
+  assert.deepEqual(projectsRootsOf({ projectsRoot: 'C:/dev' }), ['C:/dev']);
+  assert.deepEqual(projectsRootsOf({ projectsRoot: ['C:/dev', ' ', 7, 'D:/code'] }), ['C:/dev', 'D:/code']);
+  assert.deepEqual(projectsRootsOf({}), []);
+  assert.deepEqual(projectsRootsOf(null), []);
 });
