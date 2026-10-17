@@ -5,6 +5,7 @@ import { createTranscript, dayName, findHits, latestTodos, timeOf, withDays } fr
 import { brainLine, chatLog, chatState, checkLine, composerSize, contextMeter, stepCounts, stepRoles, stepRuns } from './views.js';
 import { signalCard } from './blocks.js';
 import { errorSignal } from './signals.js';
+import { createMenu } from './menu.js';
 
 const SSE_TYPES = ['user', 'session', 'mode', 'run', 'text', 'thinking', 'tool', 'permission', 'turn-end', 'error', 'draft'];
 // What the header shows (the way it runs, the mode, the session), as opposed to the turns the transcript also holds.
@@ -20,6 +21,11 @@ const endsAsking = (text) => /\?[*_\s]*$/.test(String(text ?? ''));
 const usd = (v) => `US$ ${v.toFixed(2)}`;
 // "settings" runs the chat in the mode of the person's own Claude settings; the rest are picked in Configurações.
 const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
+// The four the composer's footer offers, the way Claude Code's own picker does; the last one picked starts the next
+// conversation too, so a long task is not stopped by a prompt the person already chose to skip.
+const BAR_MODES = ['default', 'acceptEdits', 'plan', 'auto'];
+const MODE_ICONS = { default: 'user', acceptEdits: 'rename', plan: 'list', auto: 'auto', dontAsk: 'stop' };
+const MODE_SAVED = 'sm.chat.mode';
 const SAVED = 'sm.chat';
 // What the composer accepts like Claude Code does (the server checks the same): a few images per message.
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -108,6 +114,10 @@ export function createChat({
   const costEl = q('cost');
   // The one beside it with the memory the conversation carries (pc37).
   const memoryEl = q('memory');
+  // The permission mode in the footer: a chip that opens the four modes.
+  const modeBtn = q('modebtn');
+  const modeMenuEl = q('modemenu');
+  const modeMenu = modeBtn && modeMenuEl ? createMenu({ button: modeBtn, pop: modeMenuEl }) : null;
   bookBtn?.addEventListener('click', () => (bookEl && !bookEl.hidden ? closeBook() : openBook()));
   const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
@@ -500,14 +510,53 @@ export function createChat({
 
   // The permission mode is chosen in Configurações (pc19); the sheet keeps the note that a bypass setting runs as auto.
   function renderMode() {
+    renderBarMode();
     if (!noteEl) return;
     noteEl.hidden = !settings?.downgraded;
     noteEl.textContent = settings?.downgraded ? t()('chat.downgraded') : '';
   }
 
-  // The choice is per conversation: a running one switches now, otherwise it goes with the next message.
+  // The mode the conversation runs in: "settings" shows the one the person's Claude settings hold.
+  const shownMode = () => (choice === 'settings' ? settings?.mode ?? 'default' : choice);
+
+  // The footer's chip ("Automático ˅") and its menu: each mode with what it does, the one in use checked.
+  function renderBarMode() {
+    if (!modeBtn) return;
+    const tt = t();
+    const mode = shownMode();
+    modeBtn.dataset.mode = mode;
+    modeBtn.setAttribute('title', `${tt('chat.modeLabel')}: ${modeName(mode)}\n${tt(`chat.modeHint.${mode}`)}`);
+    modeBtn.setAttribute('aria-label', tt('chat.modeButton', { mode: modeName(mode) }));
+    modeBtn.replaceChildren(...[
+      icon ? icon(MODE_ICONS[mode] ?? 'sliders', 'chat-mode-icon') : null,
+      h('span', { class: 'chat-mode-name' }, modeName(mode)),
+      icon ? icon('chevron', 'chat-mode-chev') : null,
+    ].filter(Boolean));
+    modeMenuEl?.replaceChildren(
+      h('p', { class: 'pm-head' }, tt('chat.modeLabel')),
+      ...BAR_MODES.map((m) => h('button', {
+        type: 'button', role: 'menuitemradio', class: 'pm-row is-two', tabindex: '-1', 'data-mode': m, 'data-close': '',
+        'aria-checked': String(m === mode), onclick: () => setChoice(m),
+      },
+      icon ? icon(MODE_ICONS[m], 'pm-icon') : h('span', { 'aria-hidden': 'true' }),
+      h('span', { class: 'pm-label' }, modeName(m)),
+      m === mode && icon ? icon('check', 'pm-icon chat-mode-check') : h('span', { 'aria-hidden': 'true' }),
+      h('span', { class: 'pm-desc' }, tt(`chat.modeHint.${m}`)))));
+  }
+
+  const savedMode = () => {
+    try {
+      const mode = storage?.getItem(MODE_SAVED);
+      return MODES.includes(mode) ? mode : null;
+    } catch { return null; }
+  };
+
+  // The choice is per conversation: a running one switches now, otherwise it goes with the next message. It is also
+  // remembered, so the next new conversation starts in it.
   async function setChoice(mode) {
     choice = MODES.includes(mode) ? mode : 'settings';
+    try { storage?.setItem(MODE_SAVED, choice); } catch { /* a private window keeps nothing */ }
+    modeMenu?.close(false);
     renderMode();
     if (!key || log?.ended) return;
     const res = await api.chatMode(key, choice);
@@ -1467,7 +1516,7 @@ export function createChat({
     histEnd = 0;
     older = null;
     lastEventId = 0;
-    choice = 'settings';
+    choice = savedMode() ?? 'settings';
     findQuery = '';
     findAt = 0;
     findOpen = false;

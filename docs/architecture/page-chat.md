@@ -35,6 +35,8 @@ A chat is a `claude` CLI process per conversation, driven over its stream. The f
 ### Permissions
 
 - [x] **Claude:** Mode per conversation, or one mode for every Claude on this PC, with undo `pc04`
+- [x] The permission mode back in the composer's footer, like Claude Code's picker: Manual, Edit automatically, Plan mode, Auto mode; the last one picked starts the next conversation `pc39`
+  - From `id173`. pc19 had moved the mode into Configurações, so every new conversation started in the PC's settings mode (none set here: Manual) and a long task stopped at each tool. The bar now has a chip (`data-chat="modebtn"`, icon and name, tinted when hands-off) that opens the four modes with one line each (`data-chat="modemenu"`, `menu.js`); a pick switches a running conversation at once, and is kept in the browser (`sm.chat.mode`) for the next new one. Configurações keeps the full list. `server/web/chat.js`, `index.html`, `style.css`, i18n; `test/web-chat` "the footer picks the permission mode…".
 
 ### Chat states
 

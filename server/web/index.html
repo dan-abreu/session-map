@@ -328,6 +328,11 @@
             <div class="chat-bar">
               <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
               <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+              <!-- The permission mode, like Claude Code's own picker: Manual, Edit automatically, Plan mode, Auto mode. -->
+              <div class="chat-mode">
+                <button type="button" class="chat-mode-btn" id="chatModeBtn" data-chat="modebtn" aria-haspopup="menu" aria-expanded="false" aria-controls="chatModeMenu"></button>
+                <div class="pop-menu chat-mode-menu" id="chatModeMenu" data-chat="modemenu" role="menu" data-i18n-aria="chat.modeLabel" hidden></div>
+              </div>
               <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
               <!-- The memory the conversation carries, "48k / 200k" (pc37). -->
               <span class="chat-memory num" data-chat="memory" hidden></span>
@@ -482,6 +487,10 @@
               <div class="chat-bar">
                 <button type="button" class="icon-btn" data-chat="attach" data-i18n-aria="chat.attach" data-i18n-title="chat.attach"><svg><use href="#i-attach"/></svg></button>
                 <input type="file" data-chat="filepick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+                <div class="chat-mode">
+                  <button type="button" class="chat-mode-btn" id="flowChatModeBtn" data-chat="modebtn" aria-haspopup="menu" aria-expanded="false" aria-controls="flowChatModeMenu"></button>
+                  <div class="pop-menu chat-mode-menu" id="flowChatModeMenu" data-chat="modemenu" role="menu" data-i18n-aria="chat.modeLabel" hidden></div>
+                </div>
                 <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
                 <span class="chat-memory num" data-chat="memory" hidden></span>
                 <span class="chat-cost num" data-chat="cost" hidden></span>

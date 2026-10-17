@@ -785,3 +785,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the session-map was built inside the Cverino folder on 2026-10-08..10, so two of its conversations (`9d919bf9`, `3d5c6af5`) were listed under Cverino, and Cverino's Claude memory kept two session-map notes that every Cverino conversation read. The two conversations were moved to session-map (placements.json), the notes left Cverino's memory (the mission went to session-map's, the old history log to `.dev/historia/`). A code defect showed on the way: a page chat the owner moved to another project was still listed in the old one from page-chats.json, and from there shown as a visitor in the new one; now a conversation whose transcript is read is listed only where its transcript is grouped.
   - Proof: `test/collect.test.mjs` "a page chat the owner moved to another project is listed only there" (fails without the fix); full suite green.
   - Status: done on 2026-10-17.
+- [x] The permission mode back in the chat's footer, like Claude Code's `id173`
+  - Asked: 2026-10-17 — "voce retirou do chat o no front a questão de das chamada igual tem aqui Manual, edit automaticly, plan, auto preciso que tenha isso igual no session, porque eu tenho que ficar apertando toda hora para ficar permitindo as coisas sendo que a tarefa é longa, e isso já era automatico, mas voce retirou e preciso disso no roda pé de manteira organizada e profissional com termos profissionais também"
+  - What it means: a chip in the composer's footer with the four modes (Manual, Editar automaticamente, Modo plano, Automático), each with one line on what it does; the last one picked starts the next new conversation.
+  - Where it went: `pc39`.
+  - Status: done on 2026-10-17 (`pc39`).

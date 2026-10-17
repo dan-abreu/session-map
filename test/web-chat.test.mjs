@@ -43,7 +43,7 @@ const text = (el) => walk(el).flatMap((e) => e.children.filter((c) => typeof c =
 const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatList': 'list', '#chatNote': 'note', '[data-close="chat"]': 'close', '#chatWhere': 'where', '#chatDot': 'dot', '#chatLive': 'live',
-  '#chatBrain': 'brain', '#chatMore': 'more', '#chatMoreMenu': 'moremenu',
+  '#chatBrain': 'brain', '#chatMore': 'more', '#chatMoreMenu': 'moremenu', '#chatModeBtn': 'modebtn', '#chatModeMenu': 'modemenu',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
@@ -144,6 +144,36 @@ test('opening a part lists the conversations the page opened there, and picking 
   await settle();
   const start = calls.find((c) => c.path === '/api/chat/start');
   assert.deepEqual(start.body, { projectId: 'acme-shop', sessionId: S1, mode: 'acceptEdits', text: 'And the retry' });
+});
+
+test('the footer picks the permission mode like Claude Code, and the next new conversation starts in it', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part, storage } = makeChat();
+  const start = { projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } };
+  chat.open(start);
+  await settle();
+  const btn = part('#chatModeBtn');
+  assert.equal(btn.dataset.mode, 'default', 'the settings hold Manual, and the chip says so');
+  assert.ok(text(btn).includes('chat.modeName.default'));
+  const rows = walk(part('#chatModeMenu')).filter((e) => e.attrs?.role === 'menuitemradio');
+  assert.deepEqual(rows.map((r) => r.attrs['data-mode']), ['default', 'acceptEdits', 'plan', 'auto'], 'the four modes, each with what it does');
+  assert.ok(text(part('#chatModeMenu')).includes('chat.modeHint.auto'));
+  assert.equal(rows.find((r) => r.attrs['data-mode'] === 'default').attrs['aria-checked'], 'true');
+
+  rows.find((r) => r.attrs['data-mode'] === 'auto').attrs.onclick();
+  await settle();
+  assert.equal(btn.dataset.mode, 'auto');
+  assert.equal(storage.items.get('sm.chat.mode'), 'auto', 'remembered for the next conversation');
+  part('#chatInput').value = 'A long task';
+  part('#chatForm').fire('submit');
+  await settle();
+  assert.equal(calls.find((c) => c.path === '/api/chat/start').body.mode, 'auto');
+
+  chat.close();
+  chat.open(start);
+  await settle();
+  assert.equal(chat.settings().choice(), 'auto', 'a new conversation starts in the mode picked last');
+  assert.equal(part('#chatModeBtn').dataset.mode, 'auto');
 });
 
 test('a reload reopens the saved conversation of this project; closing the sheet forgets it', async () => {
