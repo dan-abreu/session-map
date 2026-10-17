@@ -37,7 +37,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Money, accounts, contracts and business priority belong to the owner: a recommendation plus a one-click confirmation.
 - The mode `bypassPermissions` is never used.
 
-Proof: 58 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/helper.test.js, test/agent-engines.test.mjs, test/agent-files.test.mjs, test/agents-catalog.test.mjs, test/agents-run.test.mjs, test/ai-activity.test.mjs, test/ai-arsenal-mcp.test.mjs, test/ai-ask-contract.test.mjs, test/ai-ask-route.test.mjs, test/ai-ask.test.mjs, …).
+Proof: 59 test files cover your part (server/disciplines/superpowers/tests/brainstorm-server/helper.test.js, test/agent-engines.test.mjs, test/agent-files.test.mjs, test/agents-catalog.test.mjs, test/agents-run.test.mjs, test/ai-activity.test.mjs, test/ai-arsenal-mcp.test.mjs, test/ai-ask-contract.test.mjs, test/ai-ask-route.test.mjs, test/ai-ask.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

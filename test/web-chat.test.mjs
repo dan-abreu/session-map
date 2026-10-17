@@ -213,7 +213,7 @@ test('the footer picks the AI, the model and the level in its maker\'s words; a 
   assert.ok(!walk(part('#chatModelMenu')).some((e) => e.attrs?.['data-ultracode'] !== undefined), 'no ultracode outside Claude Code');
   levels.find((l) => l.attrs['data-level'] === 'ultra').attrs.onclick();
   await settle();
-  assert.deepEqual(JSON.parse(storage.items.get('sm.chat.pick')), { ai: 'openai', model: 'gpt-6.1-sol', effort: 'ultra', ultracode: false }, 'kept for the next conversation');
+  assert.deepEqual(JSON.parse(storage.items.get('sm.chat.pick')), { ai: 'openai', model: 'gpt-6.1-sol', effort: 'ultra', ultracode: false, thinking: 'on' }, 'kept for the next conversation');
 
   part('#chatInput').value = 'Oi';
   part('#chatForm').fire('submit');
@@ -248,6 +248,32 @@ test('Claude Code\'s ultracode is a switch of its own beside the level, and ride
   part('#chatForm').fire('submit');
   await settle();
   assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'talk', model: 'opus', effort: 'medium', ultracode: true });
+});
+
+test('DeepSeek\'s Thinking mode is a switch of its own: off, its non-thinking mode, the level does not apply and the start says so', async () => {
+  const DS = { ok: true, engines: [{ ai: 'deepseek', term: 'Effort', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', note: null, levels: [{ id: 'low' }, { id: 'high' }, { id: 'max' }], start: 'high', thinkingSwitch: true }] }] };
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => DS, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  walk(part('#chatModelMenu')).find((e) => e.attrs?.['data-model'] === 'deepseek-v4-pro').attrs.onclick();
+  await settle();
+  const sw = () => walk(part('#chatModelMenu')).find((e) => e.attrs?.['data-thinking'] !== undefined);
+  assert.ok(text(sw()).includes('Thinking mode'), 'DeepSeek\'s own name for it');
+  assert.equal(sw().attrs['aria-checked'], 'true', 'thinking is on by default, as DeepSeek starts it');
+  assert.ok(!walk(part('#chatModelMenu')).some((e) => e.attrs?.['data-ultracode'] !== undefined), 'no ultracode on DeepSeek');
+  sw().attrs.onclick();
+  await settle();
+  assert.equal(sw().attrs['aria-checked'], 'false');
+  assert.ok(text(part('#chatModelBtn')).includes('DeepSeek V4 Pro · non-thinking'), text(part('#chatModelBtn')));
+  const levels = walk(part('#chatModelMenu')).filter((e) => e.attrs?.class === 'chat-level');
+  assert.ok(levels.every((l) => l.attrs.disabled !== undefined), 'with the thinking off, the level does not apply');
+  part('#chatInput').value = 'Oi';
+  part('#chatForm').fire('submit');
+  await settle();
+  const body = calls.find((c) => c.path === '/api/chat/start').body;
+  assert.equal(body.ai, 'deepseek');
+  assert.deepEqual(body.run, { kind: 'talk', model: 'deepseek-v4-pro', effort: 'high', thinking: 'off' });
 });
 
 test('a saved pick whose level or ultracode the model no longer has starts where its maker starts it', async () => {

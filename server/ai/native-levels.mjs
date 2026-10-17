@@ -45,7 +45,8 @@ function claudeModels() {
 function deepseekModels() {
   return current('deepseek').map((m) => {
     const levels = levelsOf('deepseek', m.id).filter((l) => DEEPSEEK_LEVELS.includes(l));
-    return { id: m.id, name: m.name, note: null, levels: levels.map((id) => ({ id })), start: startOf(levels, 'high') };
+    // DeepSeek's Thinking Mode switch: off is its non-thinking mode, sent by the relay (deepseek-relay.mjs, id180).
+    return { id: m.id, name: m.name, note: null, levels: levels.map((id) => ({ id })), start: startOf(levels, 'high'), thinkingSwitch: true };
   });
 }
 
@@ -88,11 +89,12 @@ export function nativeCatalog(ai, { smDir = null } = {}) {
 }
 
 // The person's pick checked against what that AI offers: -> { model, effort, ultracode } or null.
-export function nativePick(ai, { model, effort, ultracode = false }, { smDir = null } = {}) {
+export function nativePick(ai, { model, effort, ultracode = false, thinking = 'on' }, { smDir = null } = {}) {
   const m = nativeCatalog(ai, { smDir }).models.find((x) => x.id === model);
   if (!m) return null;
   const level = effort ?? m.start;
   if (level !== null && !m.levels.some((l) => l.id === level)) return null;
   if (ultracode && !m.ultracode) return null;
-  return { model: m.id, effort: level, ultracode: Boolean(ultracode) };
+  if (thinking === 'off' && !m.thinkingSwitch) return null;
+  return { model: m.id, effort: level, ultracode: Boolean(ultracode), thinking: thinking === 'off' ? 'off' : 'on' };
 }

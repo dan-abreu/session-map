@@ -230,7 +230,7 @@ export function createChatHub({
   smDir, dir = claudeDir(), dshDir = null, bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
   readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null, tidyText = null,
-  weighOther = weighOutside, keyOf = (provider) => getKey(smDir, provider), cliOf = findCli,
+  weighOther = weighOutside, keyOf = (provider) => getKey(smDir, provider), cliOf = findCli, dsRelay = null, dsRelayBase = null,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -579,6 +579,7 @@ export function createChatHub({
     clearTimeout(chat.idleTimer);
     for (const p of [...chat.pending.values()]) p.finish('denied', { behavior: 'deny', message: DENIED });
     if (chat.sessionId && bySession.get(chat.sessionId) === chat) bySession.delete(chat.sessionId);
+    if (chat.relaySecret) dsRelay?.unregister(chat.relaySecret);
     rmSync(chat.configPath, { force: true });
     if (code !== 0 && !chat.closing) {
       log('warn', 'chat-exited', { code, signal });
@@ -740,12 +741,15 @@ export function createChatHub({
   };
   // What a process needs to speak to that AI instead of Claude: its address, the key (held in memory for this conversation
   // only, never written), and its models in the place of Claude's for the helpers the conversation starts.
+  // A talk on DeepSeek goes through the relay when the server runs one (id180): Claude Code gets the relay's address and
+  // the conversation's own secret, never the real key.
   const talkEnv = (chat) => {
     const p = chat.ai && chat.ai !== 'claude' ? providerOf(chat.ai) : null;
     if (!p || !chat.aiKey) return {};
     const h = p.talkHelpers ?? {};
+    const via = chat.relaySecret ? { url: dsRelayBase, key: chat.relaySecret } : { url: p.talkEndpoint, key: chat.aiKey };
     return {
-      ANTHROPIC_BASE_URL: p.talkEndpoint, ANTHROPIC_AUTH_TOKEN: chat.aiKey, ANTHROPIC_API_KEY: '',
+      ANTHROPIC_BASE_URL: via.url, ANTHROPIC_AUTH_TOKEN: via.key, ANTHROPIC_API_KEY: '',
       ...(h.haiku ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: h.haiku, ANTHROPIC_SMALL_FAST_MODEL: h.haiku } : {}),
       ...(h.sonnet ? { ANTHROPIC_DEFAULT_SONNET_MODEL: h.sonnet } : {}),
       ...(h.opus ? { ANTHROPIC_DEFAULT_OPUS_MODEL: h.opus } : {}),
@@ -757,11 +761,11 @@ export function createChatHub({
   // The pick is checked against what that AI itself offers (native-levels.mjs, id179): its models, the levels of the model
   // picked and its own extras (ultracode on Claude Code).
   const pickFor = (ai, run) => {
-    if (run?.kind !== 'talk' || (!run.model && !run.effort && !run.ultracode)) return run;
+    if (run?.kind !== 'talk' || (!run.model && !run.effort && !run.ultracode && !run.thinking)) return run;
     const model = run.model ? canonicalModel(ai, run.model) : chatLevelOf(ai).model;
-    const ok = typeof model === 'string' ? nativePick(ai, { model, effort: run.effort, ultracode: run.ultracode === true }, { smDir }) : null;
+    const ok = typeof model === 'string' ? nativePick(ai, { model, effort: run.effort, ultracode: run.ultracode === true, thinking: run.thinking }, { smDir }) : null;
     if (!ok) return null;
-    return { kind: 'talk', model: ok.model, ...(ok.effort ? { effort: ok.effort } : {}), ...(ok.ultracode ? { ultracode: true } : {}) };
+    return { kind: 'talk', model: ok.model, ...(ok.effort ? { effort: ok.effort } : {}), ...(ok.ultracode ? { ultracode: true } : {}), ...(ok.thinking === 'off' ? { thinking: 'off' } : {}) };
   };
   // What the footer's model chip offers (pc40): Claude, and each other AI that can run the talk here (its protocol or its
   // program, and a key saved), with its current models, the levels of each and the level a conversation starts on.
@@ -1082,6 +1086,8 @@ ${prompt}`;
       skillFocus,
       bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false, ai, aiKey,
     };
+    // DeepSeek's thinking switch rides in the relay, read at each request (id180): the conversation's run says it.
+    if (ai === 'deepseek' && dsRelay && dsRelayBase) chat.relaySecret = dsRelay.register(() => ({ thinkingOff: chat.run?.thinking === 'off' }));
     if (turn) rememberPlan(chat, turn);
     chat.done = new Promise((resolve) => { chat.exited = resolve; });
     if (resume) resuming.add(resume);
@@ -1370,7 +1376,7 @@ ${prompt}`;
     if (!chat) return reply(404, { error: 'unknown-chat' });
     if (chat.ended) return reply(409, { error: 'ended' });
     if (chat.run?.kind !== 'talk') return reply(409, { error: 'not-talk' });
-    const asked = pickFor(chat.ai ?? 'claude', parseRun({ kind: 'talk', ...(body?.model ? { model: body.model } : {}), ...(body?.effort ? { effort: body.effort } : {}), ...(body?.ultracode === true ? { ultracode: true } : {}) }));
+    const asked = pickFor(chat.ai ?? 'claude', parseRun({ kind: 'talk', ...(body?.model ? { model: body.model } : {}), ...(body?.effort ? { effort: body.effort } : {}), ...(body?.ultracode === true ? { ultracode: true } : {}), ...(body?.thinking === 'off' ? { thinking: 'off' } : {}) }));
     if (!asked) return reply(400, { error: 'bad-run' });
     changeRun(chat, asked, chat.weighed ?? { phase: null, why: null, ...chatLevelOf(chat.ai ?? 'claude') });
     return reply(200, { run: chat.run });

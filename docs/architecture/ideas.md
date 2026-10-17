@@ -815,3 +815,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: the chip of `pc40` showed the levels through the generic words of the Cérebro ("baixo, médio, alto") and gave every Claude model the five levels Claude Code accepts, not the ones each model applies; no ultracode, no DeepSeek's non-thinking mode. Each AI's list is checked against its maker's own documentation and the installed program, then shown in that maker's words.
   - Where it went: `pc41`.
   - Status: done on 2026-10-17 (`pc41`).
+- [x] Talk to DeepSeek properly: its own non-thinking mode in the footer, through session-map `id180`
+  - Asked: 2026-10-17 — "entao arruma pra falar direito com o deepseek" (after: "como assim sem raciocinio?")
+  - What it means: the talk on DeepSeek runs on Claude Code, which cannot ask DeepSeek for its non-thinking mode (proved on 2026-10-17: Claude Code drops its thinking field and DeepSeek then thinks by default). Claude Code is pointed at a relay in session-map that adds `thinking: {type: "disabled"}` when the person turns DeepSeek's "Thinking mode" off in the footer; the real key stays in session-map.
+  - Where it went: `pc42`.
+  - Status: done on 2026-10-17 (`pc42`).

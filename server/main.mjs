@@ -17,6 +17,7 @@ import { createHelperRoutes } from './ai/helperroute.mjs';
 import { createBrainRoutes } from './ai/brainroute.mjs';
 import { createCensusRoutes } from './censusroute.mjs';
 import { getKey } from './ai/keys.mjs';
+import { RELAY_PATH, createDeepseekRelay } from './ai/deepseek-relay.mjs';
 import { othersSettings } from './ai/others.mjs';
 import { createVersionWatch } from './ai/versions.mjs';
 import { createPricesWatch } from './ai/prices-watch.mjs';
@@ -221,7 +222,10 @@ export function createApp({
   // The look-only key (sv04): null while the owner has none; read once here, then changed only by lookRoute.
   let lookKey = demo || !smDir ? null : loadLookKey(smDir);
   // readState/changed: the orchestrator's tools read the newest state and drop it after an archive or a rename (or17).
+  // The DeepSeek relay (id180): a talk on DeepSeek reaches it through here, so its own non-thinking mode can be asked for.
+  const dsRelay = demo || !smDir ? null : createDeepseekRelay({ keyOf: () => getKey(smDir, 'deepseek'), log });
   const chat = chatHub !== undefined ? chatHub : demo ? null : createChatHub({
+    dsRelay, dsRelayBase: dsRelay ? `${baseUrl}${RELAY_PATH}` : null,
     smDir, dir, dshDir, arsenalUrl: baseUrl, conductorFacts: () => askRoutes.others(), onAlert: (a) => watcher?.push([a]), readState: () => quickState(), changed: () => fresh(),
     // The project's month against its own budget (or07), from the newest finished state: a chat start never waits a collect.
     projectBudget: (projectId) => newest?.projects?.find((p) => p.id === projectId)?.budget ?? null,
@@ -1096,6 +1100,8 @@ export function createApp({
     } catch {
       return send(res, 400, 'bad request');
     }
+    // The DeepSeek relay answers Claude Code, not the page: its own secret and the loopback check stand for the token.
+    if (dsRelay?.handles(url.pathname)) return dsRelay.handle(req, res, url, addressOf(req)).catch(() => res.destroy());
     const auth = askRoutes.authorizeHeader(req, url, addressOf(req))
       ?? runRoutes.authorizeHeader(req, url, addressOf(req))
       ?? bookRoutes.authorizeHeader(req, url, addressOf(req))

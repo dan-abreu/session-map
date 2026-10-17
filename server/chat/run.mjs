@@ -35,10 +35,12 @@ const PICK_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
 // Every level word of every AI the talk runs on (id179): Claude Code's, DeepSeek's, Codex's (none to max, and ultra) and
 // Gemini's (minimal). Ultracode is Claude Code's own switch, not a level.
 export const PICK_LEVELS = Object.freeze(['none', 'minimal', ...EFFORTS, 'ultra']);
-function talkRun({ model, effort, ultracode }) {
+// thinking 'off': DeepSeek's non-thinking mode (id180), carried by the relay (deepseek-relay.mjs), not by a flag.
+function talkRun({ model, effort, ultracode, thinking }) {
   if ((model !== undefined && !(typeof model === 'string' && PICK_MODEL.test(model))) || (effort !== undefined && !PICK_LEVELS.includes(effort))) return null;
   if (ultracode !== undefined && typeof ultracode !== 'boolean') return null;
-  return { kind: 'talk', ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(ultracode ? { ultracode: true } : {}) };
+  if (thinking !== undefined && thinking !== 'off' && thinking !== 'on') return null;
+  return { kind: 'talk', ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(ultracode ? { ultracode: true } : {}), ...(thinking === 'off' ? { thinking: 'off' } : {}) };
 }
 // The talk run never names a level of its own: its model and effort are the policy's chat row, the same one the Cérebro
 // resolves (or39); the entry brain puts the weighed level on top for the process.

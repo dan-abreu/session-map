@@ -568,7 +568,7 @@ export function createChat({
     try {
       const v = JSON.parse(storage?.getItem(PICK_SAVED) ?? 'null');
       return v && typeof v.ai === 'string' && typeof v.model === 'string'
-        ? { ai: v.ai, model: v.model, effort: typeof v.effort === 'string' ? v.effort : null, ultracode: v.ultracode === true } : null;
+        ? { ai: v.ai, model: v.model, effort: typeof v.effort === 'string' ? v.effort : null, ultracode: v.ultracode === true, thinking: v.thinking === 'off' ? 'off' : 'on' } : null;
     } catch { return null; }
   };
   // Only a talk has a model to pick: the orchestrator and its activity chats keep the way they were started on.
@@ -581,9 +581,10 @@ export function createChat({
   // A maker's own words for its model (Claude Code's line, Codex's description), in the page's language when it has one.
   const noteOf = (m) => (lang() === 'pt-BR' ? m?.note?.pt ?? m?.note?.en : m?.note?.en ?? m?.note?.pt) ?? null;
   // The pick a run event shows: a talk with a model of its own was picked; one without runs Automático.
-  const pickOfRun = (r) => (r?.run?.kind === 'talk' && r.run.model ? { ai: r.ai ?? 'claude', model: r.run.model, effort: r.run.effort ?? null, ultracode: r.run.ultracode === true } : null);
+  const pickOfRun = (r) => (r?.run?.kind === 'talk' && r.run.model ? { ai: r.ai ?? 'claude', model: r.run.model, effort: r.run.effort ?? null, ultracode: r.run.ultracode === true, thinking: r.run.thinking === 'off' ? 'off' : 'on' } : null);
   // What the chip says: the model's own name, the level in its maker's own word, and Ultracode when it is on (id179).
-  const pickName = (p, m) => [m?.name ?? modelName(p.model) ?? p.model, p.effort, p.ultracode ? 'Ultracode' : null].filter(Boolean).join(' · ');
+  // DeepSeek with its thinking off says so in its own words ("non-thinking"): the level does not apply then.
+  const pickName = (p, m) => [m?.name ?? modelName(p.model) ?? p.model, p.thinking === 'off' ? 'non-thinking' : p.effort, p.ultracode ? 'Ultracode' : null].filter(Boolean).join(' · ');
 
   function renderModelPick() {
     if (!modelBtn) return;
@@ -617,7 +618,7 @@ export function createChat({
         ...e.models.map((mm) => row(mm.name, other ? tt('chat.model.otherAi', { ai: AI_NAMES[locked] ?? locked }) : noteOf(mm),
           Boolean(pick && pick.ai === e.ai && pick.model === mm.id),
           // A new model keeps the level when it has it, else starts where its maker starts it.
-          () => setPick({ ai: e.ai, model: mm.id, effort: hasLevel(mm, pick?.effort) ? pick.effort : mm.start ?? null, ultracode: Boolean(mm.ultracode && pick?.ultracode) }),
+          () => setPick({ ai: e.ai, model: mm.id, effort: hasLevel(mm, pick?.effort) ? pick.effort : mm.start ?? null, ultracode: Boolean(mm.ultracode && pick?.ultracode), thinking: mm.thinkingSwitch && pick?.thinking === 'off' ? 'off' : 'on' }),
           { disabled: other, data: { 'data-model': mm.id } })),
       ];
     });
@@ -626,7 +627,7 @@ export function createChat({
     // The menu stays open on the levels and the ultracode switch: the control the person was on keeps the focus after the redraw.
     const active = typeof document !== 'undefined' && modelMenuEl?.contains?.(document.activeElement) ? document.activeElement : null;
     const focusKey = active?.getAttribute?.('data-level') ? `[data-level="${active.getAttribute('data-level')}"]`
-      : active?.hasAttribute?.('data-ultracode') ? '[data-ultracode]' : null;
+      : active?.hasAttribute?.('data-ultracode') ? '[data-ultracode]' : active?.hasAttribute?.('data-thinking') ? '[data-thinking]' : null;
     modelMenuEl?.replaceChildren(...[
       h('p', { class: 'pm-head' }, tt('chat.model.label')),
       row(tt('chat.model.auto'), tt('chat.model.autoHint'), !pick, () => setPick(null)),
@@ -636,9 +637,17 @@ export function createChat({
         // The control under its maker's own name ("Effort", "Reasoning effort", "Thinking level"); each level in its word.
         h('p', { class: 'pm-head', title: tt('chat.model.level') }, term),
         h('div', { class: 'chat-levels', role: 'group', 'aria-label': term }, ...levels.map((l) => h('button', {
-          type: 'button', class: 'chat-level', 'data-level': l.id, 'aria-pressed': String(l.id === pick.effort),
-          title: l.about ?? tt(`chat.model.about.${l.id}`), onclick: () => setPick({ ...pick, effort: l.id }),
+          type: 'button', class: 'chat-level', 'data-level': l.id, 'aria-pressed': String(l.id === pick.effort && pick.thinking !== 'off'),
+          title: pick.thinking === 'off' ? tt('chat.model.thinkingOffLevel') : l.about ?? tt(`chat.model.about.${l.id}`),
+          ...(pick.thinking === 'off' ? { disabled: '' } : { onclick: () => setPick({ ...pick, effort: l.id }) }),
         }, l.id, l.id === m.start ? h('span', { class: 'chat-level-start', title: tt('chat.model.start'), 'aria-hidden': 'true' }, '•') : null))),
+      ] : []),
+      // DeepSeek's Thinking Mode: on by default; off is its non-thinking mode, answered at once (sent by the relay).
+      ...(pick && m?.thinkingSwitch ? [
+        h('hr', { class: 'pm-sep' }),
+        row('Thinking mode', tt(pick.thinking === 'off' ? 'chat.model.thinkingOff' : 'chat.model.thinkingOn'), pick.thinking !== 'off',
+          () => setPick({ ...pick, thinking: pick.thinking === 'off' ? 'on' : 'off' }),
+          { close: false, role: 'menuitemcheckbox', data: { 'data-thinking': '' } }),
       ] : []),
       // Claude Code's ultracode: a switch of its own, at the level picked, on the models that run it.
       ...(pick && m?.ultracode ? [
@@ -660,14 +669,14 @@ export function createChat({
     }
     renderModelPick();
     if (!key || log?.ended || !isTalk()) return;
-    const res = await api.chatRun(key, next ? { model: next.model, ...(next.effort ? { effort: next.effort } : {}), ...(next.ultracode ? { ultracode: true } : {}) } : {});
+    const res = await api.chatRun(key, next ? { model: next.model, ...(next.effort ? { effort: next.effort } : {}), ...(next.ultracode ? { ultracode: true } : {}), ...(next.thinking === 'off' ? { thinking: 'off' } : {}) } : {});
     if (!res.ok) toast(errorText(res.error));
   }
 
   // What the next start carries: a new talk its AI and pick; an existing one the pick only when the person changed it.
   function pickBody() {
     if (!isTalk()) return {};
-    const run = pick ? { kind: 'talk', model: pick.model, ...(pick.effort ? { effort: pick.effort } : {}), ...(pick.ultracode ? { ultracode: true } : {}) } : { kind: 'talk' };
+    const run = pick ? { kind: 'talk', model: pick.model, ...(pick.effort ? { effort: pick.effort } : {}), ...(pick.ultracode ? { ultracode: true } : {}), ...(pick.thinking === 'off' ? { thinking: 'off' } : {}) } : { kind: 'talk' };
     if (!shownId()) return pick ? { ai: pick.ai, run } : {};
     return pickDirty ? { run } : {};
   }
@@ -679,7 +688,7 @@ export function createChat({
     // A saved level or ultracode the model no longer has goes back to where its maker starts it.
     if (pick && !shownId()) {
       const m = pickedModel(pick);
-      pick = m ? { ...pick, effort: hasLevel(m, pick.effort) ? pick.effort : m.start ?? null, ultracode: Boolean(m.ultracode && pick.ultracode) } : null;
+      pick = m ? { ...pick, effort: hasLevel(m, pick.effort) ? pick.effort : m.start ?? null, ultracode: Boolean(m.ultracode && pick.ultracode), thinking: m.thinkingSwitch && pick.thinking === 'off' ? 'off' : 'on' } : null;
     }
     renderModelPick();
   }

@@ -111,7 +111,7 @@ test('each AI\'s own catalog: Codex\'s listed models with its levels, descriptio
     assert.deepEqual(openai.models[0].levels.map((l) => l.id), ['low', 'max', 'ultra']);
     assert.equal(openai.models[0].levels[2].about, 'Maximum reasoning with automatic task delegation');
     assert.equal(openai.models[0].start, 'low');
-    assert.deepEqual(nativePick('openai', { model: 'gpt-6.1-sol', effort: 'ultra' }, { smDir }), { model: 'gpt-6.1-sol', effort: 'ultra', ultracode: false });
+    assert.deepEqual(nativePick('openai', { model: 'gpt-6.1-sol', effort: 'ultra' }, { smDir }), { model: 'gpt-6.1-sol', effort: 'ultra', ultracode: false, thinking: 'on' });
     assert.equal(nativePick('openai', { model: 'gpt-6.1-sol', effort: 'medium' }, { smDir }), null, 'a level this model does not list');
     assert.equal(nativePick('openai', { model: 'gpt-6.1-sol', effort: 'low', ultracode: true }, { smDir }), null, 'ultracode is Claude Code\'s alone');
   } finally {

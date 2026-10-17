@@ -1416,6 +1416,7 @@ body.is-resizing .sheet { animation: none; }
   font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
 }
 .chat-level:hover { color: var(--ink); background: var(--bg-3); }
+.chat-level:disabled { opacity: 0.45; cursor: not-allowed; background: none; }
 .chat-level[aria-pressed="true"] { background: var(--active-fill); color: var(--active-ink); border-color: transparent; }
 /* The dot of the level a model starts on, as its maker sets it. */
 .chat-level-start { margin-left: 4px; opacity: 0.6; }
