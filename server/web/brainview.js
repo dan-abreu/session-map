@@ -68,6 +68,7 @@ export function createBrainView(ctx) {
       '.br-ctrls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}',
       '.br-ctrls .dv-field{min-width:130px}',
       '.br-ctrls select{width:100%}',
+      '.br-fixed{padding:7px 2px;font-size:13px;color:var(--ink)}',
       '.br-ctrls .br-modelfield{min-width:220px;flex:1 1 280px;max-width:420px}',
       '.br-modelnote{margin:8px 0 0;line-height:1.45;max-width:68ch}',
       '.br-lvl{display:flex;gap:6px;align-items:end;flex-wrap:wrap}',
@@ -211,7 +212,11 @@ export function createBrainView(ctx) {
     const chosen = modelEntriesOf(f).find((m) => m.id === (f.model ?? 'auto')) ?? null;
     if (!chosen) return null;
     const notes = [factsOf(chosen)];
-    if (chosen.verified === false) notes.push(t('brain.unverified'));
+    // The real test: how many of this model's levels answered a real call, and when.
+    if (chosen.tested?.n) {
+      const when = chosen.tested.at ? new Date(chosen.tested.at).toLocaleDateString(isPt() ? 'pt-BR' : 'en-US') : '—';
+      notes.push(t('brain.tested', { ok: chosen.tested.ok, n: chosen.tested.n, when }));
+    } else if (chosen.verified === false) notes.push(t('brain.unverified'));
     if (chosen.gone) notes.push(t('brain.gone'));
     if (f.agent && f.provider === 'claude') notes.push(t('brain.agentOnly'));
     return h('p', { class: 'br-muted br-modelnote', 'data-brain-note': f.id }, notes.join(' '));
@@ -220,19 +225,26 @@ export function createBrainView(ctx) {
   // The controls of one row: the AI, the model and the level, shown only when its row is opened.
   function controlsOf(f) {
     const providers = model.engineOptions ?? ['auto', 'claude'];
-    // The level list is the engine's own vocabulary, minus the top (Ultracode), which is its own button.
-    const levelOptions = [...new Set(['auto', ...((Array.isArray(f.levelOptions) ? f.levelOptions : ['low', 'medium', 'high']).filter((l) => l !== 'max'))])];
+    // The level list is the engine's whole vocabulary, the maximum included: it is one more level, chosen like the others.
+    // Ultracode is not a level (a Claude Code setting that plans each task in steps), so it keeps a switch of its own.
+    const levelOptions = [...new Set(['auto', ...(Array.isArray(f.levelOptions) ? f.levelOptions : ['low', 'medium', 'high'])])];
+    const rowProviders = Array.isArray(f.providers) ? f.providers : providers;
+    // A row that can run on one AI only (the talk is Claude Code itself) says which, instead of a list with one choice.
+    const only = rowProviders.filter((p) => p !== 'auto');
+    const aiField = only.length === 1
+      ? h('div', { class: 'dv-field' }, h('label', {}, t('brain.motor')), h('div', { class: 'br-fixed', 'data-brain': `${f.id}:provider` }, aiName(only[0])))
+      : selector(f.id, 'provider', t('brain.motor'), f.provider, rowProviders, t('brain.auto'), aiName);
     const controls = h('div', { class: 'br-ctrls' },
-      selector(f.id, 'provider', t('brain.motor'), f.provider, Array.isArray(f.providers) ? f.providers : providers, t('brain.auto'), aiName),
+      aiField,
       modelField(f),
       h('span', { class: 'br-lvl' },
         selector(f.id, 'effort', t('brain.level'), f.effort, levelOptions, t('brain.autoEffort'), levelName),
-        f.topLevel
+        f.topLevel === 'ultracode'
           ? h('button', {
-              type: 'button', class: `btn small-btn${f.effort === f.topLevel ? ' is-on' : ''}`,
-              title: f.topLevel === 'ultracode' ? t('brain.ultracodeTitle') : t('brain.maxTitle'),
-              onclick: () => saveFn(f.id, 'effort', f.effort === f.topLevel ? 'auto' : f.topLevel),
-            }, f.topLevel === 'ultracode' ? t('brain.ultracode') : t('brain.maxBtn'))
+              type: 'button', class: `btn small-btn${f.effort === 'ultracode' ? ' is-on' : ''}`, 'aria-pressed': f.effort === 'ultracode' ? 'true' : 'false',
+              title: t('brain.ultracodeTitle'),
+              onclick: () => saveFn(f.id, 'effort', f.effort === 'ultracode' ? 'auto' : 'ultracode'),
+            }, t('brain.ultracode'))
           : null));
     return h('div', {}, controls, modelNote(f));
   }

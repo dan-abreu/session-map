@@ -67,14 +67,12 @@ export function levelsOf(provider, model) {
   return LEVELS_BY_PROVIDER.openrouter;
 }
 
-// The separate top button of a (provider, model): Claude's own is ultracode (a dynamic-workflow setting, only where
-// the model supports xhigh); the others' top is max, where the model accepts it. Never part of the select list.
+// The separate switch of a (provider, model): Claude's ultracode only (a dynamic-workflow setting, not a level, only where
+// the model supports xhigh). The maximum of any AI is one more level of its list (id168): a "Max" button beside the list
+// confused the owner, a level that sat outside the list of levels.
 export function topLevelOf(provider, model) {
   if (provider === 'claude') {
     return levelsOf(provider, model).includes('xhigh') ? 'ultracode' : null;
-  }
-  if (provider === 'deepseek' || provider === 'openai') {
-    return levelsOf(provider, model).includes('max') ? 'max' : null;
   }
   return null;
 }

@@ -45,6 +45,9 @@ export const PROVIDERS = Object.freeze({
     priceCheckedOn: CHECKED_ON,
     // Thinking is on by default and its hidden reasoning ate the whole answer budget (bench of 2026-10-10): these
     // short JSON and text jobs ask for none (https://api-docs.deepseek.com/api/create-chat-completion).
+    // Another name the API takes for a model it lists: checked on 2026-10-17, a call to deepseek-v4-flash is answered by
+    // deepseek-flash (the reply's own "model" field). The name is kept for old choices and old bills, never offered twice.
+    aliases: { 'deepseek-v4-flash': 'deepseek-flash' },
     requestExtras: {
       'deepseek-flash': { body: { thinking: { type: 'disabled' } } },
       'deepseek-v4-flash': { body: { thinking: { type: 'disabled' } } },
@@ -135,7 +138,7 @@ export const maxAnswerTokens = (providerId, model, maxTokens) => {
 };
 
 // What the page may show: the catalog has no secrets, the copy keeps the frozen original out of reach.
-export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, requestExtras, unlistedExtras, maxTokensField, ...p }) => structuredClone(p));
+export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, requestExtras, unlistedExtras, maxTokensField, aliases, ...p }) => structuredClone(p));
 
 // A model missing from the catalog could be any AI the owner typed, up to the dearest on the market: it is priced
 // above those, so the daily cap stops early rather than late. OpenRouter's own reported cost wins over this anyway.

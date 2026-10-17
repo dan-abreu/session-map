@@ -40,8 +40,9 @@ test('the work done by DeepSeek is reviewed by Claude and a defect goes back to 
   const pro = { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'high' };
   const note = cerebroNote({ ai: aiWith({ plan: pro, risk: pro, docs: { ...flash, effort: 'low' }, code: flash, screen: flash, debug: flash }), status: edits });
   assert.match(note, /- plan, risk \(plan, architecture, security, money, personal-data\): deepseek deepseek-v4-pro high, edits files/, 'rows with the same AI, model and level are one line');
-  assert.match(note, /- code, screen, debug \(code, test, screen, debug\): deepseek deepseek-v4-flash high, edits files/);
-  assert.match(note, /- docs \(docs\): deepseek deepseek-v4-flash low, edits files/);
+  // deepseek-v4-flash is another name of deepseek-flash (id169): the chat is told the name DeepSeek lists.
+  assert.match(note, /- code, screen, debug \(code, test, screen, debug\): deepseek deepseek-flash high, edits files/);
+  assert.match(note, /- docs \(docs\): deepseek deepseek-flash low, edits files/);
   assert.match(note, /goes back to the AI that wrote it/, 'Claude reviews and sends back');
   assert.match(note, /After 2 rounds/);
   assert.match(note, /\[review\] agent on Claude/);

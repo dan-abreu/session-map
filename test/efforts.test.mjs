@@ -29,11 +29,11 @@ test('levelsOf refines by model and falls back to the provider', () => {
   assert.deepEqual(levelsOf('openrouter', 'x'), ['auto']);
 });
 
-test('the separate top button: ultracode for Claude, max for the others', () => {
+test("the separate switch is Claude's ultracode only: the maximum of any AI is one more level of its list (id168)", () => {
   assert.equal(topLevelOf('claude', 'sonnet'), 'ultracode');
   assert.equal(topLevelOf('claude', 'haiku'), null, 'Haiku does not reach xhigh: no ultracode');
-  assert.equal(topLevelOf('deepseek', 'deepseek-v4-pro'), 'max');
-  assert.equal(topLevelOf('deepseek', 'deepseek-flash'), null, 'Flash has no max');
+  assert.equal(topLevelOf('deepseek', 'deepseek-v4-pro'), null, 'max is in the list of levels, not a button beside it');
+  assert.ok(levelsOf('deepseek', 'deepseek-v4-pro').includes('max'));
   assert.equal(topLevelOf('openai', 'gpt-6.1-sol'), null, 'measured: Sol refuses max');
   assert.equal(topLevelOf('gemini', 'gemini-3.8-flash'), null, 'Gemini\'s top stays in the list');
 });

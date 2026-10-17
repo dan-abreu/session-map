@@ -111,18 +111,20 @@ export function openaiEntries(body) {
   return out.sort(newerFirst);
 }
 
-// Gemini's list has every model Google serves, music, video, speech and embeddings among them: only the ones that answer a
-// chat message through generateContent stay. The previews are real models and stay, with their name.
+// Gemini's list has every model Google serves, music, video, speech and embeddings among them: only the Gemini models that
+// answer a chat message through generateContent stay. The previews are real models and stay, with their name. Gemma is
+// left out: in the real test of 2026-10-17 both Gemma models answered with their thinking as text and no answer the
+// program could read (2 of 2 failed).
 const GEMINI_SKIP = /tts|image|transcribe|live|native-audio|robotics|computer-use|embedding|customtools|antigravity|research|lyria|veo|banana|omni|latest/i;
 
 export function geminiEntries(body) {
   const out = [];
   for (const m of Array.isArray(body?.models) ? body.models : []) {
     const id = typeof m?.name === 'string' ? m.name.replace(/^models\//, '') : null;
-    if (!id || !MODEL_RE.test(id) || !/^(?:gemini|gemma)-/.test(id) || GEMINI_SKIP.test(id)) continue;
+    if (!id || !MODEL_RE.test(id) || !/^gemini-/.test(id) || GEMINI_SKIP.test(id)) continue;
     if (!(m.supportedGenerationMethods ?? []).includes('generateContent')) continue;
     const context = num(m.inputTokenLimit);
-    out.push({ id, name: text(m.displayName, 80) || humanName(id), ...(context ? { context } : {}), levels: id.startsWith('gemini-') ? ['low', 'medium', 'high'] : [], levelsFrom: 'guess' });
+    out.push({ id, name: text(m.displayName, 80) || humanName(id), ...(context ? { context } : {}), levels: ['low', 'medium', 'high'], levelsFrom: 'guess' });
   }
   return out.sort(newerFirst);
 }
@@ -210,12 +212,19 @@ function build(provider) {
   const listed = listedOf(provider);
   const known = p.pricesUSDPerMTok ?? {};
   const live = new Map((listed ?? []).map((e) => [e.id, e]));
-  const out = Object.entries(known).map(([id, price]) => {
+  const aliases = p.aliases ?? {};
+  const out = Object.entries(known).filter(([id]) => !Object.hasOwn(aliases, id)).map(([id, price]) => {
     const e = live.get(id);
     return { id, name: e?.name ?? humanName(id), priceIn: price.in, priceOut: price.out, ...(e?.context ? { context: e.context } : {}), group: 'current', verified: true, ...(listed && !e ? { gone: true } : {}) };
   });
-  for (const e of listed ?? []) if (!Object.hasOwn(known, e.id)) out.push({ ...e, group: 'other', verified: false });
+  for (const e of listed ?? []) if (!Object.hasOwn(known, e.id) && !Object.hasOwn(aliases, e.id)) out.push({ ...e, group: 'other', verified: false });
   return out;
+}
+
+// The one name of a model: another name the maker's API takes for it (providers.mjs aliases) becomes the name it lists.
+export function canonicalModel(provider, id) {
+  const aliases = providerOf(provider)?.aliases ?? {};
+  return typeof id === 'string' && Object.hasOwn(aliases, id) ? aliases[id] : id;
 }
 
 const memo = new Map();

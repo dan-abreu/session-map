@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -754,3 +754,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the Cérebro lists the same Claude models as the VS Code picker, by name and in two groups; an AI with a key lists its own; choosing a model and a level on the talk row shows "Claude · Opus 4.8 · muito alto" and the row's note says the price and the call id; the "Listas de modelos" fold says where each list came from.
   - Where it went: `or72`.
   - Status: done on 2026-10-16 (`or72`; seen in a real browser on a separate copy of the program, with the real keys: the lists, the real names, a Claude and an OpenAI choice, the refresh button; 12 real calls on models the program had never listed all answered).
+- [x] The Cérebro's model lists without confusion, every model tested at every level, and no Max button beside the levels `id169`
+  - Asked: 2026-10-17 — "em conversa só tem a IA claude e outra coisa, os modelos do deepseek ficaram confusos, voce fez certo? E quando esses modelos chamar nas API vai da certo? voce fez os testes? E fez os testes quando esses modelo e nivel E voce colocou um botao do lado max no deepseek, nao entendi, a quando clica nele ele muda o nivel do racicio voce fez isso muito mal feito"
+  - What it means: (1) the talk row offered "Automático" and "Claude", but the talk is Claude Code itself: it now says "Claude", with no list. (2) DeepSeek showed "V4.1 Flash", "V4 Flash (fora da lista)" and "V4 Pro"; a real call proved `deepseek-v4-flash` is answered by `deepseek-flash` (the same model under another name), so it is shown once and an old choice reads as the current name. (3) Every model the Cérebro offers was called for real at every level it offers: 227 calls (Claude 12 models, 74 calls; OpenAI 29 models, 89; Gemini 13 models, 54; DeepSeek 2 models, 10), all answered. Gemma failed (its thinking came back as the answer, 2 of 2) and left the Gemini list. The results are in the tab: each model says how many of its levels answered, and a level the test saw fail is never offered. (4) The maximum level was a "Max" button beside the list; it is now one more level of the list ("máximo"). Claude's Ultracode stays a switch, since it is not a level.
+  - How to confirm it is done: the talk row says "IA: Claude"; DeepSeek lists two models; the note of a model says "Teste real em …: N de N níveis responderam"; no Max button; "máximo" in the list of levels where the model takes it.
+  - Where it went: `or73`.
+  - Status: done on 2026-10-17 (`or73`).

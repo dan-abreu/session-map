@@ -148,7 +148,7 @@ test('the tab shows the AI each row really runs on (id155): the brain row\'s own
   assert.deepEqual([byId.brain.provider, byId.brain.why], ['deepseek', 'choice']);
   assert.deepEqual([byId.background.provider, byId.background.model], ['gemini', 'gemini-3.1-flash-lite']);
   assert.deepEqual([byId.chat.provider, byId.chat.model], ['claude', 'opus'], 'another AI\'s model never shows on the Claude talk');
-  assert.deepEqual(byId.chat.providers, ['auto', 'claude']);
+  assert.deepEqual(byId.chat.providers, ['claude'], 'the talk is Claude Code itself: one AI, said as such');
   assert.equal(byId.book.providers, undefined, 'the book takes any AI with a key too');
   assert.deepEqual([byId.book.provider, byId.book.model, byId.book.why], ['claude', 'haiku', 'policy'], 'nothing chosen: Claude, the cheap default, said as the default');
   const onDeepseek = panelModel({ smDir, ai: { others: { functions: { book: { provider: 'deepseek', model: 'deepseek-flash', effort: 'low' } } } }, keys: ['deepseek'] }).functions.find((f) => f.id === 'book');

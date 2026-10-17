@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  askClaudeModels, claudeEntries, cleanEntry, createModelWatch, deepseekEntries, geminiEntries, humanName, loadModels,
+  askClaudeModels, canonicalModel, claudeEntries, cleanEntry, createModelWatch, deepseekEntries, geminiEntries, humanName, loadModels,
   modelFits, modelIdsOf, modelNameOf, modelsFile, modelsOf, modelsView, openaiEntries, openrouterEntries, pageModels,
 } from '../server/ai/models.mjs';
 import { clearListed, listedOf } from '../server/ai/model-registry.mjs';
@@ -93,8 +93,8 @@ test('each maker\'s list is read into real names, leaving out what does not answ
   assert.ok(openai.every((e) => e.levelsFrom === 'guess'));
 
   const gemini = geminiEntries(GEMINI_BODY);
-  assert.deepEqual(gemini.map((e) => [e.id, e.name, e.context]), [['gemini-3.8-flash', 'Gemini 3.8 Flash', 1048576], ['gemini-2.5-pro', 'Gemini 2.5 Pro', 1048576], ['gemma-4-31b-it', 'Gemma 4 31B IT', 262144]], 'speech, embeddings, audio, video and the moving "latest" aliases out; Google\'s own display name kept');
-  assert.deepEqual(gemini.map((e) => e.levels), [['low', 'medium', 'high'], ['low', 'medium', 'high'], []], 'Gemma has no thinking level');
+  assert.deepEqual(gemini.map((e) => [e.id, e.name, e.context]), [['gemini-3.8-flash', 'Gemini 3.8 Flash', 1048576], ['gemini-2.5-pro', 'Gemini 2.5 Pro', 1048576]], 'speech, embeddings, audio, video, the moving "latest" aliases and Gemma (it failed the real test: its thinking came back as the answer) out; Google\'s own display name kept');
+  assert.deepEqual(gemini.map((e) => e.levels), [['low', 'medium', 'high'], ['low', 'medium', 'high']]);
 
   const deepseek = deepseekEntries(DEEPSEEK_BODY);
   assert.deepEqual(deepseek.map((e) => [e.id, e.name]), [['deepseek-flash', 'DeepSeek V4.1 Flash'], ['deepseek-v4-pro', 'DeepSeek V4 Pro']]);
@@ -132,7 +132,7 @@ test('with no list read, the built-in one stands: Claude Code\'s twelve models a
   assert.equal(claude.length, CLAUDE_FALLBACK.length);
   assert.deepEqual(claude.slice(0, 4).map((e) => [e.id, e.name, e.group, e.agent]), [['opus', 'Opus 5.5', 'current', true], ['fable', 'Fable 5.1', 'current', true], ['sonnet', 'Sonnet 5.5', 'current', true], ['haiku', 'Haiku 5.5', 'current', true]]);
   assert.ok(claude.slice(4).every((e) => e.group === 'other' && e.agent === false), 'the older ids are not for helpers');
-  assert.deepEqual(modelsOf('deepseek').map((e) => e.id), ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro']);
+  assert.deepEqual(modelsOf('deepseek').map((e) => e.id), ['deepseek-flash', 'deepseek-v4-pro'], 'deepseek-v4-flash is another name of deepseek-flash: offered once');
   assert.equal(modelNameOf('deepseek', 'deepseek-v4-pro'), 'DeepSeek V4 Pro');
   assert.equal(modelNameOf('claude', 'sonnet'), 'Sonnet 5.5');
   assert.equal(modelNameOf('openai', 'gpt-9-x'), 'GPT-9 X', 'a model nobody lists is still named like a person');
@@ -159,7 +159,13 @@ test('the lists read from the makers join the models the program knows: known on
   assert.deepEqual(openai.slice(3).map((e) => [e.id, e.group, e.verified]), [['gpt-5.5', 'other', false], ['gpt-4o', 'other', false], ['o4-mini', 'other', false]]);
   const deepseek = modelsOf('deepseek');
   assert.equal(deepseek.find((e) => e.id === 'deepseek-flash').name, 'DeepSeek V4.1 Flash', 'the maker\'s own name wins');
-  assert.equal(deepseek.find((e) => e.id === 'deepseek-v4-flash').gone, true, 'the older name still works but the list no longer has it');
+  assert.equal(deepseek.find((e) => e.id === 'deepseek-v4-flash'), undefined, 'the other name of Flash is never offered twice');
+  assert.equal(canonicalModel('deepseek', 'deepseek-v4-flash'), 'deepseek-flash');
+  assert.equal(canonicalModel('deepseek', 'deepseek-v4-pro'), 'deepseek-v4-pro');
+  assert.equal(canonicalModel('claude', 'opus'), 'opus');
+  // A saved choice under the other name reads, and saves, as the name DeepSeek lists.
+  assert.deepEqual(functionsOf({ others: { functions: { code: { provider: 'deepseek', model: 'deepseek-v4-flash', effort: 'high' } } } }), { code: { provider: 'deepseek', model: 'deepseek-flash', effort: 'high' } });
+  assert.deepEqual(mergeFunctionChoice({}, { functions: { docs: { provider: 'deepseek', model: 'deepseek-v4-flash' } } }).ai.others.functions, { docs: { provider: 'deepseek', model: 'deepseek-flash' } });
   assert.equal(modelNameOf('claude', 'haiku'), 'Haiku 5.5');
   assert.deepEqual(modelsOf('claude').map((e) => e.id), ['opus', 'sonnet', 'haiku', 'claude-haiku-4-5-20251001', 'claude-opus-4-6']);
 
@@ -298,4 +304,24 @@ test('a maker that answers badly changes nothing and costs no secret: short code
   errors.push(file.providers.openai.error, file.providers.claude.error);
   assert.deepEqual(errors, ['http-401', 'claude-not-found']);
   assert.equal(modelsOf('openai').length, 3, 'the built-in models stand');
+});
+
+test('the real test of every model at every level rides the panel: how many answered, and a failed level is not offered', () => {
+  clearListed();
+  const sm = dir();
+  mkdirSync(join(sm, 'bench'), { recursive: true });
+  writeFileSync(join(sm, 'bench', 'levels.json'), JSON.stringify({ updatedAt: '2026-10-17T04:00:00Z', entries: [
+    { provider: 'deepseek', model: 'deepseek-v4-pro', level: 'auto', ok: true, costUSD: 0 },
+    { provider: 'deepseek', model: 'deepseek-v4-pro', level: 'high', ok: true, costUSD: 0 },
+    { provider: 'deepseek', model: 'deepseek-v4-pro', level: 'max', ok: false, error: 'http-400', costUSD: 0 },
+    { provider: 'deepseek', model: 'deepseek-v4-flash', level: 'low', ok: true, costUSD: 0 },
+  ] }));
+  const m = panelModel({ smDir: sm, ai: { others: { functions: { plan: { provider: 'deepseek', model: 'deepseek-v4-pro' } } } }, keys: ['deepseek'] });
+  const plan = m.functions.find((f) => f.id === 'plan');
+  assert.ok(!plan.levelOptions.includes('max'), 'the level the test saw fail is not offered');
+  assert.ok(plan.levelOptions.includes('high'));
+  assert.ok(!m.agents.find((a) => a.id === 'planner').row.levelOptions.includes('max'), 'nor on the helper\'s row');
+  const pro = m.modelList.deepseek.find((e) => e.id === 'deepseek-v4-pro');
+  assert.deepEqual(pro.tested, { n: 3, ok: 2, at: '2026-10-17T04:00:00Z' });
+  assert.deepEqual(m.modelList.deepseek.find((e) => e.id === 'deepseek-flash').tested, { n: 1, ok: 1, at: '2026-10-17T04:00:00Z' }, 'a test under the other name counts for the model');
 });

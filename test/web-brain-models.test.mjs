@@ -135,3 +135,19 @@ test('without any list read the page still draws the built-in models with their 
   assert.equal(all12.length, 13, 'automatic and the twelve of Claude Code');
   assert.ok(all12.includes('Fable 5.1') && all12.includes('Haiku 4.5') && all12.includes('Opus 4.6'));
 });
+
+test('DeepSeek: each model once, the maximum inside the list of levels and no button beside it; the talk says its one AI', async () => {
+  const ai = { others: { functions: { plan: { provider: 'deepseek', model: 'deepseek-v4-flash', effort: 'high' } } } };
+  const { view, root } = setup({ ai });
+  await view.render(root);
+  const body = rowBody(root, 'role-planner');
+  const models = all(byAttr(body, 'data-brain', 'plan:model')).filter((e) => e.tag === 'option').map((o) => o.text.trim());
+  assert.deepEqual(models, ['Padrão da IA', 'DeepSeek V4.1 Flash', 'DeepSeek V4 Pro'], 'the other name of Flash (deepseek-v4-flash) is the same model, shown once and chosen');
+  const levels = all(byAttr(body, 'data-brain', 'plan:effort')).filter((e) => e.tag === 'option').map((o) => o.text.trim());
+  assert.deepEqual(levels, ['Padrão', 'desligado', 'baixo', 'alto', 'máximo'], 'the maximum is one more level of the list');
+  assert.equal(all(body).filter((e) => e.tag === 'button').length, 0, 'no Max button beside the list');
+  const chat = rowBody(root, 'chat');
+  assert.equal(byAttr(chat, 'data-brain', 'chat:provider').tag, 'div', 'the talk is Claude Code itself: its AI is said, not offered in a list');
+  assert.equal(byAttr(chat, 'data-brain', 'chat:provider').text, 'Claude');
+  assert.ok(all(chat).some((e) => e.tag === 'button' && /Ultracode/.test(e.text)), 'Claude keeps its Ultracode switch, which is not a level');
+});

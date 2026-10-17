@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { POLICY, chatLevel } from './policy.mjs';
 import { PROVIDERS, publicCatalog, providerOf } from './providers.mjs';
-import { loadModels, modelFits, modelNameOf, modelsOf, modelsView, pageModels } from './models.mjs';
+import { canonicalModel, loadModels, modelFits, modelNameOf, modelsOf, modelsView, pageModels } from './models.mjs';
 import { LEVEL_UNION, levelsOf, topLevelOf } from './efforts.mjs';
 import { bulkModelOf, loadStats } from './router.mjs';
 import { othersSettings } from './others.mjs';
@@ -70,8 +70,10 @@ export function functionsOf(ai) {
     if (!functionById(id) || !isObject(c)) continue;
     const one = {};
     if (c.provider === 'auto' || validProvider(c.provider)) one.provider = c.provider;
-    // A model named with no AI is Claude's, the AI every row starts on.
-    if (c.model === 'auto' || (typeof c.model === 'string' && validModel(one.provider && one.provider !== 'auto' ? one.provider : 'claude', c.model, id))) one.model = c.model;
+    // A model named with no AI is Claude's, the AI every row starts on. Another name of a model reads as the one it lists.
+    const prov = one.provider && one.provider !== 'auto' ? one.provider : 'claude';
+    const model = canonicalModel(prov, c.model);
+    if (model === 'auto' || (typeof model === 'string' && validModel(prov, model, id))) one.model = model;
     if (c.effort === 'auto' || validEffort(c.effort)) one.effort = c.effort;
     if (Object.keys(one).length) out[id] = one;
   }
@@ -87,8 +89,11 @@ export function mergeFunctionChoice(ai, patch = {}) {
   const given = patch.functions;
   if (given !== undefined) {
     if (!isObject(given)) return { ok: false, error: 'bad-functions' };
-    for (const [id, c] of Object.entries(given)) {
-      if (!isObject(c)) return { ok: false, error: 'bad-functions' };
+    for (const [id, sent] of Object.entries(given)) {
+      if (!isObject(sent)) return { ok: false, error: 'bad-functions' };
+      // Another name of a model is saved as the name its AI lists (deepseek-v4-flash is deepseek-flash).
+      const named0 = sent.provider ?? next[id]?.provider;
+      const c = typeof sent.model === 'string' ? { ...sent, model: canonicalModel(!named0 || named0 === 'auto' ? 'claude' : named0, sent.model) } : sent;
       if (id !== 'auto' && !functionById(id)) return { ok: false, error: 'unknown-function' };
       if (c.provider !== undefined && c.provider !== 'auto' && !validProvider(c.provider)) return { ok: false, error: 'unknown-provider' };
       if (c.effort !== undefined && c.effort !== 'auto') {
@@ -141,7 +146,7 @@ function resolveRow(fn, { settings, engines, choices, available, stats, models, 
     // tab says which of the two it is, so a default never looks like a choice.
     const fallback = chatLevel();
     const model = choice.provider && choice.provider !== 'claude' && choice.provider !== 'auto' ? fallback.model : choice.model ?? fallback.model;
-    return { ...row, provider: 'claude', providers: ['auto', 'claude'], model, effort: choice.effort ?? fallback.effort, levelOptions: levelsOf('claude', model), topLevel: topLevelOf('claude', model), why: choice.model || choice.effort ? 'choice' : 'policy' };
+    return { ...row, provider: 'claude', providers: ['claude'], model, effort: choice.effort ?? fallback.effort, levelOptions: levelsOf('claude', model), topLevel: topLevelOf('claude', model), why: choice.model || choice.effort ? 'choice' : 'policy' };
   }
   if (fn.engine === null) {
     return { ...row, provider: null, model: null, effort: null, levelOptions: [], topLevel: null, why: 'not-wired' };
@@ -246,8 +251,29 @@ export function panelModel({
 
   // The model list the selectors draw, for the AIs the page can offer (Claude, the ones with a key and the ones a row already
   // names): the full list of each, with the real names, the notes of the maker, the price and the context.
+  // The real test of every model at every level (bench/levels.json): each model says how many of its levels answered, and a
+  // level that failed is not offered on any row, so the page never shows a choice whose call the test saw fail.
+  const levels = smDir ? readLevels(smDir) : { updatedAt: null, entries: [] };
+  const testKey = (provider, model) => `${provider}|${model}`;
+  const tests = new Map();
+  for (const e of levels.entries) {
+    const k = testKey(e.provider, canonicalModel(e.provider, e.model));
+    const t = tests.get(k) ?? { n: 0, ok: 0, failed: new Set() };
+    t.n += 1;
+    if (e.ok) t.ok += 1; else t.failed.add(e.level);
+    tests.set(k, t);
+  }
   const modelList = {};
-  for (const id of new Set(['claude', ...keyProviders, ...functions.map((f) => f.provider).filter((p) => p && p !== 'auto')])) modelList[id] = pageModels(id);
+  for (const id of new Set(['claude', ...keyProviders, ...functions.map((f) => f.provider).filter((p) => p && p !== 'auto')])) {
+    modelList[id] = pageModels(id).map((m) => {
+      const t = tests.get(testKey(id, m.id));
+      return t ? { ...m, tested: { n: t.n, ok: t.ok, at: levels.updatedAt } } : m;
+    });
+  }
+  const withTested = (f) => {
+    const failed = f.provider && f.model ? tests.get(testKey(f.provider, f.model))?.failed : null;
+    return failed?.size && Array.isArray(f.levelOptions) ? { ...f, levelOptions: f.levelOptions.filter((l) => !failed.has(l)) } : f;
+  };
 
-  return { ok: true, matrix, functions, agents, agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels: smDir ? readLevels(smDir) : { updatedAt: null, entries: [] }, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
+  return { ok: true, matrix, functions: functions.map(withTested), agents: agents.map((a) => (a.row ? { ...a, row: withTested(a.row) } : a)), agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
 }
