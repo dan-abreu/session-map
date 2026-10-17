@@ -96,6 +96,9 @@ export function mergeFunctionChoice(ai, patch = {}) {
       const c = typeof sent.model === 'string' ? { ...sent, model: canonicalModel(!named0 || named0 === 'auto' ? 'claude' : named0, sent.model) } : sent;
       if (id !== 'auto' && !functionById(id)) return { ok: false, error: 'unknown-function' };
       if (c.provider !== undefined && c.provider !== 'auto' && !validProvider(c.provider)) return { ok: false, error: 'unknown-provider' };
+      // The talk runs where Claude Code runs: on Claude, or on an AI that speaks its protocol (id170).
+      if (id === 'chat' && c.provider !== undefined && !['auto', 'claude'].includes(c.provider) && !providerOf(c.provider)?.talkEndpoint) return { ok: false, error: 'unknown-provider' };
+      if (id === 'chat' && c.effort === 'off') return { ok: false, error: 'bad-effort' };
       if (c.effort !== undefined && c.effort !== 'auto') {
         const prov = c.provider ?? next[id]?.provider;
         const mdl = c.model ?? next[id]?.model;
@@ -145,8 +148,17 @@ function resolveRow(fn, { settings, engines, choices, available, stats, models, 
     // The level the chat starts on is this row's, else the policy's chat row (the default, never the entry brain's): the
     // tab says which of the two it is, so a default never looks like a choice.
     const fallback = chatLevel();
-    const model = choice.provider && choice.provider !== 'claude' && choice.provider !== 'auto' ? fallback.model : choice.model ?? fallback.model;
-    return { ...row, provider: 'claude', providers: ['claude'], model, effort: choice.effort ?? fallback.effort, levelOptions: levelsOf('claude', model), topLevel: topLevelOf('claude', model), why: choice.model || choice.effort ? 'choice' : 'policy' };
+    // Claude, and every AI with a key that speaks Claude Code's protocol (id170: DeepSeek).
+    const talkers = ['claude', ...available.filter((p) => p !== 'claude' && providerOf(p)?.talkEndpoint)];
+    const other = choice.provider && choice.provider !== 'claude' && choice.provider !== 'auto' ? choice.provider : null;
+    if (other && talkers.includes(other)) {
+      const model = choice.model ?? providerOf(other).talkModel;
+      // Its levels are the maker's, without "off": Claude Code has no word for thinking switched off.
+      const levels = levelsOf(other, model).filter((l) => l !== 'off' && l !== 'auto');
+      return { ...row, provider: other, providers: talkers, model, effort: levels.includes(choice.effort) ? choice.effort : levels.includes('high') ? 'high' : levels[0] ?? null, levelOptions: levels, topLevel: null, why: 'choice' };
+    }
+    const model = other ? fallback.model : choice.model ?? fallback.model;
+    return { ...row, provider: 'claude', providers: talkers, model, effort: choice.effort ?? fallback.effort, levelOptions: levelsOf('claude', model), topLevel: topLevelOf('claude', model), why: choice.model || choice.effort ? 'choice' : 'policy' };
   }
   if (fn.engine === null) {
     return { ...row, provider: null, model: null, effort: null, levelOptions: [], topLevel: null, why: 'not-wired' };

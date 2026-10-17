@@ -147,7 +147,24 @@ test('DeepSeek: each model once, the maximum inside the list of levels and no bu
   assert.deepEqual(levels, ['Padrão', 'desligado', 'baixo', 'alto', 'máximo'], 'the maximum is one more level of the list');
   assert.equal(all(body).filter((e) => e.tag === 'button').length, 0, 'no Max button beside the list');
   const chat = rowBody(root, 'chat');
-  assert.equal(byAttr(chat, 'data-brain', 'chat:provider').tag, 'div', 'the talk is Claude Code itself: its AI is said, not offered in a list');
-  assert.equal(byAttr(chat, 'data-brain', 'chat:provider').text, 'Claude');
+  const ais = all(byAttr(chat, 'data-brain', 'chat:provider')).filter((e) => e.tag === 'option').map((o) => o.text.trim());
+  assert.deepEqual(ais, ['Claude', 'DeepSeek'], 'the talk runs on Claude or on DeepSeek, which speaks Claude Code\'s protocol (id170); OpenAI cannot');
   assert.ok(all(chat).some((e) => e.tag === 'button' && /Ultracode/.test(e.text)), 'Claude keeps its Ultracode switch, which is not a level');
+});
+
+test('the talk on DeepSeek: its models and levels, and the note that says what changes (id170)', async () => {
+  const { view, root } = setup({ ai: { others: { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'high' } } } } });
+  await view.render(root);
+  const chat = rowBody(root, 'chat');
+  assert.match(chat.children[0].text, /DeepSeek V4 Pro · alto/);
+  const models = all(byAttr(chat, 'data-brain', 'chat:model')).filter((e) => e.tag === 'option').map((o) => o.text.trim());
+  assert.deepEqual(models, ['Padrão da IA', 'DeepSeek V4.1 Flash', 'DeepSeek V4 Pro']);
+  const levels = all(byAttr(chat, 'data-brain', 'chat:effort')).filter((e) => e.tag === 'option').map((o) => o.text.trim());
+  assert.deepEqual(levels, ['Padrão', 'baixo', 'alto', 'máximo'], 'no "off": Claude Code cannot switch thinking off');
+  assert.match(chat.text, /As conversas novas começam no DeepSeek; as que já existem continuam na IA em que começaram/);
+  assert.equal(all(chat).some((e) => e.tag === 'button'), false, 'no Ultracode: it is Claude\'s');
+  const none = setup({ keys: ['openai'] });
+  await none.view.render(none.root);
+  const fixed = byAttr(rowBody(none.root, 'chat'), 'data-brain', 'chat:provider');
+  assert.deepEqual([fixed.tag, fixed.text], ['div', 'Claude'], 'with no AI that can run the talk, its one AI is said, not offered in a list');
 });

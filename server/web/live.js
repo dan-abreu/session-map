@@ -92,6 +92,10 @@ export function captionsAt(isOpen, entries) {
 const MODEL_ID = /^(?:claude-)?([a-z]+)(?:-(\d+)(?:-(\d{1,2}))?)?(?:-\d{8})?(\[1m\])?$/i;
 export function modelName(model) {
   if (typeof model !== 'string') return null;
+  // A conversation on DeepSeek (id170): 'deepseek-v4-pro' → 'DeepSeek V4 Pro', 'deepseek-flash' → 'DeepSeek Flash'.
+  if (/^deepseek-[a-z0-9.-]+$/i.test(model)) {
+    return ['DeepSeek', ...model.split('-').slice(1).map((w) => (/^v\d/i.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))].join(' ');
+  }
   const m = MODEL_ID.exec(model);
   if (!m || (!m[2] && model.startsWith('claude-'))) return model;
   const name = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();

@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -760,3 +760,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the talk row says "IA: Claude"; DeepSeek lists two models; the note of a model says "Teste real em …: N de N níveis responderam"; no Max button; "máximo" in the list of levels where the model takes it.
   - Where it went: `or73`.
   - Status: done on 2026-10-17 (`or73`).
+- [x] The talk (the Conversa row, the page chat) can run on another AI, not only Claude `id170`
+  - Asked: 2026-10-17 — "conversa que é o chat, eu nao consigo mudar o modelo para outras IA, tem que mudar para outras IA"
+  - What it means: the page chat is Claude Code itself (tools, files, resume, helpers). DeepSeek speaks the same protocol, so Claude Code can run on it: the Conversa row now offers Claude and DeepSeek (when its key is saved), with DeepSeek's models and its own levels (low, high, max). Proved on 2026-10-17: Claude Code on deepseek-v4-pro read a file, answered and resumed; through the program's own chat it read a file with its tool and answered (US$ 0.046 at DeepSeek's price). OpenAI and Gemini have no such door: their talk would need their own programs (Codex, Gemini CLI), not installed here, so the row does not offer them.
+  - Limits, said on the page: new conversations start on the chosen AI and the ones that exist keep the AI they began on (a conversation begun on Claude cannot be read by DeepSeek: HTTP 422 in the real test); the helpers of a conversation on DeepSeek run on DeepSeek too (one process speaks to one AI); Claude Code's web search works on Claude only. A conversation on DeepSeek is priced at DeepSeek's price (Claude Code prices it as Claude, 13 times more).
+  - How to confirm it is done: Cérebro, Conversa: the AI list has Claude and DeepSeek; choose DeepSeek V4 Pro at high; a new chat answers with "DeepSeek V4 Pro" as its model.
+  - Where it went: `or74`.
+  - Status: done on 2026-10-17 (`or74`).

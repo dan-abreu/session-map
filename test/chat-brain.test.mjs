@@ -207,12 +207,12 @@ test('the Cérebro\'s brain row on another company\'s AI (id154): the weighing g
   let reply = { ok: true, value: { phase: 'build', size: 'large', sensitive: false } };
   const weighOther = async (prompt, o) => { sent.push(o.choice); return reply; };
   await withBrain({ weighOther }, async ({ hub, state, smDir, level }) => {
-    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { brain: { provider: 'deepseek', model: 'deepseek-v4-pro' }, chat: { provider: 'deepseek', model: 'deepseek-v4-pro' } } } } }));
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { brain: { provider: 'deepseek', model: 'deepseek-v4-pro' }, chat: { provider: 'gemini', model: 'gemini-3.8-flash' } } } } }));
     const first = await open(hub, state, LONG);
     await nthTurnEnd(first.r, 1);
     assert.deepEqual(sent, [{ provider: 'deepseek', model: 'deepseek-v4-pro' }], 'the row\'s AI weighs the message');
     assert.equal(first.r.events.find((e) => e.type === 'run').data.brain.phase, 'build');
-    assert.equal(level(), 'opus/high', 'a chat row on another AI never sends its model to the Claude CLI');
+    assert.equal(level(), 'opus/high', 'a chat row on an AI that cannot run the talk (Gemini) never sends its model to the Claude CLI');
     await hub.close();
 
     reply = null;
@@ -225,5 +225,59 @@ test('the Cérebro\'s brain row on another company\'s AI (id154): the weighing g
     const third = await open(hub, state, 'oi');
     await nthTurnEnd(third.r, 1);
     assert.equal(level(), 'opus/high', 'a model of another company with no AI named never reaches the Claude CLI');
+  });
+});
+
+test('the talk on DeepSeek (id170): a new conversation runs Claude Code on DeepSeek, keeps it when resumed, and an old one stays on Claude', async () => {
+  const asked = [];
+  const keyOf = async (p) => { asked.push(p); return p === 'deepseek' ? 'sk-deepseek-test-1234' : null; };
+  await withBrain({ keyOf }, async ({ hub, state, smDir, log, level }) => {
+    // A conversation begun on Claude, before the row moved.
+    const old = await open(hub, state, 'oi');
+    await nthTurnEnd(old.r, 1);
+    const oldId = old.r.events.find((e) => e.type === 'session').data.sessionId;
+    assert.equal(level(), 'opus/high');
+    await hub.close();
+
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'max' } } } } }));
+    const fresh = await open(hub, state, 'oi');
+    await nthTurnEnd(fresh.r, 1);
+    assert.equal(level(), 'deepseek-v4-pro/max', 'the row\'s model and level');
+    const logged = JSON.parse(readFileSync(log, 'utf8'));
+    assert.ok(logged.envKeys.includes('ANTHROPIC_BASE_URL') && logged.envKeys.includes('ANTHROPIC_AUTH_TOKEN'), 'the process speaks to DeepSeek');
+    assert.ok(logged.envKeys.includes('ANTHROPIC_DEFAULT_HAIKU_MODEL'), 'its helpers run on DeepSeek too');
+    assert.ok(!JSON.stringify(logged.argv).includes('sk-deepseek'), 'the key never reaches the command line');
+    assert.deepEqual(asked, ['deepseek']);
+    const freshId = fresh.r.events.find((e) => e.type === 'session').data.sessionId;
+    const pages = JSON.parse(readFileSync(join(smDir, 'page-chats.json'), 'utf8'));
+    assert.equal(pages[freshId].ai, 'deepseek', 'the conversation remembers its AI');
+    assert.ok(!JSON.stringify(pages).includes('sk-deepseek'), 'the key is never written');
+    assert.equal(pages[oldId].ai, undefined);
+    await hub.close();
+
+    // Resumed: each keeps the AI it began on, whatever the row says now.
+    const back = await hub.start({ projectId: 'demo', sessionId: oldId, text: 'e agora?' }, state);
+    assert.equal(back.status, 200, JSON.stringify(back.body));
+    const rb = recorder(); hub.subscribe(back.body.chatKey, rb.sink);
+    await nthTurnEnd(rb, 1);
+    assert.equal(level(), 'opus/high', 'a conversation begun on Claude stays on Claude: DeepSeek cannot read it');
+    assert.ok(!JSON.parse(readFileSync(log, 'utf8')).envKeys.includes('ANTHROPIC_BASE_URL'));
+    await hub.close();
+
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { chat: { provider: 'claude', model: 'sonnet' } } } } }));
+    const again = await hub.start({ projectId: 'demo', sessionId: freshId, text: 'continua' }, state);
+    assert.equal(again.status, 200, JSON.stringify(again.body));
+    const ra = recorder(); hub.subscribe(again.body.chatKey, ra.sink);
+    await nthTurnEnd(ra, 1);
+    assert.equal(level(), 'deepseek-v4-pro/high', 'a conversation begun on DeepSeek stays on DeepSeek, on its strong model when the row names another AI');
+  });
+});
+
+test('the talk on DeepSeek with no key saved says so and starts nothing', async () => {
+  await withBrain({ keyOf: async () => null }, async ({ hub, state, smDir }) => {
+    writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ai: { others: { functions: { chat: { provider: 'deepseek' } } } } }));
+    const res = await hub.start({ projectId: 'demo', node: { kind: 'project' }, text: 'oi' }, state);
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.body, { ok: false, error: 'no-key', ai: 'deepseek' });
   });
 });

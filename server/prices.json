@@ -1,6 +1,6 @@
 {
   "_asOf": "2026-10-11",
-  "_note": "USD per million tokens; checked against platform.claude.com/docs/en/about-claude/pricing on 2026-10-11. Cache write 1.25x (5m) and 2x (1h) of input. Haiku 5.5 uses over100k for a prompt over 100,000 tokens.",
+  "_note": "USD per million tokens; checked against platform.claude.com/docs/en/about-claude/pricing on 2026-10-11. Cache write 1.25x (5m) and 2x (1h) of input. Haiku 5.5 uses over100k for a prompt over 100,000 tokens. DeepSeek (id170, a conversation Claude Code runs on DeepSeek): the peak price of providers.mjs, a cache write at the input price.",
   "claude-fable-5-1": {
     "input": 10,
     "output": 50,
@@ -133,5 +133,26 @@
     "cacheWrite5m": 1.25,
     "cacheWrite1h": 2,
     "cacheRead": 0.1
+  },
+  "deepseek-flash": {
+    "input": 0.3,
+    "output": 1.2,
+    "cacheWrite5m": 0.3,
+    "cacheWrite1h": 0.3,
+    "cacheRead": 0.006
+  },
+  "deepseek-v4-flash": {
+    "input": 0.3,
+    "output": 1.2,
+    "cacheWrite5m": 0.3,
+    "cacheWrite1h": 0.3,
+    "cacheRead": 0.006
+  },
+  "deepseek-v4-pro": {
+    "input": 1.32,
+    "output": 3.96,
+    "cacheWrite5m": 1.32,
+    "cacheWrite1h": 1.32,
+    "cacheRead": 0.044
   }
 }

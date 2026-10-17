@@ -32,6 +32,14 @@ export const PROVIDERS = Object.freeze({
     endpoint: 'https://api.deepseek.com/chat/completions',
     defaultModel: 'deepseek-flash',
     keyUrl: 'https://platform.deepseek.com/api_keys',
+    // The talk (id170): DeepSeek also speaks the protocol Claude Code speaks, so a whole conversation of the page can run on it,
+    // tools, files and resume included (proved on 2026-10-17: Claude Code read a file, answered and resumed on deepseek-v4-pro,
+    // every level low to max accepted). OpenAI and Gemini have no such door: their conversations would need their own programs.
+    talkEndpoint: 'https://api.deepseek.com/anthropic',
+    talkModel: 'deepseek-v4-pro',
+    // The helpers of a conversation on DeepSeek run on DeepSeek too (one process speaks to one AI): the small one for Haiku's
+    // place, the strong one for Sonnet's and Opus's.
+    talkHelpers: { haiku: 'deepseek-flash', sonnet: 'deepseek-v4-pro', opus: 'deepseek-v4-pro' },
     privacyNote: 'Servers in China, and the policy does not rule out training on what is sent: never use it for personal or client data.',
     // The peak-hour price: off-peak is half, so the daily cap errs on the safe side. cacheHit: the context-cache price
     // per million input tokens (peak), for the usage rows the DeepSeek Harness writes (checked 2026-10-14 on the
@@ -148,6 +156,21 @@ export function costOf(providerId, model, tokensIn, tokensOut) {
   const prices = providerOf(providerId)?.pricesUSDPerMTok ?? {};
   const price = Object.hasOwn(prices, model) ? prices[model] : UNKNOWN_MODEL_PRICE;
   return ((tokensIn || 0) * price.in + (tokensOut || 0) * price.out) / 1e6;
+}
+
+// What a conversation that Claude Code ran on another AI cost (id170): Claude Code's modelUsage ({model: {inputTokens,
+// outputTokens, cacheReadInputTokens, cacheCreationInputTokens}}) priced at that AI's own price; a cache hit at its cache
+// price, a cache write as plain input (DeepSeek charges no more for it). A model not in the table is priced high.
+export function talkCostUSD(providerId, modelUsage) {
+  const prices = providerOf(providerId)?.pricesUSDPerMTok ?? {};
+  let usd = 0;
+  for (const [model, u] of Object.entries(modelUsage ?? {})) {
+    if (!u || typeof u !== 'object') continue;
+    const p = Object.hasOwn(prices, model) ? prices[model] : UNKNOWN_MODEL_PRICE;
+    const n = (k) => (Number.isFinite(u[k]) && u[k] > 0 ? u[k] : 0);
+    usd += (n('inputTokens') * p.in + n('cacheCreationInputTokens') * p.in + n('cacheReadInputTokens') * (p.cacheHit ?? p.in) + n('outputTokens') * p.out) / 1e6;
+  }
+  return Math.round(usd * 1e6) / 1e6;
 }
 
 const promptWithHint = (prompt, schemaHint) => (schemaHint ? `${prompt}\n\nReply with one JSON object only, no prose, shaped like:\n${schemaHint}\n` : prompt);

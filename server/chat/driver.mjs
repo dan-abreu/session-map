@@ -59,7 +59,9 @@ export function translate(msg, cwd = '') {
         type: 'turn-end',
         data: { subtype: msg.subtype, isError: Boolean(msg.is_error), sessionId: msg.session_id, terminalReason: msg.terminal_reason, denials: msg.permission_denials?.length ?? 0,
           // What this process has spent so far: claude adds every turn of the process into it.
-          processCostUSD: Number.isFinite(msg.total_cost_usd) ? msg.total_cost_usd : null },
+          processCostUSD: Number.isFinite(msg.total_cost_usd) ? msg.total_cost_usd : null,
+          // The tokens per model, for a conversation on another AI: claude prices them as Claude's (id170).
+          ...(msg.modelUsage && typeof msg.modelUsage === 'object' ? { modelUsage: msg.modelUsage } : {}) },
       }];
     default:
       return [];

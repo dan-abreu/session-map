@@ -46,6 +46,9 @@ import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 import { functionsOf } from '../ai/brainpanel.mjs';
 import { isClaudeModel } from '../ai/claude-models.mjs';
+import { getKey } from '../ai/keys.mjs';
+import { providerOf, talkCostUSD } from '../ai/providers.mjs';
+import { canonicalModel } from '../ai/models.mjs';
 import { weighOutside } from '../ai/brain-other.mjs';
 import { cerebroNote } from '../ai/cerebro-note.mjs';
 import { chatLevel } from '../ai/policy.mjs';
@@ -222,7 +225,7 @@ export function createChatHub({
   smDir, dir = claudeDir(), dshDir = null, bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
   readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null, tidyText = null,
-  weighOther = weighOutside,
+  weighOther = weighOutside, keyOf = (provider) => getKey(smDir, provider),
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -436,6 +439,7 @@ export function createChatHub({
       // parentId: the mother, kept also for a conversation the orchestrator adopted (its list_chats reads it).
       savePageChat(chat.sessionId, {
         projectId: chat.projectId, root: chat.root, cwd: chat.cwd, mode: chat.choice, run: chat.run, prompted: chat.prompted, running: chat.running, updatedAt: now(),
+        ...(chat.ai && chat.ai !== 'claude' ? { ai: chat.ai } : {}),
         ...(chat.planned ? { planned: chat.planned } : {}),
         ...(chat.parentId && chat.parentId !== chat.sessionId ? { parentId: chat.parentId } : {}),
         ...(known ? {} : { partId: chat.partId, workCellId: chat.workCellId, ...(chat.node ? { node: chat.node } : {}), title: chat.title, startedAt: chat.startedAt }),
@@ -453,13 +457,16 @@ export function createChatHub({
     if (evt.type === 'turn-end') {
       chat.running = false;
       if (chat.flow) saveFlowDraft(chat);
-      const auto = endTurnRun(chat, evt.data.processCostUSD);
+      // On another AI the process's own total is Claude's price for that AI's tokens (13 times DeepSeek's real price in the
+      // check of 2026-10-17): the tokens are priced at that AI's own price instead.
+      const processCost = chat.ai && chat.ai !== 'claude' && evt.data.modelUsage ? talkCostUSD(chat.ai, evt.data.modelUsage) : evt.data.processCostUSD;
+      const auto = endTurnRun(chat, processCost);
       clearTimeout(chat.idleTimer);
       armIdle(chat, idleMs);
       const check = checkOf(chat);
       chat.contextTokens = memoryOf(chat) ?? chat.contextTokens;
       if (chat.sessionId) savePageChat(chat.sessionId, { running: false, updatedAt: now(), ...(check ? { check } : {}) });
-      const { processCostUSD, ...data } = evt.data;
+      const { processCostUSD, modelUsage, ...data } = evt.data;
       emit(chat, 'turn-end', { ...data, costUSD: chat.costUSD, ...(check ? { check } : {}) });
       emitRun(chat);
       const ended = { isError: Boolean(data.isError), reply: chat.lastText, auto: Boolean(auto), stopped: Boolean(chat.stopRequested) };
@@ -698,16 +705,44 @@ export function createChatHub({
   // The talk chat's level (id146): the owner's choice for the Conversa row in the Cérebro (ai.others.functions.chat,
   // validated by the same script that saves it), else the policy's chat row. The one place the person changes it is the
   // Cérebro tab; the bench of or35, once it runs, proposes the policy's default with the owner's OK.
-  const chatLevelOf = () => {
-    try {
-      const choice = claudeSide(functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).chat);
-      return { model: choice.model ?? chatLevel().model, effort: choice.effort ?? chatLevel().effort };
-    } catch {
-      return chatLevel();
+  // ai: the AI the conversation runs on (id170). A conversation keeps the AI it started on (a conversation begun on Claude
+  // cannot be read by DeepSeek: proved on 2026-10-17, HTTP 422), so a Claude one stays on the policy's level when the row
+  // names another AI, and one on that AI takes the row's model and level, else its maker's strong model at high.
+  const chatChoice = () => {
+    try { return functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).chat ?? null; } catch { return null; }
+  };
+  const chatLevelOf = (ai = 'claude') => {
+    const choice = chatChoice();
+    if (ai !== 'claude') {
+      const p = providerOf(ai);
+      const mine = choice?.provider === ai;
+      const model = mine && typeof choice.model === 'string' ? canonicalModel(ai, choice.model) : p?.talkModel ?? null;
+      const effort = mine && ['low', 'medium', 'high', 'xhigh', 'max'].includes(choice.effort) ? choice.effort : 'high';
+      return { model, effort };
     }
+    const own = claudeSide(choice);
+    return { model: own.model ?? chatLevel().model, effort: own.effort ?? chatLevel().effort };
+  };
+  // The AI a new talk starts on: the Cérebro's Conversa row, when it names an AI that speaks Claude Code's protocol.
+  const talkAi = () => {
+    const p = chatChoice()?.provider;
+    return typeof p === 'string' && p !== 'claude' && p !== 'auto' && providerOf(p)?.talkEndpoint ? p : 'claude';
+  };
+  // What a process needs to speak to that AI instead of Claude: its address, the key (held in memory for this conversation
+  // only, never written), and its models in the place of Claude's for the helpers the conversation starts.
+  const talkEnv = (chat) => {
+    const p = chat.ai && chat.ai !== 'claude' ? providerOf(chat.ai) : null;
+    if (!p || !chat.aiKey) return {};
+    const h = p.talkHelpers ?? {};
+    return {
+      ANTHROPIC_BASE_URL: p.talkEndpoint, ANTHROPIC_AUTH_TOKEN: chat.aiKey, ANTHROPIC_API_KEY: '',
+      ...(h.haiku ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: h.haiku, ANTHROPIC_SMALL_FAST_MODEL: h.haiku } : {}),
+      ...(h.sonnet ? { ANTHROPIC_DEFAULT_SONNET_MODEL: h.sonnet } : {}),
+      ...(h.opus ? { ANTHROPIC_DEFAULT_OPUS_MODEL: h.opus } : {}),
+    };
   };
   // The weight rides on the effective level: the phase shapes the turn, the level is the Cérebro's.
-  const weighText = (text, { haiku = null, planned = null } = {}) => ({ ...weigh({ text, measured: sizeRequest({ text }), haiku, planned }), ...chatLevelOf() });
+  const weighText = (text, { haiku = null, planned = null, ai = 'claude' } = {}) => ({ ...weigh({ text, measured: sizeRequest({ text }), haiku, planned }), ...chatLevelOf(ai) });
 
   // ---- the person's message, tidied (id111) ----
 
@@ -751,7 +786,7 @@ export function createChatHub({
     return startDriver({
       bin: chat.bin,
       args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail, run.kind === 'talk' ? cerebroNoteOf() : ''), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
-      cwd: chat.cwd, env: cleanEnv(env),
+      cwd: chat.cwd, env: { ...cleanEnv(env), ...talkEnv(chat) },
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
   }
@@ -775,7 +810,7 @@ export function createChatHub({
       return null;
     }
     const go = (h) => {
-      const turn = weighText(text, { haiku: h, planned: chat.planned });
+      const turn = weighText(text, { haiku: h, planned: chat.planned, ai: chat.ai });
       applyTurn(chat, turn);
       sendTo(chat, text, phaseNote(turn.phase, prompt), auto, images, from);
     };
@@ -863,13 +898,17 @@ ${prompt}`;
     // The person's words, tidied by the cheap AI, are what the work and the book get (tidy-words.mjs).
     const asking = mine ? await tidiedPrompt(body.text) : body.text;
     const fromSettings = settingsMode(project.root, dir);
+    // The AI this conversation runs on (id170): the one it started on when it is resumed, else the Cérebro's Conversa row.
+    // Only the talk moves: the orchestrator's ways stay on Claude.
+    const talkRun = (asked ?? DEFAULT_RUN).kind === 'talk' && !internal.orchestrator;
+    const ai = body.sessionId ? (readPageChats()[body.sessionId]?.ai ?? 'claude') : talkRun ? talkAi() : 'claude';
 
     // The entry brain weighs the first message of a process for its phase; the phase note goes right before the person's
     // words, after the context block. The level is the policy's chat level (or35).
     let turn = null;
     const planned = () => (PLANNED.has(saved?.planned) ? saved.planned : null);
     const weighFirst = (run) => {
-      turn = mine && isWeighed(run) ? weighText(body.text, { haiku, planned: planned() }) : null;
+      turn = mine && isWeighed(run) ? weighText(body.text, { haiku, planned: planned(), ai }) : null;
       return phaseNote(turn?.phase, asking);
     };
     let cwd;
@@ -957,7 +996,7 @@ ${prompt}`;
     // Cérebro's level for the Conversa row (the policy's chat row when the owner chose none), weighed per message.
     const run = asked ?? parseRun(saved?.run) ?? DEFAULT_RUN;
     // A talk chat with no weighed turn yet (an idle resume) still launches on the Cérebro's level.
-    if (!turn && run.kind === 'talk') turn = { phase: null, why: null, ...chatLevelOf() };
+    if (!turn && run.kind === 'talk') turn = { phase: null, why: null, ...chatLevelOf(ai) };
     const mode = modeFor(run, choice, fromSettings);
     const prompted = resume ? saved?.prompted ?? 'plain' : instructionsOf(run);
     const listed = resume ? (project.conversations ?? []).find((c) => c.sessionId === resume) ?? find(project, 'chat', resume) : null;
@@ -966,6 +1005,12 @@ ${prompt}`;
     if ([...chats.values()].filter((c) => !c.ended).length >= chatsMax) return reply(429, { error: 'too-many-chats' });
     const claude = bin !== undefined ? bin : findClaude();
     if (!claude) return reply(503, { error: 'claude-not-found' });
+    // Another AI needs its key for the whole conversation: read once, here, kept in memory with the conversation.
+    let aiKey = null;
+    if (ai !== 'claude') {
+      try { aiKey = await keyOf(ai); } catch { aiKey = null; }
+      if (typeof aiKey !== 'string' || !aiKey) return reply(409, { error: 'no-key', ai });
+    }
 
     const key = randomBytes(16).toString('hex');
     const chat = {
@@ -977,7 +1022,7 @@ ${prompt}`;
       run, processRun: run, prompted, model: null, level: null, turnText: '', baseCostUSD, processCostUSD: 0, costUSD: baseCostUSD, restart: false,
       reinforcing: false, autoAnswered: false,
       skillFocus,
-      bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false,
+      bin: claude, orchestrator, weighed: turn, planned: planned(), weighing: false, ai, aiKey,
     };
     if (turn) rememberPlan(chat, turn);
     chat.done = new Promise((resolve) => { chat.exited = resolve; });

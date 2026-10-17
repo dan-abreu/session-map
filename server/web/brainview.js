@@ -265,7 +265,7 @@ export function createBrainView(ctx) {
   function explainOf(f) {
     const why = text(`brain.why.${f.why}`);
     const note = (f.note || f.notePt) ? (isPt() ? f.notePt : f.note) : '';
-    const chat = f.id === 'chat' ? t('brain.chatNote') : '';
+    const chat = f.id === 'chat' ? (f.provider && f.provider !== 'claude' ? t('brain.talkOther', { ai: aiName(f.provider) }) : t('brain.chatNote')) : '';
     return [why.length > 24 ? why : '', chat, note].filter(Boolean).map((s) => h('p', { class: 'br-does' }, s));
   }
 
