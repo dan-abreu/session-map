@@ -411,7 +411,7 @@ test('the brain\'s line by Send is quiet until a run event, then says the model 
   sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', brain: { phase: 'build', why: 'money' }, costUSD: 0.1 }, 1);
   assert.equal(part('brain').hidden, false);
   const line = text(part('brain'));
-  assert.ok(line.includes('Opus 5.5') && line.includes('run.effort.high') && !line.includes('run.brain.'), line);
+  assert.ok(line.includes('Opus 5.5') && line.includes('high') && !line.includes('run.effort.') && !line.includes('run.brain.'), line);
   assert.equal(part('brain').attrs.title, 'chat.brainTitle\nchat.brainWhy(run.brain.money)', 'the why rides in the tooltip');
 });
 

@@ -493,12 +493,14 @@ export function chatSkillSettings({ skills = [], plugins = [], part = null, text
   return { skillOverrides, enabledPlugins: {} };
 }
 
-export function guardSettings({ snapshot, focus = null }) {
+export function guardSettings({ snapshot, focus = null, ultracode = false }) {
   const slash = (p) => p.replace(/\\/g, '/');
   const node = `"${slash(process.execPath)}"`;
   const command = `${node} "${slash(GUARD_HOOK)}"${snapshot ? ' --snapshot' : ''}`;
   const book = (flag) => [{ type: 'command', command: `${node} "${slash(BOOK_HOOK)}" ${flag}`, timeout: HOOK_TIMEOUT_S }];
   return JSON.stringify({
+    // Claude Code's ultracode (id179): a setting of the session, at the level picked (get_settings shows it applied).
+    ...(ultracode ? { ultracode: true } : {}),
     ...(focus && Object.keys(focus.skillOverrides ?? {}).length ? { skillOverrides: focus.skillOverrides } : {}),
     ...(focus && Object.keys(focus.enabledPlugins ?? {}).length ? { enabledPlugins: focus.enabledPlugins } : {}),
     hooks: {

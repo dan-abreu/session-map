@@ -505,7 +505,8 @@ export function createChat({
     const tt = t();
     const info = log?.run ?? null;
     const model = info?.model ? modelName(info.model) : null;
-    const effort = info?.effort ? tt(`run.effort.${info.effort}`) : null;
+    // The level in its maker's own word (id179), and Claude Code's ultracode when the run has it.
+    const effort = [info?.effort ?? null, info?.ultracode ? 'Ultracode' : null].filter(Boolean).join(' · ') || null;
     const { line, why } = brainLine(tt, { model: model ?? (info?.brain ? tt('run.modelDefault') : null), effort }, info?.brain);
     brainEl.hidden = !line;
     if (line) {
@@ -566,7 +567,8 @@ export function createChat({
   const savedPick = () => {
     try {
       const v = JSON.parse(storage?.getItem(PICK_SAVED) ?? 'null');
-      return v && typeof v.ai === 'string' && typeof v.model === 'string' ? { ai: v.ai, model: v.model, effort: typeof v.effort === 'string' ? v.effort : null } : null;
+      return v && typeof v.ai === 'string' && typeof v.model === 'string'
+        ? { ai: v.ai, model: v.model, effort: typeof v.effort === 'string' ? v.effort : null, ultracode: v.ultracode === true } : null;
     } catch { return null; }
   };
   // Only a talk has a model to pick: the orchestrator and its activity chats keep the way they were started on.
@@ -575,9 +577,13 @@ export function createChat({
   const convAi = () => (shownId() && log?.run ? log.run.ai ?? 'claude' : null);
   const engineOf = (ai) => engines?.find((e) => e.ai === ai) ?? null;
   const pickedModel = (p) => engineOf(p?.ai)?.models.find((m) => m.id === p?.model) ?? null;
-  const levelWord = (tt, l) => tt(`run.effort.${l}`);
+  const hasLevel = (m, l) => Boolean(m?.levels.some((x) => x.id === l));
+  // A maker's own words for its model (Claude Code's line, Codex's description), in the page's language when it has one.
+  const noteOf = (m) => (lang() === 'pt-BR' ? m?.note?.pt ?? m?.note?.en : m?.note?.en ?? m?.note?.pt) ?? null;
   // The pick a run event shows: a talk with a model of its own was picked; one without runs Automático.
-  const pickOfRun = (r) => (r?.run?.kind === 'talk' && r.run.model ? { ai: r.ai ?? 'claude', model: r.run.model, effort: r.run.effort ?? null } : null);
+  const pickOfRun = (r) => (r?.run?.kind === 'talk' && r.run.model ? { ai: r.ai ?? 'claude', model: r.run.model, effort: r.run.effort ?? null, ultracode: r.run.ultracode === true } : null);
+  // What the chip says: the model's own name, the level in its maker's own word, and Ultracode when it is on (id179).
+  const pickName = (p, m) => [m?.name ?? modelName(p.model) ?? p.model, p.effort, p.ultracode ? 'Ultracode' : null].filter(Boolean).join(' · ');
 
   function renderModelPick() {
     if (!modelBtn) return;
@@ -586,7 +592,7 @@ export function createChat({
     if (modelBtn.parentElement) modelBtn.parentElement.hidden = !shown;
     if (!shown) return;
     const m = pick ? pickedModel(pick) : null;
-    const name = pick ? `${m?.name ?? modelName(pick.model) ?? pick.model}${pick.effort ? ` · ${levelWord(tt, pick.effort)}` : ''}` : tt('chat.model.auto');
+    const name = pick ? pickName(pick, m) : tt('chat.model.auto');
     modelBtn.dataset.pick = pick ? 'fixed' : 'auto';
     modelBtn.setAttribute('title', pick ? tt('chat.model.title', { ai: AI_NAMES[pick.ai] ?? pick.ai, name }) : tt('chat.model.autoHint'));
     modelBtn.setAttribute('aria-label', tt('chat.model.button', { name }));
@@ -596,9 +602,9 @@ export function createChat({
       icon ? icon('chevron', 'chat-mode-chev') : null,
     ].filter(Boolean));
     const locked = convAi();
-    const row = (label, desc, checked, onclick, disabled = false) => h('button', {
-      type: 'button', role: 'menuitemradio', class: `pm-row${desc ? ' is-two' : ''}`, tabindex: '-1', 'aria-checked': String(checked),
-      ...(disabled ? { 'aria-disabled': 'true' } : { 'data-close': '', onclick }),
+    const row = (label, desc, checked, onclick, { disabled = false, close = true, role = 'menuitemradio', data = {} } = {}) => h('button', {
+      type: 'button', role, class: `pm-row${desc ? ' is-two' : ''}`, tabindex: '-1', 'aria-checked': String(checked), ...data,
+      ...(disabled ? { 'aria-disabled': 'true' } : { ...(close ? { 'data-close': '' } : {}), onclick }),
     },
     h('span', { 'aria-hidden': 'true' }),
     h('span', { class: 'pm-label' }, label),
@@ -608,25 +614,40 @@ export function createChat({
       const other = Boolean(locked && locked !== e.ai);
       return [
         h('p', { class: 'pm-head' }, AI_NAMES[e.ai] ?? e.ai),
-        ...e.models.map((mm) => row(mm.name, other ? tt('chat.model.otherAi', { ai: AI_NAMES[locked] ?? locked }) : null,
+        ...e.models.map((mm) => row(mm.name, other ? tt('chat.model.otherAi', { ai: AI_NAMES[locked] ?? locked }) : noteOf(mm),
           Boolean(pick && pick.ai === e.ai && pick.model === mm.id),
-          () => setPick({ ai: e.ai, model: mm.id, effort: mm.levels.includes(pick?.effort) ? pick.effort : mm.levels.includes(e.start?.effort) ? e.start.effort : mm.levels.at(-1) ?? null }), other)),
+          // A new model keeps the level when it has it, else starts where its maker starts it.
+          () => setPick({ ai: e.ai, model: mm.id, effort: hasLevel(mm, pick?.effort) ? pick.effort : mm.start ?? null, ultracode: Boolean(mm.ultracode && pick?.ultracode) }),
+          { disabled: other, data: { 'data-model': mm.id } })),
       ];
     });
     const levels = m?.levels ?? [];
+    const term = engineOf(pick?.ai)?.term ?? tt('chat.model.level');
+    // The menu stays open on the levels and the ultracode switch: the control the person was on keeps the focus after the redraw.
+    const active = typeof document !== 'undefined' && modelMenuEl?.contains?.(document.activeElement) ? document.activeElement : null;
+    const focusKey = active?.getAttribute?.('data-level') ? `[data-level="${active.getAttribute('data-level')}"]`
+      : active?.hasAttribute?.('data-ultracode') ? '[data-ultracode]' : null;
     modelMenuEl?.replaceChildren(...[
       h('p', { class: 'pm-head' }, tt('chat.model.label')),
       row(tt('chat.model.auto'), tt('chat.model.autoHint'), !pick, () => setPick(null)),
       ...groups,
       ...(pick && levels.length ? [
         h('hr', { class: 'pm-sep' }),
-        h('p', { class: 'pm-head' }, tt('chat.model.level')),
-        h('div', { class: 'chat-levels', role: 'group', 'aria-label': tt('chat.model.level') }, ...levels.map((l) => h('button', {
-          type: 'button', class: 'chat-level', 'data-level': l, 'aria-pressed': String(l === pick.effort),
-          onclick: () => setPick({ ...pick, effort: l }),
-        }, levelWord(tt, l)))),
+        // The control under its maker's own name ("Effort", "Reasoning effort", "Thinking level"); each level in its word.
+        h('p', { class: 'pm-head', title: tt('chat.model.level') }, term),
+        h('div', { class: 'chat-levels', role: 'group', 'aria-label': term }, ...levels.map((l) => h('button', {
+          type: 'button', class: 'chat-level', 'data-level': l.id, 'aria-pressed': String(l.id === pick.effort),
+          title: l.about ?? tt(`chat.model.about.${l.id}`), onclick: () => setPick({ ...pick, effort: l.id }),
+        }, l.id, l.id === m.start ? h('span', { class: 'chat-level-start', title: tt('chat.model.start'), 'aria-hidden': 'true' }, '•') : null))),
+      ] : []),
+      // Claude Code's ultracode: a switch of its own, at the level picked, on the models that run it.
+      ...(pick && m?.ultracode ? [
+        h('hr', { class: 'pm-sep' }),
+        row('Ultracode', tt('chat.model.ultracode'), pick.ultracode === true, () => setPick({ ...pick, ultracode: !pick.ultracode }),
+          { close: false, role: 'menuitemcheckbox', data: { 'data-ultracode': '' } }),
       ] : []),
     ]);
+    if (focusKey) modelMenuEl?.querySelector?.(focusKey)?.focus?.();
   }
 
   // A pick for this conversation: a running talk switches now (the server restarts its process on the new flags); otherwise
@@ -639,14 +660,14 @@ export function createChat({
     }
     renderModelPick();
     if (!key || log?.ended || !isTalk()) return;
-    const res = await api.chatRun(key, next ? { model: next.model, ...(next.effort ? { effort: next.effort } : {}) } : {});
+    const res = await api.chatRun(key, next ? { model: next.model, ...(next.effort ? { effort: next.effort } : {}), ...(next.ultracode ? { ultracode: true } : {}) } : {});
     if (!res.ok) toast(errorText(res.error));
   }
 
   // What the next start carries: a new talk its AI and pick; an existing one the pick only when the person changed it.
   function pickBody() {
     if (!isTalk()) return {};
-    const run = pick ? { kind: 'talk', model: pick.model, ...(pick.effort ? { effort: pick.effort } : {}) } : { kind: 'talk' };
+    const run = pick ? { kind: 'talk', model: pick.model, ...(pick.effort ? { effort: pick.effort } : {}), ...(pick.ultracode ? { ultracode: true } : {}) } : { kind: 'talk' };
     if (!shownId()) return pick ? { ai: pick.ai, run } : {};
     return pickDirty ? { run } : {};
   }
@@ -655,7 +676,11 @@ export function createChat({
     const res = await api.chatEngines?.();
     engines = res?.ok && Array.isArray(res.engines) ? res.engines : null;
     // A saved pick of an AI no longer ready (its key removed) falls back to Automático.
-    if (pick && !shownId() && !pickedModel(pick)) pick = null;
+    // A saved level or ultracode the model no longer has goes back to where its maker starts it.
+    if (pick && !shownId()) {
+      const m = pickedModel(pick);
+      pick = m ? { ...pick, effort: hasLevel(m, pick.effort) ? pick.effort : m.start ?? null, ultracode: Boolean(m.ultracode && pick.ultracode) } : null;
+    }
     renderModelPick();
   }
 

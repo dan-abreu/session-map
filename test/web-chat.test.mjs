@@ -177,13 +177,19 @@ test('the footer picks the permission mode like Claude Code, and the next new co
   assert.equal(part('#chatModeBtn').dataset.mode, 'auto');
 });
 
-// pc40: the model chip, like Claude Code's — Automático, or an AI's model and its level.
+// pc40, id179: the model chip, like Claude Code's — Automático, or an AI's model, its level in its maker's own word, and
+// Claude Code's ultracode.
 const ENGINES = { ok: true, standby: true, engines: [
-  { ai: 'claude', start: { model: 'opus', effort: 'high' }, models: [{ id: 'opus', name: 'Opus 5.5', levels: ['low', 'medium', 'high', 'xhigh', 'max'] }, { id: 'sonnet', name: 'Sonnet 5.5', levels: ['low', 'medium', 'high'] }] },
-  { ai: 'deepseek', start: { model: 'deepseek-v4-pro', effort: 'high' }, models: [{ id: 'deepseek-flash', name: 'DeepSeek Flash', levels: ['low', 'medium', 'high', 'max'] }] },
+  { ai: 'claude', term: 'Effort', models: [
+    { id: 'opus', name: 'Opus 5.5', note: { en: 'For complex work', pt: 'Para trabalho complexo' }, levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((id) => ({ id })), start: 'medium', ultracode: true },
+    { id: 'sonnet', name: 'Sonnet 5.5', note: null, levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((id) => ({ id })), start: 'medium', ultracode: true },
+  ] },
+  { ai: 'openai', term: 'Reasoning effort', models: [
+    { id: 'gpt-6.1-sol', name: 'GPT-6.1-Sol', note: null, levels: [{ id: 'low', about: 'Fast responses with lighter reasoning' }, { id: 'max', about: 'Maximum reasoning depth' }, { id: 'ultra', about: 'Maximum reasoning with automatic task delegation' }], start: 'low' },
+  ] },
 ] };
 
-test('the footer picks the AI, the model and the level like Claude Code; a new conversation starts on the pick and the next one too', async () => {
+test('the footer picks the AI, the model and the level in its maker\'s words; a new conversation starts on the pick and the next one too', async () => {
   const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => ENGINES, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
   const { chat, part, storage } = makeChat();
   const start = { projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } };
@@ -193,30 +199,65 @@ test('the footer picks the AI, the model and the level like Claude Code; a new c
   assert.equal(btn.dataset.pick, 'auto', 'nothing picked yet: Automático');
   assert.ok(text(btn).includes('chat.model.auto'));
   const rows = () => walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio');
-  assert.deepEqual(rows().map((r) => text(r).split(' ')[0]), ['chat.model.auto', 'Opus', 'Sonnet', 'DeepSeek'], 'Automático, then each AI\'s models');
-  assert.ok(text(part('#chatModelMenu')).includes('Claude') && text(part('#chatModelMenu')).includes('DeepSeek'), 'grouped by AI');
+  assert.deepEqual(rows().map((r) => r.attrs['data-model'] ?? 'auto'), ['auto', 'opus', 'sonnet', 'gpt-6.1-sol'], 'Automático, then each AI\'s own models');
+  assert.ok(text(part('#chatModelMenu')).includes('For complex work'), 'the maker\'s own line for its model');
 
-  rows().find((r) => text(r).includes('DeepSeek Flash')).attrs.onclick();
+  rows().find((r) => r.attrs['data-model'] === 'gpt-6.1-sol').attrs.onclick();
   await settle();
   assert.equal(btn.dataset.pick, 'fixed');
-  assert.ok(text(btn).includes('DeepSeek Flash') && text(btn).includes('run.effort.high'), 'the AI\'s start level when the model has it');
+  assert.ok(text(btn).includes('GPT-6.1-Sol · low'), `the model starts where its maker starts it, in its word: ${text(btn)}`);
+  assert.ok(text(part('#chatModelMenu')).includes('Reasoning effort'), 'the control under its maker\'s name');
   const levels = walk(part('#chatModelMenu')).filter((e) => e.attrs?.class === 'chat-level');
-  assert.deepEqual(levels.map((l) => l.attrs['data-level']), ['low', 'medium', 'high', 'max'], 'the levels of the picked model');
-  levels.find((l) => l.attrs['data-level'] === 'max').attrs.onclick();
+  assert.deepEqual(levels.map((l) => l.attrs['data-level']), ['low', 'max', 'ultra'], 'only the levels this model takes');
+  assert.equal(levels.find((l) => l.attrs['data-level'] === 'ultra').attrs.title, 'Maximum reasoning with automatic task delegation', 'its maker\'s description');
+  assert.ok(!walk(part('#chatModelMenu')).some((e) => e.attrs?.['data-ultracode'] !== undefined), 'no ultracode outside Claude Code');
+  levels.find((l) => l.attrs['data-level'] === 'ultra').attrs.onclick();
   await settle();
-  assert.deepEqual(JSON.parse(storage.items.get('sm.chat.pick')), { ai: 'deepseek', model: 'deepseek-flash', effort: 'max' }, 'kept for the next conversation');
+  assert.deepEqual(JSON.parse(storage.items.get('sm.chat.pick')), { ai: 'openai', model: 'gpt-6.1-sol', effort: 'ultra', ultracode: false }, 'kept for the next conversation');
 
   part('#chatInput').value = 'Oi';
   part('#chatForm').fire('submit');
   await settle();
   const body = calls.find((c) => c.path === '/api/chat/start').body;
-  assert.equal(body.ai, 'deepseek');
-  assert.deepEqual(body.run, { kind: 'talk', model: 'deepseek-flash', effort: 'max' });
+  assert.equal(body.ai, 'openai');
+  assert.deepEqual(body.run, { kind: 'talk', model: 'gpt-6.1-sol', effort: 'ultra' });
 
   chat.close();
   chat.open(start);
   await settle();
-  assert.ok(text(part('#chatModelBtn')).includes('DeepSeek Flash'), 'a new conversation starts on the pick made last');
+  assert.ok(text(part('#chatModelBtn')).includes('GPT-6.1-Sol'), 'a new conversation starts on the pick made last');
+});
+
+test('Claude Code\'s ultracode is a switch of its own beside the level, and rides on the start', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => ENGINES, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  walk(part('#chatModelMenu')).find((e) => e.attrs?.['data-model'] === 'opus').attrs.onclick();
+  await settle();
+  assert.ok(text(part('#chatModelBtn')).includes('Opus 5.5 · medium'), 'Opus starts on medium, as Claude Code starts it');
+  const sw = () => walk(part('#chatModelMenu')).find((e) => e.attrs?.['data-ultracode'] !== undefined);
+  assert.equal(sw().attrs.role, 'menuitemcheckbox');
+  assert.equal(sw().attrs['aria-checked'], 'false');
+  assert.equal(sw().attrs['data-close'], undefined, 'the menu stays open to pick the level too');
+  sw().attrs.onclick();
+  await settle();
+  assert.equal(sw().attrs['aria-checked'], 'true');
+  assert.ok(text(part('#chatModelBtn')).includes('Opus 5.5 · medium · Ultracode'));
+  part('#chatInput').value = 'Oi';
+  part('#chatForm').fire('submit');
+  await settle();
+  assert.deepEqual(calls.find((c) => c.path === '/api/chat/start').body.run, { kind: 'talk', model: 'opus', effort: 'medium', ultracode: true });
+});
+
+test('a saved pick whose level or ultracode the model no longer has starts where its maker starts it', async () => {
+  server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => ENGINES });
+  const storage = memoryStorage({ 'sm.chat.pick': JSON.stringify({ ai: 'openai', model: 'gpt-6.1-sol', effort: 'none', ultracode: true }) });
+  const { chat, part } = makeChat({ storage });
+  chat.open({ projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  const label = text(part('#chatModelBtn'));
+  assert.ok(label.includes('GPT-6.1-Sol · low') && !label.includes('Ultracode') && !label.includes('none'), label);
 });
 
 test('a running conversation changes its model and level at once, keeps its AI, and Automático goes back', async () => {
@@ -231,16 +272,16 @@ test('a running conversation changes its model and level at once, keeps its AI, 
   sse(streams.at(-1), 'run', { run: { kind: 'talk' }, ai: 'claude', model: 'claude-opus-5-5', effort: 'high', brain: null, costUSD: 0 }, 2);
   await settle();
   const rows = walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio');
-  const flash = rows.find((r) => text(r).includes('DeepSeek Flash'));
-  assert.equal(flash.attrs['aria-disabled'], 'true', 'a conversation keeps the AI it began on');
-  assert.ok(text(flash).includes('chat.model.otherAi'));
-  rows.find((r) => text(r).includes('Sonnet')).attrs.onclick();
+  const sol = rows.find((r) => r.attrs['data-model'] === 'gpt-6.1-sol');
+  assert.equal(sol.attrs['aria-disabled'], 'true', 'a conversation keeps the AI it began on');
+  assert.ok(text(sol).includes('chat.model.otherAi'));
+  rows.find((r) => r.attrs['data-model'] === 'sonnet').attrs.onclick();
   await settle();
-  const sent = calls.filter((c) => c.path === `/api/chat/${KEY}/run`);
-  assert.deepEqual(sent.at(-1).body, { model: 'sonnet', effort: 'high' });
+  const runs = () => calls.filter((c) => c.path === `/api/chat/${KEY}/run`);
+  assert.deepEqual(runs().at(-1).body, { model: 'sonnet', effort: 'medium' }, 'Sonnet starts on medium');
   walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio')[0].attrs.onclick();
   await settle();
-  assert.deepEqual(calls.filter((c) => c.path === `/api/chat/${KEY}/run`).at(-1).body, {}, 'Automático');
+  assert.deepEqual(runs().at(-1).body, {}, 'Automático');
   assert.equal(part('#chatModelBtn').dataset.pick, 'auto');
 });
 
@@ -318,7 +359,7 @@ test('a reopened running conversation still takes the header events from before 
   assert.equal(part('#chatBrain').hidden, false);
   const line = text(part('#chatBrain'));
   assert.ok(line.includes('Sonnet 5.5'), 'the model claude reported, from before the history\'s end');
-  assert.ok(line.includes('run.effort.high') && !line.includes('run.brain.'), 'the reasoning, not the entry brain\'s why');
+  assert.ok(line.includes('high') && !line.includes('run.effort.') && !line.includes('run.brain.'), 'the reasoning, not the entry brain\'s why');
   assert.ok(part('#chatBrain').attrs.title.includes('run.brain.money'), 'the why rides in the tooltip');
 });
 
@@ -568,7 +609,7 @@ test('the brain\'s line by Send is quiet until the run event, then says the mode
   sse(streams.at(-1), 'run', { run: { kind: 'talk' }, model: 'claude-opus-5-5', effort: 'high', brain: { phase: 'build', why: 'money' }, costUSD: 0.1 }, 1);
   assert.equal(part('#chatBrain').hidden, false);
   const line = text(part('#chatBrain'));
-  assert.ok(line.includes('Opus 5.5') && line.includes('run.effort.high') && !line.includes('run.brain.'), line);
+  assert.ok(line.includes('Opus 5.5') && line.includes('high') && !line.includes('run.effort.') && !line.includes('run.brain.'), line);
   assert.equal(part('#chatBrain').attrs.title, 'chat.brainTitle\nchat.brainWhy(run.brain.money)', 'the why rides in the tooltip');
 });
 
@@ -580,7 +621,7 @@ test('a run event without a brain weight still names the model and the reasoning
   await send(part, 'Hi');
   sse(streams.at(-1), 'run', { run: { kind: 'autonomous', model: 'sonnet', effort: 'medium' }, model: 'claude-sonnet-5-5', effort: 'medium', brain: null, costUSD: 0 }, 1);
   const line = text(part('#chatBrain'));
-  assert.ok(line.includes('Sonnet 5.5') && line.includes('run.effort.medium') && !line.includes('run.brain.'), line);
+  assert.ok(line.includes('Sonnet 5.5') && line.includes('medium') && !line.includes('run.effort.') && !line.includes('run.brain.'), line);
   assert.equal(part('#chatBrain').attrs.title, 'chat.brainTitle', 'no why to add');
 });
 

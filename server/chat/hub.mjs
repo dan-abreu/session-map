@@ -47,11 +47,12 @@ import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
 import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
-import { functionsOf, standbyOf, talkLevelsOf } from '../ai/brainpanel.mjs';
+import { functionsOf, standbyOf } from '../ai/brainpanel.mjs';
+import { nativeCatalog, nativePick } from '../ai/native-levels.mjs';
 import { isClaudeModel } from '../ai/claude-models.mjs';
 import { getKey } from '../ai/keys.mjs';
 import { PROVIDERS, providerOf, talkCostUSD } from '../ai/providers.mjs';
-import { canonicalModel, modelFits, modelsOf } from '../ai/models.mjs';
+import { canonicalModel } from '../ai/models.mjs';
 import { weighOutside } from '../ai/brain-other.mjs';
 import { cerebroNote } from '../ai/cerebro-note.mjs';
 import { chatLevel } from '../ai/policy.mjs';
@@ -164,7 +165,8 @@ const PLANNED = new Set(['medium', 'large']);
 const BIGGER = { medium: 1, large: 2 };
 // The run as the process runs it: the person's choice with the chat's level on top (or35: one level, never moved by the brain).
 const runOf = (chat) => withWeighed(chat.run, chat.weighed);
-const flagsOf = (run) => JSON.stringify(runArgs(run));
+// Ultracode rides in the process's settings, not in its run flags: a change of it restarts the process too.
+const flagsOf = (run) => JSON.stringify([runArgs(run), run?.ultracode === true]);
 
 const reply = (status, body = {}) => ({ status, body: status < 300 ? { ok: true, ...body } : { ok: false, ...body } });
 // → the images of a message, [] when it has none, null when they are not images we pass on.
@@ -752,15 +754,14 @@ export function createChatHub({
   // The person's pick in the footer (pc40) for a conversation on this AI: the model must be one that AI lists and the level
   // one its program takes; a level alone or a model alone takes the other from the conversation's default. -> the run to
   // keep, or null for a pick that AI cannot run. "Automático" (no model, no level) stays the weighed talk.
+  // The pick is checked against what that AI itself offers (native-levels.mjs, id179): its models, the levels of the model
+  // picked and its own extras (ultracode on Claude Code).
   const pickFor = (ai, run) => {
-    if (run?.kind !== 'talk' || (!run.model && !run.effort)) return run;
-    const base = chatLevelOf(ai);
-    const model = run.model ? canonicalModel(ai, run.model) : base.model;
-    if (typeof model !== 'string' || !modelFits(ai, model)) return null;
-    const levels = talkLevelsOf(ai, model);
-    const effort = run.effort ?? (levels.includes(base.effort) ? base.effort : levels.at(-1) ?? null);
-    if (effort && !levels.includes(effort)) return null;
-    return { kind: 'talk', model, ...(effort ? { effort } : {}) };
+    if (run?.kind !== 'talk' || (!run.model && !run.effort && !run.ultracode)) return run;
+    const model = run.model ? canonicalModel(ai, run.model) : chatLevelOf(ai).model;
+    const ok = typeof model === 'string' ? nativePick(ai, { model, effort: run.effort, ultracode: run.ultracode === true }, { smDir }) : null;
+    if (!ok) return null;
+    return { kind: 'talk', model: ok.model, ...(ok.effort ? { effort: ok.effort } : {}), ...(ok.ultracode ? { ultracode: true } : {}) };
   };
   // What the footer's model chip offers (pc40): Claude, and each other AI that can run the talk here (its protocol or its
   // program, and a key saved), with its current models, the levels of each and the level a conversation starts on.
@@ -773,9 +774,8 @@ export function createChatHub({
         try { key = await keyOf(ai); } catch { key = null; }
         if (typeof key !== 'string' || !key) continue;
       }
-      const models = modelsOf(ai).filter((m) => m.group === 'current' && !m.gone)
-        .map((m) => ({ id: m.id, name: m.name, levels: talkLevelsOf(ai, m.id) }));
-      if (models.length) out.push({ ai, models, start: chatLevelOf(ai) });
+      const { term, models } = nativeCatalog(ai, { smDir });
+      if (models.length) out.push({ ai, term, models });
     }
     let standby = false;
     try { standby = standbyOf(readJsonFile(join(smDir, 'config.json'), {})?.ai); } catch { standby = false; }
@@ -836,7 +836,7 @@ export function createChatHub({
     const tail = [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n');
     return startDriver({
       bin: chat.bin,
-      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail, run.kind === 'talk' ? cerebroNoteOf() : ''), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
+      args: buildArgs({ mcpConfigPath: chat.configPath, resume, mode: chat.mode, run: runArgs(run, tail, run.kind === 'talk' ? cerebroNoteOf() : ''), settings: guardSettings({ snapshot: run.kind === 'autonomous', focus: chat.skillFocus, ultracode: run.ultracode === true }), allowedTools: chat.orchestrator ? ORCH_ALLOWED : [] }),
       cwd: chat.cwd, env: { ...cleanEnv(env), ...talkEnv(chat) },
       onEvent: (evt) => onDriverEvent(chat, evt), ...(spawner ? { spawner } : {}),
     });
@@ -1370,7 +1370,7 @@ ${prompt}`;
     if (!chat) return reply(404, { error: 'unknown-chat' });
     if (chat.ended) return reply(409, { error: 'ended' });
     if (chat.run?.kind !== 'talk') return reply(409, { error: 'not-talk' });
-    const asked = pickFor(chat.ai ?? 'claude', parseRun({ kind: 'talk', ...(body?.model ? { model: body.model } : {}), ...(body?.effort ? { effort: body.effort } : {}) }));
+    const asked = pickFor(chat.ai ?? 'claude', parseRun({ kind: 'talk', ...(body?.model ? { model: body.model } : {}), ...(body?.effort ? { effort: body.effort } : {}), ...(body?.ultracode === true ? { ultracode: true } : {}) }));
     if (!asked) return reply(400, { error: 'bad-run' });
     changeRun(chat, asked, chat.weighed ?? { phase: null, why: null, ...chatLevelOf(chat.ai ?? 'claude') });
     return reply(200, { run: chat.run });

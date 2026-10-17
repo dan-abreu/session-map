@@ -55,7 +55,7 @@ test('mergeFunctionChoice writes, removes and refuses', () => {
   assert.equal(ultra.ok, true, 'max is a real Claude level');
   const ucode = mergeFunctionChoice(ai, { functions: { code: { provider: 'claude', model: 'sonnet', effort: 'ultracode' } } });
   assert.equal(ucode.ok, true, 'ultracode is Claude\'s own setting, where xhigh exists');
-  assert.equal(mergeFunctionChoice(ai, { functions: { code: { provider: 'claude', model: 'haiku', effort: 'ultracode' } } }).error, 'bad-effort', 'no xhigh, no ultracode');
+  assert.equal(mergeFunctionChoice(ai, { functions: { code: { provider: 'claude', model: 'haiku', effort: 'ultracode' } } }).ok, true, 'Haiku 5.5 runs ultracode too (id179)');
   assert.equal(mergeFunctionChoice(ai, { functions: { code: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'ultracode' } } }).error, 'bad-effort', 'ultracode is not DeepSeek\'s word');
 });
 
@@ -71,11 +71,11 @@ test('panelModel resolves every function mechanically', () => {
   assert.deepEqual(byId.chat.levelOptions, ['low', 'medium', 'high', 'xhigh', 'max'], 'Opus reaches max');
   assert.equal(byId.chat.topLevel, 'ultracode', 'Opus supports xhigh: its top button is ultracode');
   assert.deepEqual([byId.plan.provider, byId.plan.model, byId.plan.effort], ['claude', 'sonnet', 'medium']);
-  assert.deepEqual(byId.plan.levelOptions, ['low', 'medium', 'high', 'xhigh']);
+  assert.deepEqual(byId.plan.levelOptions, ['low', 'medium', 'high', 'xhigh', 'max'], 'Sonnet 5.5 has the five levels (id179)');
   assert.deepEqual([byId.risk.provider, byId.risk.effort], ['claude', 'high']);
   assert.equal(byId.gather.effort, 'low');
-  assert.deepEqual(byId.gather.levelOptions, ['low', 'medium', 'high'], 'Haiku has three levels');
-  assert.equal(byId.gather.topLevel, null, 'Haiku has no ultracode');
+  assert.deepEqual(byId.gather.levelOptions, ['low', 'medium', 'high', 'xhigh', 'max'], 'Haiku 5.5 has the five levels (id179)');
+  assert.equal(byId.gather.topLevel, 'ultracode', 'Haiku 5.5 runs ultracode (id179)');
   assert.equal(byId.web.provider, null);
   assert.equal(byId.brain.why, 'auto', 'no key: the preference falls to Claude');
   assert.deepEqual([byId.agents.provider, byId.agents.why], ['claude', 'policy']);
@@ -158,7 +158,7 @@ test('the tab shows the AI each row really runs on (id155): the brain row\'s own
   assert.deepEqual([both.provider, both.model, both.effort, both.providers], ['gemini', 'gemini-3.8-flash', 'low', ['claude', 'gemini', 'openai']]);
   assert.deepEqual(both.levelOptions, ['low', 'medium', 'high']);
   const gpt = panelModel({ smDir, ai: { others: { functions: { chat: { provider: 'openai', model: 'gpt-6.1-sol' } } } }, keys: ['openai'], cli: (p) => `C:/npm/${p}.js` }).functions.find((f) => f.id === 'chat');
-  assert.deepEqual([gpt.provider, gpt.model, gpt.effort, gpt.levelOptions], ['openai', 'gpt-6.1-sol', 'medium', ['low', 'medium', 'high', 'xhigh']], "Codex's words: no max for Sol");
+  assert.deepEqual([gpt.provider, gpt.model, gpt.effort, gpt.levelOptions], ['openai', 'gpt-6.1-sol', 'medium', ['low', 'medium', 'high', 'xhigh']], "the Cérebro's row keeps the API's measured words; the footer reads Codex's own catalog (id179)");
   assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'openrouter' } } }).error, 'unknown-provider');
   assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'off' } } }).error, 'bad-effort');
   assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'max' } } }).ok, true);

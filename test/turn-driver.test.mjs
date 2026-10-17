@@ -138,7 +138,7 @@ test('the programs\' arguments: the mode becomes their permissions, the level th
   assert.deepEqual(permissionArgs('gemini', 'default'), ['--approval-mode', 'auto_edit']);
   const resumed = turnArgs('openai', { session: 't1', prompt: 'p', model: 'gpt-5.5', effort: 'max', mode: 'default' });
   assert.deepEqual(resumed.slice(0, 5), ['exec', 'resume', 't1', '--json', '--skip-git-repo-check']);
-  assert.ok(!resumed.includes('model_reasoning_effort="max"'), 'Codex has no "max"');
+  assert.ok(resumed.includes('model_reasoning_effort="max"'), 'the catalog of Codex gives max (id179: accepted on a real call)');
   assert.ok(resumed.includes('sandbox_mode="workspace-write"'), 'the resume keeps the permissions: `exec resume` has no flag for them');
   assert.deepEqual(handoffArgs('gemini', { brief: 'b', model: 'gemini-3.8-flash' }), ['-p', 'b', '--skip-trust', '-m', 'gemini-3.8-flash', '--approval-mode', 'yolo'], 'no level: the plain model');
   assert.equal(turnArgs('claude', { prompt: 'x' }), null);

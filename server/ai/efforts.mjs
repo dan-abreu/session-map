@@ -33,12 +33,14 @@ export const LEVELS_BY_PROVIDER = Object.freeze({
 // (.dev/execucao/validate-levels.mjs → smDir/bench/levels.json): Luna refuses low (400), Sol refuses max (400),
 // Astra refuses minimal (400). A model not listed takes its provider's.
 const LEVELS_BY_MODEL = Object.freeze({
-  haiku: Object.freeze(['low', 'medium', 'high']),
-  sonnet: Object.freeze(['low', 'medium', 'high', 'xhigh']),
+  // Re-checked on 2026-10-17 (id179): the docs give all five levels to Haiku 5.5, Sonnet 5.5, Opus 5.5 and Fable 5.1, and
+  // DeepSeek's own /models gives max to its Flash too.
+  haiku: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
+  sonnet: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
   opus: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
-  fable: Object.freeze(['high', 'xhigh', 'max']),
-  'deepseek-flash': Object.freeze(['off', 'low', 'high']),
-  'deepseek-v4-flash': Object.freeze(['off', 'low', 'high']),
+  fable: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']),
+  'deepseek-flash': Object.freeze(['off', 'low', 'high', 'max']),
+  'deepseek-v4-flash': Object.freeze(['off', 'low', 'high', 'max']),
   'deepseek-v4-pro': Object.freeze(['off', 'low', 'high', 'max']),
   'gpt-6-luna': Object.freeze(['none']),
   'gpt-6.1-sol': Object.freeze(['low', 'medium', 'high', 'xhigh']),

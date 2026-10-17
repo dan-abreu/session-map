@@ -14,12 +14,13 @@ test('each engine names its own levels', () => {
 });
 
 test('levelsOf refines by model and falls back to the provider', () => {
-  assert.deepEqual(levelsOf('claude', 'haiku'), ['low', 'medium', 'high']);
-  assert.deepEqual(levelsOf('claude', 'sonnet'), ['low', 'medium', 'high', 'xhigh']);
+  // id179: the docs give the 5.5 family and Fable 5.1 all five levels.
+  assert.deepEqual(levelsOf('claude', 'haiku'), ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.deepEqual(levelsOf('claude', 'sonnet'), ['low', 'medium', 'high', 'xhigh', 'max']);
   assert.deepEqual(levelsOf('claude', 'opus'), ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.deepEqual(levelsOf('claude', 'fable'), ['high', 'xhigh', 'max']);
+  assert.deepEqual(levelsOf('claude', 'fable'), ['low', 'medium', 'high', 'xhigh', 'max']);
   assert.deepEqual(levelsOf('deepseek', 'deepseek-v4-pro'), ['off', 'low', 'high', 'max']);
-  assert.deepEqual(levelsOf('deepseek', 'deepseek-flash'), ['off', 'low', 'high']);
+  assert.deepEqual(levelsOf('deepseek', 'deepseek-flash'), ['off', 'low', 'high', 'max'], 'DeepSeek\'s own /models gives its Flash max (id179)');
   assert.deepEqual(levelsOf('openai', 'gpt-6-luna'), ['none'], 'measured 2026-10-14: Luna refuses low');
   assert.deepEqual(levelsOf('openai', 'gpt-6.1-sol'), ['low', 'medium', 'high', 'xhigh'], 'measured: Sol refuses max');
   assert.deepEqual(levelsOf('openai', 'gpt-6-astra'), ['low', 'medium', 'high', 'xhigh'], 'measured: Astra refuses minimal');
@@ -31,7 +32,7 @@ test('levelsOf refines by model and falls back to the provider', () => {
 
 test("the separate switch is Claude's ultracode only: the maximum of any AI is one more level of its list (id168)", () => {
   assert.equal(topLevelOf('claude', 'sonnet'), 'ultracode');
-  assert.equal(topLevelOf('claude', 'haiku'), null, 'Haiku does not reach xhigh: no ultracode');
+  assert.equal(topLevelOf('claude', 'haiku'), 'ultracode', 'Haiku 5.5 reaches xhigh and runs ultracode (get_settings, 2026-10-17)');
   assert.equal(topLevelOf('deepseek', 'deepseek-v4-pro'), null, 'max is in the list of levels, not a button beside it');
   assert.ok(levelsOf('deepseek', 'deepseek-v4-pro').includes('max'));
   assert.equal(topLevelOf('openai', 'gpt-6.1-sol'), null, 'measured: Sol refuses max');

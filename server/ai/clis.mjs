@@ -55,9 +55,14 @@ const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const plainModel = (m) => (typeof m === 'string' && MODEL_RE.test(m) ? m : null);
 
 // Codex's words for the level (its config takes these five); a level it has no word for is left out.
-export const CODEX_LEVELS = Object.freeze(['minimal', 'low', 'medium', 'high', 'xhigh']);
+// The values Codex's own catalog gives its models (id179): low to max, and ultra ("Maximum reasoning with automatic task
+// delegation"); no model it lists takes none or minimal. Which of them a model takes is in that catalog (native-levels.mjs
+// codexCatalog); a value outside this list is never passed.
+export const CODEX_LEVELS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 // Gemini's levels through the alias: LOW, MEDIUM and HIGH of Gemini 3; the 2.5 line thinks by a budget of tokens.
-export const GEMINI_LEVELS = Object.freeze(['low', 'medium', 'high']);
+// Gemini's thinking levels (id179): minimal (Flash-Lite), low, medium, high; the alias sends the word raw, and the API
+// took MINIMAL and MEDIUM on real calls (a wrong word comes back as a 400).
+export const GEMINI_LEVELS = Object.freeze(['minimal', 'low', 'medium', 'high']);
 const BUDGET_25 = Object.freeze({ low: 1024, medium: 8192, high: 24576 });
 
 // The alias that carries a level to Gemini CLI: one per model and level, all kept in its settings file.

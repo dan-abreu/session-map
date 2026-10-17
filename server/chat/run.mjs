@@ -32,10 +32,13 @@ const WEIGHABLE = new Set(['autonomous', 'talk']);
 // The person's pick in the footer (pc40): a model of the AI the conversation runs on and its level. The words only are
 // checked here (a name, a known level); the hub checks the model against that AI's own list.
 const PICK_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
-export const PICK_LEVELS = Object.freeze(['minimal', ...EFFORTS]);
-function talkRun({ model, effort }) {
+// Every level word of every AI the talk runs on (id179): Claude Code's, DeepSeek's, Codex's (none to max, and ultra) and
+// Gemini's (minimal). Ultracode is Claude Code's own switch, not a level.
+export const PICK_LEVELS = Object.freeze(['none', 'minimal', ...EFFORTS, 'ultra']);
+function talkRun({ model, effort, ultracode }) {
   if ((model !== undefined && !(typeof model === 'string' && PICK_MODEL.test(model))) || (effort !== undefined && !PICK_LEVELS.includes(effort))) return null;
-  return { kind: 'talk', ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
+  if (ultracode !== undefined && typeof ultracode !== 'boolean') return null;
+  return { kind: 'talk', ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(ultracode ? { ultracode: true } : {}) };
 }
 // The talk run never names a level of its own: its model and effort are the policy's chat row, the same one the Cérebro
 // resolves (or39); the entry brain puts the weighed level on top for the process.
@@ -133,7 +136,7 @@ export function runArgs(run, tail = '', note = '') {
 export function expectedRun(run) {
   switch (run?.kind) {
     case 'autonomous':
-    case 'talk': return { model: modelOf(run), effort: effortOf(run), ultracode: false };
+    case 'talk': return { model: modelOf(run), effort: effortOf(run), ultracode: run.ultracode === true };
     default: return null;
   }
 }
