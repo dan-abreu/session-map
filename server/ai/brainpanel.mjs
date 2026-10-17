@@ -70,6 +70,14 @@ function readLevels(smDir) {
 // The switch "Cérebro obrigatório" (id176): on, the talk hands the rows of work to the AI the table names and the program
 // reviews before it merges (guard.mjs, runroute.mjs). Off, the table is told to the talk as before.
 export const obeyOf = (ai) => ai?.others?.obey === true;
+// The Cérebro on standby (id178, or78): the table and the "obrigatório" switch wait aside in ai.others.standby, where no
+// reader looks, so every row runs on its default (the talk on Claude at the policy's level, the person's pick in the footer
+// over it); the same switch puts them back as they were.
+export const standbyOf = (ai) => isObject(ai?.others?.standby);
+// The levels a talk on this AI and model takes (pc40): the maker's, those the program running it accepts (Claude Code has no
+// "off", Codex and Gemini CLI their own words), never ultracode (a Claude Code setting, not a level).
+export const talkLevelsOf = (provider, model) => levelsOf(provider, model ?? null)
+  .filter((l) => l !== 'off' && l !== 'auto' && l !== 'ultracode' && (!PROGRAM_LEVELS[provider] || PROGRAM_LEVELS[provider].includes(l)));
 
 export function functionsOf(ai) {
   const raw = isObject(ai?.others?.functions) ? ai.others.functions : {};
@@ -111,6 +119,20 @@ export function effectiveFunctionsOf(ai) {
 export function mergeFunctionChoice(ai, patch = {}) {
   const { others, ...rest } = isObject(ai) ? ai : {};
   const { functions, ...o } = isObject(others) ? others : {};
+  // Standby (or78): on, the table and the switch move aside whole; off, they come back. Nothing else rides with it.
+  if (patch.standby !== undefined) {
+    if (typeof patch.standby !== 'boolean') return { ok: false, error: 'bad-standby' };
+    if (patch.standby === standbyOf(ai)) return { ok: true, ai: isObject(ai) ? ai : {} };
+    if (patch.standby) {
+      const kept = { ...(isObject(functions) ? { functions } : {}), ...(o.obey === true ? { obey: true } : {}) };
+      delete o.obey;
+      return { ok: true, ai: { ...rest, others: { ...o, standby: kept } } };
+    }
+    const { standby: kept, ...awake } = o;
+    return { ok: true, ai: { ...rest, others: { ...awake, ...(isObject(kept.functions) ? { functions: kept.functions } : {}), ...(kept.obey === true ? { obey: true } : {}) } } };
+  }
+  // On standby the table is not changed: it comes back as the owner left it.
+  if (standbyOf(ai) && (patch.functions !== undefined || patch.obey !== undefined)) return { ok: false, error: 'standby' };
   const next = { ...functionsOf(ai) };
   // The Cérebro obeyed (id176): the owner's switch that makes the rows of work an order the program holds.
   if (patch.obey !== undefined) {
@@ -322,5 +344,5 @@ export function panelModel({
     return failed?.size && Array.isArray(f.levelOptions) ? { ...f, levelOptions: f.levelOptions.filter((l) => !failed.has(l)) } : f;
   };
 
-  return { ok: true, obey: obeyOf(ai), matrix, functions: functions.map(withTested), agents: agents.map((a) => (a.row ? { ...a, row: withTested(a.row) } : a)), agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
+  return { ok: true, obey: obeyOf(ai), standby: standbyOf(ai), matrix, functions: functions.map(withTested), agents: agents.map((a) => (a.row ? { ...a, row: withTested(a.row) } : a)), agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
 }

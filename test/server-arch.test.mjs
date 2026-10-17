@@ -138,12 +138,15 @@ test('the monthly limit for reinforcing on its own: read and set with the token,
   });
 });
 
-test('the run route died with the ways the brain replaced: /api/chat/:key/run answers 404, even with the token', async () => {
+// The ways the brain replaced stay dead (id146); the route came back for the footer's model chip alone (pc40, id178).
+test('/api/chat/:key/run takes only the footer\'s pick: a model and level of the conversation\'s AI, or none for Automático', async () => {
   await withServer(async ({ call, write }) => {
     const made = await call('POST', '/api/chat/start', { headers: write, body: { projectId: 'shop-def456', node: { kind: 'idea' }, text: 'An idea' } });
     assert.equal(made.status, 200);
     const path = `/api/chat/${made.body.chatKey}/run`;
-    assert.equal((await call('POST', path, { headers: write, body: { run: { kind: 'talk' } } })).status, 404);
+    assert.equal((await call('POST', path, { headers: write, body: { model: 'gpt-nonexistent' } })).status, 400, 'a model its AI does not list');
+    assert.equal((await call('POST', path, { headers: write, body: { model: 'sonnet', effort: 'low' } })).status, 200);
+    assert.equal((await call('POST', path, { headers: write, body: {} })).status, 200, 'Automático');
   });
 });
 

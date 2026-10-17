@@ -29,6 +29,14 @@ function autonomousRun({ model, effort }) {
   return { kind: 'autonomous', ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
 }
 const WEIGHABLE = new Set(['autonomous', 'talk']);
+// The person's pick in the footer (pc40): a model of the AI the conversation runs on and its level. The words only are
+// checked here (a name, a known level); the hub checks the model against that AI's own list.
+const PICK_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
+export const PICK_LEVELS = Object.freeze(['minimal', ...EFFORTS]);
+function talkRun({ model, effort }) {
+  if ((model !== undefined && !(typeof model === 'string' && PICK_MODEL.test(model))) || (effort !== undefined && !PICK_LEVELS.includes(effort))) return null;
+  return { kind: 'talk', ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
+}
 // The talk run never names a level of its own: its model and effort are the policy's chat row, the same one the Cérebro
 // resolves (or39); the entry brain puts the weighed level on top for the process.
 const modelOf = (run) => (run.model ?? (run.kind === 'talk' ? chatLevel().model : 'opus'));
@@ -45,7 +53,7 @@ const MODEL_NAMES = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fa
 export function parseRun(value) {
   if (!value || typeof value !== 'object') return null;
   switch (value.kind) {
-    case 'talk': return { kind: 'talk' };
+    case 'talk': return talkRun(value);
     case 'autonomous': return autonomousRun(value);
     default: return null;
   }

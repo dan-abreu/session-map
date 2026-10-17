@@ -291,6 +291,25 @@ export function createBrainView(ctx) {
       h('p', { class: 'br-hint' }, t('brain.obeyHint')));
   }
 
+  // The Cérebro on standby (or78): one switch keeps the table and the 'obrigatório' aside and brings them back unchanged.
+  function standbySection() {
+    const on = model.standby === true;
+    return h('section', { class: 'br-obey br-standby' },
+      h('h2', { class: 'br-sec' }, t('brain.standbyTitle')),
+      h('button', {
+        type: 'button', class: `btn small-btn${on ? ' is-on' : ''}`, 'aria-pressed': on ? 'true' : 'false', 'data-brain': 'standby',
+        onclick: async () => {
+          const res = await api.setBrain({ standby: !on });
+          if (res.ok) {
+            model = res;
+            toast(t('brain.saved'));
+            if (rootEl) { await render(rootEl); rootEl.querySelector('[data-brain="standby"]')?.focus(); }
+          } else toast(t('brain.saveFailed', { why: res.error ?? '—' }));
+        },
+      }, on ? t('brain.standbyOn') : t('brain.standbyOff')),
+      h('p', { class: 'br-hint' }, t('brain.standbyHint')));
+  }
+
   // The program's own functions: what decides, talks and works in the background. A row with no call of its own is not drawn.
   function programSection() {
     const order = ['chat', 'brain', 'opinion', 'background', 'book'];
@@ -488,13 +507,15 @@ export function createBrainView(ctx) {
     root.replaceChildren(h('div', { class: 'dv-wrap br-view' },
       h('h1', { class: 'br-title' }, t('brain.title')),
       h('p', { class: 'dv-lede' }, t('brain.sub')),
-      obeySection(),
+      standbySection(),
+      // On standby the table waits aside: nothing of it is drawn, so nothing looks like it still runs.
+      ...(model.standby === true ? [] : [obeySection(),
       programSection(),
       agentsSection(),
       aisSection(),
       listsFold(),
       configureFold(),
-      checkedFold()));
+      checkedFold()])));
   }
 
   return { render, refresh() {} };

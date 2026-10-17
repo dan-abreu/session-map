@@ -44,6 +44,7 @@ const ROLES = {
   '#chatLog': 'log', '#chatForm': 'form', '#chatInput': 'input', '#chatSend': 'send', '#chatStop': 'stop', '#chatTitle': 'title', '#chatContext': 'context',
   '#chatStatus': 'status', '#chatList': 'list', '#chatNote': 'note', '[data-close="chat"]': 'close', '#chatWhere': 'where', '#chatDot': 'dot', '#chatLive': 'live',
   '#chatBrain': 'brain', '#chatMore': 'more', '#chatMoreMenu': 'moremenu', '#chatModeBtn': 'modebtn', '#chatModeMenu': 'modemenu',
+  '#chatModelBtn': 'modelbtn', '#chatModelMenu': 'modelmenu',
 };
 function sheet() {
   const parts = new Map(Object.keys(ROLES).map((s) => [s, new El()]));
@@ -174,6 +175,73 @@ test('the footer picks the permission mode like Claude Code, and the next new co
   await settle();
   assert.equal(chat.settings().choice(), 'auto', 'a new conversation starts in the mode picked last');
   assert.equal(part('#chatModeBtn').dataset.mode, 'auto');
+});
+
+// pc40: the model chip, like Claude Code's — Automático, or an AI's model and its level.
+const ENGINES = { ok: true, standby: true, engines: [
+  { ai: 'claude', start: { model: 'opus', effort: 'high' }, models: [{ id: 'opus', name: 'Opus 5.5', levels: ['low', 'medium', 'high', 'xhigh', 'max'] }, { id: 'sonnet', name: 'Sonnet 5.5', levels: ['low', 'medium', 'high'] }] },
+  { ai: 'deepseek', start: { model: 'deepseek-v4-pro', effort: 'high' }, models: [{ id: 'deepseek-flash', name: 'DeepSeek Flash', levels: ['low', 'medium', 'high', 'max'] }] },
+] };
+
+test('the footer picks the AI, the model and the level like Claude Code; a new conversation starts on the pick and the next one too', async () => {
+  const { calls } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => ENGINES, 'POST /api/chat/start': () => ({ chatKey: KEY }) });
+  const { chat, part, storage } = makeChat();
+  const start = { projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } };
+  chat.open(start);
+  await settle();
+  const btn = part('#chatModelBtn');
+  assert.equal(btn.dataset.pick, 'auto', 'nothing picked yet: Automático');
+  assert.ok(text(btn).includes('chat.model.auto'));
+  const rows = () => walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio');
+  assert.deepEqual(rows().map((r) => text(r).split(' ')[0]), ['chat.model.auto', 'Opus', 'Sonnet', 'DeepSeek'], 'Automático, then each AI\'s models');
+  assert.ok(text(part('#chatModelMenu')).includes('Claude') && text(part('#chatModelMenu')).includes('DeepSeek'), 'grouped by AI');
+
+  rows().find((r) => text(r).includes('DeepSeek Flash')).attrs.onclick();
+  await settle();
+  assert.equal(btn.dataset.pick, 'fixed');
+  assert.ok(text(btn).includes('DeepSeek Flash') && text(btn).includes('run.effort.high'), 'the AI\'s start level when the model has it');
+  const levels = walk(part('#chatModelMenu')).filter((e) => e.attrs?.class === 'chat-level');
+  assert.deepEqual(levels.map((l) => l.attrs['data-level']), ['low', 'medium', 'high', 'max'], 'the levels of the picked model');
+  levels.find((l) => l.attrs['data-level'] === 'max').attrs.onclick();
+  await settle();
+  assert.deepEqual(JSON.parse(storage.items.get('sm.chat.pick')), { ai: 'deepseek', model: 'deepseek-flash', effort: 'max' }, 'kept for the next conversation');
+
+  part('#chatInput').value = 'Oi';
+  part('#chatForm').fire('submit');
+  await settle();
+  const body = calls.find((c) => c.path === '/api/chat/start').body;
+  assert.equal(body.ai, 'deepseek');
+  assert.deepEqual(body.run, { kind: 'talk', model: 'deepseek-flash', effort: 'max' });
+
+  chat.close();
+  chat.open(start);
+  await settle();
+  assert.ok(text(part('#chatModelBtn')).includes('DeepSeek Flash'), 'a new conversation starts on the pick made last');
+});
+
+test('a running conversation changes its model and level at once, keeps its AI, and Automático goes back', async () => {
+  const { calls, streams } = server({ 'GET /api/chat/list': () => ({ chats: [], settings: { mode: 'default' } }), 'GET /api/chat/engines': () => ENGINES, 'POST /api/chat/start': () => ({ chatKey: KEY }), [`POST /api/chat/${KEY}/run`]: () => ({ run: { kind: 'talk' } }) });
+  const { chat, part } = makeChat();
+  chat.open({ projectId: 'acme-shop', title: 'New chat', intro: 'intro', start: { node: { kind: 'part', partId: 'checkout' } } });
+  await settle();
+  part('#chatInput').value = 'Oi';
+  part('#chatForm').fire('submit');
+  await settle();
+  sse(streams.at(-1), 'session', { sessionId: S1, state: 'started' }, 1);
+  sse(streams.at(-1), 'run', { run: { kind: 'talk' }, ai: 'claude', model: 'claude-opus-5-5', effort: 'high', brain: null, costUSD: 0 }, 2);
+  await settle();
+  const rows = walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio');
+  const flash = rows.find((r) => text(r).includes('DeepSeek Flash'));
+  assert.equal(flash.attrs['aria-disabled'], 'true', 'a conversation keeps the AI it began on');
+  assert.ok(text(flash).includes('chat.model.otherAi'));
+  rows.find((r) => text(r).includes('Sonnet')).attrs.onclick();
+  await settle();
+  const sent = calls.filter((c) => c.path === `/api/chat/${KEY}/run`);
+  assert.deepEqual(sent.at(-1).body, { model: 'sonnet', effort: 'high' });
+  walk(part('#chatModelMenu')).filter((e) => e.attrs?.role === 'menuitemradio')[0].attrs.onclick();
+  await settle();
+  assert.deepEqual(calls.filter((c) => c.path === `/api/chat/${KEY}/run`).at(-1).body, {}, 'Automático');
+  assert.equal(part('#chatModelBtn').dataset.pick, 'auto');
 });
 
 test('a reload reopens the saved conversation of this project; closing the sheet forgets it', async () => {

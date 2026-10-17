@@ -47,11 +47,11 @@ import { projectBudgetLine } from '../budget.mjs';
 import { loadStats } from '../ai/router.mjs';
 import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
-import { functionsOf } from '../ai/brainpanel.mjs';
+import { functionsOf, standbyOf, talkLevelsOf } from '../ai/brainpanel.mjs';
 import { isClaudeModel } from '../ai/claude-models.mjs';
 import { getKey } from '../ai/keys.mjs';
-import { providerOf, talkCostUSD } from '../ai/providers.mjs';
-import { canonicalModel } from '../ai/models.mjs';
+import { PROVIDERS, providerOf, talkCostUSD } from '../ai/providers.mjs';
+import { canonicalModel, modelFits, modelsOf } from '../ai/models.mjs';
 import { weighOutside } from '../ai/brain-other.mjs';
 import { cerebroNote } from '../ai/cerebro-note.mjs';
 import { chatLevel } from '../ai/policy.mjs';
@@ -530,7 +530,7 @@ export function createChatHub({
   function emitRun(chat) {
     const expected = expectedRun(runOf(chat));
     emit(chat, 'run', {
-      run: chat.run, model: chat.model ?? expected?.model ?? null, effort: expected?.effort ?? null, ultracode: expected?.ultracode ?? false,
+      run: chat.run, ai: chat.ai ?? 'claude', model: chat.model ?? expected?.model ?? null, effort: expected?.effort ?? null, ultracode: expected?.ultracode ?? false,
       level: chat.level?.level ?? null, why: chat.level?.why ?? null, estimateUSD: chat.level?.estimateUSD ?? null, costUSD: chat.costUSD,
       context: chat.contextTokens > 0 ? { tokens: chat.contextTokens, max: MAX_CONTEXT } : null,
       // The entry brain's weight of the turn ("Sonnet · low: conversa"): its phase and the key of its reason (run.brain.<why>).
@@ -749,6 +749,39 @@ export function createChatHub({
       ...(h.opus ? { ANTHROPIC_DEFAULT_OPUS_MODEL: h.opus } : {}),
     };
   };
+  // The person's pick in the footer (pc40) for a conversation on this AI: the model must be one that AI lists and the level
+  // one its program takes; a level alone or a model alone takes the other from the conversation's default. -> the run to
+  // keep, or null for a pick that AI cannot run. "Automático" (no model, no level) stays the weighed talk.
+  const pickFor = (ai, run) => {
+    if (run?.kind !== 'talk' || (!run.model && !run.effort)) return run;
+    const base = chatLevelOf(ai);
+    const model = run.model ? canonicalModel(ai, run.model) : base.model;
+    if (typeof model !== 'string' || !modelFits(ai, model)) return null;
+    const levels = talkLevelsOf(ai, model);
+    const effort = run.effort ?? (levels.includes(base.effort) ? base.effort : levels.at(-1) ?? null);
+    if (effort && !levels.includes(effort)) return null;
+    return { kind: 'talk', model, ...(effort ? { effort } : {}) };
+  };
+  // What the footer's model chip offers (pc40): Claude, and each other AI that can run the talk here (its protocol or its
+  // program, and a key saved), with its current models, the levels of each and the level a conversation starts on.
+  async function engines() {
+    const out = [];
+    for (const ai of ['claude', ...Object.keys(PROVIDERS)]) {
+      if (ai !== 'claude') {
+        if (!talkable(ai)) continue;
+        let key = null;
+        try { key = await keyOf(ai); } catch { key = null; }
+        if (typeof key !== 'string' || !key) continue;
+      }
+      const models = modelsOf(ai).filter((m) => m.group === 'current' && !m.gone)
+        .map((m) => ({ id: m.id, name: m.name, levels: talkLevelsOf(ai, m.id) }));
+      if (models.length) out.push({ ai, models, start: chatLevelOf(ai) });
+    }
+    let standby = false;
+    try { standby = standbyOf(readJsonFile(join(smDir, 'config.json'), {})?.ai); } catch { standby = false; }
+    return reply(200, { ok: true, engines: out, standby });
+  }
+
   // The weight rides on the effective level: the phase shapes the turn, the level is the Cérebro's.
   const weighText = (text, { haiku = null, planned = null, ai = 'claude' } = {}) => ({ ...weigh({ text, measured: sizeRequest({ text }), haiku, planned }), ...chatLevelOf(ai) });
 
@@ -907,8 +940,9 @@ ${prompt}`;
     const workCellId = body.frontId ?? body.workCellId;
     for (const id of [body.sessionId, body.parentId]) if (id !== undefined && !(typeof id === 'string' && UUID_RE.test(id))) return reply(400, { error: 'bad-session' });
     if (body.mode !== undefined && pickMode(body.mode, { mode: 'default' }) === null) return reply(400, { error: 'bad-mode' });
-    const asked = body.run === undefined ? null : parseRun(body.run);
+    let asked = body.run === undefined ? null : parseRun(body.run);
     if (body.run !== undefined && !asked) return reply(400, { error: 'bad-run' });
+    if (body.ai !== undefined && !(body.ai === 'claude' || (typeof body.ai === 'string' && talkable(body.ai)))) return reply(400, { error: 'bad-ai' });
     // The entry brain weighs only the person's own words (not an orchestrator's message, the agreed restart's note or a
     // continue after a cut); the one Haiku call for a long text it cannot read comes before anything is checked or started.
     const mine = !idle && internal.auto === undefined && !internal.orchestrator && internal.restart !== true && body.cut !== true;
@@ -919,7 +953,12 @@ ${prompt}`;
     // The AI this conversation runs on (id170): the one it started on when it is resumed, else the Cérebro's Conversa row.
     // Only the talk moves: the orchestrator's ways stay on Claude.
     const talkRun = (asked ?? DEFAULT_RUN).kind === 'talk' && !internal.orchestrator;
-    const ai = body.sessionId ? (readPageChats()[body.sessionId]?.ai ?? 'claude') : talkRun ? talkAi() : 'claude';
+    // A new talk starts on the AI the person picked in the footer (pc40), else the Cérebro's row; a resumed one keeps its own.
+    const ai = body.sessionId ? (readPageChats()[body.sessionId]?.ai ?? 'claude') : talkRun ? (body.ai ?? talkAi()) : 'claude';
+    if (asked) {
+      asked = pickFor(drivenNow(body.sessionId)?.ai ?? ai, asked);
+      if (!asked) return reply(400, { error: 'bad-run' });
+    }
 
     // The entry brain weighs the first message of a process for its phase; the phase note goes right before the person's
     // words, after the context block. The level is the policy's chat level (or35).
@@ -1323,6 +1362,20 @@ ${prompt}`;
     return reply(200, { mode: chat.mode });
   }
 
+  // The footer's model chip on a live conversation (pc40): a model and level of its own AI, or none for "Automático". The
+  // process takes them as flags, so a change ends the idle one (or the running one after its turn) and the next message
+  // resumes the same conversation on them. The AI never moves: a conversation is kept in the format of the one it began on.
+  function run(key, body) {
+    const chat = chatOf(key);
+    if (!chat) return reply(404, { error: 'unknown-chat' });
+    if (chat.ended) return reply(409, { error: 'ended' });
+    if (chat.run?.kind !== 'talk') return reply(409, { error: 'not-talk' });
+    const asked = pickFor(chat.ai ?? 'claude', parseRun({ kind: 'talk', ...(body?.model ? { model: body.model } : {}), ...(body?.effort ? { effort: body.effort } : {}) }));
+    if (!asked) return reply(400, { error: 'bad-run' });
+    changeRun(chat, asked, chat.weighed ?? { phase: null, why: null, ...chatLevelOf(chat.ai ?? 'claude') });
+    return reply(200, { run: chat.run });
+  }
+
   function stop(key) {
     const chat = chatOf(key);
     if (!chat) return reply(404, { error: 'unknown-chat' });
@@ -1403,7 +1456,7 @@ ${prompt}`;
   });
 
   return {
-    start, send, permission, mode, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
+    start, send, permission, mode, run, engines, stop, subscribe, list: listChats, history, image, helper, close, closeIdle, interrupted, drivenIds: () => everDriven,
     drivingIds,
     // The project root of the chat with that key (or07): its outside AI calls count in that project's budget.
     rootOf: (key) => chatOf(key)?.root ?? null,

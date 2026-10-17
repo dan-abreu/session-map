@@ -16,7 +16,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - English and Portuguese texts stay in step.
 - Every state works without hover and respects reduced motion.
 
-Proof: 86 test files cover your part (test/cards.test.mjs, test/chat.test.mjs, test/costwhy.test.mjs, test/server-cards.test.mjs, test/web-ai-activity.test.mjs, test/web-ai-panel.test.mjs, test/web-aihelpers.test.mjs, test/web-around-shell.test.mjs, test/web-blocks.test.mjs, test/web-board-cards.test.mjs, …).
+Proof: 87 test files cover your part (test/cards.test.mjs, test/chat.test.mjs, test/costwhy.test.mjs, test/server-cards.test.mjs, test/web-ai-activity.test.mjs, test/web-ai-panel.test.mjs, test/web-aihelpers.test.mjs, test/web-around-shell.test.mjs, test/web-blocks.test.mjs, test/web-board-cards.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

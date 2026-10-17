@@ -94,6 +94,9 @@ export const api = {
   chatPermission: (key, requestId, allow, always) => call('POST', `/api/chat/${seg(key)}/permission`, { requestId, allow, always }),
   chatStop: (key) => call('POST', `/api/chat/${seg(key)}/stop`, {}),
   chatMode: (key, mode) => call('POST', `/api/chat/${seg(key)}/mode`, { mode }),
+  // The footer's model chip (pc40): what it offers, and a live conversation's model and level ({} is Automático).
+  chatEngines: () => call('GET', '/api/chat/engines'),
+  chatRun: (key, pick) => call('POST', `/api/chat/${seg(key)}/run`, pick ?? {}),
   reinforcedLimit: () => call('GET', '/api/settings/reinforced-limit'),
   setReinforcedLimit: (usd) => call('POST', '/api/settings/reinforced-limit', { usd }),
   setProjectBackground: (projectId, always) => call('POST', '/api/settings/project-background', { projectId, always }),

@@ -333,6 +333,11 @@
                 <button type="button" class="chat-mode-btn" id="chatModeBtn" data-chat="modebtn" aria-haspopup="menu" aria-expanded="false" aria-controls="chatModeMenu"></button>
                 <div class="pop-menu chat-mode-menu" id="chatModeMenu" data-chat="modemenu" role="menu" data-i18n-aria="chat.modeLabel" hidden></div>
               </div>
+              <!-- The model, like Claude Code's picker: Automático, or an AI, its model and its level (pc40). -->
+              <div class="chat-mode chat-model" hidden>
+                <button type="button" class="chat-mode-btn chat-model-btn" id="chatModelBtn" data-chat="modelbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="chatModelMenu"></button>
+                <div class="pop-menu chat-mode-menu chat-model-menu" id="chatModelMenu" data-chat="modelmenu" role="menu" data-i18n-aria="chat.model.label" hidden></div>
+              </div>
               <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
               <!-- The memory the conversation carries, "48k / 200k" (pc37). -->
               <span class="chat-memory num" data-chat="memory" hidden></span>
@@ -490,6 +495,10 @@
                 <div class="chat-mode">
                   <button type="button" class="chat-mode-btn" id="flowChatModeBtn" data-chat="modebtn" aria-haspopup="menu" aria-expanded="false" aria-controls="flowChatModeMenu"></button>
                   <div class="pop-menu chat-mode-menu" id="flowChatModeMenu" data-chat="modemenu" role="menu" data-i18n-aria="chat.modeLabel" hidden></div>
+                </div>
+                <div class="chat-mode chat-model" hidden>
+                  <button type="button" class="chat-mode-btn chat-model-btn" id="flowChatModelBtn" data-chat="modelbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="flowChatModelMenu"></button>
+                  <div class="pop-menu chat-mode-menu chat-model-menu" id="flowChatModelMenu" data-chat="modelmenu" role="menu" data-i18n-aria="chat.model.label" hidden></div>
                 </div>
                 <span class="chat-hints" data-chat="hints" data-i18n-title="chat.keys" aria-hidden="true"><span data-i18n="chat.hint.send"></span><span data-i18n="chat.hint.file"></span><span data-i18n="chat.hint.command"></span></span>
                 <span class="chat-memory num" data-chat="memory" hidden></span>

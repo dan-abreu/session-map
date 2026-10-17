@@ -27,7 +27,7 @@ Rules that must not break (the map, "Rules that must not break"):
 - Every file is read in full; the report states "100% read" or lists what is missing.
 - The inspector never says "clean" without listing what it checked.
 
-Proof: 36 test files cover your part (test/bench-classify-build.test.mjs, test/bench-contestants.test.mjs, test/bench-plan.test.mjs, test/bench-ponytail.test.mjs, test/bench-pt.test.mjs, test/bench-report.test.mjs, test/bench-run.test.mjs, test/bench-sandbox.test.mjs, test/bench-score.test.mjs, test/bench-sets-code-run.test.mjs, …).
+Proof: 38 test files cover your part (test/bench-classify-build.test.mjs, test/bench-contestants.test.mjs, test/bench-plan.test.mjs, test/bench-ponytail.test.mjs, test/bench-pt.test.mjs, test/bench-report.test.mjs, test/bench-run.test.mjs, test/bench-sandbox.test.mjs, test/bench-score.test.mjs, test/bench-sets-code-run.test.mjs, …).
 Run only the ones that cover what you changed with `node --test <files>`; the whole suite runs once at the end, by the conductor.
 
 How to work, by the kind tag of your task:

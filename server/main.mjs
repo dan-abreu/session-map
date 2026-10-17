@@ -310,6 +310,11 @@ export function createApp({
       return send(res, result.status, result.body);
     }
     if (key === 'orchestrator' && parts.length === 4) return orchestratorRoute(req, res, url);
+    // The AIs, models and levels the footer's model chip offers (pc40).
+    if (req.method === 'GET' && key === 'engines' && parts.length === 4) {
+      const result = await chat.engines();
+      return send(res, result.status, result.body);
+    }
     if (req.method === 'GET' && key === 'list' && parts.length === 4) {
       const query = Object.fromEntries(['projectId', 'partId', 'workCellId', 'code', 'kind'].map((k) => [k, url.searchParams.get(k) ?? undefined]));
       const result = chat.list(query, await quickState());
@@ -358,7 +363,7 @@ export function createApp({
       req.on('close', unsubscribe);
       return undefined;
     }
-    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
+    if (req.method !== 'POST' || !['send', 'permission', 'mode', 'run', 'stop'].includes(verb)) throw new HttpError(404, 'not-found');
     const body = await readBody(req, verb === 'send' ? CHAT_BODY_MAX : BODY_MAX);
     const result = await (verb === 'stop' ? chat.stop(key) : chat[verb](key, body));
     return send(res, result.status, result.body);

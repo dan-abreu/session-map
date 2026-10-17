@@ -26,6 +26,10 @@ const MODES = ['settings', 'default', 'acceptEdits', 'plan', 'auto'];
 const BAR_MODES = ['default', 'acceptEdits', 'plan', 'auto'];
 const MODE_ICONS = { default: 'user', acceptEdits: 'rename', plan: 'list', auto: 'auto', dontAsk: 'stop' };
 const MODE_SAVED = 'sm.chat.mode';
+// The footer's model chip (pc40), like Claude Code's: Automático, or an AI, one of its models and a level. The last pick
+// starts the next new conversation too; a running one changes model and level at once and keeps the AI it began on.
+const PICK_SAVED = 'sm.chat.pick';
+const AI_NAMES = { claude: 'Claude', deepseek: 'DeepSeek', openai: 'OpenAI', gemini: 'Gemini' };
 const SAVED = 'sm.chat';
 // What the composer accepts like Claude Code does (the server checks the same): a few images per message.
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
@@ -118,6 +122,10 @@ export function createChat({
   const modeBtn = q('modebtn');
   const modeMenuEl = q('modemenu');
   const modeMenu = modeBtn && modeMenuEl ? createMenu({ button: modeBtn, pop: modeMenuEl }) : null;
+  // The model chip beside it (pc40): Automático, or an AI's model and level.
+  const modelBtn = q('modelbtn');
+  const modelMenuEl = q('modelmenu');
+  const modelMenu = modelBtn && modelMenuEl ? createMenu({ button: modelBtn, pop: modelMenuEl }) : null;
   bookBtn?.addEventListener('click', () => (bookEl && !bookEl.hidden ? closeBook() : openBook()));
   const moreMenuEl = q('moremenu');
   // Two sheets (the map's and the workshop's) share this code: ids inside the panel carry the sheet's own.
@@ -131,6 +139,11 @@ export function createChat({
   let returnFocus = null;
   let settings = null;
   let choice = 'settings';
+  // What the model chip offers (api.chatEngines), the pick shown ({ai, model, effort}, null for Automático) and whether the
+  // person changed it in this conversation (then the next start carries it).
+  let engines = null;
+  let pick = null;
+  let pickDirty = false;
   // The specialist roles (id148, or55): the catalog from the brain model (api.brain), read once per open; the steps
   // line names the roles that worked. Null until it arrives — the steps stay plain, nothing waits on it.
   let rolesByKind = null;
@@ -485,6 +498,9 @@ export function createChat({
   // The entry brain's weight of the turn ("a chat") rides in the tooltip. The Cérebro tab is the one place that changes
   // the route; the line only says it.
   function renderBrain() {
+    // The model chip follows what the conversation runs on, until the person picks something else in it (pc40).
+    if (!pickDirty && shownId()) pick = pickOfRun(log?.run);
+    renderModelPick();
     if (!brainEl) return;
     const tt = t();
     const info = log?.run ?? null;
@@ -511,6 +527,7 @@ export function createChat({
   // The permission mode is chosen in Configurações (pc19); the sheet keeps the note that a bypass setting runs as auto.
   function renderMode() {
     renderBarMode();
+    renderModelPick();
     if (!noteEl) return;
     noteEl.hidden = !settings?.downgraded;
     noteEl.textContent = settings?.downgraded ? t()('chat.downgraded') : '';
@@ -542,6 +559,104 @@ export function createChat({
       h('span', { class: 'pm-label' }, modeName(m)),
       m === mode && icon ? icon('check', 'pm-icon chat-mode-check') : h('span', { 'aria-hidden': 'true' }),
       h('span', { class: 'pm-desc' }, tt(`chat.modeHint.${m}`)))));
+  }
+
+  // ---- the model chip (pc40) ----
+
+  const savedPick = () => {
+    try {
+      const v = JSON.parse(storage?.getItem(PICK_SAVED) ?? 'null');
+      return v && typeof v.ai === 'string' && typeof v.model === 'string' ? { ai: v.ai, model: v.model, effort: typeof v.effort === 'string' ? v.effort : null } : null;
+    } catch { return null; }
+  };
+  // Only a talk has a model to pick: the orchestrator and its activity chats keep the way they were started on.
+  const isTalk = () => !context?.orchestrator && (!log?.run?.run || log.run.run.kind === 'talk');
+  // The AI the open conversation runs on, once a run event said it; a new one has none yet.
+  const convAi = () => (shownId() && log?.run ? log.run.ai ?? 'claude' : null);
+  const engineOf = (ai) => engines?.find((e) => e.ai === ai) ?? null;
+  const pickedModel = (p) => engineOf(p?.ai)?.models.find((m) => m.id === p?.model) ?? null;
+  const levelWord = (tt, l) => tt(`run.effort.${l}`);
+  // The pick a run event shows: a talk with a model of its own was picked; one without runs Automático.
+  const pickOfRun = (r) => (r?.run?.kind === 'talk' && r.run.model ? { ai: r.ai ?? 'claude', model: r.run.model, effort: r.run.effort ?? null } : null);
+
+  function renderModelPick() {
+    if (!modelBtn) return;
+    const tt = t();
+    const shown = Boolean(engines?.length) && isTalk();
+    if (modelBtn.parentElement) modelBtn.parentElement.hidden = !shown;
+    if (!shown) return;
+    const m = pick ? pickedModel(pick) : null;
+    const name = pick ? `${m?.name ?? modelName(pick.model) ?? pick.model}${pick.effort ? ` · ${levelWord(tt, pick.effort)}` : ''}` : tt('chat.model.auto');
+    modelBtn.dataset.pick = pick ? 'fixed' : 'auto';
+    modelBtn.setAttribute('title', pick ? tt('chat.model.title', { ai: AI_NAMES[pick.ai] ?? pick.ai, name }) : tt('chat.model.autoHint'));
+    modelBtn.setAttribute('aria-label', tt('chat.model.button', { name }));
+    modelBtn.replaceChildren(...[
+      icon ? icon('spark', 'chat-mode-icon') : null,
+      h('span', { class: 'chat-mode-name' }, name),
+      icon ? icon('chevron', 'chat-mode-chev') : null,
+    ].filter(Boolean));
+    const locked = convAi();
+    const row = (label, desc, checked, onclick, disabled = false) => h('button', {
+      type: 'button', role: 'menuitemradio', class: `pm-row${desc ? ' is-two' : ''}`, tabindex: '-1', 'aria-checked': String(checked),
+      ...(disabled ? { 'aria-disabled': 'true' } : { 'data-close': '', onclick }),
+    },
+    h('span', { 'aria-hidden': 'true' }),
+    h('span', { class: 'pm-label' }, label),
+    checked && icon ? icon('check', 'pm-icon chat-mode-check') : h('span', { 'aria-hidden': 'true' }),
+    desc ? h('span', { class: 'pm-desc' }, desc) : null);
+    const groups = engines.flatMap((e) => {
+      const other = Boolean(locked && locked !== e.ai);
+      return [
+        h('p', { class: 'pm-head' }, AI_NAMES[e.ai] ?? e.ai),
+        ...e.models.map((mm) => row(mm.name, other ? tt('chat.model.otherAi', { ai: AI_NAMES[locked] ?? locked }) : null,
+          Boolean(pick && pick.ai === e.ai && pick.model === mm.id),
+          () => setPick({ ai: e.ai, model: mm.id, effort: mm.levels.includes(pick?.effort) ? pick.effort : mm.levels.includes(e.start?.effort) ? e.start.effort : mm.levels.at(-1) ?? null }), other)),
+      ];
+    });
+    const levels = m?.levels ?? [];
+    modelMenuEl?.replaceChildren(...[
+      h('p', { class: 'pm-head' }, tt('chat.model.label')),
+      row(tt('chat.model.auto'), tt('chat.model.autoHint'), !pick, () => setPick(null)),
+      ...groups,
+      ...(pick && levels.length ? [
+        h('hr', { class: 'pm-sep' }),
+        h('p', { class: 'pm-head' }, tt('chat.model.level')),
+        h('div', { class: 'chat-levels', role: 'group', 'aria-label': tt('chat.model.level') }, ...levels.map((l) => h('button', {
+          type: 'button', class: 'chat-level', 'data-level': l, 'aria-pressed': String(l === pick.effort),
+          onclick: () => setPick({ ...pick, effort: l }),
+        }, levelWord(tt, l)))),
+      ] : []),
+    ]);
+  }
+
+  // A pick for this conversation: a running talk switches now (the server restarts its process on the new flags); otherwise
+  // it rides on the next message. A new conversation's pick is also kept for the next one.
+  async function setPick(next) {
+    pick = next;
+    pickDirty = true;
+    if (!shownId()) {
+      try { if (next) storage?.setItem(PICK_SAVED, JSON.stringify(next)); else storage?.removeItem(PICK_SAVED); } catch { /* a private window keeps nothing */ }
+    }
+    renderModelPick();
+    if (!key || log?.ended || !isTalk()) return;
+    const res = await api.chatRun(key, next ? { model: next.model, ...(next.effort ? { effort: next.effort } : {}) } : {});
+    if (!res.ok) toast(errorText(res.error));
+  }
+
+  // What the next start carries: a new talk its AI and pick; an existing one the pick only when the person changed it.
+  function pickBody() {
+    if (!isTalk()) return {};
+    const run = pick ? { kind: 'talk', model: pick.model, ...(pick.effort ? { effort: pick.effort } : {}) } : { kind: 'talk' };
+    if (!shownId()) return pick ? { ai: pick.ai, run } : {};
+    return pickDirty ? { run } : {};
+  }
+
+  async function loadEngines() {
+    const res = await api.chatEngines?.();
+    engines = res?.ok && Array.isArray(res.engines) ? res.engines : null;
+    // A saved pick of an AI no longer ready (its key removed) falls back to Automático.
+    if (pick && !shownId() && !pickedModel(pick)) pick = null;
+    renderModelPick();
   }
 
   const savedMode = () => {
@@ -1063,7 +1178,7 @@ export function createChat({
     const opens = !live && !sessionId && context.orchestrator;
     const res = live
       ? await api.chatSend(key, text, images)
-      : await (opens ? api.orchestratorOpen({ projectId: context.projectId, text, ...(images.length ? { images } : {}) }) : api.chatStart({ projectId: context.projectId, ...start, mode: choice, text, ...(images.length ? { images } : {}) }));
+      : await (opens ? api.orchestratorOpen({ projectId: context.projectId, text, ...(images.length ? { images } : {}) }) : api.chatStart({ projectId: context.projectId, ...start, ...pickBody(), mode: choice, text, ...(images.length ? { images } : {}) }));
     if (!res.ok && !(res.error === 'busy' && res.chatKey)) {
       log = chatLog(log, { type: 'error', data: { error: res.error } });
       return render();
@@ -1517,6 +1632,8 @@ export function createChat({
     older = null;
     lastEventId = 0;
     choice = savedMode() ?? 'settings';
+    pick = ctx.start?.sessionId ? null : savedPick();
+    pickDirty = false;
     findQuery = '';
     findAt = 0;
     findOpen = false;
@@ -1543,6 +1660,7 @@ export function createChat({
     if (ctx.start?.sessionId) loadHistory(ctx);
     else loadList(ctx);
     loadRoles();
+    loadEngines();
   }
 
   function resume(entry) {
