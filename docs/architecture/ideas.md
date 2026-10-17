@@ -11,7 +11,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
-- Clarity and polish: id56, id121, id126, id161, id162, id163, id164, id165, id166, id172
+- Clarity and polish: id56, id121, id126, id161, id162, id163, id164, id165, id166, id172, id175
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115, id116
@@ -790,3 +790,8 @@ Nothing here is code. The registry is this file, read by the map like every part
   - What it means: a chip in the composer's footer with the four modes (Manual, Editar automaticamente, Modo plano, Automático), each with one line on what it does; the last one picked starts the next new conversation.
   - Where it went: `pc39`.
   - Status: done on 2026-10-17 (`pc39`).
+- [x] "Precisa de você" under "Este projeto" shows only that project `id175`
+  - Asked: 2026-10-17 — "em esperando voce a mesma conversa que está no cverino está no session"
+  - What it means: the "Precisa de você" group of the conversation list showed every project's waiting conversations whatever the scope (mm49), so the session-map's three showed on Cverino too. Under "Este projeto" it now holds the open project's alone, and its chip counts them; "Todos os projetos" keeps every one. The amber pill at the top still counts every project.
+  - Proof: `test/web-convlist-inbox.test.mjs` (the scope tests); full suite green.
+  - Status: done on 2026-10-17.

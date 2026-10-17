@@ -236,15 +236,16 @@ export function needOf(chat) {
   return { key: waitingSignal({ chat })?.reason === 'question' ? 'convs.need.question' : 'convs.need.asks' };
 }
 
-// "Needs you" (mm49): needs is now.js needsYou(state), the one count of the page that the amber pill reads too, made into
-// rows of the list for every project whatever the scope: a question first, then newest. The search and the box filter
-// narrow it like the rest of the list; with neither, it holds exactly needs. Each entry: {row, project, nodeId, place,
-// chat, need}.
-export function needsEntries(state, needs, { projectId = null, query = '', nodeId = null } = {}) {
+// "Needs you" (mm49): needs is now.js needsYou(state), the one count of the amber pill, made into rows of the list: a
+// question first, then newest. "This project" keeps the open project's alone (id175: another project's rows there read as
+// conversations mixed up); "All projects" holds every one, as the pill counts. The search and the box filter narrow it
+// like the rest of the list. Each entry: {row, project, nodeId, place, chat, need}.
+export function needsEntries(state, needs, { projectId = null, scope = 'all', query = '', nodeId = null } = {}) {
   const q = plain(query);
   const indexes = new Map();
   const out = [];
   for (const { project, chat } of needs) {
+    if (scope === 'project' && project.id !== projectId) continue;
     if (!indexes.has(project.id)) indexes.set(project.id, indexOf(archTree(project)));
     const index = indexes.get(project.id);
     const row = conversationsOf(project).find((r) => r.sessionId === chat.sessionId) ?? rowOfChat(chat);
@@ -547,12 +548,12 @@ export function createConvList(ctx) {
     if (!s || !p) return;
     const tt = ctx.t();
     renderFilter();
-    // One count of what needs the person (mm47, mm49): the amber pill's own needsYou, rows from every project.
+    // What needs the person (mm47, mm49): the amber pill's own needsYou, narrowed to the open project under "This project".
     const all = needsYou(s);
-    const needs = needsEntries(s, all, { projectId: p.id, query, nodeId: filter });
-    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(all.map((n) => n.chat.sessionId)), bucket: picked });
+    const needs = needsEntries(s, all, { projectId: p.id, scope, query, nodeId: filter });
+    const out = listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(needs.map((e) => e.chat.sessionId)), bucket: picked });
     // The chips count the rows the search and the box leave, "Waiting for you" being Needs you whole, as the pill counts it.
-    const counts = picked ? listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(all.map((n) => n.chat.sessionId)) }).counts : out.counts;
+    const counts = picked ? listConversations(s, { projectId: p.id, scope, query, nodeId: filter, showArchived: true, skip: new Set(needs.map((e) => e.chat.sessionId)) }).counts : out.counts;
     renderStates({ ...counts, waiting: needs.length });
     const mine = conversationsOf(p).filter((r) => !r.archived);
     byId('convsRailCount').textContent = String(mine.length);

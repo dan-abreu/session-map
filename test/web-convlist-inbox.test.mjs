@@ -200,9 +200,23 @@ async function draw(state, { scope = 'project', onContinue = () => {}, saved = [
   return { list: els.get('convsList'), el: (id) => els.get(id), run, convs };
 }
 
+test('needsEntries under "This project" keeps the open project\'s alone; "All projects" every one (id175)', () => {
+  const state = mixed();
+  assert.deepEqual(ids(needsEntries(state, needsYou(state), { projectId: SHOP, scope: 'project' })).sort(), ['ask-busy', 'q1', 'q2']);
+  assert.deepEqual(ids(needsEntries(state, needsYou(state), { projectId: SHOP, scope: 'all' })).sort(), ['ask-busy', 'n1', 'q1', 'q2']);
+});
+
+test('"This project": Needs you and its chip hold no conversation of another project', async () => {
+  const { list, el } = await draw(mixed());
+  const [needs] = withClass(list, 'g-needs');
+  assert.deepEqual(rowIds(needs), ['ask-busy', 'q1', 'q2']);
+  assert.ok(!rowIds(list).includes('n1'), 'the notes-app conversation is not in the shop\'s list');
+  assert.match(el('convsStates').text, /convs\.states\.waiting.*3|3.*convs\.states\.waiting/s, 'the chip counts the project\'s three');
+});
+
 test('the inbox opens with Needs you, counted by the same needsYou as the pill, each row saying in one line what is needed', async () => {
   const state = mixed();
-  const { list } = await draw(state);
+  const { list } = await draw(state, { scope: 'all' });
   assert.deepEqual(groups(list), ['needs', 'working', 'cutoff', 'recent']);
   const [needs] = withClass(list, 'g-needs');
   assert.equal(withClass(needs, 'cv-group-n')[0].text, String(needsYou(state).length));
@@ -211,8 +225,9 @@ test('the inbox opens with Needs you, counted by the same needsYou as the pill, 
   assert.deepEqual(lines, ['convs.need.question', 'convs.need.question', 'Choose the email template', 'convs.need.asks']);
   const n1 = withClass(needs, 'cv-item').find((li) => rowIds(li)[0] === 'n1');
   assert.match(withClass(n1, 'cv-proj')[0]?.text ?? '', /notes-app/, 'a row of another project names it');
-  const q1 = withClass(needs, 'cv-item').find((li) => rowIds(li)[0] === 'q1');
-  assert.equal(withClass(q1, 'cv-proj').length, 0, 'the open project needs no name');
+  const here = await draw(state);
+  const q1 = withClass(withClass(here.list, 'g-needs')[0], 'cv-item').find((li) => rowIds(li)[0] === 'q1');
+  assert.equal(withClass(q1, 'cv-proj').length, 0, 'under "This project" the open project needs no name');
 });
 
 test('no Needs you group when nobody waits, and no Cut off group when nothing was cut', async () => {
@@ -409,19 +424,20 @@ test('the switch opens on the saved scope and answers the arrow keys, Home and E
 test('five state chips with their counts, and the counts follow the scope', async () => {
   const { el, run } = await draw(twoProjects());
   assert.deepEqual(chips(el).map((c) => c.attrs['data-state']), ['working', 'waiting', 'cutoff', 'finished', 'archived']);
-  assert.deepEqual(chipCounts(el), { working: 1, waiting: 4, cutoff: 1, finished: 2, archived: 1 }, 'this project');
+  assert.deepEqual(chipCounts(el), { working: 1, waiting: 3, cutoff: 1, finished: 2, archived: 1 }, 'this project');
   assert.match(chip(el, 'waiting').text, /convs\.states\.waiting/);
   run(() => tabs(el)[1].fire('click'));
   assert.deepEqual(chipCounts(el), { working: 2, waiting: 4, cutoff: 1, finished: 3, archived: 2 }, 'all projects');
 });
 
-test('"Waiting for you" is the one number: the amber pill, the inbox group and the chip', async () => {
+test('"Waiting for you" is one number for the group and the chip: the pill\'s under "All projects", the open project\'s under "This project"', async () => {
   for (const scope of ['project', 'all']) {
     const state = twoProjects();
-    const pill = needsYou(state).length;
+    const all = needsYou(state);
+    const want = scope === 'all' ? all.length : all.filter((n) => n.project.id === state.projects[0].id).length;
     const { el, list } = await draw(state, { scope });
-    assert.equal(chipCounts(el).waiting, pill, scope);
-    assert.equal(withClass(withClass(list, 'g-needs')[0], 'cv-group-n')[0].text, String(pill), scope);
+    assert.equal(chipCounts(el).waiting, want, scope);
+    assert.equal(withClass(withClass(list, 'g-needs')[0], 'cv-group-n')[0].text, String(want), scope);
   }
   const quiet = await draw(stateOf([conv('a'), conv('s', { updatedAt: ago(60 * 24 * 3) }, { strong: false, weak: true, items: [] })]));
   assert.equal(chipCounts(quiet.el).waiting, 0, 'a stale question is history: not counted, as in the pill');
@@ -445,14 +461,14 @@ test('a chip filters the inbox to its conversations; a second click clears it', 
   run(() => chip(el, 'finished').fire('click'));
   assert.deepEqual(pressed(el), [], 'the same chip again lets it go');
   assert.deepEqual(groups(list), before);
-  assert.deepEqual(chipCounts(el), { working: 1, waiting: 4, cutoff: 1, finished: 2, archived: 1 }, 'the counts do not move with the filter');
+  assert.deepEqual(chipCounts(el), { working: 1, waiting: 3, cutoff: 1, finished: 2, archived: 1 }, 'the counts do not move with the filter');
 });
 
 test('the waiting chip shows exactly what Needs you holds, the archived chip the archived ones', async () => {
   const { el, list, run } = await draw(twoProjects());
   run(() => chip(el, 'waiting').fire('click'));
   assert.deepEqual(groups(list), ['needs']);
-  assert.deepEqual(rowIds(list), ['ask-busy', 'q1', 'q2', 'n1']);
+  assert.deepEqual(rowIds(list), ['ask-busy', 'q1', 'q2']);
   run(() => chip(el, 'archived').fire('click'));
   assert.deepEqual(pressed(el), ['archived']);
   assert.deepEqual(groups(list), ['archived']);
