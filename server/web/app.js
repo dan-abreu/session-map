@@ -652,7 +652,7 @@ function markSeen(sessionId) {
 function renderNow() {
   if (!state) return;
   jobs = nowJobs(state, { unseen });
-  if (project) picker.update(state.projects.map((p) => ({ id: p.id, name: p.name, hue: projectHue(p) })), project.id, jobBadges(jobs));
+  if (project) picker.update(state.projects.map((p) => ({ id: p.id, name: p.name, hue: projectHue(p), scratch: p.scratch ?? null })), project.id, jobBadges(jobs));
   alerts.refreshTitle();
   cutPanel?.render(state);
 }

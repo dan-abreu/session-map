@@ -11,7 +11,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
-- Clarity and polish: id56, id121, id126
+- Clarity and polish: id56, id121, id126, id161, id162
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115, id116
@@ -705,3 +705,15 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the level draws one room per area (with a room for what every area shares), each with its sections, buttons as chips and texts one click away, a search that finds any word, the real counts on top and the pieces with no words of their own counted but never named; it opens with no key; no label of it is junk and every one is a real text of the page.
   - Where it went: `mm65` (the words and the route), `mm66` (the floor plan), `fl19` (the overview read one box at a time).
   - Status: done on 2026-10-16 (`mm65`, `mm66`, `fl19`).
+- [x] The project list shows only the projects he keeps, not every folder a conversation ever ran in `id161`
+  - Asked: 2026-10-16 — "ta tipo com uma lista verde em cima do session-map, onde escolhe os diretorios" (with a picture of the project button); then — "continua vendo tem um monte de repositorio agora que nao faço ideia do que é" (with a picture of the list)
+  - What it means: measured on 2026-10-16 with the running program: the list had 15 entries and 10 of them were not projects of his: 2 helpers' worktrees and 2 test runs' copies whose folders no longer exist, 3 folders in the system's temp folder, the sandbox of the program's own tests (`.dev`), the memory folder of Claude (`.claude`) and the DeepSeek Harness's default workspace. Every folder where a conversation ever ran became a project.
+  - How to confirm it is done: the list shows his repositories first (here: session-map, cverino, surigo, dnd_mmorpg and his home folder), then one row "10 outras pastas (temporárias ou de teste)" with the marks of all of them; one click opens it and each folder says why it is there; the open project is always in the main list; nothing is deleted and every cost still counts.
+  - Where it went: `mm67`.
+  - Status: done on 2026-10-16 (`mm67`; seen live on the running page with the flags of the new server simulated; the running server needs its restart to send them).
+- [x] On hover, a conversation's title ends before its cost and ⋯, not under them `id162`
+  - Asked: 2026-10-16 — "aqui está fora de esquadro" (a picture of the card "Como funciona log de programas e para que serve" with the title running under "US$ 3,21")
+  - What it means: measured: the box that takes the time's place on hover is 74 to 86 px wide and the time's column only 26 to 33, so a long title ran 30 to 50 px under the box.
+  - How to confirm it is done: resting the pointer on any card, the title ends with its ellipsis about 8 px before the cost; on a touch screen nothing changes.
+  - Where it went: `mm68`.
+  - Status: done on 2026-10-16 (`mm68`, commit ce51341).

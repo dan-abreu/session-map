@@ -2,11 +2,15 @@
 // marks: a pulsing green dot when something works there, an amber number waiting for the person, a check for finished and
 // not seen yet. A native <select> cannot hold those marks, so this is a small listbox with the same keys.
 
-// No project id holds a ':' (paths.mjs projectIdOf), so this one never meets a project.
+// No project id holds a ':' (paths.mjs projectIdOf), so these never meet a project.
 const NEW = ':new';
+const OTHERS = ':others';
 
 // The button names the open project only (mm47): its amber count is the pill's and its work the map header's, so the marks
 // wait in the list, one look away; its label still says them.
+// The folders that are not projects the owner keeps (id161: gone, temporary, a tool's) wait behind one row, "N other
+// folders", with the marks of all of them (so a helper working in one is never out of sight) and each one's reason when it
+// is opened; the open project stays in the main list whatever it is.
 // The list ends with "New project" (sv14, mm50) when the page may create one: ctx.onNew opens its dialog.
 // ctx: root, button, list, name (the name span), h, t (translator getter), icon(name, cls), onPick(id), onNew() (optional),
 // canNew() (optional: false hides "New project", as with the look-only link).
@@ -15,6 +19,7 @@ export function createProjectPicker(ctx) {
   let projects = [];
   let current = null;
   let badges = new Map();
+  let showOthers = false;
 
   function marksView(b) {
     const tt = ctx.t();
@@ -25,6 +30,9 @@ export function createProjectPicker(ctx) {
     if (b.finished) out.push(h('span', { class: 'pp-mark is-finished', title: tt.count('project.markFinished', b.finished) }, ctx.icon('check', 'pp-check'), h('span', { class: 'visually-hidden' }, tt.count('project.markFinished', b.finished))));
     return out;
   }
+
+  // The marks of several projects as one: working if any works, the waiting and the finished added up.
+  const sumMarks = (all) => all.reduce((s, b) => ({ working: s.working || Boolean(b?.working), waiting: s.waiting + (b?.waiting ?? 0), finished: s.finished + (b?.finished ?? 0) }), { working: false, waiting: 0, finished: 0 });
 
   const options = () => [...list.querySelectorAll('[role="option"]')];
   const isOpen = () => !list.hidden;
@@ -50,6 +58,11 @@ export function createProjectPicker(ctx) {
   }
 
   function pick(id) {
+    if (id === OTHERS) {
+      showOthers = !showOthers;
+      render();
+      return;
+    }
     close();
     if (id === NEW) ctx.onNew();
     else if (id !== current) ctx.onPick(id);
@@ -65,10 +78,20 @@ export function createProjectPicker(ctx) {
     const words = b ? [b.working ? tt('project.markWorking') : null, b.waiting ? tt.count('project.markWaiting', b.waiting) : null, b.finished ? tt.count('project.markFinished', b.finished) : null] : [];
     button.setAttribute('aria-label', [tt('project.pick', { name: p.name }), ...words.filter(Boolean)].join(' · '));
     const focusedId = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
-    list.replaceChildren(...projects.map((x) => h('li', {
-      role: 'option', 'data-id': x.id, 'aria-selected': String(x.id === current), tabindex: '-1', class: 'pp-option', style: `--p-h:${x.hue}`,
+    const kept = projects.filter((x) => !x.scratch || x.id === current);
+    const others = projects.filter((x) => x.scratch && x.id !== current);
+    const optionOf = (x) => h('li', {
+      role: 'option', 'data-id': x.id, 'aria-selected': String(x.id === current), tabindex: '-1', class: `pp-option${x.scratch ? ' is-scratch' : ''}`, style: `--p-h:${x.hue}`,
       onclick: () => pick(x.id),
-    }, h('span', { class: 'pp-swatch', 'aria-hidden': 'true' }), h('span', { class: 'pp-option-name' }, x.name), h('span', { class: 'pp-marks' }, marksView(badges.get(x.id))))),
+    }, h('span', { class: 'pp-swatch', 'aria-hidden': 'true' }),
+    h('span', { class: 'pp-option-name' }, x.name, x.scratch ? h('small', { class: 'pp-why' }, tt(`project.scratch.${x.scratch}`)) : null),
+    h('span', { class: 'pp-marks' }, marksView(badges.get(x.id))));
+    list.replaceChildren(...kept.map(optionOf),
+    ...(others.length ? [h('li', {
+      role: 'option', 'data-id': OTHERS, 'aria-selected': 'false', tabindex: '-1', class: 'pp-option pp-others', onclick: () => pick(OTHERS),
+    }, h('span', { class: 'pp-option-name' }, showOthers ? tt('project.othersHide') : tt.count('project.others', others.length)),
+    h('span', { class: 'pp-marks' }, showOthers ? [] : marksView(sumMarks(others.map((x) => badges.get(x.id))))))] : []),
+    ...(showOthers ? others.map(optionOf) : []),
     ...(ctx.onNew && ctx.canNew?.() !== false ? [h('li', {
       role: 'option', 'data-id': NEW, 'aria-selected': 'false', tabindex: '-1', class: 'pp-option pp-new', onclick: () => pick(NEW),
     }, ctx.icon('plus', 'pp-new-icon'), h('span', { class: 'pp-option-name' }, tt('project.new')))] : []));

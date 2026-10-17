@@ -156,6 +156,51 @@ test('the project button names the project only: its amber count is the pill\'s,
   assert.doesNotMatch(between('id="projectPicker"', 'id="navbar"'), /id="projectMarks"/);
 });
 
+test('the folders that are not projects the owner keeps wait behind one row, with their marks, and open to say why (id161)', async () => {
+  const { createProjectPicker } = await import('../server/web/picker.js');
+  const el = (tag) => ({
+    tag, attrs: {}, kids: [], hidden: tag === 'list', style: { setProperty() {} }, textContent: '',
+    setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, contains: () => false, querySelectorAll: () => [],
+    replaceChildren(...kids) { this.kids = kids; },
+  });
+  const h = (tag, attrs, ...kids) => ({ tag, attrs, kids: kids.flat(Infinity) });
+  const real = globalThis.document;
+  globalThis.document = { activeElement: null, addEventListener() {} };
+  try {
+    const parts = { root: el('root'), button: el('button'), list: el('list'), name: el('name') };
+    const t = Object.assign((k) => k, { count: (k, n) => `${k}:${n}` });
+    const picker = createProjectPicker({ ...parts, h, t: () => t, icon: () => null, onPick() {} });
+    const projects = [
+      { id: 'a', name: 'acme-shop', hue: 160 }, { id: 'x', name: 'agent-x', hue: 10, scratch: 'gone' },
+      { id: 'w', name: 'work', hue: 20, scratch: 'temp' }, { id: 'n', name: 'notes', hue: 40 },
+    ];
+    const names = () => parts.list.kids.map((k) => k.kids.find((c) => /pp-option-name/.test(c.attrs?.class ?? '')).kids[0]);
+    const textOf = (node) => (node.kids ?? []).map((k) => (typeof k === 'object' && k ? textOf(k) : String(k))).join('');
+    picker.update(projects, 'a', new Map([['w', { waiting: 2 }], ['x', { working: true }]]));
+    assert.deepEqual(names(), ['acme-shop', 'notes', 'project.others:2'], 'two projects and one row for the two folders');
+    const row = parts.list.kids[2];
+    assert.equal(row.attrs['data-id'], ':others');
+    const marks = row.kids.at(-1).kids;
+    assert.equal(marks.length, 2, 'what works and what waits in them is never out of sight');
+    assert.equal(textOf(row.kids.at(-1)).includes('2'), true, 'the waiting counted once, added up');
+    row.attrs.onclick();
+    assert.deepEqual(names(), ['acme-shop', 'notes', 'project.othersHide', 'agent-x', 'work'], 'opened: each folder, with its reason');
+    assert.match(textOf(parts.list.kids[3]), /project\.scratch\.gone/);
+    assert.match(textOf(parts.list.kids[4]), /project\.scratch\.temp/);
+    // The open project stays in the main list whatever it is.
+    picker.update(projects, 'x', new Map());
+    assert.deepEqual(names().slice(0, 3), ['acme-shop', 'agent-x', 'notes']);
+    // No such folder: no row.
+    picker.update(projects.filter((p) => !p.scratch), 'a', new Map());
+    assert.deepEqual(names(), ['acme-shop', 'notes']);
+  } finally { globalThis.document = real; }
+  for (const lang of ['en', 'pt-BR']) {
+    const t = translator(lang);
+    for (const key of ['project.othersHide', 'project.scratch.gone', 'project.scratch.temp', 'project.scratch.tool']) assert.notEqual(t(key), key, `${lang}: ${key} is written`);
+    assert.match(t.count('project.others', 2), /^2 /, lang);
+  }
+});
+
 test('the pill carries the bell, says how many need the person and opens the waiting list', () => {
   const pill = html.match(/<button[^>]*id="waitingBtn"[^>]*>[\s\S]*?<\/button>/)[0];
   assert.match(pill, /class="[^"]*needs-pill/);

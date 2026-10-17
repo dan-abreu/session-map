@@ -36,6 +36,7 @@ import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
 import { planLimits } from './sources/limits.mjs';
 import { runGit } from './sources/gitqueue.mjs';
 import { createdRoots } from './newproject.mjs';
+import { scratchWhy } from './scratch.mjs';
 import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
 import { readRoadmap } from './sources/roadmap.mjs';
@@ -489,6 +490,7 @@ async function buildProject(ctx, { root, items }) {
   const openspec = readOpenSpec(root);
   const roadmap = config.roadmap ? readRoadmap(join(root, config.roadmap), { decisions: config.decisions }) : null;
   // The AI spends tokens: only on a project worked on now, or one the person keeps always up to date.
+  const kept = alwaysOn(userConfig, root) || createdRoots(userConfig).some((r) => normalizePath(r) === normalizePath(root));
   const background = backgroundOf({ always: alwaysOn(userConfig, root), working: isWorking({ items, liveById, driving: ctx.cut.driving, nowMs: now.getTime() }) });
   const aiOn = life.queue.enabled && config.ai?.enabled !== false && background.on;
   const aiAnswers = aiPlacements(life, smDir, projectId);
@@ -645,6 +647,9 @@ async function buildProject(ctx, { root, items }) {
   return {
     project: {
       id: projectId, name, root, mainBranch: main, fetchedAt: memo.fetchedAt, tunnelUrl: tunnelOf(userConfig.tunnelUrl),
+      // Why this folder is not a project the owner keeps (id161), or null; the page puts these behind "other folders".
+      // A folder the owner made through the page or keeps always on is his, wherever it sits.
+      scratch: kept ? null : scratchWhy(root),
       arch: { ...attachToParts(withLive(arch, live), chats, workCells), links: explained(linkParts(arch, chats.map((c) => ({ ...c, files: chatFiles.get(c.sessionId) })), workCells, { topLevel })), sizes },
       workCells,
       // The words of a registry of requests kept translated in session-map's folder, by language and code (id76).
