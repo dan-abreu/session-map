@@ -265,9 +265,20 @@ test('OpenAI gpt-6: max_completion_tokens, the lowest reasoning each model accep
     assert.ok(body.max_completion_tokens > 1024, `${model} reasons a little: the answer keeps its 1024`);
     assert.equal(body.max_tokens, undefined);
   }
+  // A model picked from OpenAI's own list that the table has not seen (id168): the cautious request, never a field it might refuse.
   const typed = await bodyFor('openai', 'gpt-7-new', { maxTokens: 300 });
-  assert.equal(typed.max_completion_tokens, 300, 'any OpenAI model takes max_completion_tokens');
+  assert.equal(typed.max_completion_tokens, 300 + 1024, 'any OpenAI model takes max_completion_tokens, with room for the reasoning a new model may do');
   assert.equal(typed.reasoning_effort, undefined);
+  assert.ok(!('temperature' in typed), 'a model the table has not seen may be a reasoning model, which takes only the default temperature');
+});
+
+test("a model picked from the maker's list gets the cautious request of its AI (id168)", async () => {
+  const gemini = await bodyFor('gemini', 'gemini-2.5-pro', { maxTokens: 300 });
+  assert.equal(gemini.max_tokens, 300 + 2048, 'a thinking model keeps room for its answer');
+  assert.equal(gemini.reasoning_effort, undefined, 'no level field it might refuse');
+  const deepseek = await bodyFor('deepseek', 'deepseek-next', { maxTokens: 300 });
+  assert.equal(deepseek.thinking, undefined, 'DeepSeek: no field it may refuse');
+  assert.equal(deepseek.max_tokens, 300 + 2048, 'and room for the thinking the model may do');
 });
 
 test('OpenRouter keeps its plain request, and the catalog page does not show the request fields', async () => {

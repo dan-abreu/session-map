@@ -20,6 +20,7 @@ import { getKey } from './ai/keys.mjs';
 import { othersSettings } from './ai/others.mjs';
 import { createVersionWatch } from './ai/versions.mjs';
 import { createPricesWatch } from './ai/prices-watch.mjs';
+import { createModelWatch, loadModels } from './ai/models.mjs';
 import { refreshBalances } from './ai/balance-watch.mjs';
 import { isAiRunnerCwd } from './ai/runner.mjs';
 import { changeDetailOf, changesOf } from './changes-state.mjs';
@@ -685,7 +686,14 @@ export function createApp({
   const runRoutes = createRunRoutes({ smDir, demo, token, backend: helpers.backend, ...runAi });
   // The book's titles and summaries on the AI the Cérebro's book row names (id156): asked by the book's own program.
   const bookRoutes = createBookRoutes({ smDir, demo, token, ai, ...(askAi.bookQueue ? { queue: askAi.bookQueue } : {}) });
-  const brainRoutes = demo || !smDir ? null : createBrainRoutes({ smDir, demo, token });
+  // The model list of every AI (id168): read once a day from Claude Code and from each maker with a key, and again on the
+  // Cérebro's refresh button. What is on file from the last look is in memory before the first request.
+  const modelWatch = demo || !smDir ? null : createModelWatch({
+    smDir, ...versions,
+    keyOf: ai?.keyOf ?? ((provider) => getKey(smDir, provider, helpers.backend ? { backend: helpers.backend } : {})),
+  });
+  if (modelWatch) loadModels(smDir);
+  const brainRoutes = demo || !smDir ? null : createBrainRoutes({ smDir, demo, token, modelWatch });
   const censusRoutes = demo || !smDir ? null : createCensusRoutes({ demo });
   async function helpersRoute(req, res, path, url) {
     if (demo) throw new HttpError(403, 'demo');
@@ -1151,6 +1159,11 @@ export function createApp({
       const lookBalances = () => refreshBalances({ smDir }).catch((err) => log('warn', 'ai-balance-failed', { error: String(err?.name ?? 'error').slice(0, 30) }));
       setTimeout(lookBalances, VERSIONS_FIRST_MS).unref();
       setInterval(lookBalances, 10 * 60_000).unref();
+    }
+    if (modelWatch) {
+      const lookModels = () => modelWatch.run().catch((err) => log('warn', 'ai-models-failed', { error: String(err?.message ?? err).slice(0, 60) }));
+      setTimeout(lookModels, VERSIONS_FIRST_MS).unref();
+      setInterval(lookModels, VERSIONS_EVERY_MS).unref();
     }
     if (priceWatch) {
       const lookPrices = () => checkPrices().catch((err) => log('warn', 'ai-prices-failed', { error: err.message }));

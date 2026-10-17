@@ -154,6 +154,7 @@ export const api = {
   brain: () => call('GET', '/api/ai/brain'),
   setBrain: (body) => call('PATCH', '/api/ai/brain', body),
   brainConfig: (body) => call('POST', '/api/ai/brain/configure', body),
+  refreshModels: () => call('POST', '/api/ai/brain/models', {}),
   removeAiKey: (provider) => call('DELETE', `/api/settings/ai-helpers?provider=${seg(provider)}`),
   // The look-only link (sv04): the owner reads it, makes a new one or turns it off.
   lookKey: () => call('GET', '/api/settings/look-key'),

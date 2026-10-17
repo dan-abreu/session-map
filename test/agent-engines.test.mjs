@@ -26,6 +26,21 @@ test('the engine commands name each official agent; the DeepSeek token never liv
   assert.equal(engineCommands().deepseek.command({ brief: 'x' }).env.ANTHROPIC_AUTH_TOKEN, '', 'no token by default');
 });
 
+test("the model and level of the Cérebro's row ride on every engine's command, as single checked arguments (id168)", () => {
+  const c = engineCommands({ deepseekToken: 'dk' });
+  // Codex: -m for the model and a config override for the reasoning effort; a level Codex has no word for is left out.
+  assert.deepEqual(c.openai.command({ brief: 'do it', choice: { model: 'gpt-5.5', effort: 'high' } }).args, ['exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort="high"', '--full-auto', 'do it']);
+  assert.deepEqual(c.openai.command({ brief: 'do it', choice: { model: 'gpt-6-luna', effort: 'none' } }).args, ['exec', '-m', 'gpt-6-luna', '--full-auto', 'do it']);
+  assert.deepEqual(c.openai.command({ brief: 'do it' }).args, ['exec', '--full-auto', 'do it'], 'nothing chosen: the CLI keeps its own');
+  // Gemini CLI: -m, and no level flag.
+  assert.deepEqual(c.gemini.command({ brief: 'do it', choice: { model: 'gemini-2.5-pro', effort: 'high' } }).args, ['-m', 'gemini-2.5-pro', '-p', 'do it']);
+  // Claude Code pointed at DeepSeek: --model.
+  assert.deepEqual(c.deepseek.command({ brief: 'do it', choice: { model: 'deepseek-v4-pro' } }).args, ['-p', 'do it', '--model', 'deepseek-v4-pro', '--dangerously-skip-permissions']);
+  // A value that is not a plain model name never becomes an argument.
+  assert.deepEqual(c.openai.command({ brief: 'x', choice: { model: '--yolo; rm -rf', effort: 'high; x' } }).args, ['exec', '--full-auto', 'x']);
+  assert.deepEqual(c.gemini.command({ brief: 'x', choice: { model: '-m evil' } }).args, ['-p', 'x']);
+});
+
 test('the DeepSeek Harness is the DeepSeek engine when it is installed, before Claude Code pointed at it (id156)', () => {
   const dsh = enginesStatus({ bin: (n) => n === 'dsh' || n === 'claude' });
   assert.equal(dsh.deepseek.edits, 'worktree');

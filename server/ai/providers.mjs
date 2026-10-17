@@ -50,6 +50,9 @@ export const PROVIDERS = Object.freeze({
       'deepseek-v4-flash': { body: { thinking: { type: 'disabled' } } },
       'deepseek-v4-pro': { body: { thinking: { type: 'disabled' } } },
     },
+    // A model picked from DeepSeek's own list (id168) that this table has not seen: no field it might refuse (thinking stays
+    // as the model has it), and room for the thinking so the answer is not cut.
+    unlistedExtras: { reasoningRoomTokens: 2048 },
   },
   gemini: {
     id: 'gemini',
@@ -74,6 +77,9 @@ export const PROVIDERS = Object.freeze({
       'gemini-3.5-flash-lite': { body: { reasoning_effort: 'minimal' }, reasoningRoomTokens: 1024 },
       'gemini-3.8-flash': { body: { reasoning_effort: 'low' }, reasoningRoomTokens: 1024 },
     },
+    // A Gemini model picked from Google's list (id168) that this table has not seen: no level field it might refuse, and the
+    // room a thinking model needs so its answer is not cut (the pro line thinks the most).
+    unlistedExtras: { reasoningRoomTokens: 2048 },
   },
   openai: {
     id: 'openai',
@@ -99,6 +105,10 @@ export const PROVIDERS = Object.freeze({
       'gpt-6.1-sol': { body: { reasoning_effort: 'low', temperature: null }, reasoningRoomTokens: 1024 },
       'gpt-6-astra': { body: { reasoning_effort: 'low', temperature: null }, reasoningRoomTokens: 1024 },
     },
+    // An OpenAI model picked from OpenAI's list (id168) that this table has not seen: the reasoning models (gpt-5 and later,
+    // the o series) take only the default temperature and think inside the answer budget, so neither the field nor the
+    // missing room may be left to chance; a model that takes a temperature loses nothing by the default.
+    unlistedExtras: { body: { temperature: null }, reasoningRoomTokens: 1024 },
   },
 });
 
@@ -110,9 +120,13 @@ const outTokens = (n) => (Number.isInteger(n) && n > 0 ? Math.min(n, MAX_TOKENS_
 
 export const providerOf = (id) => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null);
 
-// What one model needs in its request ({ body, reasoningRoomTokens }), or nothing for a model not in the catalog:
-// it gets no field it might refuse.
-const extrasOf = (p, model) => (p?.requestExtras && Object.hasOwn(p.requestExtras, model) ? p.requestExtras[model] : {});
+// What one model needs in its request ({ body, reasoningRoomTokens }). A model not in the table gets no field it might
+// refuse: the provider's own cautious set (unlistedExtras) or nothing. Only a provider with a table has an "unlisted"
+// model; OpenRouter routes whatever it is asked and its calls stay as they were.
+const extrasOf = (p, model) => {
+  if (!p?.requestExtras) return {};
+  return Object.hasOwn(p.requestExtras, model) ? p.requestExtras[model] : p.unlistedExtras ?? {};
+};
 
 // The token budget a call asks for: the answer's, plus room for reasoning the model cannot skip.
 export const maxAnswerTokens = (providerId, model, maxTokens) => {
@@ -121,7 +135,7 @@ export const maxAnswerTokens = (providerId, model, maxTokens) => {
 };
 
 // What the page may show: the catalog has no secrets, the copy keeps the frozen original out of reach.
-export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, requestExtras, maxTokensField, ...p }) => structuredClone(p));
+export const publicCatalog = () => Object.values(PROVIDERS).map(({ extraBody, requestExtras, unlistedExtras, maxTokensField, ...p }) => structuredClone(p));
 
 // A model missing from the catalog could be any AI the owner typed, up to the dearest on the market: it is priced
 // above those, so the daily cap stops early rather than late. OpenRouter's own reported cost wins over this anyway.

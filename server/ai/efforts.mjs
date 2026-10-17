@@ -15,6 +15,8 @@
 // One mechanical table: the selectors draw from it, the validator checks against it, and the API call maps it to
 // each provider's own field (effortBody). A level that does not fit the resolved engine is never applied.
 
+import { listedEntry } from './model-registry.mjs';
+
 // The union of every level word, for tolerant reading: a stored choice survives a provider change.
 export const LEVEL_UNION = Object.freeze(['off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultracode']);
 
@@ -46,11 +48,20 @@ const LEVELS_BY_MODEL = Object.freeze({
   'gemini-3.8-flash': Object.freeze(['low', 'medium', 'high']),
 });
 
-// The levels a (provider, model) accepts: the model's own list, else the provider's. openrouter has no vocabulary of
-// its own: the routed model decides at call time.
+// What the maker's own list says (id168): Claude Code names the levels of each model it serves and DeepSeek's /models does
+// too, and what the maker says today wins over the table above. For the rest the table wins, and a list read from the
+// maker gives the model it does not know the cautious set (low, medium, high) or none at all (an old model), never the
+// provider's whole vocabulary: a field the model refuses would make the call fail.
+const NO_LEVELS = Object.freeze(['auto']);
+
+// The levels a (provider, model) accepts: the maker's list, else the model's own, else the provider's. openrouter has no
+// vocabulary of its own: the routed model decides at call time.
 export function levelsOf(provider, model) {
+  const listed = model ? listedEntry(provider, model) : null;
+  if (listed?.levelsFrom === 'maker' && Array.isArray(listed.levels)) return listed.levels.length ? Object.freeze([...listed.levels]) : NO_LEVELS;
   const byModel = model && LEVELS_BY_MODEL[model];
   if (byModel) return byModel;
+  if (listed?.levelsFrom === 'guess' && Array.isArray(listed.levels)) return listed.levels.length ? Object.freeze([...listed.levels]) : NO_LEVELS;
   const byProvider = LEVELS_BY_PROVIDER[provider];
   if (byProvider) return byProvider;
   return LEVELS_BY_PROVIDER.openrouter;

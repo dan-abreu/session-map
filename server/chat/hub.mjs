@@ -45,6 +45,7 @@ import { loadStats } from '../ai/router.mjs';
 import { measureWork, directiveOf, sizeRequest } from '../ai/size.mjs';
 import { lastMermaidBlock, parseFlow } from '../web/flow.js';
 import { functionsOf } from '../ai/brainpanel.mjs';
+import { isClaudeModel } from '../ai/claude-models.mjs';
 import { weighOutside } from '../ai/brain-other.mjs';
 import { cerebroNote } from '../ai/cerebro-note.mjs';
 import { chatLevel } from '../ai/policy.mjs';
@@ -676,11 +677,10 @@ export function createChatHub({
   const wantsHaikuFor = (text) => wantsHaiku({ text, measured: sizeRequest({ text }) });
   // The part of a Cérebro row a Claude call may take (id154): its model and level only when the row is Claude's (or names
   // no AI) and the model is a Claude one; another company's model never reaches the Claude CLI, even with no AI named.
-  const CLAUDE_MODEL_RE = /^(?:haiku|sonnet|opus|fable|claude-[a-z0-9.-]+)$/;
   const claudeSide = (choice) => {
     if (!choice || (choice.provider && choice.provider !== 'auto' && choice.provider !== 'claude')) return {};
     return {
-      ...(typeof choice.model === 'string' && CLAUDE_MODEL_RE.test(choice.model) ? { model: choice.model } : {}),
+      ...(isClaudeModel(choice.model) ? { model: choice.model } : {}),
       ...(EFFORTS.includes(choice.effort) ? { effort: choice.effort } : {}),
     };
   };

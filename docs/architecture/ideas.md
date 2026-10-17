@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -747,3 +747,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - Left on Claude on purpose, with the numbers: search, reading, bulk and commit text (Haiku costs US$ 0.10 / 0.50 per million tokens, DeepSeek flash 0.30 / 1.20, and a hand-off to a copy of the repository is heavier than a read), the entry brain (about 2 of 13 messages reach it; no classification was measured for DeepSeek) and the talk (it is Claude Code itself).
   - Where it went: `or71`.
   - Status: done on 2026-10-16 (`or71`).
+- [x] The Cérebro lists every model of every AI, by its real name, as the VS Code picker does, and what is chosen there is what the call sends `id168`
+  - Asked: 2026-10-16 — "no cerebro senti falta dos modelos mesmo das IA, não ta profissional e quando estiver no cerebro tem que fazer as chamadas corretas dos modelos, aqui no vscode, tem todos os modelos, quero dessa forma no cerebro, de todas as IA"
+  - What it means: the model selector of a row showed a short built-in list with aliases and raw ids ("sonnet", "gpt-6-luna"). It now lists the whole list of the chosen AI as its maker gives it, with the real name ("Opus 5.5", "GPT-6.1 Sol", "DeepSeek V4 Pro"), the maker's note, the context, the price and the exact id the call sends. Claude's list is Claude Code's own (the one the VS Code picker is drawn from: 12 models, 4 current and 8 older versions); the others come from the provider's list, read with the owner's key (DeepSeek 2, Gemini 15 of 63 that answer a chat message, OpenAI 29 of 135). Lists are read once a day and by a "Ler as listas agora" button in the tab. Each row says the real name of its model, and a model the program has not measured says so.
+  - Calls: a model chosen there is saved as that exact id and reaches the call that row makes: the talk, the entry brain, the map's bulk work and the book take any model Claude Code lists (`--model`); a row run by Claude's helpers offers only the four the helper tool accepts, so no choice is silently replaced; Codex, Gemini CLI and Claude Code pointed at DeepSeek now get the row's model (and Codex its level) on their command line; a model read from a maker's list that the program has not seen is sent with the cautious request of its AI (no temperature for OpenAI, room for the thinking, no level field the model might refuse). Found in a real browser: choosing a Claude model on a row with no AI stored was refused (`bad-model`) and never saved; fixed.
+  - How to confirm it is done: the Cérebro lists the same Claude models as the VS Code picker, by name and in two groups; an AI with a key lists its own; choosing a model and a level on the talk row shows "Claude · Opus 4.8 · muito alto" and the row's note says the price and the call id; the "Listas de modelos" fold says where each list came from.
+  - Where it went: `or72`.
+  - Status: done on 2026-10-16 (`or72`; seen in a real browser on a separate copy of the program, with the real keys: the lists, the real names, a Claude and an OpenAI choice, the refresh button; 12 real calls on models the program had never listed all answered).

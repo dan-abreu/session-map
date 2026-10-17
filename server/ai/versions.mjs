@@ -32,7 +32,7 @@ const SNAPSHOT_RE = /preview|experimental|-exp(?:-|$)|latest|-\d{4}-\d{2}-\d{2}$
 // Names without a version number that stand for "the current one" (deepseek-flash): the line they follow.
 const ALIAS_FAMILIES = Object.freeze({ 'deepseek-flash': 'deepseek-v#-flash', 'deepseek-pro': 'deepseek-v#-pro', 'deepseek/deepseek-flash': 'deepseek/deepseek-v#-flash' });
 
-const LISTS = Object.freeze({
+export const LISTS = Object.freeze({
   openai: { url: 'https://api.openai.com/v1/models', headers: (key) => ({ Authorization: `Bearer ${key}` }), read: 'data', retire: 'shutdown_date' },
   deepseek: { url: 'https://api.deepseek.com/models', headers: (key) => ({ Authorization: `Bearer ${key}` }), read: 'data' },
   openrouter: { url: 'https://openrouter.ai/api/v1/models', headers: (key) => ({ Authorization: `Bearer ${key}` }), read: 'data', retire: 'expiration_date' },
@@ -87,7 +87,7 @@ function readPage(spec, body) {
 
 // The body as text, read with a limit: a declared length over it is refused unread, a stream is cut off the moment it
 // passes it (null). The tests' doubles may have only text().
-async function readBounded(res) {
+export async function readBounded(res) {
   const declared = Number(res.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > BODY_MAX_BYTES) {
     await res.body?.cancel?.().catch(() => {});

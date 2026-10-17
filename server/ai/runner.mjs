@@ -13,14 +13,15 @@ import { activeGroupOf, applyGroup } from './groups.mjs';
 import { isQuotaError, isQuotaPaused, markQuotaError, noteQuotaOk, preflight, quotaFile, quotaPause, readQuota } from './quota.mjs';
 import { BACKGROUND_PREFERENCE, enginesOf, resolveEngine } from './engine.mjs';
 import { levelsOf } from './efforts.mjs';
+import { isClaudeModel } from './claude-models.mjs';
 import { addOthersSpend } from '../budget.mjs';
 
 const TIMEOUT_MS = 90_000;
 const OUTPUT_MAX = 1_000_000;
 const HOUR = 60 * 60 * 1000;
 const CACHE_MAX = 1000;
-// The Cérebro's "background" row may name these for the map's own Claude calls (id146): anything else falls back.
-const CLAUDE_MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable']);
+// The Cérebro's "background" row may name any model Claude Code takes for the map's own Claude calls (id146, id168): an alias
+// or a full id; anything else falls back.
 const EFFORT_WORDS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 // How long an answer a job may need. The default (1024 tokens) fits a short label, not the titles and summaries of six chapters in
 // Portuguese: asked of DeepSeek it came back cut every time, the call was paid, and Claude did the work after it.
@@ -76,7 +77,7 @@ export function findClaude({ env = process.env, home = homedir(), platform = pro
 // Inherited CLAUDE* variables would tag the child as a VS Code conversation of the parent session.
 export const cleanEnv = (env) => Object.fromEntries(Object.entries(env).filter(([k]) => !/^(CLAUDE|MCP_CONNECTION_NONBLOCKING$)/i.test(k)));
 
-function spawnCapture(bin, args, { cwd, env, input, timeoutMs }) {
+export function spawnCapture(bin, args, { cwd, env, input, timeoutMs }) {
   const script = /\.(m?js|cjs)$/i.test(bin);
   return new Promise((resolve) => {
     let child;
@@ -336,7 +337,7 @@ export class AiQueue {
     // the legacy ai.model default stays under it.
     const chosen = this.#functionChoice(functionId);
     const onClaude = !chosen?.provider || chosen.provider === 'claude';
-    const model = onClaude && CLAUDE_MODELS.has(chosen?.model) ? chosen.model : this.model;
+    const model = onClaude && isClaudeModel(chosen?.model) ? chosen.model : this.model;
     const effort = onClaude && EFFORT_WORDS.has(chosen?.effort) ? chosen.effort : undefined;
     const res = await this.#run(prompt, { model, ...(effort ? { effort } : {}), cwd: aiRunnerDir(this.#smDir), schemaHint, bin: this.#bin });
     this.#spend(now, projectId, 'claude', res.costUSD);

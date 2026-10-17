@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runClaudeJSON } from '../ai/runner.mjs';
+import { isClaudeModel } from '../ai/claude-models.mjs';
 import { callServer, readTokenFile, serverBase } from '../ai/serverclient.mjs';
 import { writeAtomic } from '../store.mjs';
 import { acceptTidy, chaptersOf, parseLines, tidyDigest } from './book.mjs';
@@ -18,7 +19,6 @@ const SCHEMA = '{"title":"...","subjectChanged":false,"chapters":[{"n":1,"title"
 // The Cérebro's "book" row (id146, id156): the owner's model and level for the titles and summaries ride on the call, Haiku at
 // no named level when none. When the row names another company's AI, the server is asked first (it holds that AI's key, the
 // daily cap and the credit pause); when it cannot take it, the Claude call below does the work as it always did.
-const CLAUDE_MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable']);
 const EFFORT_WORDS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const smDirOf = () => process.env.SESSION_MAP_DIR || join(homedir(), '.claude', 'session-map');
 const bookRow = () => {
@@ -35,7 +35,7 @@ const bookChoice = () => {
   const f = bookRow();
   if (typeof f.provider === 'string' && f.provider !== 'auto' && f.provider !== 'claude') return {};
   return {
-    ...(CLAUDE_MODELS.has(f.model) ? { model: f.model } : {}),
+    ...(isClaudeModel(f.model) ? { model: f.model } : {}),
     ...(EFFORT_WORDS.has(f.effort) ? { effort: f.effort } : {}),
   };
 };

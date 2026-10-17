@@ -2,7 +2,7 @@
 // program's own functions, the agents that do the work, and the AIs that can take a job, each with the choice the
 // person made. A row is one line of text; its selectors open on a click, so nothing is drawn that nobody is changing.
 // Everything shown comes from the server's model (brainpanel.mjs); a change is saved whole and the scripts decide, never
-// a prompt.
+// a prompt. The model selector lists every model of the chosen AI as its maker lists it (id168), with the real name.
 export function createBrainView(ctx) {
   const { h, t, api, toast } = ctx;
   let model = null;
@@ -23,11 +23,18 @@ export function createBrainView(ctx) {
   };
 
   const AI_NAME = { claude: 'Claude', deepseek: 'DeepSeek', gemini: 'Gemini', openai: 'OpenAI', openrouter: 'OpenRouter' };
-  const MODEL_NAME = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };
   const aiName = (p) => (p === 'auto' ? t('brain.auto') : AI_NAME[p] ?? p);
-  const modelName = (m) => MODEL_NAME[m] ?? m;
+  // The real name of a model (the server says it: "Opus 5.5", "DeepSeek V4 Pro"), else the list's, else the id as it is.
+  const listOf = (provider) => model?.modelList?.[provider] ?? [];
+  const nameOfModel = (provider, id) => listOf(provider).find((m) => m.id === id)?.name ?? id;
   const levelName = (l) => text(`brain.lvl.${l}`) || l;
-  const pickOf = (f) => [aiName(f.provider), modelName(f.model), levelName(f.effort)].join(' · ');
+  // "Claude · Opus 5.5 · high"; when the model's name already starts with the AI's ("DeepSeek V4 Pro") the AI is not said twice.
+  const pickOf = (f) => {
+    const ai = aiName(f.provider);
+    const name = f.modelName ?? nameOfModel(f.provider, f.model);
+    const head = name && String(name).toLowerCase().startsWith(String(ai).toLowerCase()) ? [name] : [ai, name];
+    return [...head, levelName(f.effort)].filter(Boolean).join(' · ');
+  };
   // The one short word that says what a choice is: the policy's default, the person's own, or what the AI can do.
   const tagOf = (f) => ({ 'handoff-edits': text('brain.tag.edits'), 'handoff-answers': text('brain.tag.answers'), policy: text('brain.tag.default'), choice: text('brain.tag.mine') })[f.why] ?? '';
 
@@ -61,6 +68,8 @@ export function createBrainView(ctx) {
       '.br-ctrls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}',
       '.br-ctrls .dv-field{min-width:130px}',
       '.br-ctrls select{width:100%}',
+      '.br-ctrls .br-modelfield{min-width:220px;flex:1 1 280px;max-width:420px}',
+      '.br-modelnote{margin:8px 0 0;line-height:1.45;max-width:68ch}',
       '.br-lvl{display:flex;gap:6px;align-items:end;flex-wrap:wrap}',
       '.br-method{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:12.5px;max-width:68ch}',
       '.br-method li{margin:2px 0}',
@@ -135,20 +144,87 @@ export function createBrainView(ctx) {
         options.map((v) => h('option', { value: v, selected: v === value }, v === 'auto' ? autoLabel : nameOf(v)))));
   }
 
-  function modelOptionsOf(provider) {
-    const catalog = model?.modelCatalog ?? {};
-    const list = provider && provider !== 'auto' ? catalog[provider] ?? [] : [];
-    return list.length ? ['auto', ...list] : ['auto'];
+  // The models a row may take: the whole list of its AI; a row run by Claude's helpers takes only the ones the helper tool
+  // accepts. A server that sends no list (an older one) still gets the ids it always sent.
+  function modelEntriesOf(f) {
+    const provider = f.provider;
+    if (!provider || provider === 'auto') return [];
+    const list = model?.modelList?.[provider];
+    if (!Array.isArray(list)) return (model?.modelCatalog?.[provider] ?? []).map((id) => ({ id, name: id, group: 'current', verified: true }));
+    return provider === 'claude' && f.agent ? list.filter((m) => m.agent) : list;
+  }
+
+  const ctxText = (n) => {
+    if (n < 1e6) return `${Math.round(n / 1000)}K`;
+    const m = Math.round(n / 1e5) / 10;
+    return `${Number.isInteger(m) ? m : num(m, 1)}M`;
+  };
+  // What the maker and the program know about one model, in one line: the maker's words, the context, the price, the exact
+  // id the call sends, and an honest word for a model the program has not measured.
+  function factsOf(m) {
+    const parts = [];
+    const note = isPt() ? m.notePt : m.noteEn;
+    if (note) parts.push(note);
+    if (m.context) parts.push(t('brain.ctx', { n: ctxText(m.context) }));
+    parts.push(Number.isFinite(m.priceIn) && Number.isFinite(m.priceOut) ? t('brain.price', { a: num(m.priceIn), b: num(m.priceOut) }) : t('brain.noPrice'));
+    if (m.resolved) parts.push(t('brain.callId', { id: m.resolved }));
+    return parts.join(' · ');
+  }
+
+  // The groups the picker shows: the maker's own order inside each. OpenRouter groups by the maker of each model, since it
+  // lists hundreds.
+  function groupsOf(provider, entries) {
+    const label = (m) => {
+      if (provider === 'openrouter' && m.group === 'other') return m.maker ?? '';
+      if (provider === 'claude') return m.group === 'current' ? t('brain.group.current') : t('brain.group.older');
+      return m.group === 'current' ? t('brain.group.checked') : t('brain.group.listed');
+    };
+    const out = [];
+    for (const m of entries) {
+      const name = label(m);
+      let g = out.find((x) => x.label === name);
+      if (!g) out.push(g = { label: name, items: [] });
+      g.items.push(m);
+    }
+    return out;
+  }
+
+  // The model selector of a row: every model of the AI with its real name, and under it what is known about the chosen one.
+  function modelField(f) {
+    const entries = modelEntriesOf(f);
+    const domId = `br-${f.id}-model`;
+    const current = f.model ?? 'auto';
+    const chosen = entries.find((m) => m.id === current) ?? null;
+    const option = (m) => h('option', { value: m.id, selected: m.id === current, title: factsOf(m) }, m.gone ? `${m.name} (${t('brain.goneTag')})` : m.name);
+    const groups = groupsOf(f.provider, entries);
+    const body = groups.length > 1 ? groups.map((g) => h('optgroup', { label: g.label }, g.items.map(option))) : entries.map(option);
+    const stray = current !== 'auto' && !chosen && f.provider && f.provider !== 'auto' ? [h('option', { value: current, selected: true }, f.modelName ?? current)] : [];
+    return h('div', { class: 'dv-field br-modelfield' },
+      h('label', { for: domId }, t('brain.model')),
+      h('select', { id: domId, 'data-brain': `${f.id}:model`, onchange: (e) => saveFn(f.id, 'model', e.target.value) },
+        h('option', { value: 'auto', selected: current === 'auto' }, t('brain.autoModel')), body, stray));
+  }
+
+  // Under the controls: what is known about the chosen model, the way the maker lists it, and an honest word when the program
+  // has not measured it or the maker no longer lists it.
+  function modelNote(f) {
+    const chosen = modelEntriesOf(f).find((m) => m.id === (f.model ?? 'auto')) ?? null;
+    if (!chosen) return null;
+    const notes = [factsOf(chosen)];
+    if (chosen.verified === false) notes.push(t('brain.unverified'));
+    if (chosen.gone) notes.push(t('brain.gone'));
+    if (f.agent && f.provider === 'claude') notes.push(t('brain.agentOnly'));
+    return h('p', { class: 'br-muted br-modelnote', 'data-brain-note': f.id }, notes.join(' '));
   }
 
   // The controls of one row: the AI, the model and the level, shown only when its row is opened.
   function controlsOf(f) {
     const providers = model.engineOptions ?? ['auto', 'claude'];
     // The level list is the engine's own vocabulary, minus the top (Ultracode), which is its own button.
-    const levelOptions = ['auto', ...((Array.isArray(f.levelOptions) ? f.levelOptions : ['low', 'medium', 'high']).filter((l) => l !== 'max'))];
-    return h('div', { class: 'br-ctrls' },
+    const levelOptions = [...new Set(['auto', ...((Array.isArray(f.levelOptions) ? f.levelOptions : ['low', 'medium', 'high']).filter((l) => l !== 'max'))])];
+    const controls = h('div', { class: 'br-ctrls' },
       selector(f.id, 'provider', t('brain.motor'), f.provider, Array.isArray(f.providers) ? f.providers : providers, t('brain.auto'), aiName),
-      selector(f.id, 'model', t('brain.model'), f.model ?? 'auto', modelOptionsOf(f.provider), t('brain.autoModel')),
+      modelField(f),
       h('span', { class: 'br-lvl' },
         selector(f.id, 'effort', t('brain.level'), f.effort, levelOptions, t('brain.autoEffort'), levelName),
         f.topLevel
@@ -158,6 +234,7 @@ export function createBrainView(ctx) {
               onclick: () => saveFn(f.id, 'effort', f.effort === f.topLevel ? 'auto' : f.topLevel),
             }, f.topLevel === 'ultracode' ? t('brain.ultracode') : t('brain.maxBtn'))
           : null));
+    return h('div', {}, controls, modelNote(f));
   }
 
   // One line of the page: the name, the choice as plain text and what that choice is; it opens to change it.
@@ -250,12 +327,44 @@ export function createBrainView(ctx) {
       h('table', { class: 'br-ais' },
         h('thead', {}, h('tr', {}, ['brain.col.ai', 'brain.col.price', 'brain.col.score', 'brain.col.edits'].map((k) => h('th', { scope: 'col' }, t(k))))),
         h('tbody', {}, have.map((m) => h('tr', { 'data-brain-family': m.id },
-          cell('brain.col.ai', h('span', { class: 'br-ai-name' }, m.name), Number.isFinite(m.balanceUSD) ? h('small', {}, t('brain.balanceOf', { v: money(m.balanceUSD) })) : null),
+          cell('brain.col.ai', h('span', { class: 'br-ai-name' }, m.name),
+            listOf(m.id).length ? h('small', {}, t('brain.models.n', { n: listOf(m.id).length })) : null,
+            Number.isFinite(m.balanceUSD) ? h('small', {}, t('brain.balanceOf', { v: money(m.balanceUSD) })) : null),
           cell('brain.col.price', `US$ ${range(m, 'in')} / ${range(m, 'out')}`),
           cell('brain.col.score', m.measured ? [`${Math.round(m.measured.accuracy * 100)}%`, h('small', {}, t('brain.measuredN', { n: m.measured.n, cost: money(m.measured.costPerCorrectUSD) }))] : h('span', { class: 'br-muted' }, '—')),
           cell('brain.col.edits', editsOf(m.id)))))),
       without.length ? h('p', { class: 'br-protect' }, t('brain.noKeyAis', { names: without.join(', ') })) : null,
       model.rules?.length ? [h('h3', { class: 'br-sub' }, t('brain.protectTitle')), h('ul', { class: 'br-notes' }, model.rules.map((r) => h('li', {}, isPt() ? r.pt : r.en)))] : null);
+  }
+
+  // Where each model list came from and when, and the button that reads them now (id168). The lists are read once a day by
+  // themselves; the button is for the day a maker has just launched a model.
+  async function refreshLists(button) {
+    button.disabled = true;
+    button.textContent = t('brain.lists.busy');
+    const res = await api.refreshModels();
+    if (res.ok) {
+      model = res;
+      toast(t('brain.lists.done'));
+    } else toast(t('brain.saveFailed', { why: res.error ?? '—' }));
+    if (rootEl) await render(rootEl);
+  }
+
+  function listsFold() {
+    const info = model.modelsInfo ?? {};
+    const ids = [...new Set(['claude', ...(model.engineOptions ?? []).filter((p) => p !== 'auto')])];
+    const when = (iso) => new Date(iso).toLocaleString(isPt() ? 'pt-BR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
+    const line = (id) => {
+      const v = info[id] ?? {};
+      const bits = [t('brain.lists.line', { name: aiName(id), n: v.source === 'built-in' || !v.count ? listOf(id).length : v.count, src: t(`brain.lists.src.${v.source ?? 'built-in'}`) })];
+      if (v.checkedAt && v.source !== 'built-in') bits.push(t('brain.lists.when', { when: when(v.checkedAt) }));
+      if (v.ok === false) bits.push(t('brain.lists.failed', { why: v.error ?? '—' }));
+      return h('li', {}, bits.join(' · '));
+    };
+    return foldOf('lists', t('brain.lists.title'),
+      h('p', { class: 'br-hint' }, t('brain.lists.hint')),
+      h('ul', { class: 'dv-list br-ask-list' }, ids.map(line)),
+      h('div', { class: 'dv-tools' }, h('button', { type: 'button', class: 'btn small-btn', 'data-brain-refresh': '1', onclick: (e) => refreshLists(e.currentTarget) }, t('brain.lists.refresh'))));
   }
 
   // The person asks the brain's own engine to configure the routing (or40): the proposal is validated by the server
@@ -328,7 +437,7 @@ export function createBrainView(ctx) {
     const ok = lv.entries.filter((e) => e.ok).length;
     const when = lv.updatedAt ? ` · ${new Date(lv.updatedAt).toLocaleDateString(isPt() ? 'pt-BR' : 'en-US')}` : '';
     const rows = lv.entries.map((e) => h('li', { class: `br-checked${e.ok ? '' : ' is-bad'}` },
-      `${aiName(e.provider)} · ${e.model} · ${levelName(e.level)} — ${e.ok ? `${t('brain.checked.ok')}, ${money(e.costUSD)}` : `${t('brain.checked.bad')} ${e.error ?? ''}`}`));
+      `${aiName(e.provider)} · ${nameOfModel(e.provider, e.model)} · ${levelName(e.level)} — ${e.ok ? `${t('brain.checked.ok')}, ${money(e.costUSD)}` : `${t('brain.checked.bad')} ${e.error ?? ''}`}`));
     return foldOf('levels', t('brain.checked.sum', { n: lv.entries.length, ok, bad: lv.entries.length - ok }) + when,
       h('p', { class: 'br-hint' }, t('brain.checked.hint')),
       h('ul', { class: 'dv-list br-ask-list' }, rows));
@@ -348,6 +457,7 @@ export function createBrainView(ctx) {
       programSection(),
       agentsSection(),
       aisSection(),
+      listsFold(),
       configureFold(),
       checkedFold()));
   }

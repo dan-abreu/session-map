@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { POLICY, chatLevel } from './policy.mjs';
 import { PROVIDERS, publicCatalog, providerOf } from './providers.mjs';
+import { loadModels, modelFits, modelNameOf, modelsOf, modelsView, pageModels } from './models.mjs';
 import { LEVEL_UNION, levelsOf, topLevelOf } from './efforts.mjs';
 import { bulkModelOf, loadStats } from './router.mjs';
 import { othersSettings } from './others.mjs';
@@ -30,14 +31,16 @@ const CLAUDE_MODELS = Object.freeze([
   { name: 'Fable 5.1', in: 10, out: 50, tier: 'N3', id: 'fable' },
 ]);
 
-// The models each provider serves, for the tab's model selectors: the catalog of providers.mjs, plus Claude's own.
+// The models each provider serves, as ids: the list the maker gave (models.mjs: Claude Code's own for Claude, the maker's
+// API for the others), else what the program knows by name and price.
 export function modelCatalog() {
-  const out = { claude: CLAUDE_MODELS.map((m) => m.id) };
-  for (const p of publicCatalog()) out[p.id] = Object.keys(p.pricesUSDPerMTok ?? {}).sort();
+  const out = {};
+  for (const p of ['claude', ...Object.keys(PROVIDERS)]) out[p] = modelsOf(p).map((e) => e.id);
   return out;
 }
-const CATALOG = modelCatalog();
-const validModel = (provider, model) => Array.isArray(CATALOG[provider]) && CATALOG[provider].includes(model);
+// A model belongs to its AI when that AI lists it. A row run by Claude agents (it has task kinds) takes only the models the
+// Agent tool accepts, so the page never shows a choice the engine would silently replace.
+const validModel = (provider, model, rowId) => modelFits(provider, model, { agent: Boolean(functionById(rowId)?.kinds?.length) });
 
 const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const validProvider = (v) => v === 'claude' || Boolean(providerOf(v));
@@ -67,7 +70,8 @@ export function functionsOf(ai) {
     if (!functionById(id) || !isObject(c)) continue;
     const one = {};
     if (c.provider === 'auto' || validProvider(c.provider)) one.provider = c.provider;
-    if (c.model === 'auto' || (typeof c.model === 'string' && (one.provider && one.provider !== 'auto' ? validModel(one.provider, c.model) : true))) one.model = c.model;
+    // A model named with no AI is Claude's, the AI every row starts on.
+    if (c.model === 'auto' || (typeof c.model === 'string' && validModel(one.provider && one.provider !== 'auto' ? one.provider : 'claude', c.model, id))) one.model = c.model;
     if (c.effort === 'auto' || validEffort(c.effort)) one.effort = c.effort;
     if (Object.keys(one).length) out[id] = one;
   }
@@ -98,8 +102,10 @@ export function mergeFunctionChoice(ai, patch = {}) {
         } else if (!validEffort(c.effort)) return { ok: false, error: 'bad-effort' };
       }
       if (c.model !== undefined && c.model !== 'auto') {
-        const prov = c.provider ?? next[id]?.provider;
-        if (!validProvider(prov) || !validModel(prov, c.model)) return { ok: false, error: 'bad-model' };
+        // A row with no AI named is on Claude, as the page draws it: choosing its model sends the model alone.
+        const named = c.provider ?? next[id]?.provider;
+        const prov = !named || named === 'auto' ? 'claude' : named;
+        if (!validProvider(prov) || !validModel(prov, c.model, id)) return { ok: false, error: 'bad-model' };
       }
       if (c.provider !== undefined || c.model !== undefined || c.effort !== undefined) next[id] = { ...next[id] };
       if (c.provider !== undefined) next[id].provider = c.provider;
@@ -172,6 +178,8 @@ function resolveRow(fn, { settings, engines, choices, available, stats, models, 
 export function panelModel({
   smDir, ai = {}, keys = null, stats = null, quota = null, bin = null,
 }) {
+  // The lists the makers gave are read from their file before anything is drawn or checked (a no-op without the file).
+  if (smDir) loadModels(smDir);
   const keyProviders = keys ?? (smDir ? listKeys(smDir).map((k) => k.provider) : []);
   const settings = othersSettings(ai, keyProviders);
   const engines = enginesOf(ai);
@@ -201,7 +209,9 @@ export function panelModel({
   }
 
   const agentEngines = enginesStatus({ bin: bin ?? undefined });
-  const functions = AI_FUNCTIONS.map((fn) => resolveRow(fn, { settings, engines, choices, available, stats: measured, models: settings.models, status: agentEngines }));
+  // Each row says the real name of its model (id168): "Opus 5.5", "DeepSeek V4 Pro", never the alias or the raw id.
+  const functions = AI_FUNCTIONS.map((fn) => resolveRow(fn, { settings, engines, choices, available, stats: measured, models: settings.models, status: agentEngines }))
+    .map((f) => ({ ...f, modelName: f.provider && f.model ? modelNameOf(f.provider, f.model) : null }));
 
   const rowOf = (id) => functions.find((f) => f.id === id) ?? null;
   // The chips on top show the AI each engine row really runs on (the row's own choice), not the older switch behind it.
@@ -234,5 +244,10 @@ export function panelModel({
     { id: 'cap', warn: false, en: `Daily cap: US$ ${settings.dailyUSD} for all the other AIs together`, pt: `Teto diário: US$ ${settings.dailyUSD} para todas as outras IAs juntas` },
   ];
 
-  return { ok: true, matrix, functions, agents, agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: CATALOG, levels: smDir ? readLevels(smDir) : { updatedAt: null, entries: [] }, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
+  // The model list the selectors draw, for the AIs the page can offer (Claude, the ones with a key and the ones a row already
+  // names): the full list of each, with the real names, the notes of the maker, the price and the context.
+  const modelList = {};
+  for (const id of new Set(['claude', ...keyProviders, ...functions.map((f) => f.provider).filter((p) => p && p !== 'auto')])) modelList[id] = pageModels(id);
+
+  return { ok: true, matrix, functions, agents, agentEngines, rules, engines: effectiveEngines, engineOptions: ['auto', 'claude', ...keyProviders], modelCatalog: modelCatalog(), modelList, modelsInfo: smDir ? modelsView(smDir) : {}, levels: smDir ? readLevels(smDir) : { updatedAt: null, entries: [] }, ponytailLevels: PONYTAIL_BY_EFFORT, ponytail: ponytailMeasure() };
 }

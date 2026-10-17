@@ -99,19 +99,29 @@ const patchArgs = (choice) => {
   return file ? ['--patch', file] : [];
 };
 
+// The model and level of the Cérebro's row ride on the other CLIs too (id168): Codex takes -m for the model and a config
+// override for the reasoning effort, Gemini CLI takes -m (it has no level flag). The words are checked here, so a value the
+// page sent can never become anything but one argument; a level Codex has no word for (none, max) is left out.
+const CODEX_EFFORTS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
+const modelFlag = (choice) => (typeof choice?.model === 'string' && MODEL_RE.test(choice.model) ? ['-m', choice.model] : []);
+
 export function engineCommands({ deepseekToken = '', dsh = null } = {}) {
   return {
     openai: {
-      command: ({ brief }) => ({ command: 'codex', args: ['exec', '--full-auto', brief], env: {} }),
+      command: ({ brief, choice }) => ({
+        command: 'codex',
+        args: ['exec', ...modelFlag(choice), ...(CODEX_EFFORTS.has(choice?.effort) ? ['-c', `model_reasoning_effort="${choice.effort}"`] : []), '--full-auto', brief],
+        env: {},
+      }),
     },
     gemini: {
-      command: ({ brief }) => ({ command: 'gemini', args: ['-p', brief], env: {} }),
+      command: ({ brief, choice }) => ({ command: 'gemini', args: [...modelFlag(choice), '-p', brief], env: {} }),
     },
     deepseek: {
       // choice: the Cérebro row's {model, effort} for this work: the Harness runs on them (dshOverlay).
       command: ({ brief, choice }) => (dsh
         ? { command: dsh.command, args: [...dsh.args, '--profile', 'headless', ...patchArgs(choice), brief], env: dsh.env ?? {} }
-        : { command: 'claude', args: ['-p', brief, '--dangerously-skip-permissions'], env: { ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic', ANTHROPIC_AUTH_TOKEN: deepseekToken } }),
+        : { command: 'claude', args: ['-p', brief, ...modelFlag(choice).map((x) => (x === '-m' ? '--model' : x)), '--dangerously-skip-permissions'], env: { ANTHROPIC_BASE_URL: 'https://api.deepseek.com/anthropic', ANTHROPIC_AUTH_TOKEN: deepseekToken } }),
     },
   };
 }
