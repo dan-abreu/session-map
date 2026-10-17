@@ -31,7 +31,33 @@ test('a row on another AI is named with its kinds, model and level, and whether 
   assert.match(note, /ask_other_ai/);
   assert.match(note, /merge_other_ai/);
   assert.ok(note.startsWith(TAG_LINE), 'the tag line leads');
-  assert.ok(note.length < 1500, `${note.length} chars`);
+  assert.ok(note.length < 2000, `${note.length} chars`);
+});
+
+test('the work done by DeepSeek is reviewed by Claude and a defect goes back to the AI that wrote it', () => {
+  // The owner's table of 2026-10-16: DeepSeek writes almost everything, Claude only reviews.
+  const flash = { provider: 'deepseek', model: 'deepseek-v4-flash', effort: 'high' };
+  const pro = { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'high' };
+  const note = cerebroNote({ ai: aiWith({ plan: pro, risk: pro, docs: { ...flash, effort: 'low' }, code: flash, screen: flash, debug: flash }), status: edits });
+  assert.match(note, /- plan, risk \(plan, architecture, security, money, personal-data\): deepseek deepseek-v4-pro high, edits files/, 'rows with the same AI, model and level are one line');
+  assert.match(note, /- code, screen, debug \(code, test, screen, debug\): deepseek deepseek-v4-flash high, edits files/);
+  assert.match(note, /- docs \(docs\): deepseek deepseek-v4-flash low, edits files/);
+  assert.match(note, /goes back to the AI that wrote it/, 'Claude reviews and sends back');
+  assert.match(note, /After 2 rounds/);
+  assert.match(note, /\[review\] agent on Claude/);
+  assert.ok(note.length < 2000, `${note.length} chars`);
+  assert.ok(note.indexOf('goes back to the AI') < note.indexOf('Rows on another AI:'), 'the instructions come before the rows, so a cut only ever loses rows');
+});
+
+test('a very long table is cut in its rows, never in the instructions', () => {
+  const functions = {};
+  for (const [i, id] of ['plan', 'gather', 'docs', 'code', 'screen', 'debug', 'review', 'opinion', 'risk', 'agents'].entries()) {
+    functions[id] = { provider: 'deepseek', model: i % 2 ? 'deepseek-v4-pro' : 'deepseek-v4-flash', effort: ['off', 'low', 'high'][i % 3] };
+  }
+  const note = cerebroNote({ ai: aiWith(functions), status: edits });
+  assert.ok(note.length <= 2000, `${note.length} chars`);
+  assert.match(note, /goes back to the AI that wrote it/);
+  assert.match(note, /merge_other_ai/);
 });
 
 test('the rows the program runs itself (the entry brain, the book, the bulk work) are not the chat\'s to route', () => {

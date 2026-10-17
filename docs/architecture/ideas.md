@@ -741,3 +741,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the chooser, the picker's row and the reasons of the folders read in that register; the plain test passes.
   - Where it went: `mm71`.
   - Status: done on 2026-10-16 (`mm71`). The rest of the page keeps the voice of PRODUCT.md (plain, short, friendly): say if the whole page should change.
+- [x] The Cérebro set so DeepSeek does almost everything and Claude only reviews, sending the work back to be redone `id167`
+  - Asked: 2026-10-16 — "quero que deixe meu cerebro configurado, colocando deepseek para fazer quase tudo, deixando apenas coisas como rever o que ele fez, mas mandando ele refazer da maneira correta, porque ai sai mais barato"
+  - What it means: the owner's table in `config.json` now puts planning (DeepSeek v4-pro, high), documentation (v4-flash, low), code and tests, screens and debugging (v4-flash, high) and the high-risk row (v4-pro, high, as before) on DeepSeek, which edits files in an isolated copy through the DeepSeek Harness. Review stays on Claude (Sonnet, medium: 20 of 20 on the bench, against 14 of 20 for DeepSeek flash). The talk chat is told that a defect found in review goes back to the AI that wrote it, with the findings, and that Claude does not redo the work; after 2 rounds on one task it stops and tells him.
+  - Left on Claude on purpose, with the numbers: search, reading, bulk and commit text (Haiku costs US$ 0.10 / 0.50 per million tokens, DeepSeek flash 0.30 / 1.20, and a hand-off to a copy of the repository is heavier than a read), the entry brain (about 2 of 13 messages reach it; no classification was measured for DeepSeek) and the talk (it is Claude Code itself).
+  - Where it went: `or71`.
+  - Status: done on 2026-10-16 (`or71`).
