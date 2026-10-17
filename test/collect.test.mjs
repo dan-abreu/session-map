@@ -823,6 +823,24 @@ test('the owner moves a conversation to another project and part and renames it:
   } finally { cleanup(dir, smDir, join(shop, '..'), join(garden, '..')); }
 });
 
+test('a page chat the owner moved to another project is listed only there, not again in the project the page opened it in', async () => {
+  const dir = tmp();
+  const smDir = tmp();
+  const shop = repo(join(tmp(), 'acme-shop'), { arch: true });
+  const garden = repo(join(tmp(), 'garden'), { arch: true });
+  try {
+    writeChat(dir, { id: A, cwd: shop, title: 'Garden work opened in the shop', entrypoint: 'sdk-cli', prompts: ['plan the garden'] });
+    writeChat(dir, { id: B, cwd: shop, title: 'Stays here', prompts: ['fix the cart'] });
+    const shopId = (await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects.find((p) => p.name === 'acme-shop').id;
+    writeFileSync(join(smDir, 'page-chats.json'), JSON.stringify({ [A]: { projectId: shopId, title: 'Garden work opened in the shop', node: { kind: 'project' } } }));
+    writeFileSync(join(smDir, 'placements.json'), JSON.stringify({ [A]: { root: garden } }));
+    const byName = Object.fromEntries((await collect({ dir, smDir, now: NOW, isAlive: alive, ai: NO_AI })).projects.map((p) => [p.name, p]));
+    assert.deepEqual(byName['acme-shop'].conversations.map((r) => r.sessionId), [B]);
+    assert.deepEqual(byName.garden.conversations.map((r) => r.sessionId), [A]);
+    assert.deepEqual(byName.garden.visitors.map((v) => v.sessionId), [], 'no visitor copy of it born in the shop');
+  } finally { cleanup(dir, smDir, join(shop, '..'), join(garden, '..')); }
+});
+
 test('the owner\'s moves teach the AI: its prompt lists them as examples', async () => {
   const dir = tmp();
   const smDir = tmp();

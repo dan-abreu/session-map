@@ -400,7 +400,7 @@ function cutOffOf(row, page, summary, cutCtx) {
 // page's own older than the window, which stay resumable. Light rows: the map's chats carry the full detail.
 // parentId (or03): the mother recorded in lineage.json, or the one the page kept (an orchestrator's activity chat), else null;
 // never guessed from shared files, so the list nests only what session-map started from another chat.
-function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx, removed, lineage }) {
+function conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx, removed, lineage, readIds = new Set() }) {
   const onMap = new Map(chats.map((c) => [c.sessionId, c]));
   const motherOf = (id) => [lineage[id], pageChats[id]?.parentId].find((m) => typeof m === 'string' && UUID_RE.test(m) && m !== id) ?? null;
   const knownPart = (id) => (typeof id === 'string' && arch.parts.some((p) => p.id === id) ? id : null);
@@ -440,7 +440,7 @@ function conversationRows({ placed, chats, arch, pageChats, projectId, liveById,
     const cutOff = cutOffOf(row, page, s, cutCtx);
     return { ...row, waiting: row.waiting && !cutOff, cutOff };
   });
-  const seen = new Set([...fromTranscripts.map((r) => r.sessionId), ...removed]);
+  const seen = new Set([...fromTranscripts.map((r) => r.sessionId), ...removed, ...readIds]);
   const fromPage = Object.entries(pageChats)
     .filter(([id, c]) => UUID_RE.test(id) && !seen.has(id) && c?.projectId === projectId)
     .map(([sessionId, c]) => ({
@@ -571,7 +571,7 @@ async function buildProject(ctx, { root, items }) {
     const { sessionId, cwd } = x.item.summary;
     ctx.internals.set(sessionId, { projectId, root, cwd, pid: liveById.get(sessionId)?.pid ?? null, engine: x.engine ?? 'claude', path: x.item.ref.path });
   }
-  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed, lineage });
+  const conversations = conversationRows({ placed, chats, arch, pageChats, projectId, liveById, archived, titleOf, cutCtx: ctx.cut, removed, lineage, readIds: ctx.readIds });
   // A cut-off conversation (mm43) waits for nobody: the person had answered and its turn was running. Its question and its
   // card's items are behind them, so the Now strip, the waiting list and the count agree with the list's "Cut off".
   const cutIds = new Set(conversations.filter((r) => r.cutOff).map((r) => r.sessionId));
@@ -719,6 +719,9 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     placements: readPlacements(smDir),
   };
   const items = readItems(dir, smDir, now.getTime(), ctx.liveById, dshDir);
+  // A page chat whose transcript is read is listed where that transcript is grouped (the owner may have moved it), never
+  // again from page-chats.json in the project the page opened it in.
+  ctx.readIds = new Set(items.map((i) => i.summary.sessionId));
   // The plan's weekly and 5-hour limits, from the limit messages in the histories (wa09): the account's, not a project's.
   // One computation feeds the state and holds the background AI back (life.mjs) while a limit is hit.
   const limits = planLimits(items.flatMap((i) => [i.summary.limitHit?.weekly, i.summary.limitHit?.session]).filter(Boolean), now.getTime());
