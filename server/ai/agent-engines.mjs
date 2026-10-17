@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
+import { GEMINI_LEVELS, cliEnv, findCli, handoffArgs, writeGeminiAliases } from './clis.mjs';
 
 // Which engines can run a specialist today (id151, or62): each company's official agent, detected on the machine —
 // plain data for the Cérebro. claude: the Agent tool, held by the guard's hooks. codex (OpenAI) and gemini (Google):
@@ -99,24 +100,27 @@ const patchArgs = (choice) => {
   return file ? ['--patch', file] : [];
 };
 
-// The model and level of the Cérebro's row ride on the other CLIs too (id168): Codex takes -m for the model and a config
-// override for the reasoning effort, Gemini CLI takes -m (it has no level flag). The words are checked here, so a value the
-// page sent can never become anything but one argument; a level Codex has no word for (none, max) is left out.
-const CODEX_EFFORTS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
+// The model and level of the Cérebro's row ride on the other CLIs too (id168, id171): clis.mjs spells them for Codex (-m and
+// a config override for the effort) and for Gemini CLI (-m with an alias that carries the thinking level). Both programs
+// are run as `node <their script>` (their Windows launcher is a .cmd, which needs a shell), each with its own home under the
+// map's folder and the owner's key for the run. The words are checked there, so a value the page sent can never become
+// anything but one argument.
 const modelFlag = (choice) => (typeof choice?.model === 'string' && MODEL_RE.test(choice.model) ? ['-m', choice.model] : []);
 
-export function engineCommands({ deepseekToken = '', dsh = null } = {}) {
+// keys: {openai?, gemini?} the owner's keys for this run; smDir: where the programs keep their homes; cli(provider): the
+// program's script (findCli; the tests inject it).
+export function engineCommands({ deepseekToken = '', dsh = null, keys = {}, smDir = null, cli = findCli } = {}) {
+  const program = (provider) => ({ brief, choice }) => {
+    if (provider === 'gemini' && smDir && typeof choice?.model === 'string' && GEMINI_LEVELS.includes(choice?.effort)) writeGeminiAliases(smDir, [choice.model]);
+    return {
+      command: process.execPath,
+      args: [cli(provider) ?? provider, ...handoffArgs(provider, { brief, model: choice?.model, effort: choice?.effort })],
+      env: smDir ? cliEnv(smDir, provider, keys[provider] ?? '') : {},
+    };
+  };
   return {
-    openai: {
-      command: ({ brief, choice }) => ({
-        command: 'codex',
-        args: ['exec', ...modelFlag(choice), ...(CODEX_EFFORTS.has(choice?.effort) ? ['-c', `model_reasoning_effort="${choice.effort}"`] : []), '--full-auto', brief],
-        env: {},
-      }),
-    },
-    gemini: {
-      command: ({ brief, choice }) => ({ command: 'gemini', args: [...modelFlag(choice), '-p', brief], env: {} }),
-    },
+    openai: { command: program('openai') },
+    gemini: { command: program('gemini') },
     deepseek: {
       // choice: the Cérebro row's {model, effort} for this work: the Harness runs on them (dshOverlay).
       command: ({ brief, choice }) => (dsh

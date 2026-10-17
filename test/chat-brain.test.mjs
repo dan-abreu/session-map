@@ -45,7 +45,8 @@ async function withBrain(opts, fn) {
   const root = mkdtempSync(join(tmpdir(), 'sm-brain-root-'));
   const smDir = mkdtempSync(join(tmpdir(), 'sm-brain-sm-'));
   const log = join(smDir, 'argv.json');
-  const hub = createChatHub({ smDir, dir: root, bin: FAKE, env: { ...process.env, FAKE_LOG: log }, snapshot: async () => null, ...opts });
+  // No program of another AI unless a test names one: a test never starts a real Codex or Gemini.
+  const hub = createChatHub({ smDir, dir: root, bin: FAKE, env: { ...process.env, FAKE_LOG: log }, snapshot: async () => null, cliOf: () => null, ...opts });
   const state = { projects: [{ id: 'demo', name: 'demo', root, arch: { layers: [], parts: [] }, workCells: [], chats: [] }] };
   Object.defineProperty(state, INTERNALS, { value: { chats: new Map() }, enumerable: false });
   const argv = () => JSON.parse(readFileSync(log, 'utf8')).argv;

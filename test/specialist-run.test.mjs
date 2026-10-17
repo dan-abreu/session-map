@@ -29,7 +29,7 @@ async function withServer(specialistsOf, fn) {
   const exec = async (cmd, args) => { calls.push([cmd, ...(args ?? [])]); return { stdout: 'done' }; };
   const app = createApp({
     dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => ({ generatedAt: new Date().toISOString(), waitingCount: 0, projects: [] }),
-    helpers: {}, runAi: { exec, bin: (n) => n === 'codex', specialistsOf },
+    helpers: {}, runAi: { exec, bin: (n) => n === 'codex', specialistsOf, keyOf: async () => 'sk-test-key-1234' },
   });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   const { port } = app.address();
@@ -53,7 +53,8 @@ async function withServer(specialistsOf, fn) {
   }
 }
 
-const briefOf = (calls) => calls.find((c) => c[0] === 'codex')?.[3] ?? '';
+// Codex runs as `node <its script> exec … <brief>` (id171): the brief is the last argument.
+const briefOf = (calls) => calls.find((c) => c[0] === process.execPath && c.includes('exec'))?.at(-1) ?? '';
 
 test('roleBrief puts the card between the role line and the task, and is unchanged without a card', () => {
   const coder = roleOf('code');

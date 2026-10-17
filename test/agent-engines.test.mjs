@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { dshOverlay, engineCommands, enginesStatus, findDsh } from '../server/ai/agent-engines.mjs';
 
 // Which engines edit files today (id151, or62): each company's official agent, detected on the machine.
@@ -17,28 +20,40 @@ test('installed CLIs edit files; the rest answer through the API', () => {
 });
 
 test('the engine commands name each official agent; the DeepSeek token never lives in the module', () => {
-  const c = engineCommands({ deepseekToken: 'dk-secret' });
-  assert.equal(c.openai.command({ brief: 'x' }).command, 'codex');
-  assert.equal(c.gemini.command({ brief: 'x' }).command, 'gemini');
+  const c = engineCommands({ deepseekToken: 'dk-secret', cli: (p) => `C:/npm/${p}.js` });
+  // Codex and Gemini CLI are npm scripts: node runs them, never a shell with the brief in it (id171).
+  assert.equal(c.openai.command({ brief: 'x' }).command, process.execPath);
+  assert.equal(c.openai.command({ brief: 'x' }).args[0], 'C:/npm/openai.js');
+  assert.equal(c.gemini.command({ brief: 'x' }).args[0], 'C:/npm/gemini.js');
   const ds = c.deepseek.command({ brief: 'x' });
   assert.equal(ds.env.ANTHROPIC_BASE_URL, 'https://api.deepseek.com/anthropic');
   assert.equal(ds.env.ANTHROPIC_AUTH_TOKEN, 'dk-secret');
   assert.equal(engineCommands().deepseek.command({ brief: 'x' }).env.ANTHROPIC_AUTH_TOKEN, '', 'no token by default');
 });
 
-test("the model and level of the Cérebro's row ride on every engine's command, as single checked arguments (id168)", () => {
-  const c = engineCommands({ deepseekToken: 'dk' });
-  // Codex: -m for the model and a config override for the reasoning effort; a level Codex has no word for is left out.
-  assert.deepEqual(c.openai.command({ brief: 'do it', choice: { model: 'gpt-5.5', effort: 'high' } }).args, ['exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort="high"', '--full-auto', 'do it']);
-  assert.deepEqual(c.openai.command({ brief: 'do it', choice: { model: 'gpt-6-luna', effort: 'none' } }).args, ['exec', '-m', 'gpt-6-luna', '--full-auto', 'do it']);
-  assert.deepEqual(c.openai.command({ brief: 'do it' }).args, ['exec', '--full-auto', 'do it'], 'nothing chosen: the CLI keeps its own');
-  // Gemini CLI: -m, and no level flag.
-  assert.deepEqual(c.gemini.command({ brief: 'do it', choice: { model: 'gemini-2.5-pro', effort: 'high' } }).args, ['-m', 'gemini-2.5-pro', '-p', 'do it']);
+test("the model and level of the Cérebro's row ride on every engine's command, as single checked arguments (id168, id171)", () => {
+  const sm = mkdtempSync(join(tmpdir(), 'sm-eng-'));
+  const c = engineCommands({ deepseekToken: 'dk', keys: { openai: 'sk-open-1234', gemini: 'gm-key-1234' }, smDir: sm, cli: (p) => `C:/npm/${p}.js` });
+  const args = (p, choice) => c[p].command({ brief: 'do it', choice }).args.slice(1);
+  // Codex (checked on 0.163.0): -m, the effort as config, and its own review of each command in the copy.
+  const review = ['-c', 'approvals_reviewer="auto_review"', '-c', 'approval_policy="on-request"', '-c', 'sandbox_mode="workspace-write"'];
+  assert.deepEqual(args('openai', { model: 'gpt-5.5', effort: 'high' }), ['exec', '--skip-git-repo-check', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort="high"', ...review, 'do it']);
+  assert.deepEqual(args('openai', { model: 'gpt-6-luna', effort: 'none' }), ['exec', '--skip-git-repo-check', '-m', 'gpt-6-luna', ...review, 'do it'], 'a level Codex has no word for is left out');
+  assert.deepEqual(args('openai'), ['exec', '--skip-git-repo-check', ...review, 'do it'], 'nothing chosen: the CLI keeps its own');
+  const env = c.openai.command({ brief: 'x' }).env;
+  assert.equal(env.CODEX_API_KEY, 'sk-open-1234');
+  assert.equal(env.CODEX_HOME, join(sm, 'codex-home'), "its own home in the map's folder, never the owner's ~/.codex");
+  // Gemini CLI (checked on 0.64.0): the level rides an alias of its settings, written before the run.
+  assert.deepEqual(args('gemini', { model: 'gemini-2.5-pro', effort: 'high' }), ['-p', 'do it', '--skip-trust', '-m', 'sm-gemini-2.5-pro-high', '--approval-mode', 'yolo']);
+  const settings = JSON.parse(readFileSync(join(sm, 'gemini-home', '.gemini', 'settings.json'), 'utf8'));
+  assert.deepEqual(settings.modelConfigs.customAliases['sm-gemini-2.5-pro-high'].modelConfig, { model: 'gemini-2.5-pro', generateContentConfig: { thinkingConfig: { includeThoughts: true, thinkingBudget: 24576 } } }, '2.5 thinks by a budget');
+  assert.equal(c.gemini.command({ brief: 'x', choice: { model: 'gemini-3.8-flash', effort: 'low' } }).env.GEMINI_API_KEY, 'gm-key-1234');
+  assert.equal(JSON.parse(readFileSync(join(sm, 'gemini-home', '.gemini', 'settings.json'), 'utf8')).modelConfigs.customAliases['sm-gemini-3.8-flash-low'].modelConfig.generateContentConfig.thinkingConfig.thinkingLevel, 'LOW');
   // Claude Code pointed at DeepSeek: --model.
   assert.deepEqual(c.deepseek.command({ brief: 'do it', choice: { model: 'deepseek-v4-pro' } }).args, ['-p', 'do it', '--model', 'deepseek-v4-pro', '--dangerously-skip-permissions']);
   // A value that is not a plain model name never becomes an argument.
-  assert.deepEqual(c.openai.command({ brief: 'x', choice: { model: '--yolo; rm -rf', effort: 'high; x' } }).args, ['exec', '--full-auto', 'x']);
-  assert.deepEqual(c.gemini.command({ brief: 'x', choice: { model: '-m evil' } }).args, ['-p', 'x']);
+  assert.deepEqual(args('openai', { model: '--yolo; rm -rf', effort: 'high; x' }), ['exec', '--skip-git-repo-check', ...review, 'do it']);
+  assert.deepEqual(args('gemini', { model: '-m evil' }), ['-p', 'do it', '--skip-trust', '--approval-mode', 'yolo']);
 });
 
 test('the DeepSeek Harness is the DeepSeek engine when it is installed, before Claude Code pointed at it (id156)', () => {

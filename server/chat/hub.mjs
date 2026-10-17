@@ -23,6 +23,9 @@ import { summaryOf } from '../web/alerts.js';
 import { contextOf } from './context.mjs';
 import { FOCUS_KINDS, focusInputs } from '../foundation/practices-focus.mjs';
 import { buildArgs, preview, startDriver } from './driver.mjs';
+import { mirrorPath, startTurnDriver } from './turn-driver.mjs';
+import { CODEX_LEVELS, GEMINI_LEVELS, cliEnv, findCli, writeGeminiAliases } from '../ai/clis.mjs';
+import { STANCE } from '../ai/stance.mjs';
 import { firstPrompt, personsWords } from './prompt.mjs';
 import { createTidier, wantsTidy, withOriginal } from './tidy-words.mjs';
 import { pickMode, settingsMode } from './mode.mjs';
@@ -225,7 +228,7 @@ export function createChatHub({
   smDir, dir = claudeDir(), dshDir = null, bin, env = process.env, permissionTimeoutMs = PERMISSION_TIMEOUT_MS, idleMs = IDLE_MS, helperWrite, helperWalkMax = HELPER_WALK_MAX, eventsMax = EVENTS_MAX,
   spawner, onAlert = () => {}, arsenalUrl, conductorFacts, snapshot = takeSnapshot, askSnapshotMs = ASK_SNAPSHOT_MS,
   readState = null, changed = () => {}, orchestra: orchestraOptions = {}, chatsMax = CHATS_MAX, projectBudget = () => null, askHaiku = null, turnInputs = null, tidyText = null,
-  weighOther = weighOutside, keyOf = (provider) => getKey(smDir, provider),
+  weighOther = weighOutside, keyOf = (provider) => getKey(smDir, provider), cliOf = findCli,
 } = {}) {
   const chats = new Map();
   const bySession = new Map();
@@ -708,6 +711,10 @@ export function createChatHub({
   // ai: the AI the conversation runs on (id170). A conversation keeps the AI it started on (a conversation begun on Claude
   // cannot be read by DeepSeek: proved on 2026-10-17, HTTP 422), so a Claude one stays on the policy's level when the row
   // names another AI, and one on that AI takes the row's model and level, else its maker's strong model at high.
+  // The AIs that can run the talk: Claude; DeepSeek, which speaks Claude Code's protocol; OpenAI and Gemini through their own
+  // programs (Codex CLI, Gemini CLI), when they are installed (id171).
+  const PROGRAM_LEVELS = { openai: CODEX_LEVELS, gemini: GEMINI_LEVELS };
+  const talkable = (p) => Boolean(providerOf(p)?.talkEndpoint) || (Object.hasOwn(PROGRAM_LEVELS, p) && Boolean(cliOf(p)));
   const chatChoice = () => {
     try { return functionsOf(readJsonFile(join(smDir, 'config.json'), {})?.ai).chat ?? null; } catch { return null; }
   };
@@ -717,7 +724,8 @@ export function createChatHub({
       const p = providerOf(ai);
       const mine = choice?.provider === ai;
       const model = mine && typeof choice.model === 'string' ? canonicalModel(ai, choice.model) : p?.talkModel ?? null;
-      const effort = mine && ['low', 'medium', 'high', 'xhigh', 'max'].includes(choice.effort) ? choice.effort : 'high';
+      const words = PROGRAM_LEVELS[ai] ?? ['low', 'medium', 'high', 'xhigh', 'max'];
+      const effort = mine && words.includes(choice.effort) ? choice.effort : ai === 'openai' ? 'medium' : 'high';
       return { model, effort };
     }
     const own = claudeSide(choice);
@@ -726,7 +734,7 @@ export function createChatHub({
   // The AI a new talk starts on: the Cérebro's Conversa row, when it names an AI that speaks Claude Code's protocol.
   const talkAi = () => {
     const p = chatChoice()?.provider;
-    return typeof p === 'string' && p !== 'claude' && p !== 'auto' && providerOf(p)?.talkEndpoint ? p : 'claude';
+    return typeof p === 'string' && p !== 'claude' && p !== 'auto' && talkable(p) ? p : 'claude';
   };
   // What a process needs to speak to that AI instead of Claude: its address, the key (held in memory for this conversation
   // only, never written), and its models in the place of Claude's for the helpers the conversation starts.
@@ -782,6 +790,16 @@ export function createChatHub({
   // conversation under the same key, so the page keeps its stream. The message that asked for the move waits for it.
   function launch(chat, resume) {
     const run = runOf(chat);
+    if (PROGRAM_LEVELS[chat.ai]) {
+      // OpenAI and Gemini: their own program, one process per message, the conversation continued by its id (id171).
+      if (chat.ai === 'gemini' && run.model) writeGeminiAliases(smDir, [run.model]);
+      // The Cérebro note speaks of Claude Code's agents and tools, which these programs do not have: the stance alone rides.
+      return startTurnDriver({
+        provider: chat.ai, script: chat.bin, cwd: chat.cwd, env: { ...cleanEnv(env), ...cliEnv(smDir, chat.ai, chat.aiKey) },
+        onEvent: (evt) => onDriverEvent(chat, evt), session: resume, model: run.model, effort: run.effort, mode: chat.mode,
+        stance: STANCE, smDir, ...(spawner ? { spawner } : {}),
+      });
+    }
     const tail = [orchestra.prompt(chat), tailFor(run, smDir, conductorFacts, budgetLineOf(chat.projectId))].filter(Boolean).join('\n');
     return startDriver({
       bin: chat.bin,
@@ -1003,8 +1021,9 @@ ${prompt}`;
     const baseCostUSD = Number(listed?.costUSD) || 0;
 
     if ([...chats.values()].filter((c) => !c.ended).length >= chatsMax) return reply(429, { error: 'too-many-chats' });
-    const claude = bin !== undefined ? bin : findClaude();
-    if (!claude) return reply(503, { error: 'claude-not-found' });
+    // The program that runs the conversation: Claude Code, or OpenAI's and Gemini's own (id171).
+    const claude = PROGRAM_LEVELS[ai] ? cliOf(ai) : bin !== undefined ? bin : findClaude();
+    if (!claude) return reply(503, { error: PROGRAM_LEVELS[ai] ? 'cli-not-found' : 'claude-not-found', ...(PROGRAM_LEVELS[ai] ? { ai } : {}) });
     // Another AI needs its key for the whole conversation: read once, here, kept in memory with the conversation.
     let aiKey = null;
     if (ai !== 'claude') {
@@ -1108,6 +1127,8 @@ ${prompt}`;
   // The DeepSeek Harness keeps each as sessions/<project>/<sessionId>/session.vN.jsonl.zstd (deepseek.mjs picks the
   // newest generation); the returned path's suffix tells the reader which engine wrote it.
   function transcriptOf(sessionId) {
+    // A conversation on OpenAI or Gemini (id171): the hub's own mirror, in Claude Code's lines.
+    if (typeof sessionId === 'string' && existsSync(mirrorPath(smDir, sessionId))) return mirrorPath(smDir, sessionId);
     let folders = [];
     try { folders = readdirSync(join(dir, 'projects')); } catch { /* no claude folder */ }
     for (const folder of folders) {

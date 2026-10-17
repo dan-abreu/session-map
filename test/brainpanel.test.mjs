@@ -144,16 +144,22 @@ test('the panel serves which engine edits files today, injectable for the tests 
 test('the tab shows the AI each row really runs on (id155): the brain row\'s own choice, Claude alone for the talk, any AI for the book (id156)', () => {
   const smDir = mkdtempSync(join(tmpdir(), 'sm-brain-'));
   const ai = { others: { functions: { brain: { provider: 'deepseek' }, background: { provider: 'gemini', model: 'gemini-3.1-flash-lite' }, chat: { provider: 'deepseek', model: 'deepseek-v4-pro' } } } };
-  const byId = Object.fromEntries(panelModel({ smDir, ai, keys: ['deepseek', 'gemini'] }).functions.map((f) => [f.id, f]));
+  const byId = Object.fromEntries(panelModel({ smDir, ai, keys: ['deepseek', 'gemini'], cli: () => null }).functions.map((f) => [f.id, f]));
   assert.deepEqual([byId.brain.provider, byId.brain.why], ['deepseek', 'choice']);
   assert.deepEqual([byId.background.provider, byId.background.model], ['gemini', 'gemini-3.1-flash-lite']);
   // The talk runs where Claude Code runs (id170): Claude, or DeepSeek, which speaks its protocol; never Gemini.
   assert.deepEqual([byId.chat.provider, byId.chat.model, byId.chat.effort], ['deepseek', 'deepseek-v4-pro', 'high']);
   assert.deepEqual(byId.chat.providers, ['claude', 'deepseek']);
   assert.deepEqual(byId.chat.levelOptions, ['low', 'high', 'max'], 'DeepSeek\'s own levels, without "off": Claude Code has no word for it');
-  const gem = panelModel({ smDir, ai: { others: { functions: { chat: { provider: 'gemini', model: 'gemini-3.8-flash' } } } }, keys: ['gemini'] }).functions.find((f) => f.id === 'chat');
-  assert.deepEqual([gem.provider, gem.model, gem.providers], ['claude', 'opus', ['claude']], 'Gemini cannot run the talk: Claude, and its model never shows');
-  assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'gemini' } } }).error, 'unknown-provider');
+  const gem = panelModel({ smDir, ai: { others: { functions: { chat: { provider: 'gemini', model: 'gemini-3.8-flash' } } } }, keys: ['gemini'], cli: () => null }).functions.find((f) => f.id === 'chat');
+  assert.deepEqual([gem.provider, gem.model, gem.providers], ['claude', 'opus', ['claude']], 'without Gemini CLI, Gemini cannot run the talk: Claude, and its model never shows');
+  // With their own programs installed (id171), OpenAI and Gemini run the talk too, in the words those programs take.
+  const both = panelModel({ smDir, ai: { others: { functions: { chat: { provider: 'gemini', model: 'gemini-3.8-flash', effort: 'low' } } } }, keys: ['gemini', 'openai'], cli: (p) => `C:/npm/${p}.js` }).functions.find((f) => f.id === 'chat');
+  assert.deepEqual([both.provider, both.model, both.effort, both.providers], ['gemini', 'gemini-3.8-flash', 'low', ['claude', 'gemini', 'openai']]);
+  assert.deepEqual(both.levelOptions, ['low', 'medium', 'high']);
+  const gpt = panelModel({ smDir, ai: { others: { functions: { chat: { provider: 'openai', model: 'gpt-6.1-sol' } } } }, keys: ['openai'], cli: (p) => `C:/npm/${p}.js` }).functions.find((f) => f.id === 'chat');
+  assert.deepEqual([gpt.provider, gpt.model, gpt.effort, gpt.levelOptions], ['openai', 'gpt-6.1-sol', 'medium', ['low', 'medium', 'high', 'xhigh']], "Codex's words: no max for Sol");
+  assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'openrouter' } } }).error, 'unknown-provider');
   assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'off' } } }).error, 'bad-effort');
   assert.equal(mergeFunctionChoice({}, { functions: { chat: { provider: 'deepseek', model: 'deepseek-v4-pro', effort: 'max' } } }).ok, true);
   assert.equal(byId.book.providers, undefined, 'the book takes any AI with a key too');

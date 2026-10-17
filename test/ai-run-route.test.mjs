@@ -20,7 +20,7 @@ async function withServer(opts, fn) {
   const app = createApp({
     dir, smDir, chat: null, stateTtlMs: 0, collectFn: () => state,
     helpers: { backend },
-    runAi: { exec: opts.exec, bin: opts.bin, dshOf: opts.dshOf },
+    runAi: { exec: opts.exec, bin: opts.bin, dshOf: opts.dshOf, keyOf: opts.keyOf ?? (async (p) => (p === 'openai' || p === 'gemini' ? 'sk-test-key-1234' : null)) },
   });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   if (opts.strict || opts.config) writeFileSync(join(smDir, 'config.json'), JSON.stringify({ ...(opts.strict ? { guard: { strict: true } } : {}), ...(opts.config ?? {}) }));

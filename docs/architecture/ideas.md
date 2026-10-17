@@ -7,7 +7,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 ## Index
 
 - The picture of the project: id16
-- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170
+- The model, the orchestration and other AIs: id22, id97, id99, id23, id24, id25, id26, id28, id73, id93, id122, id123, id124, id127, id128, id129, id130, id131, id132, id133, id134, id135, id136, id137, id138, id139, id140, id168, id169, id170, id171
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
@@ -767,3 +767,10 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: Cérebro, Conversa: the AI list has Claude and DeepSeek; choose DeepSeek V4 Pro at high; a new chat answers with "DeepSeek V4 Pro" as its model.
   - Where it went: `or74`.
   - Status: done on 2026-10-17 (`or74`).
+- [x] The Cérebro the same for every AI: the talk on OpenAI and Gemini too, through their own programs, installed `id171`
+  - Asked: 2026-10-17 — "poxa claude vamos deixar o cerebro todos padronizado com IA e modelos e nivel de raicioncio Porque eu mando voce fazer e voce faz só pela metade ao inves de verificar como realmente deve ser. Porque voce colocou so o deepseek no chat, pode instalar o cli do codex e do gemini"
+  - What it means: Codex CLI 0.163.0 and Gemini CLI 0.64.0 installed (npm, official packages). The Conversa row offers Claude, DeepSeek, Gemini and OpenAI, each with its models and its own levels; every row of the tab has the same three fields (IA, Modelo, Nível de raciocínio), and the "one rule for all helpers" row offers every AI and, when it names one, puts every row of work on it. A talk on OpenAI or Gemini runs on its own program (one process per message, the conversation continued by its id), shows its words and its steps on the page, reopens from the map's mirror of it and is priced at that AI's price. The work handed to OpenAI or Gemini in an isolated copy now really runs (it could not before: the old command was a `.cmd` Node cannot start, and its flag `--full-auto` no longer exists).
+  - Proved on 2026-10-17: a whole conversation through the program's own chat on Codex (gpt-6.1-sol) and on Gemini (gemini-3.8-flash): it read a file, was continued, created a file, and reopened; the hand-over edited a file in an isolated copy and committed it on both; every level each program takes answered (Codex: GPT-6.1 Sol and GPT-5.5 low to xhigh, Luna; Gemini: 3.8 Flash, 3.5 Flash-Lite, 2.5 Pro, 2.5 Flash, 3.1 Pro low to high). Found and fixed on the way: Codex blocks every command unless its own review is named, and `exec resume` has no flag for it (config instead); Codex waits on an open stdin; Gemini 2.5 refuses a level and a budget together.
+  - Limits: in a talk on OpenAI or Gemini the program's own tools work (read, edit, run commands in the project), but session-map's tools, Claude's helpers and pasted pictures do not; a conversation keeps the AI it began on.
+  - Where it went: `or75`.
+  - Status: done on 2026-10-17 (`or75`).

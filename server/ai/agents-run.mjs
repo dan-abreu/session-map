@@ -45,7 +45,11 @@ export async function executeRun({ cwd, role, task, card = '', kind = role.kinds
     await run('git', ['worktree', 'add', '-b', plan.branch, plan.dir], { cwd });
     steps.push('worktree');
     const call = engine.command({ brief: plan.brief, dir: plan.dir, role, choice });
-    const ran = await run(call.command, call.args ?? [], { cwd: plan.dir, env: { ...process.env, ...(call.env ?? {}) }, timeout: RUN_TIMEOUT_MS, maxBuffer: RUN_MAX_BUFFER, windowsHide: true });
+    // The engine gets no input but its brief: its stdin is closed at once (Codex reads a piped stdin to its end before it
+    // starts, and an open one held it until the 15-minute cut, id171).
+    const running = run(call.command, call.args ?? [], { cwd: plan.dir, env: { ...process.env, ...(call.env ?? {}) }, timeout: RUN_TIMEOUT_MS, maxBuffer: RUN_MAX_BUFFER, windowsHide: true });
+    running?.child?.stdin?.end();
+    const ran = await running;
     steps.push('run');
     const answer = String(ran?.stdout ?? '').trim().slice(-ANSWER_MAX);
     // What the other AI wrote is committed in the copy, or the merge below would bring nothing back. Nothing changed:

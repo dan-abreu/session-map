@@ -3,7 +3,7 @@ import { entryGate, readGuardOpen } from '../chat/guard.mjs';
 import { executeRun, mergeRun } from './agents-run.mjs';
 import { engineCommands, enginesStatus, findDsh } from './agent-engines.mjs';
 import { getKey } from './keys.mjs';
-import { AI_FUNCTIONS, functionsOf } from './brainpanel.mjs';
+import { AI_FUNCTIONS, effectiveFunctionsOf } from './brainpanel.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { headerAuth } from './askroute.mjs';
@@ -64,14 +64,20 @@ export function createRunRoutes({ smDir, demo = false, token = '', backend = nul
         : specialistForFiles(body.files.map(String), loaded.arch, loaded.specialists);
       if (body.specialist !== undefined && !specialist) return { status: 400, body: { ok: false, error: 'unknown-specialist' } };
     }
-    const commands = engineCommands({ deepseekToken: token, dsh })[provider];
+    // OpenAI and Gemini run on their own programs with the owner's key for this run (id171): no key, no run.
+    const keys = {};
+    if (provider === 'openai' || provider === 'gemini') {
+      keys[provider] = (await keyFor(provider).catch(() => null)) ?? '';
+      if (!keys[provider]) return { status: 400, body: { ok: false, error: 'no-key', note: `no ${provider} key saved` } };
+    }
+    const commands = engineCommands({ deepseekToken: token, dsh, keys, smDir })[provider];
     const engine = { command: commands.command };
     if (body.tests && typeof body.tests === 'object' && typeof body.tests.command === 'string') {
       engine.tests = { command: body.tests.command, args: Array.isArray(body.tests.args) ? body.tests.args : [] };
     }
     // The model and level the owner chose in the Cérebro for this kind of work ride on the run, when that row names this AI.
     const row = AI_FUNCTIONS.find((f) => (f.kinds ?? []).includes(role.kinds[0]));
-    const picked = row ? functionsOf(configAi())[row.id] : null;
+    const picked = row ? effectiveFunctionsOf(configAi())[row.id] : null;
     const choice = picked && picked.provider === provider ? { model: picked.model, effort: picked.effort } : null;
     const out = await executeRun({ cwd: body.cwd, role, task, card: specialist ? specialistCard(specialist) : '', kind: role.kinds[0], engine, choice, open: open(), ...(exec ? { exec } : {}), now: now() });
     if (out.ok) runs.set(out.runId, { run: out, cwd: body.cwd, provider, at: now() });

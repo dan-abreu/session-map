@@ -13,6 +13,10 @@ import { PONYTAIL_BY_EFFORT } from './ponytail-levels.mjs';
 import { ponytailMeasure } from '../bench/ponytail.mjs';
 import { AGENTS } from './agents.mjs';
 import { enginesStatus } from './agent-engines.mjs';
+import { CODEX_LEVELS, GEMINI_LEVELS, findCli } from './clis.mjs';
+
+// The AIs whose own program can run the talk (id171), and the level words that program takes.
+const PROGRAM_LEVELS = Object.freeze({ openai: CODEX_LEVELS, gemini: GEMINI_LEVELS });
 
 // The Cérebro panel's model (id124, or39): one mechanical place that turns the config, the policy (policy.json), the
 // function registry (functions.json), the measured results and the credit state into what the tab draws. No prompt
@@ -80,6 +84,24 @@ export function functionsOf(ai) {
   return out;
 }
 
+// The choices as they run (id171): the "one rule for all helpers" row (agents) is over every row of work a helper does, as
+// the tab says. A rule that names an AI puts every such row on it, with the rule's model and level; a rule of model or level
+// alone changes that much of each row. Every reader of the rows of work reads them here, so the tab and the run agree.
+export function effectiveFunctionsOf(ai) {
+  const own = functionsOf(ai);
+  const rule = own.agents;
+  if (!rule || !Object.keys(rule).some((k) => rule[k] !== undefined && rule[k] !== 'auto')) return own;
+  const out = { ...own };
+  for (const f of AI_FUNCTIONS) {
+    if (!f.kinds?.length || f.id === 'agents') continue;
+    const mine = own[f.id] ?? {};
+    const named = rule.provider && rule.provider !== 'auto';
+    const next = named ? { provider: rule.provider, ...(rule.model ? { model: rule.model } : {}), ...(rule.effort ? { effort: rule.effort } : {}) } : { ...mine, ...(rule.model ? { model: rule.model } : {}), ...(rule.effort ? { effort: rule.effort } : {}) };
+    out[f.id] = next;
+  }
+  return out;
+}
+
 // Merge the page's patch into the ai part of config.json: {functions: {id: {provider?, effort?}}}. 'auto' removes the
 // line (the default needs none). Unknown functions, providers or efforts refuse the whole patch.
 export function mergeFunctionChoice(ai, patch = {}) {
@@ -97,7 +119,7 @@ export function mergeFunctionChoice(ai, patch = {}) {
       if (id !== 'auto' && !functionById(id)) return { ok: false, error: 'unknown-function' };
       if (c.provider !== undefined && c.provider !== 'auto' && !validProvider(c.provider)) return { ok: false, error: 'unknown-provider' };
       // The talk runs where Claude Code runs: on Claude, or on an AI that speaks its protocol (id170).
-      if (id === 'chat' && c.provider !== undefined && !['auto', 'claude'].includes(c.provider) && !providerOf(c.provider)?.talkEndpoint) return { ok: false, error: 'unknown-provider' };
+      if (id === 'chat' && c.provider !== undefined && !['auto', 'claude'].includes(c.provider) && !providerOf(c.provider)?.talkEndpoint && !PROGRAM_LEVELS[c.provider]) return { ok: false, error: 'unknown-provider' };
       if (id === 'chat' && c.effort === 'off') return { ok: false, error: 'bad-effort' };
       if (c.effort !== undefined && c.effort !== 'auto') {
         const prov = c.provider ?? next[id]?.provider;
@@ -136,7 +158,7 @@ function measuredOf(stats, provider) {
 }
 
 // One row of the routing table: the function with the engine and level the scripts resolved for it.
-function resolveRow(fn, { settings, engines, choices, available, stats, models, status }) {
+function resolveRow(fn, { settings, engines, choices, available, stats, models, status, cli = findCli }) {
   const choice = choices[fn.id] ?? {};
   const row = { id: fn.id, order: fn.order, label: fn.en.label, labelPt: fn.pt.label, does: fn.en.does, doesPt: fn.pt.does };
   if (fn.note) { row.note = fn.note.en; row.notePt = fn.note.pt; }
@@ -148,14 +170,16 @@ function resolveRow(fn, { settings, engines, choices, available, stats, models, 
     // The level the chat starts on is this row's, else the policy's chat row (the default, never the entry brain's): the
     // tab says which of the two it is, so a default never looks like a choice.
     const fallback = chatLevel();
-    // Claude, and every AI with a key that speaks Claude Code's protocol (id170: DeepSeek).
-    const talkers = ['claude', ...available.filter((p) => p !== 'claude' && providerOf(p)?.talkEndpoint)];
+    // Claude, every AI with a key that speaks Claude Code's protocol (id170: DeepSeek), and the AIs whose own program is
+    // installed (id171: Codex CLI for OpenAI, Gemini CLI for Gemini).
+    const talkers = ['claude', ...available.filter((p) => p !== 'claude' && (providerOf(p)?.talkEndpoint || (PROGRAM_LEVELS[p] && cli(p))))];
     const other = choice.provider && choice.provider !== 'claude' && choice.provider !== 'auto' ? choice.provider : null;
     if (other && talkers.includes(other)) {
       const model = choice.model ?? providerOf(other).talkModel;
-      // Its levels are the maker's, without "off": Claude Code has no word for thinking switched off.
-      const levels = levelsOf(other, model).filter((l) => l !== 'off' && l !== 'auto');
-      return { ...row, provider: other, providers: talkers, model, effort: levels.includes(choice.effort) ? choice.effort : levels.includes('high') ? 'high' : levels[0] ?? null, levelOptions: levels, topLevel: null, why: 'choice' };
+      // Its levels are the maker's that the program running it takes: Claude Code has no "off", Codex and Gemini CLI their own words.
+      const levels = levelsOf(other, model).filter((l) => l !== 'off' && l !== 'auto' && (!PROGRAM_LEVELS[other] || PROGRAM_LEVELS[other].includes(l)));
+      const fallbackEffort = other === 'openai' ? 'medium' : 'high';
+      return { ...row, provider: other, providers: talkers, model, effort: levels.includes(choice.effort) ? choice.effort : levels.includes(fallbackEffort) ? fallbackEffort : levels[0] ?? null, levelOptions: levels, topLevel: null, why: 'choice' };
     }
     const model = other ? fallback.model : choice.model ?? fallback.model;
     return { ...row, provider: 'claude', providers: talkers, model, effort: choice.effort ?? fallback.effort, levelOptions: levelsOf('claude', model), topLevel: topLevelOf('claude', model), why: choice.model || choice.effort ? 'choice' : 'policy' };
@@ -193,14 +217,16 @@ function resolveRow(fn, { settings, engines, choices, available, stats, models, 
 // The whole model the tab draws. smDir: the map's storage (stats, quota, keys read from it); every input injectable
 // for tests. now: unused today, kept for the balance freshness the page will show.
 export function panelModel({
-  smDir, ai = {}, keys = null, stats = null, quota = null, bin = null,
+  smDir, ai = {}, keys = null, stats = null, quota = null, bin = null, cli = findCli,
 }) {
   // The lists the makers gave are read from their file before anything is drawn or checked (a no-op without the file).
   if (smDir) loadModels(smDir);
   const keyProviders = keys ?? (smDir ? listKeys(smDir).map((k) => k.provider) : []);
   const settings = othersSettings(ai, keyProviders);
   const engines = enginesOf(ai);
-  const choices = functionsOf(ai);
+  const choices = effectiveFunctionsOf(ai);
+  // The rule row itself shows what was chosen for it, not what it hands the others.
+  choices.agents = functionsOf(ai).agents;
   const measured = stats ?? (smDir ? loadStats(smDir) : []);
   const qstate = quota ?? (smDir ? readQuota(smDir) : { providers: {} });
   const available = [...keyProviders, 'claude'];
@@ -227,7 +253,7 @@ export function panelModel({
 
   const agentEngines = enginesStatus({ bin: bin ?? undefined });
   // Each row says the real name of its model (id168): "Opus 5.5", "DeepSeek V4 Pro", never the alias or the raw id.
-  const functions = AI_FUNCTIONS.map((fn) => resolveRow(fn, { settings, engines, choices, available, stats: measured, models: settings.models, status: agentEngines }))
+  const functions = AI_FUNCTIONS.map((fn) => resolveRow(fn, { settings, engines, choices, available, stats: measured, models: settings.models, status: agentEngines, cli }))
     .map((f) => ({ ...f, modelName: f.provider && f.model ? modelNameOf(f.provider, f.model) : null }));
 
   const rowOf = (id) => functions.find((f) => f.id === id) ?? null;

@@ -265,7 +265,9 @@ export function createBrainView(ctx) {
   function explainOf(f) {
     const why = text(`brain.why.${f.why}`);
     const note = (f.note || f.notePt) ? (isPt() ? f.notePt : f.note) : '';
-    const chat = f.id === 'chat' ? (f.provider && f.provider !== 'claude' ? t('brain.talkOther', { ai: aiName(f.provider) }) : t('brain.chatNote')) : '';
+    const PROGRAM = { openai: 'Codex CLI', gemini: 'Gemini CLI' };
+    const chat = f.id !== 'chat' ? '' : !f.provider || f.provider === 'claude' ? t('brain.chatNote')
+      : PROGRAM[f.provider] ? t('brain.talkProgram', { ai: aiName(f.provider), program: PROGRAM[f.provider] }) : t('brain.talkOther', { ai: aiName(f.provider) });
     return [why.length > 24 ? why : '', chat, note].filter(Boolean).map((s) => h('p', { class: 'br-does' }, s));
   }
 
@@ -310,7 +312,7 @@ export function createBrainView(ctx) {
         },
         h('summary', {}, t('brain.generalTitle')),
         h('p', { class: 'br-does' }, t('brain.generalHint')),
-        controlsOf({ ...general, providers: ['auto', 'claude'], ...(unset ? { provider: 'auto', model: 'auto', effort: 'auto' } : {}) }))
+        controlsOf({ ...general, providers: model.engineOptions ?? ['auto', 'claude'], ...(unset ? { provider: 'auto', model: 'auto', effort: 'auto' } : {}) }))
       : null;
     return h('section', {},
       h('h2', { class: 'br-sec' }, t('brain.helpersTitle')),

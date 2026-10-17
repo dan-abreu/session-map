@@ -19,7 +19,7 @@ const fakeH = (tag, attrs = {}, ...children) => ({
 const all = (el) => (typeof el === 'string' ? [] : [el, ...el.children.flatMap(all)]);
 const byAttr = (root, k, v) => all(root).find((e) => e.attrs?.[k] === v);
 
-function setup({ lang = 'pt-BR', ai = {}, keys = ['openai', 'deepseek'], lists = true } = {}) {
+function setup({ lang = 'pt-BR', ai = {}, keys = ['openai', 'deepseek'], lists = true, cli = () => null } = {}) {
   clearListed();
   const smDir = mkdtempSync(join(tmpdir(), 'sm-brainview-'));
   if (lists) {
@@ -33,7 +33,7 @@ function setup({ lang = 'pt-BR', ai = {}, keys = ['openai', 'deepseek'], lists =
       deepseek: { checkedAt: '2026-10-16T12:00:00Z', ok: true, models: deepseekEntries({ data: [{ id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', context_window: 1048576, effort: { supported_levels: ['low', 'high', 'max'] } }, { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', context_window: 1048576 }] }) },
     } }));
   }
-  const panel = panelModel({ smDir, ai, keys });
+  const panel = panelModel({ smDir, ai, keys, cli });
   const saved = [];
   const t = translator(lang);
   const api = { brain: async () => panel, setBrain: async (b) => { saved.push(b); return panel; }, refreshModels: async () => { saved.push('refresh'); return panel; }, brainConfig: async () => ({ ok: false }) };

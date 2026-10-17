@@ -1,4 +1,4 @@
-import { AI_FUNCTIONS, functionsOf } from './brainpanel.mjs';
+import { AI_FUNCTIONS, effectiveFunctionsOf } from './brainpanel.mjs';
 import { enginesStatus } from './agent-engines.mjs';
 import { KINDS } from './policy.mjs';
 
@@ -25,7 +25,7 @@ const probe = () => {
 // -> the note text: the tag line always, and the table of the rows on another AI when there are any. ai: config.json's ai
 // part; status: enginesStatus' answer (injected by the tests).
 export function cerebroNote({ ai, status } = {}) {
-  const choices = functionsOf(ai);
+  const choices = effectiveFunctionsOf(ai);
   const named = AI_FUNCTIONS
     .filter((f) => WORK_ROWS.has(f.id))
     .map((f) => ({ f, c: choices[f.id] }))

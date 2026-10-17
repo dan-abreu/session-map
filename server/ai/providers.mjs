@@ -71,6 +71,8 @@ export const PROVIDERS = Object.freeze({
     goodFor: 'Google AI, fast and low-cost, for short and repetitive questions.',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
     defaultModel: 'gemini-3.1-flash-lite',
+    // The talk (id171) runs on Gemini CLI, its own program (clis.mjs): this model when the Conversa row names none.
+    talkModel: 'gemini-3.8-flash',
     keyUrl: 'https://aistudio.google.com/apikey',
     privacyNote: 'On the free tier Google may use what is sent to improve its products: use a key from a project with billing turned on.',
     // Google says these prices double from 2027-01-01. The 2.5 family is only served to past users: not offered.
@@ -98,6 +100,8 @@ export const PROVIDERS = Object.freeze({
     goodFor: 'Luna: cheap bulk labels from a fixed answer list (it guesses rather than say "I do not know", so Claude checks it). Sol: a second opinion from another AI family.',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     defaultModel: 'gpt-6-luna',
+    // The talk (id171) runs on Codex CLI, its own program (clis.mjs): this model when the Conversa row names none.
+    talkModel: 'gpt-6.1-sol',
     keyUrl: 'https://platform.openai.com/api-keys',
     privacyNote: 'API data is not used for training unless you opt in, and is kept up to 30 days for abuse monitoring. Storage in Brazil is not offered.',
     // No cost comes back in the reply: it is worked out from the tokens used.
