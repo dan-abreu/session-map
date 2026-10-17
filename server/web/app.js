@@ -27,6 +27,7 @@ import { createMenu } from './menu.js';
 import { orchChip, orchSection, orchState } from './orchview.js';
 import { budgetSection } from './budgetview.js';
 import { createProjectPicker } from './picker.js';
+import { openFolderPicker } from './folderpick.js';
 import { createLivePanel, workingIn, livePaths, captionsAt, stepWords, placeWords, modelName } from './live.js';
 import { agentDots, dotsAt, useTeamHues, workflowView } from './workflows.js';
 import { createAlerts } from './alerts.js';
@@ -1399,6 +1400,16 @@ async function openNewProject() {
   return nameInput.focus();
 }
 
+// The folders his projects live in (id164): he walks the PC's folders, picks one, and every git repository under it is a
+// project; the page reads its projects again at once.
+function openFolders() {
+  return openFolderPicker({
+    dialog: $('#folderDialog'), h, t: () => t, icon, api, toast, errorText,
+    roots: () => state?.projectsRoot ?? [],
+    onSaved: () => poll(),
+  });
+}
+
 function boxCount(node) {
   const n = convCounts.get(node.id);
   return n ? { n, label: t.count('convs.count', n), pressed: convs?.filterNode() === node.id } : null;
@@ -2577,7 +2588,7 @@ function wire() {
   picker = createProjectPicker({
     root: $('#projectPicker'), button: $('#project'), list: $('#projectList'), name: $('#projectName'), h, t: () => t, icon,
     onPick: (id) => setProject(id),
-    onNew: openNewProject, canNew: () => !lookMode,
+    onNew: openNewProject, onFolders: openFolders, canNew: () => !lookMode,
   });
   live = createLivePanel({
     root: $('#liveList'), button: $('#liveBtn'), h, t: () => t, icon, relative,

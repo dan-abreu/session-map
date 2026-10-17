@@ -11,7 +11,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
-- Clarity and polish: id56, id121, id126, id161, id162, id163
+- Clarity and polish: id56, id121, id126, id161, id162, id163, id164
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115, id116
@@ -723,3 +723,9 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: with `"projectsRoot": "C:/dev"`, the picker lists only what is inside C:/dev (session-map, cverino, surigo, dnd_mmorpg) and "danie" waits behind the row with the reason "fora da pasta dos seus projetos"; without the setting nothing changes; the cost still counts.
   - Where it went: `mm69`.
   - Status: done on 2026-10-16 (`mm69`; checked by running the collector on his real history with the setting: `danie` is "outside", the four projects are not). The running server needs its restart.
+- [x] Pick a folder anywhere on the PC, like VS Code's Open Folder, and the repositories inside it become the projects `id164`
+  - Asked: 2026-10-16 — "quero que encontre repositorios que está dentro da pasta que eu selecionar, pode ser onde quiser dentro do pc, mas mostrar a pasta, igual é aqui no vscode"
+  - What it means: a folder chooser in the page (the project list gets a row "Pastas dos projetos…"): it opens on the drives and the home folder, he walks into folders one at a time (a repository wears a "git" mark), sees the repositories found inside the folder he is in, and picks it with "Usar esta pasta". The server looks for the git repositories under every picked folder (four levels, 80 repositories, 5000 folder reads at most; dependency, system and hidden folders passed by; a repository is not walked into; a linked worktree is not a project) and lists each as a project with no conversation needed. The choice is kept in `projectsRoot` of `config.json` (`id163`); a repository under a picked folder is never put away, wherever the folder sits.
+  - How to confirm it is done: the row opens the chooser; walking from a drive to a folder with repositories lists them ("Achei 3 repositórios aqui dentro: …"); "Usar esta pasta" keeps it and the repositories show in the list within a poll; "Tirar" takes a folder out; a network path, a missing folder and the look-only link are refused; the routes need the page's token.
+  - Where it went: `mm70`.
+  - Status: done on 2026-10-16 (`mm70`; seen in a real browser on a separate copy of the program, reading the real disk: 3 repositories found in the dev folder and 4 from the drive's root in about a second).

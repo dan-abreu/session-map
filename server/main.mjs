@@ -35,6 +35,8 @@ import { lookState } from './lookstate.mjs';
 import { createCatalogRefresher, setBackground, setTidy, sweepable, tidyOn } from './background.mjs';
 import { continueProjectMonth, monthOf, setProjectBudget } from './budget.mjs';
 import { githubStatus, newProject, suggestParent } from './newproject.mjs';
+import { findRepos, folderError, listFolders, setProjectsRoot } from './folders.mjs';
+import { projectsRootsOf } from './scratch.mjs';
 import { projectIdOf } from './paths.mjs';
 import { createChatHub } from './chat/hub.mjs';
 import { setUserMode, setUserPlugin, undoUserMode, userModeState } from './chat/mode.mjs';
@@ -85,6 +87,7 @@ const NEW_PROJECT_ERRORS = {
   'bad-name': 400, 'bad-parent': 400, 'bad-github': 400, 'bad-repo-name': 400, 'folder-exists': 409, 'repo-exists': 409, 'github-not-ready': 409, 'github-user-changed': 409, 'github-unreachable': 502,
   'config-unreadable': 409, 'folder-failed': 500,
 };
+const FOLDER_ERRORS = { 'bad-folder': 400, 'not-a-folder': 404, 'no-access': 403, 'bad-roots': 400, 'config-unreadable': 409 };
 const FLOW_ERRORS = {
   'not-flowchart': 400, 'empty-flowchart': 400, 'fence-in-drawing': 400, 'view-not-importable': 400, 'bad-path': 400, 'arch-not-here': 409, 'no-arch': 409,
   // what care.applyOp may answer (fd14)
@@ -554,6 +557,32 @@ export function createApp({
     return send(res, status, result.ok ? { ...result, projectId: projectIdOf(result.root) } : result);
   }
 
+  // The folder browser (id164): GET /api/folders?path= lists the folders inside one (none: the drives and home), GET
+  // /api/folders/repos?path= the git repositories under it; POST /api/settings/projects-root {roots} keeps the folders he
+  // picked, and the next read of the projects lists every repository in them. Folder names only, never a file; the
+  // page's token, never the look-only key (it is not on the allow-list).
+  async function foldersRoute(req, res, url) {
+    if (demo) throw new HttpError(403, 'demo');
+    if (!sameToken(cookieToken(req), token)) throw new HttpError(401, 'token-required');
+    if (url.pathname === '/api/settings/projects-root') {
+      if (req.method === 'GET') return send(res, 200, { ok: true, roots: projectsRootsOf(readJsonFile(join(smDir, 'config.json'), {}) ?? {}) });
+      if (req.method !== 'POST') throw new HttpError(404, 'not-found');
+      const result = setProjectsRoot(smDir, await readBody(req));
+      const status = result.ok ? 200 : FOLDER_ERRORS[result.error];
+      if (result.ok) cached = null;
+      logAction(smDir, { action: 'projects-root', folders: result.ok ? result.roots.length : null }, status);
+      return send(res, status, result);
+    }
+    if (req.method !== 'GET') throw new HttpError(404, 'not-found');
+    const path = url.searchParams.get('path') ?? '';
+    if (url.pathname === '/api/folders/repos') {
+      const error = folderError(path);
+      return error ? send(res, FOLDER_ERRORS[error], { ok: false, error }) : send(res, 200, { ok: true, ...findRepos(path) });
+    }
+    const out = listFolders(path);
+    return send(res, out.ok ? 200 : FOLDER_ERRORS[out.error], out);
+  }
+
   // A project's monthly budget (or07): POST {projectId, usd} sets it (null removes it), {projectId, continue: true} lifts the
   // pause until the month ends. Merged into session-map's own config.json; the next state shows it.
   async function budgetRoute(req, res) {
@@ -1014,6 +1043,7 @@ export function createApp({
     if (path === '/api/settings/project-tidy') return tidyRoute(req, res, url);
     if (path === '/api/settings/project-budget') return budgetRoute(req, res);
     if (path === '/api/projects/new') return newProjectRoute(req, res);
+    if (path === '/api/folders' || path === '/api/folders/repos' || path === '/api/settings/projects-root') return foldersRoute(req, res, url);
     if (path === '/api/settings/notify' || path === '/api/settings/notify/test') return notifyRoute(req, res, path);
     if (path === '/api/settings/ai-helpers' || path === '/api/settings/ai-helpers/test') return helpersRoute(req, res, path, url);
     if (path === '/api/settings/look-key') return lookRoute(req, res);

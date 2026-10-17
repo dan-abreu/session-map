@@ -75,6 +75,10 @@ export const api = {
   placeConversation: (id, body) => call('POST', `/api/conversation/${seg(id)}/place`, body),
   newProjectPlace: () => call('GET', '/api/projects/new'),
   createProject: (body) => call('POST', '/api/projects/new', body),
+  // The folder chooser (id164): folder names only, the page's token.
+  folders: (path) => call('GET', `/api/folders?${new URLSearchParams({ path })}`),
+  folderRepos: (path) => call('GET', `/api/folders/repos?${new URLSearchParams({ path })}`),
+  setProjectsRoot: (roots) => call('POST', '/api/settings/projects-root', { roots }),
   // The cards the owner makes by hand in the Board (mm14), kept in session-map's own folder.
   cards: () => call('GET', '/api/cards'),
   addCard: (body) => call('POST', '/api/cards', body),

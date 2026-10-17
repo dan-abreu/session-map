@@ -36,6 +36,7 @@ import { activityOf, mainBranch, projectRoot } from './sources/git.mjs';
 import { planLimits } from './sources/limits.mjs';
 import { runGit } from './sources/gitqueue.mjs';
 import { createdRoots } from './newproject.mjs';
+import { reposIn } from './folders.mjs';
 import { projectsRootsOf, scratchWhy } from './scratch.mjs';
 import { readPlacements } from './placements.mjs';
 import { readOpenSpec } from './sources/openspec.mjs';
@@ -490,7 +491,7 @@ async function buildProject(ctx, { root, items }) {
   const openspec = readOpenSpec(root);
   const roadmap = config.roadmap ? readRoadmap(join(root, config.roadmap), { decisions: config.decisions }) : null;
   // The AI spends tokens: only on a project worked on now, or one the person keeps always up to date.
-  const kept = alwaysOn(userConfig, root) || createdRoots(userConfig).some((r) => normalizePath(r) === normalizePath(root));
+  const kept = alwaysOn(userConfig, root) || ctx.scanned?.has(normalizePath(root)) || createdRoots(userConfig).some((r) => normalizePath(r) === normalizePath(root));
   const background = backgroundOf({ always: alwaysOn(userConfig, root), working: isWorking({ items, liveById, driving: ctx.cut.driving, nowMs: now.getTime() }) });
   const aiOn = life.queue.enabled && config.ai?.enabled !== false && background.on;
   const aiAnswers = aiPlacements(life, smDir, projectId);
@@ -750,6 +751,16 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     known.add(key);
     groups.push({ root, items: [] });
   }
+  // The repositories under the folders he picked (id164) are projects before any conversation runs in them, and are his
+  // wherever the folder sits (a picked folder in the temp folder is still a pick).
+  const scanned = reposIn(projectsRootsOf(userConfig)).repos;
+  ctx.scanned = new Set(scanned.map(normalizePath));
+  for (const root of scanned) {
+    const key = normalizePath(root);
+    if (known.has(key)) continue;
+    known.add(key);
+    groups.push({ root, items: [] });
+  }
   // One broken project must not blank the page for the others.
   const built = (await Promise.all(groups.map((g) => buildProject(ctx, g).catch((err) => {
     log('warn', 'project-failed', { projectId: projectIdOf(g.root), error: err.message });
@@ -803,6 +814,8 @@ export async function collect({ dir, smDir, now = new Date(), isAlive, ai, bootM
     // How much of the plan's week is used, as Claude Code last saw it (~/.claude.json, next to the .claude folder): near
     // the end only urgent and important work starts in the orchestration (or08, wa09). Null when unknown or stale.
     weekUse: readWeekUse(join(dirname(dir), '.claude.json'), now.getTime()),
+    // The folders he keeps his projects in (config.json projectsRoot); empty = anywhere.
+    projectsRoot: projectsRootsOf(userConfig),
     projects,
   };
   Object.defineProperty(state, INTERNALS, { value: { chats: ctx.internals, changes }, enumerable: false });

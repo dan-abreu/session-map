@@ -2568,6 +2568,7 @@ body:has(.chat:not([hidden])) .al-stack { right: calc(var(--chat-w, 460px) + 28p
 .pp-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-new { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 var(--r-md) var(--r-md); color: var(--ink-2); }
 .pp-new-icon { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.pp-new + .pp-new { margin-top: 0; border-top: 0; }
 /* The folders that are not projects the owner keeps (id161) wait behind one quiet row; opened, each says why it is there. */
 .pp-others { margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .pp-option.is-scratch { font-weight: 500; color: var(--ink-2); }
@@ -3505,3 +3506,23 @@ body:has(.pop-menu:not([hidden]), .pp-list:not([hidden])) .cut { display: none; 
 .stmt-rows-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 16px 0 4px; }
 .stmt-rows-head h4 { margin: 0; }
 .stmt-rows-head .btn { margin-left: auto; }
+
+/* The folder chooser (id164): the chosen folders on top, then the walk of the PC's folders and what it found. */
+.fp { display: grid; gap: 12px; }
+.fp h3 { margin: 0 0 6px; font-size: var(--fs-sm); }
+.fp-chosen-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fp-chosen-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fp-chosen-path, .fp-path { flex: 1; min-width: 0; overflow-wrap: anywhere; font: var(--fs-xs)/1.45 var(--mono); color: var(--ink-2); }
+.fp-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-3); }
+.fp-bar .btn { flex: none; }
+.fp-up { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transform: rotate(180deg); }
+.fp-list { list-style: none; margin: 0; padding: 4px; max-height: min(320px, 38vh); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-2); }
+.fp-list > .pl-hint { padding: 8px 10px; }
+.fp-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.fp-row:hover, .fp-row:focus-visible { background: var(--bg-3); }
+.fp-row:focus-visible { outline-offset: -2px; }
+.fp-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-linejoin: round; }
+.fp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-badge { flex: none; padding: 1px 6px; border-radius: var(--r-pill); background: var(--active-fill); color: var(--active-ink); font-size: var(--fs-2xs); font-weight: 700; }
+.fp-found { margin: 0; font-size: var(--fs-sm); }
+.fp-found-names { color: var(--ink-2); }

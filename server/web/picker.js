@@ -5,6 +5,7 @@
 // No project id holds a ':' (paths.mjs projectIdOf), so these never meet a project.
 const NEW = ':new';
 const OTHERS = ':others';
+const FOLDERS = ':folders';
 
 // The button names the open project only (mm47): its amber count is the pill's and its work the map header's, so the marks
 // wait in the list, one look away; its label still says them.
@@ -12,8 +13,9 @@ const OTHERS = ':others';
 // folders", with the marks of all of them (so a helper working in one is never out of sight) and each one's reason when it
 // is opened; the open project stays in the main list whatever it is.
 // The list ends with "New project" (sv14, mm50) when the page may create one: ctx.onNew opens its dialog.
+// Before it, "Project folders" (id164) when the page may: ctx.onFolders opens the folder chooser.
 // ctx: root, button, list, name (the name span), h, t (translator getter), icon(name, cls), onPick(id), onNew() (optional),
-// canNew() (optional: false hides "New project", as with the look-only link).
+// onFolders() (optional), canNew() (optional: false hides "New project" and "Project folders", as with the look-only link).
 export function createProjectPicker(ctx) {
   const { root, button, list, h } = ctx;
   let projects = [];
@@ -65,6 +67,7 @@ export function createProjectPicker(ctx) {
     }
     close();
     if (id === NEW) ctx.onNew();
+    else if (id === FOLDERS) ctx.onFolders();
     else if (id !== current) ctx.onPick(id);
   }
 
@@ -92,6 +95,9 @@ export function createProjectPicker(ctx) {
     }, h('span', { class: 'pp-option-name' }, showOthers ? tt('project.othersHide') : tt.count('project.others', others.length)),
     h('span', { class: 'pp-marks' }, showOthers ? [] : marksView(sumMarks(others.map((x) => badges.get(x.id))))))] : []),
     ...(showOthers ? others.map(optionOf) : []),
+    ...(ctx.onFolders && ctx.canNew?.() !== false ? [h('li', {
+      role: 'option', 'data-id': FOLDERS, 'aria-selected': 'false', tabindex: '-1', class: 'pp-option pp-new', onclick: () => pick(FOLDERS),
+    }, ctx.icon('folder', 'pp-new-icon'), h('span', { class: 'pp-option-name' }, tt('folders.open')))] : []),
     ...(ctx.onNew && ctx.canNew?.() !== false ? [h('li', {
       role: 'option', 'data-id': NEW, 'aria-selected': 'false', tabindex: '-1', class: 'pp-option pp-new', onclick: () => pick(NEW),
     }, ctx.icon('plus', 'pp-new-icon'), h('span', { class: 'pp-option-name' }, tt('project.new')))] : []));
