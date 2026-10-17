@@ -1379,13 +1379,13 @@ body.is-resizing .sheet { animation: none; }
    wrap out of sight whole, before the way it runs gives any room, so none is ever cut ("/ com…"); the whole list is the
    tooltip. */
 .chat-hints {
-  flex: 0 1000 auto; min-width: 0; height: 16px; margin-left: 4px; display: flex; flex-wrap: wrap; overflow: hidden;
+  flex: 1 1000 auto; min-width: 0; height: 16px; margin-left: 4px; display: flex; flex-wrap: wrap; overflow: hidden;
   font-size: var(--fs-2xs); line-height: 16px; color: var(--ink-2); cursor: default;
 }
 .chat-hints > span { white-space: nowrap; }
 .chat-hints > span + span::before { content: "·"; margin: 0 4px; }
 /* A touch screen has no keys to learn (Enter, Ctrl F): the box and the menus keep the room for the words. */
-@media (pointer: coarse) { .chat-hints, .pm-keys { display: none; } }
+@media (pointer: coarse) { .chat-hints, .pm-keys { display: none; } .chat-mode { margin-right: auto; } }
 .chat-bar { display: flex; align-items: center; gap: 6px; margin-left: -6px; }
 /* The permission mode in the footer, like Claude Code's picker: a quiet chip with the mode's icon and name; the hands-off
    modes take the active tint so a glance tells whether the conversation will stop to ask. Its menu opens upwards. */
@@ -1405,7 +1405,16 @@ body.is-resizing .sheet { animation: none; }
 .chat-mode-menu { top: auto; bottom: calc(100% + 8px); left: 0; right: auto; z-index: 6; width: 320px; }
 .chat-mode-menu .pm-row[aria-checked="true"] { background: var(--bg-3); }
 .chat-mode-check { justify-self: end; stroke: var(--ink); }
-.chat-send { gap: 6px; }
+/* Send is one round arrow, like Claude's: the name rides in its tooltip and its label. */
+.chat-send {
+  flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--ink); color: var(--bg); cursor: pointer;
+  transition: background-color var(--dur-fast);
+}
+.chat-send:hover { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); }
+.chat-send:disabled { opacity: 0.35; cursor: not-allowed; }
+.chat-send:disabled:hover { background: var(--ink); }
+.chat-send svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transform: rotate(-90deg); }
 /* The quiet chip by Send with the conversation's cost so far (pc22). */
 .chat-cost {
   flex: none; max-width: 40%; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--bg-3);
@@ -3486,7 +3495,7 @@ body:has(.pop-menu:not([hidden]), .pp-list:not([hidden])) .cut { display: none; 
 .stmt-kpi-label { font-size: var(--fs-xs); color: var(--ink-2); }
 .stmt-kpi strong { font-size: var(--fs-xl); }
 .stmt-kpi-sub { font-size: var(--fs-xs); color: var(--ink-2); }
-.stmt-kpi.is-warn { border-left: 4px solid var(--waiting); }
+.stmt-kpi.is-warn { border-color: var(--waiting); background: var(--waiting-fill); }
 .stmt-chart { margin: 8px 0 16px; }
 .stmt-chart figcaption { font-weight: 600; margin-bottom: 6px; }
 .stmt-plot { display: grid; grid-template-columns: auto 1fr; gap: 8px; height: 140px; }
