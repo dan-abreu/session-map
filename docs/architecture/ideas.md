@@ -801,3 +801,7 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: switch on; in a page chat ask for a code change: the chat's own edit of a code file is refused with the row's AI named, the work goes through `run_other_ai` to that AI, and `merge_other_ai` merges only after the program's review (an activity line of kind `review`); a refused review comes back with the defects.
   - Where it went: `or77`.
   - Status: done on 2026-10-17 (`or77`).
+- [ ] A simpler Cérebro: fewer rows that do the same thing, more detail where the choice changes the result `id177`
+  - Asked: 2026-10-17 — "parece que tem coisas de mais que faz a mesma coisa e outro lado de coisa de menos que deveria ser distrinchado mais, seja um profissional, pode ser setico também ... retirar aquilo que eu pedi de errado se estiver errado"
+  - What it means: of the 16 rows, `agents` silently overrides every work row (guard.mjs), `team` and `web` have no call, `opinion` and `brain` need no owner choice, `book`/`background`/`gather` are the same cheap volume work, `plan`/`debug`/`docs` share their neighbour's model. Missing: code split by size (files the task touches, counted by the program), architecture apart from security/money/data, and a "plano B" per row (a rejected or failed delivery climbs to the next AI before it stops at the owner). Proposal: 8 rows plus the plano B column; the owner's old choices carried over.
+  - Status: proposed, waiting for the owner's OK.
