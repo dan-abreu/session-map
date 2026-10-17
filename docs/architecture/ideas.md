@@ -11,7 +11,7 @@ The ideas already done or discarded (ticked) live in [Ideas and requests — clo
 - Following the work live: id33, id92
 - Files, terminal and the first use of a repository: id41, id42
 - The Flow: id45, id46, id47, id48, id49, id50, id120, id160
-- Clarity and polish: id56, id121, id126, id161, id162, id163, id164
+- Clarity and polish: id56, id121, id126, id161, id162, id163, id164, id165, id166
 - Reading every detail: id57, id58, id59, id60, id61
 - Everything up to date and professional: id62, id63, id64, id70, id71, id72, id86, id125
 - What it costs: id98, id105, id106, id107, id108, id109, id110, id111, id112, id113, id114, id115, id116
@@ -729,3 +729,15 @@ Nothing here is code. The registry is this file, read by the map like every part
   - How to confirm it is done: the row opens the chooser; walking from a drive to a folder with repositories lists them ("Achei 3 repositórios aqui dentro: …"); "Usar esta pasta" keeps it and the repositories show in the list within a poll; "Tirar" takes a folder out; a network path, a missing folder and the look-only link are refused; the routes need the page's token.
   - Where it went: `mm70`.
   - Status: done on 2026-10-16 (`mm70`; seen in a real browser on a separate copy of the program, reading the real disk: 3 repositories found in the dev folder and 4 from the drive's root in about a second).
+- [x] New project: look for the folder or type its path, not only type it `id165`
+  - Asked: 2026-10-16 — "aqui eu teria que poder procurar a pasta ou escrever o diretorio, seria melhor" (a picture of the New project dialog, the field "Criar dentro de")
+  - What it means: that field was a text box only. It now has a "Procurar…" button that opens the folder chooser (`id164`) over the dialog, on the path typed so far, and hands the folder back to the field. In the chooser, the path is a field too: type or paste a path and press Enter to go there (a wrong one says why, stays where it was and keeps what was typed), and the folders of the open one can be filtered by name.
+  - How to confirm it is done: New project shows "Procurar…" beside the field; it opens "Selecionar pasta" on the typed path (or on the drives when that path is not a folder); typing a path and Enter goes there; the filter narrows the list and keeps its focus; "Selecionar esta pasta" fills the field and closes only the chooser.
+  - Where it went: `mm71`.
+  - Status: done on 2026-10-16 (`mm71`; seen in a real browser on a separate copy of the program: Procurar…, a typed path, the filter and the pick).
+- [x] The words of the chooser and of the "other folders" row in a professional register `id166`
+  - Asked: 2026-10-16 — "usa termos mais profissionais"
+  - What it means: the texts written for `id161` to `id164` read like talk ("Achei", "Tirar", "onde quiser", "põe cada um"). They now read like a tool: "Encontrados 3 projetos nesta pasta", "Remover", "Selecionar esta pasta", "Pasta do usuário", "Subir um nível", "N outras pastas (fora do escopo)", "pasta removida do disco", in both languages and both modes (plain: "projetos"; technical: "repositórios git"), still with no jargon by default (`web-plain.test.mjs`).
+  - How to confirm it is done: the chooser, the picker's row and the reasons of the folders read in that register; the plain test passes.
+  - Where it went: `mm71`.
+  - Status: done on 2026-10-16 (`mm71`). The rest of the page keeps the voice of PRODUCT.md (plain, short, friendly): say if the whole page should change.

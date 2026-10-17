@@ -1355,6 +1355,11 @@ async function openNewProject() {
   };
   nameInput.addEventListener('input', () => { showPath(); showRepo(); });
   parentInput.addEventListener('input', showPath);
+  // "Browse…" (id164): the folder chooser opens over this dialog on the path typed so far, and hands the folder picked back.
+  const browseParent = () => openFolderPicker({
+    dialog: $('#folderDialog'), h, t: () => t, icon, api, toast, errorText, mode: 'pick', start: parentInput.value.trim(),
+    onPick: (path) => { parentInput.value = path; showPath(); parentInput.focus(); },
+  });
   const save = async (e) => {
     e.preventDefault();
     submit.disabled = true;
@@ -1383,7 +1388,8 @@ async function openNewProject() {
     h('h2', { id: 'newProjectTitle' }, t('newproject.title')),
     h('p', { class: 'pl-lede' }, t('newproject.lede')),
     h('div', { class: 'pl-field' }, h('label', { for: 'newProjectName' }, t('newproject.name')), nameInput, pathLine),
-    h('div', { class: 'pl-field' }, h('label', { for: 'newProjectParent' }, t('newproject.parent')), parentInput,
+    h('div', { class: 'pl-field' }, h('label', { for: 'newProjectParent' }, t('newproject.parent')),
+      h('div', { class: 'pl-pick' }, parentInput, h('button', { type: 'button', class: 'btn', onclick: browseParent }, icon('folder', 'btn-icon'), t('folders.browse'))),
       h('p', { class: 'pl-hint', id: 'newProjectParentHint' }, t('newproject.parentHint'))),
     h('fieldset', { class: 'care-opts np-where' },
       h('legend', { class: 'np-legend' }, t('newproject.where')),
